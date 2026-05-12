@@ -283,6 +283,7 @@ function StudioInner() {
 
   return (
     <div className="flex flex-col h-full">
+      <h1 className="sr-only">Studio</h1>
       <Toolbar
         crewName={crewName}
         onCrewNameChange={setCrewName}

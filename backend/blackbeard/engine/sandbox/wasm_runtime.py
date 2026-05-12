@@ -123,10 +123,11 @@ class WasmSandbox:
             return cached
 
         path = Path(wasm_path)
-        # Prevent path traversal — reject any path containing '..'
-        if ".." in wasm_path:
-            raise WasmExecutionError(f"Invalid WASM module path: {wasm_path}. Path must not contain '..'")
-        if not path.exists():
+        resolved = path.resolve()
+        cwd = Path.cwd().resolve()
+        if not str(resolved).startswith(str(cwd) + os.sep) and resolved != cwd:
+            raise WasmExecutionError(f"Invalid WASM module path: path must be within the application directory")
+        if not resolved.exists():
             raise WasmExecutionError(f"WASM module not found: {wasm_path}")
 
         try:

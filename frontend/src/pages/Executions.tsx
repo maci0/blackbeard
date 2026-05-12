@@ -94,17 +94,21 @@ export default function Executions() {
         {/* Table */}
         <div className="border rounded-lg overflow-hidden bg-card shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" aria-label="Executions">
               <thead>
                 <tr className="border-b bg-muted/40">
-                  {['Status', 'Crew', 'Tokens', 'Cost', 'Created', 'Duration', ''].map((h) => (
+                  {['Status', 'Crew', 'Tokens', 'Cost', 'Created', 'Duration'].map((h) => (
                     <th
                       key={h}
+                      scope="col"
                       className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wider"
                     >
                       {h}
                     </th>
                   ))}
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">
+                    <span className="sr-only">Details</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>

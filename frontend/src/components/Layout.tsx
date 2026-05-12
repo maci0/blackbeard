@@ -86,13 +86,13 @@ export default function Layout() {
       </a>
 
       {/* ── Sidebar ── */}
-      <aside className="w-60 border-r bg-card flex flex-col">
+      <aside aria-label="Main navigation" className="w-60 border-r bg-card flex flex-col">
         <div className="p-4 border-b">
           <span className="text-xl font-bold tracking-tight">Blackbeard</span>
           <p className="text-xs text-muted-foreground">Agent Management Platform</p>
         </div>
 
-        <nav data-tour="sidebar-nav" className="flex-1 p-2 space-y-1">
+        <nav aria-label="Primary" data-tour="sidebar-nav" className="flex-1 p-2 space-y-1">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}

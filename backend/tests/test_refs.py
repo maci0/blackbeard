@@ -161,8 +161,12 @@ def test_detect_longer_cycle():
         "Crew/c": ["Agent/a"],
     }
     result = detect_cycles(adjacency)
-    assert result is not None
     assert len(result) >= 1
+    cycle = result[0]
+    nodes_in_cycle = set(cycle)
+    assert "Agent/a" in nodes_in_cycle
+    assert "Task/b" in nodes_in_cycle
+    assert "Crew/c" in nodes_in_cycle
 
 
 def test_detect_no_cycle_linear_chain():

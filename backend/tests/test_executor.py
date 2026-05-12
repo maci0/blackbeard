@@ -22,7 +22,7 @@ API_KEY_HEADER = {"X-API-Key": "change-me-in-production"}
 
 async def _create_full_crew(client: AsyncClient, crew_name: str = "test-crew") -> None:
     """Create LLM connection, agent, task, and crew resources via the API."""
-    await client.post(
+    r = await client.post(
         "/api/v1/llm-connections",
         json={
             "apiVersion": "blackbeard/v1",
@@ -32,8 +32,9 @@ async def _create_full_crew(client: AsyncClient, crew_name: str = "test-crew") -
         },
         headers=API_KEY_HEADER,
     )
+    assert r.status_code in (200, 201), f"LLMConnection setup failed: {r.status_code} {r.text}"
 
-    await client.post(
+    r = await client.post(
         "/api/v1/agents",
         json={
             "apiVersion": "blackbeard/v1",
@@ -48,8 +49,9 @@ async def _create_full_crew(client: AsyncClient, crew_name: str = "test-crew") -
         },
         headers=API_KEY_HEADER,
     )
+    assert r.status_code in (200, 201), f"Agent setup failed: {r.status_code} {r.text}"
 
-    await client.post(
+    r = await client.post(
         "/api/v1/tasks",
         json={
             "apiVersion": "blackbeard/v1",
@@ -63,8 +65,9 @@ async def _create_full_crew(client: AsyncClient, crew_name: str = "test-crew") -
         },
         headers=API_KEY_HEADER,
     )
+    assert r.status_code in (200, 201), f"Task setup failed: {r.status_code} {r.text}"
 
-    await client.post(
+    r = await client.post(
         "/api/v1/crews",
         json={
             "apiVersion": "blackbeard/v1",
@@ -78,6 +81,7 @@ async def _create_full_crew(client: AsyncClient, crew_name: str = "test-crew") -
         },
         headers=API_KEY_HEADER,
     )
+    assert r.status_code in (200, 201), f"Crew setup failed: {r.status_code} {r.text}"
 
 
 # ---------------------------------------------------------------------------

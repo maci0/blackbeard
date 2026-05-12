@@ -1,4 +1,4 @@
-import { type ChangeEvent } from 'react'
+import { type ChangeEvent, useMemo } from 'react'
 import { Save, Play, Loader2, FolderOpen, ChevronDown, Undo2, Redo2, Loader } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { toResourceName } from '@/lib/utils'
@@ -45,6 +45,8 @@ export function Toolbar({
   undo: () => void
   redo: () => void
 }) {
+  const mod = useMemo(() => /Mac|iPhone|iPad/.test(navigator.userAgent) ? 'Cmd' : 'Ctrl', [])
+
   return (
     <header className="h-12 shrink-0 border-b bg-card flex items-center gap-3 px-4">
       {/* Crew name + Load button */}
@@ -138,7 +140,7 @@ export function Toolbar({
           disabled={!canUndo}
           className="p-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-30 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           aria-label="Undo"
-          title="Undo (Cmd+Z)"
+          title={`Undo (${mod}+Z)`}
         >
           <Undo2 className="h-3.5 w-3.5" />
         </button>
@@ -147,7 +149,7 @@ export function Toolbar({
           disabled={!canRedo}
           className="p-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-30 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           aria-label="Redo"
-          title="Redo (Cmd+Shift+Z)"
+          title={`Redo (${mod}+Shift+Z)`}
         >
           <Redo2 className="h-3.5 w-3.5" />
         </button>

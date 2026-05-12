@@ -30,6 +30,17 @@ from blackbeard.models.database import async_session
 
 logger = logging.getLogger(__name__)
 
+_SAFE_ERROR_PREFIXES = ("Crew '", "Agent '", "Task '", "Tool '", "Resource '", "Kind '")
+
+
+def _sanitize_error(error_msg: str) -> str:
+    """Return a user-safe error string, redacting internal details."""
+    if any(error_msg.startswith(p) for p in _SAFE_ERROR_PREFIXES):
+        if len(error_msg) > 500:
+            return error_msg[:500] + "..."
+        return error_msg
+    return "Execution failed — check server logs for details"
+
 # Thread pool for running CrewAI (which is synchronous)
 _executor = ThreadPoolExecutor(
     max_workers=settings.max_concurrent_executions,
@@ -54,7 +65,6 @@ async def _load_crew_resources(
 
     Returns a dict keyed by 'Kind/name' for the ResourceLoader.
     """
-    # Load the crew resource
     result = await session.execute(
         select(Resource).where(
             Resource.kind == ResourceKind.CREW,
@@ -88,12 +98,10 @@ async def kickoff(
     """
     inputs = inputs or {}
 
-    # Verify crew exists and load resources
     resources = await _load_crew_resources(session, crew_name, namespace)
     crew_key = f"Crew/{crew_name}"
     crew_resource = resources[crew_key]
 
-    # Create execution record
     execution = Execution(
         crew_name=crew_name,
         crew_namespace=namespace,
@@ -104,7 +112,6 @@ async def kickoff(
     # Flush to assign execution.id before creating child ExecutionTask rows.
     await session.flush()
 
-    # Create task records
     task_refs = crew_resource.spec.get("tasks", [])
     for i, task_ref in enumerate(task_refs):
         # Extract task name from ref
@@ -128,7 +135,6 @@ async def kickoff(
         key: _snapshot_resource(r) for key, r in resources.items()
     }
 
-    # Launch background execution with error handling
     execution_id = execution.id
     loop = asyncio.get_running_loop()
     future = loop.run_in_executor(
@@ -144,13 +150,14 @@ async def kickoff(
     def _on_thread_error(fut: asyncio.Future) -> None:  # type: ignore[type-arg]
         exc = fut.exception()
         if exc is not None:
-            logger.error(f"Execution {execution_id} thread failed: {exc}")
+            logger.error("Execution %s thread failed: %s", execution_id, exc, exc_info=True)
+            error_msg = _sanitize_error(str(exc))
             # Schedule on the main event loop instead of creating a new one
             try:
-                asyncio.ensure_future(_mark_failed_async(execution_id, str(exc)))
+                asyncio.ensure_future(_mark_failed_async(execution_id, error_msg))
             except RuntimeError:
                 # Fallback if no running event loop (shouldn't happen in normal operation)
-                _mark_failed_sync(execution_id, str(exc))
+                _mark_failed_sync(execution_id, error_msg)
 
     future.add_done_callback(_on_thread_error)
 
@@ -166,7 +173,7 @@ def _mark_failed_sync(execution_id: UUID, error: str) -> None:
         loop.run_until_complete(_mark_failed_async(execution_id, error))
         loop.close()
     except Exception as e:
-        logger.error(f"Failed to mark execution {execution_id} as failed: {e}")
+        logger.error("Failed to mark execution %s as failed: %s", execution_id, e)
 
 
 async def _mark_failed_async(execution_id: UUID, error: str) -> None:
@@ -220,15 +227,13 @@ async def _run_crew_async(
 ) -> None:
     """Run a crew and update the execution record with results."""
     async with async_session() as session:
-        # Update status to running
         execution = await _get_execution_for_update(session, execution_id)
         if not execution:
-            logger.error(f"Execution {execution_id} not found")
+            logger.error("Execution %s not found when starting run", execution_id)
             return
 
-        # Check if already cancelled before starting
         if execution.status == ExecutionStatus.CANCELLED:
-            logger.info(f"Execution {execution_id} was cancelled before starting")
+            logger.info("Execution %s was cancelled before starting", execution_id)
             return
 
         execution.status = ExecutionStatus.RUNNING
@@ -236,7 +241,6 @@ async def _run_crew_async(
         await session.commit()
 
         try:
-            # Build CrewAI objects from snapshot
             mock_resources = {}
             for key, snap in resource_snapshot.items():
                 r = Resource()
@@ -246,7 +250,6 @@ async def _run_crew_async(
                 r.spec = snap["spec"]
                 mock_resources[key] = r
 
-            # Set up Langfuse listener (fire-and-forget)
             langfuse_listener = BlackbeardLangfuseListener(
                 execution_id=str(execution_id),
                 metadata={"crew_name": crew_name},
@@ -255,23 +258,19 @@ async def _run_crew_async(
             loader = ResourceLoader(mock_resources)
             crew = loader.build_crew(crew_name)
 
-            # Run the crew (synchronous CrewAI call)
             result = crew.kickoff(inputs=inputs)
 
-            # Re-read execution and check if it was cancelled during execution
             execution = await _get_execution_for_update(session, execution_id)
             if not execution:
                 return
 
             if execution.status == ExecutionStatus.CANCELLED:
-                logger.info(f"Execution {execution_id} was cancelled during execution, preserving cancelled status")
+                logger.info("Execution %s cancelled during run", execution_id)
                 return
 
-            # Update with results
             execution.status = ExecutionStatus.COMPLETED
             execution.completed_at = datetime.now(timezone.utc)
 
-            # Extract result data
             if hasattr(result, "raw"):
                 execution.outputs = {"raw": str(result.raw)}
             elif isinstance(result, str):
@@ -279,36 +278,26 @@ async def _run_crew_async(
             else:
                 execution.outputs = {"raw": str(result)}
 
-            # Extract token usage if available
             if hasattr(result, "token_usage"):
                 usage = result.token_usage
                 execution.total_tokens = getattr(usage, "total_tokens", 0) or 0
                 execution.prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
                 execution.completion_tokens = getattr(usage, "completion_tokens", 0) or 0
 
-            # Store Langfuse trace link
             if langfuse_listener.trace_id:
                 execution.langfuse_trace_id = langfuse_listener.trace_id
                 execution.langfuse_trace_url = langfuse_listener.trace_url
 
             await session.commit()
-            logger.info(f"Execution {execution_id} completed successfully")
+            logger.info("Execution %s completed successfully", execution_id)
 
         except Exception as e:
-            logger.exception(f"Execution {execution_id} failed: {e}")
+            logger.exception("Execution %s failed: %s", execution_id, e)
 
             execution = await _get_execution_for_update(session, execution_id)
             if execution and execution.status != ExecutionStatus.CANCELLED:
                 execution.status = ExecutionStatus.FAILED
-                # Sanitize error — classify and redact internal details
-                error_msg = str(e)
-                _SAFE_PREFIXES = ("Crew '", "Agent '", "Task '", "Tool '", "Resource '", "Kind '")
-                if any(error_msg.startswith(p) for p in _SAFE_PREFIXES):
-                    if len(error_msg) > 500:
-                        error_msg = error_msg[:500] + "..."
-                    execution.error = error_msg
-                else:
-                    execution.error = "Execution failed — check server logs for details"
+                execution.error = _sanitize_error(str(e))
                 execution.completed_at = datetime.now(timezone.utc)
                 await session.commit()
 

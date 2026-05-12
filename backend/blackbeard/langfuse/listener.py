@@ -175,7 +175,7 @@ class BlackbeardLangfuseListener(BaseEventListener):
             # LIFO matching — only correct for sequential task execution.
             # For async/concurrent tasks, this will mismatch spans.
             # TODO: Match by event_id when CrewAI provides matching IDs on completion events.
-            last_key = list(self._task_spans.keys())[-1]
+            last_key = next(reversed(self._task_spans))
             span = self._task_spans.pop(last_key)
             output = str(event.output) if event.output else None
             span.end(output=output)
@@ -191,7 +191,7 @@ class BlackbeardLangfuseListener(BaseEventListener):
             # Find parent task span or use trace directly
             parent = self._trace
             if self._task_spans:
-                last_key = list(self._task_spans.keys())[-1]
+                last_key = next(reversed(self._task_spans))
                 parent = self._task_spans[last_key]
 
             span = parent.span(
@@ -208,13 +208,12 @@ class BlackbeardLangfuseListener(BaseEventListener):
 
     def _on_tool_finished(self, event) -> None:  # type: ignore[no-untyped-def]
         """End the tool span."""
-        # Match by tool name since event_id differs between start/finish
         if not self._tool_spans:
             return
 
         try:
             # Pop the last tool span
-            last_key = list(self._tool_spans.keys())[-1]
+            last_key = next(reversed(self._tool_spans))
             span = self._tool_spans.pop(last_key)
             duration_ms = None
             if hasattr(event, "started_at") and hasattr(event, "finished_at"):
@@ -235,7 +234,7 @@ class BlackbeardLangfuseListener(BaseEventListener):
             # Find parent task span or use trace directly
             parent = self._trace
             if self._task_spans:
-                last_key = list(self._task_spans.keys())[-1]
+                last_key = next(reversed(self._task_spans))
                 parent = self._task_spans[last_key]
 
             generation = parent.generation(
@@ -258,7 +257,7 @@ class BlackbeardLangfuseListener(BaseEventListener):
 
         try:
             # Pop the last generation
-            last_key = list(self._llm_generations.keys())[-1]
+            last_key = next(reversed(self._llm_generations))
             generation = self._llm_generations.pop(last_key)
 
             output = None

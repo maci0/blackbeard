@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, Link } from 'react-router-dom'
 import Layout from './components/Layout'
 import { Spinner } from './components/ui/Spinner'
 
@@ -30,6 +30,26 @@ function App() {
           <Route path="executions/:id" element={<ExecutionDetail />} />
           <Route path="models" element={<Models />} />
           <Route path="tools" element={<Tools />} />
+          <Route
+            path="*"
+            element={
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-6xl font-bold text-muted-foreground/20 mb-2">404</p>
+                  <h1 className="text-lg font-semibold mb-1">Page not found</h1>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    The page you're looking for doesn't exist.
+                  </p>
+                  <Link
+                    to="/studio"
+                    className="inline-flex px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90 transition-opacity"
+                  >
+                    Go to Studio
+                  </Link>
+                </div>
+              </div>
+            }
+          />
         </Route>
       </Routes>
     </Suspense>

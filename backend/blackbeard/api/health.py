@@ -32,7 +32,7 @@ async def readiness(session: AsyncSession = Depends(get_session)) -> JSONRespons
     except Exception as e:
         checks["database"] = {"status": "down"}
         overall = "unhealthy"
-        logger.error(f"Health check: database is down: {e}")
+        logger.error("Health check: database is down: %s: %s", type(e).__name__, e)
 
     status_code = 200 if overall == "healthy" else 503
     return JSONResponse(

@@ -16,4 +16,4 @@ async def test_health_returns_ok(client):
 async def test_protected_endpoint_requires_api_key(client):
     """Any non-public endpoint should require X-API-Key."""
     response = await client.get("/api/v1/agents")
-    assert response.status_code in (401, 404)  # 401 if route exists, 404 if not yet
+    assert response.status_code == 401

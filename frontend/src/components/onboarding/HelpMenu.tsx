@@ -12,9 +12,12 @@ interface Shortcut {
   label: string
 }
 
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent)
+const mod = isMac ? '⌘' : 'Ctrl'
+
 const SHORTCUTS: Shortcut[] = [
-  { keys: ['⌘', 'Z'], label: 'Undo' },
-  { keys: ['⌘', '⇧', 'Z'], label: 'Redo' },
+  { keys: [mod, 'Z'], label: 'Undo' },
+  { keys: [mod, '⇧', 'Z'], label: 'Redo' },
   { keys: ['Del', 'Backspace'], label: 'Delete selected node' },
   { keys: ['Enter', 'Space'], label: 'Add node from palette' },
   { keys: ['Tab'], label: 'Navigate between elements' },

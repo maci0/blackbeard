@@ -26,7 +26,7 @@ router = APIRouter(tags=["executions"])
 async def kickoff_crew(
     crew_name: str = Path(..., pattern=r"^[a-z0-9][a-z0-9\-]*$", max_length=255),
     body: KickoffRequest = Body(...),
-    namespace: str = Query(default="default"),
+    namespace: str = Query(default="default", pattern=r"^[a-z0-9][a-z0-9\-]*$", max_length=255),
     session: AsyncSession = Depends(get_session),
 ) -> ExecutionResponse:
     """Kick off a crew execution. Returns immediately with status=queued."""
@@ -39,8 +39,8 @@ async def kickoff_crew(
 
 @router.get("/executions", response_model=ExecutionListResponse)
 async def list_executions(
-    crew_name: str | None = Query(default=None),
-    namespace: str | None = Query(default=None),
+    crew_name: str | None = Query(default=None, pattern=r"^[a-z0-9][a-z0-9\-]*$", max_length=255),
+    namespace: str | None = Query(default=None, pattern=r"^[a-z0-9][a-z0-9\-]*$", max_length=255),
     status: ExecutionStatus | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),

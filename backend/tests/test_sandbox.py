@@ -100,7 +100,7 @@ class TestWasmSandbox:
 
     def test_sandbox_load_missing_module(self):
         sandbox = WasmSandbox()
-        with pytest.raises(WasmExecutionError, match="not found"):
+        with pytest.raises(WasmExecutionError, match="not found|Invalid WASM module path"):
             sandbox._load_module("/nonexistent/path/tool.wasm")
 
     def test_sandbox_cache_size(self):

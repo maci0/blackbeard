@@ -7,6 +7,13 @@ a live PostgreSQL instance.
 """
 
 # ---------------------------------------------------------------------------
+# Enable debug mode so the default API key is accepted during tests.
+# Must be set before blackbeard.config is imported.
+# ---------------------------------------------------------------------------
+import os as _os
+_os.environ.setdefault("DEBUG", "true")
+
+# ---------------------------------------------------------------------------
 # Patch postgresql types → SQLite-compatible equivalents
 # This must happen at import time, before any blackbeard module is loaded.
 # ---------------------------------------------------------------------------
@@ -74,8 +81,6 @@ from sqlalchemy.pool import StaticPool
 
 from blackbeard.models.database import get_session
 from blackbeard.main import app
-
-API_KEY_HEADER = {"X-API-Key": "change-me-in-production"}
 
 
 @pytest.fixture

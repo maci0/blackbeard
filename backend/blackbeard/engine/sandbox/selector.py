@@ -17,15 +17,16 @@ logger = logging.getLogger(__name__)
 
 # Tier ordering — higher index = more isolation
 TIER_ORDER = ["none", "wasm", "docker", "microvm"]
+_TIER_RANK: dict[str, int] = {name: i for i, name in enumerate(TIER_ORDER)}
 
 
 def tier_rank(tier: str) -> int:
     """Get the numeric rank of a sandbox tier."""
-    try:
-        return TIER_ORDER.index(tier)
-    except ValueError:
-        logger.warning(f"Unknown sandbox tier '{tier}', defaulting to 'none'")
-        return 0
+    rank = _TIER_RANK.get(tier)
+    if rank is not None:
+        return rank
+    logger.warning(f"Unknown sandbox tier '{tier}', defaulting to 'none'")
+    return 0
 
 
 def select_sandbox(
@@ -39,8 +40,6 @@ def select_sandbox(
     - tool's declared tier
     - policy's minimum tier
     - system default
-
-    For MVP, only 'none' and 'wasm' are supported.
     """
     effective = tool_tier or system_default
 

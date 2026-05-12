@@ -5,6 +5,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+from sqlalchemy import inspect as sa_inspect
 
 
 class KickoffRequest(BaseModel):
@@ -58,10 +59,10 @@ class ExecutionResponse(BaseModel):
     def from_db(cls, execution) -> "ExecutionResponse":  # type: ignore[no-untyped-def]
         """Build response from a SQLAlchemy Execution model."""
         tasks = []
-        try:
+        if "tasks" not in sa_inspect(execution).unloaded:
             raw_tasks = execution.tasks or []
-        except Exception:
-            raw_tasks = []  # Tasks not eagerly loaded (e.g., list endpoint)
+        else:
+            raw_tasks = []
         for t in raw_tasks:
             tasks.append(ExecutionTaskResponse(
                 id=t.id,

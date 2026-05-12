@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
 
-    # GCP / Vertex AI (from crew project credentials)
+    # GCP / Vertex AI
     google_cloud_project: str = ""
     cloud_ml_region: str = "us-east5"
     google_application_credentials: str = ""

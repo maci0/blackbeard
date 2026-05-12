@@ -71,7 +71,7 @@ def generate_litellm_config(llm_connections: list[Resource]) -> str:
             "request_timeout": 120,
         },
         "general_settings": {
-            "master_key": settings.litellm_master_key,
+            "master_key": "os.environ/LITELLM_MASTER_KEY",
         },
         "router_settings": {
             "routing_strategy": "simple-shuffle",

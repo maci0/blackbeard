@@ -349,7 +349,7 @@ export default function PropertyPanel() {
   const yamlContent = nodeToYaml(nodeType, selectedNode.id, data)
 
   return (
-    <aside className="w-[300px] shrink-0 border-l bg-card flex flex-col overflow-hidden">
+    <aside aria-label="Node properties" className="w-[300px] shrink-0 border-l bg-card flex flex-col overflow-hidden">
       {/* Header */}
       <div className={`flex items-center justify-between px-4 py-3 border-b ${meta.border} bg-card`}>
         <div className="flex items-center gap-2">

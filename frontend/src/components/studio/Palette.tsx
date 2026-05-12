@@ -92,7 +92,7 @@ function PaletteCard({ item }: { item: PaletteItem }) {
 
 export default function Palette() {
   return (
-    <aside data-tour="palette" className="w-[108px] border-r bg-card flex flex-col shrink-0">
+    <aside aria-label="Node palette" data-tour="palette" className="w-[108px] border-r bg-card flex flex-col shrink-0">
       <div className="px-3 pt-3 pb-2 border-b">
         <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
           Palette

@@ -1,10 +1,9 @@
-"""Agent policy enforcement.
+"""Agent policy definitions and resolution.
 
-Implements:
-- Tool allowlist/denylist enforcement
-- LLM budget limits (via LiteLLM virtual key max_budget)
-- Sandbox minimum tier enforcement
-- Policy resolution chain: agent.spec.policy → crew.spec.default_agent_policy → default
+Resolves the effective policy for an agent via:
+  agent.spec.policy → crew.spec.default_agent_policy → DEFAULT_POLICY
+
+Policy data covers tool access mode, budget limits, and sandbox tier.
 """
 
 from __future__ import annotations
@@ -33,6 +32,8 @@ class AgentPolicy:
         self._tools_config = spec.get("tools", {})
         self._budget = spec.get("budget", {})
         self._sandbox = spec.get("sandbox", {})
+        self._allowed_tools: set[str] = set(self._tools_config.get("allow", []))
+        self._denied_tools: set[str] = set(self._tools_config.get("deny", []))
 
     @property
     def tool_mode(self) -> str:
@@ -42,12 +43,12 @@ class AgentPolicy:
     @property
     def allowed_tools(self) -> set[str]:
         """Set of allowed tool names (when mode=allowlist)."""
-        return set(self._tools_config.get("allow", []))
+        return self._allowed_tools
 
     @property
     def denied_tools(self) -> set[str]:
         """Set of denied tool names (when mode=denylist)."""
-        return set(self._tools_config.get("deny", []))
+        return self._denied_tools
 
     @property
     def max_budget_usd(self) -> float | None:
@@ -118,7 +119,7 @@ def resolve_policy(
         policy_name = _extract_name(agent_policy_ref)
         if policy_name in policies:
             return AgentPolicy(policies[policy_name])
-        logger.warning(f"Agent policy '{policy_name}' not found, checking crew default")
+        logger.warning("Agent policy '%s' not found, checking crew default", policy_name)
 
     # Check crew-level default
     if crew_spec:
@@ -127,7 +128,7 @@ def resolve_policy(
             policy_name = _extract_name(crew_policy_ref)
             if policy_name in policies:
                 return AgentPolicy(policies[policy_name])
-            logger.warning(f"Crew default policy '{policy_name}' not found, using default")
+            logger.warning("Crew default policy '%s' not found, using default", policy_name)
 
     return DEFAULT_POLICY
 

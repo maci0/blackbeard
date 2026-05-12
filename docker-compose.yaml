@@ -127,12 +127,15 @@ services:
     image: langfuse/langfuse:3.38.1
     ports:
       - "127.0.0.1:3001:3000"
+    # SECURITY: Replace NEXTAUTH_SECRET, SALT, and ENCRYPTION_KEY with
+    # cryptographically random values before any non-local deployment.
+    # Generate with: openssl rand -hex 32
     environment: &langfuse-env
       DATABASE_URL: postgresql://blackbeard:blackbeard@postgres:5432/langfuse
-      NEXTAUTH_SECRET: blackbeard-langfuse-secret
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-blackbeard-langfuse-secret}
       NEXTAUTH_URL: http://localhost:3001
-      SALT: blackbeard-salt
-      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      SALT: ${LANGFUSE_SALT:-blackbeard-salt}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
       CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
       CLICKHOUSE_URL: http://langfuse-clickhouse:8123
       CLICKHOUSE_USER: clickhouse

@@ -70,12 +70,12 @@ async def create_execution_key(
             return data.get("key")
         else:
             logger.warning(
-                f"Failed to create LiteLLM key: {response.status_code} {response.text}"
+                "Failed to create LiteLLM key: %d %s", response.status_code, response.text
             )
             return None
 
     except Exception as e:
-        logger.warning(f"LiteLLM key creation failed, using master key: {e}")
+        logger.warning("LiteLLM key creation failed, using master key: %s", e)
         return None
 
 
@@ -91,7 +91,7 @@ async def delete_execution_key(key: str) -> bool:
         )
         return response.status_code == 200
     except Exception as e:
-        logger.warning(f"Failed to delete LiteLLM key: {e}")
+        logger.warning("Failed to delete LiteLLM key: %s", e)
         return False
 
 
@@ -109,5 +109,5 @@ async def get_key_spend(key: str) -> dict | None:
             return response.json()
         return None
     except Exception as e:
-        logger.warning(f"Failed to get key spend: {e}")
+        logger.warning("Failed to get key spend: %s", e)
         return None

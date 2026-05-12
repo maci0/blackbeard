@@ -121,9 +121,10 @@ class ResourceLoader:
         tool_refs = spec.get("tools", [])
         if tool_refs:
             logger.warning(
-                f"Agent '{resource.name}' declares tools {tool_refs} — "
-                f"tool loading from refs is not yet wired into CrewAI runtime. "
-                f"Tools must be registered directly via CrewAI's tool system."
+                "Agent '%s' declares tools %s — "
+                "tool loading from refs is not yet wired into CrewAI runtime. "
+                "Tools must be registered directly via CrewAI's tool system.",
+                resource.name, tool_refs,
             )
 
         # Optional params
@@ -174,7 +175,10 @@ class ResourceLoader:
         if "human_input" in spec:
             task_kwargs["human_input"] = spec["human_input"]
         if "output_file" in spec:
-            task_kwargs["output_file"] = spec["output_file"]
+            output_file = spec["output_file"]
+            if "/" in output_file or "\\" in output_file or ".." in output_file:
+                raise LoaderError(f"output_file must be a plain filename, got '{output_file}'")
+            task_kwargs["output_file"] = output_file
 
         task = Task(**task_kwargs)
         self._task_cache[ref_or_name] = task

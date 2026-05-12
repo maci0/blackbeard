@@ -1,7 +1,6 @@
 """Blackbeard CLI entry point — Rich-powered output."""
 
 import json
-import sys
 import time
 from graphlib import TopologicalSorter
 from importlib.metadata import version as pkg_version
@@ -12,14 +11,13 @@ import httpx
 import yaml
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.syntax import Syntax
 from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.text import Text
 
-from blackbeard.resources.validator import validate_resource
-from blackbeard.resources.refs import build_adjacency, detect_cycles
 from blackbeard.kinds import KIND_TO_PLURAL
+from blackbeard.resources.refs import build_adjacency, detect_cycles
+from blackbeard.resources.validator import validate_resource
 
 # Rich consoles — stderr for errors/progress, stdout for data
 console = Console(stderr=True)
@@ -30,7 +28,10 @@ def _require_api_key(ctx: click.Context) -> str:
     """Get API key from context, raising if not set."""
     key = ctx.obj.get("api_key")
     if not key:
-        console.print("[red bold]Error:[/] API key required. Set BLACKBEARD_API_KEY or pass --api-key.")
+        console.print(
+            "[red bold]Error:[/] API key required."
+            " Set BLACKBEARD_API_KEY or pass --api-key."
+        )
         raise SystemExit(1)
     return key
 
@@ -91,7 +92,10 @@ def validate_resources(resources: list[dict]) -> tuple[list[tuple[dict, list]], 
 @click.option("--json", "output_json", is_flag=True, default=False,
               help="Output results as JSON (for scripting)")
 @click.pass_context
-def cli(ctx: click.Context, server: str, api_key: str | None, namespace: str, output_json: bool) -> None:
+def cli(
+    ctx: click.Context, server: str, api_key: str | None,
+    namespace: str, output_json: bool,
+) -> None:
     """Blackbeard — Agent Management Platform CLI."""
     ctx.ensure_object(dict)
     ctx.obj["server"] = server
@@ -114,12 +118,12 @@ def validate(ctx: click.Context, path: str) -> None:
 
     if not resources:
         console.print("[yellow]No resource files found.[/]")
-        sys.exit(1)
+        raise SystemExit(1)
 
     per_errors, cycles = validate_resources(resources)
     all_valid = not per_errors and not cycles
 
-    if ctx.obj.get("json"):
+    if ctx.obj["json"]:
         result = {
             "valid": all_valid,
             "total": len(resources),
@@ -135,7 +139,7 @@ def validate(ctx: click.Context, path: str) -> None:
             "cycles": cycles,
         }
         _output_json(result)
-        sys.exit(0 if all_valid else 1)
+        raise SystemExit(0 if all_valid else 1)
 
     # Rich table output
     table = Table(title="Validation Results", show_lines=False)
@@ -171,7 +175,7 @@ def validate(ctx: click.Context, path: str) -> None:
         summary += f", [red]{len(per_errors)} errors[/]"
     console.print(f"\n{summary}")
 
-    sys.exit(0 if all_valid else 1)
+    raise SystemExit(0 if all_valid else 1)
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +196,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
 
     if not resources:
         console.print("[yellow]No resource files found.[/]")
-        sys.exit(1)
+        raise SystemExit(1)
 
     # Local validation first
     per_errors, cycles = validate_resources(resources)
@@ -210,10 +214,10 @@ def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
             for cycle in cycles:
                 console.print(f"  [red]•[/] {' → '.join(cycle)}")
         console.print("\n[red]Aborting apply due to validation errors.[/]")
-        sys.exit(1)
+        raise SystemExit(1)
 
     if dry_run:
-        if ctx.obj.get("json"):
+        if ctx.obj["json"]:
             _output_json({"dry_run": True, "resources": [
                 {"kind": r.get("kind"), "name": r.get("metadata", {}).get("name")}
                 for r in resources
@@ -224,7 +228,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
                 kind = res.get("kind", "")
                 name = res.get("metadata", {}).get("name", "?")
                 console.print(f"  [cyan]→[/] {kind}/{name}: would apply")
-        sys.exit(0)
+        raise SystemExit(0)
 
     # Topologically sort resources by dependency order
     adjacency = build_adjacency(resources)
@@ -239,7 +243,10 @@ def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
                 sorted_resources.append(r)
         resources = sorted_resources
     except (KeyError, ValueError) as exc:
-        console.print(f"[yellow]⚠ Could not sort by dependencies ({exc}), applying in file order.[/]")
+        console.print(
+            f"[yellow]⚠ Could not sort by dependencies ({exc}),"
+            " applying in file order.[/]"
+        )
 
     # Apply resources with progress
     headers = {"X-API-Key": api_key}
@@ -262,7 +269,10 @@ def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
 
                 plural = KIND_TO_PLURAL.get(kind)
                 if not plural:
-                    results.append({"resource": label, "status": "error", "detail": f"Unknown kind '{kind}'"})
+                    results.append({
+                        "resource": label, "status": "error",
+                        "detail": f"Unknown kind '{kind}'",
+                    })
                     progress.advance(task)
                     continue
 
@@ -279,14 +289,20 @@ def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
                             detail = response.json().get("detail", response.text)
                         except Exception:
                             detail = response.text
-                        results.append({"resource": label, "status": "error", "detail": f"HTTP {response.status_code}: {detail}"})
+                        results.append({
+                            "resource": label, "status": "error",
+                            "detail": f"HTTP {response.status_code}: {detail}",
+                        })
                 except httpx.RequestError as exc:
-                    results.append({"resource": label, "status": "error", "detail": f"Connection failed: {exc}"})
+                    results.append({
+                        "resource": label, "status": "error",
+                        "detail": f"Connection failed: {exc}",
+                    })
 
                 progress.advance(task)
 
     # Output results
-    if ctx.obj.get("json"):
+    if ctx.obj["json"]:
         _output_json({"results": results})
     else:
         table = Table(title="Apply Results")
@@ -306,10 +322,14 @@ def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
 
         created = sum(1 for r in results if r["status"] in ("created", "updated"))
         failed = sum(1 for r in results if r["status"] == "error")
-        console.print(f"\n[bold]{len(results)}[/] resources: [green]{created} succeeded[/], [red]{failed} failed[/]")
+        console.print(
+            f"\n[bold]{len(results)}[/] resources:"
+            f" [green]{created} succeeded[/],"
+            f" [red]{failed} failed[/]"
+        )
 
     if any(r["status"] == "error" for r in results):
-        sys.exit(1)
+        raise SystemExit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -324,7 +344,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
 def kickoff(ctx: click.Context, crew_name: str, inputs: tuple) -> None:
     """Kick off a crew execution.
 
-    CREW_NAME is the crew name, e.g. research-crew
+    CREW_NAME is the name of the crew to run, e.g. research-crew.
     """
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
@@ -351,7 +371,10 @@ def kickoff(ctx: click.Context, crew_name: str, inputs: tuple) -> None:
             with httpx.Client(timeout=30.0) as client:
                 response = client.post(url, json=body, headers=headers)
         except httpx.RequestError as exc:
-            console.print(f"[red]Cannot reach server at {server}.[/] Check --server or BLACKBEARD_SERVER.\n{exc}")
+            console.print(
+                f"[red]Cannot reach server at {server}.[/]"
+                f" Check --server or BLACKBEARD_SERVER.\n{exc}"
+            )
             raise SystemExit(1) from exc
 
     if response.status_code not in (200, 201, 202):
@@ -364,7 +387,7 @@ def kickoff(ctx: click.Context, crew_name: str, inputs: tuple) -> None:
 
     data = response.json()
 
-    if ctx.obj.get("json"):
+    if ctx.obj["json"]:
         _output_json(data)
         return
 
@@ -385,27 +408,37 @@ def kickoff(ctx: click.Context, crew_name: str, inputs: tuple) -> None:
 
 @cli.command()
 @click.argument("execution_id")
-@click.option("--watch", is_flag=True, default=False, help="Poll until execution reaches a terminal state")
+@click.option("--watch", is_flag=True, default=False,
+              help="Poll until execution reaches a terminal state")
 @click.pass_context
 def status(ctx: click.Context, execution_id: str, watch: bool) -> None:
     """Check execution status."""
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
-    is_json = ctx.obj.get("json")
+    is_json = ctx.obj["json"]
 
     terminal_states = {"completed", "failed", "cancelled"}
     url = f"{server.rstrip('/')}/api/v1/executions/{execution_id}"
     headers = {"X-API-Key": api_key}
 
     def _status_color(s: str) -> str:
-        return {"completed": "green", "failed": "red", "cancelled": "yellow"}.get(s, "blue")
+        return {
+            "completed": "green",
+            "failed": "red",
+            "cancelled": "yellow",
+            "running": "blue",
+            "pending": "cyan",
+        }.get(s, "dim")
 
     with httpx.Client(timeout=30.0) as client:
         def fetch() -> dict:
             try:
                 response = client.get(url, headers=headers)
             except httpx.RequestError as exc:
-                console.print(f"[red]Cannot reach server at {server}.[/] Check --server or BLACKBEARD_SERVER.\n{exc}")
+                console.print(
+                f"[red]Cannot reach server at {server}.[/]"
+                f" Check --server or BLACKBEARD_SERVER.\n{exc}"
+            )
                 raise SystemExit(1) from exc
 
             if response.status_code != 200:
@@ -451,7 +484,11 @@ def status(ctx: click.Context, execution_id: str, watch: bool) -> None:
             if trace:
                 table.add_row("Trace", f"[link={trace}]{trace}[/link]")
 
-            console.print(Panel(table, title=f"Execution [{color}]{status_val}[/]", border_style=color))
+            console.print(Panel(
+                table,
+                title=f"Execution [{color}]{status_val}[/]",
+                border_style=color,
+            ))
 
             # Error
             error = data.get("error")

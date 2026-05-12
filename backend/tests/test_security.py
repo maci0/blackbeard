@@ -29,7 +29,7 @@ async def test_api_rejects_wrong_key(client):
 async def test_api_accepts_correct_key(client):
     """Protected endpoints should accept correct API key."""
     response = await client.get("/api/v1/agents", headers={"X-API-Key": "change-me-in-production"})
-    assert response.status_code in (200, 404)
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -53,7 +53,7 @@ async def test_error_no_secret_leak(client):
         "/api/v1/agents/nonexistent",
         headers={"X-API-Key": "change-me-in-production"},
     )
-    assert response.status_code in (404, 422)
+    assert response.status_code == 404
     body = response.json()
     detail = str(body.get("detail", ""))
     assert "/Users/" not in detail

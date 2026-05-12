@@ -39,7 +39,7 @@ def _resolve_kind(kind_plural: str) -> str:
 @router.get("/{kind_plural}", response_model=ResourceListResponse)
 async def list_resources(
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
-    namespace: str | None = Query(default=None),
+    namespace: str | None = Query(default=None, pattern=r"^[a-z0-9][a-z0-9\-]*$", max_length=255),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
@@ -95,7 +95,7 @@ _NAME_PATTERN = r"^[a-z0-9][a-z0-9\-]*$"
 async def get_resource(
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
     name: str = Path(..., pattern=_NAME_PATTERN, max_length=255),
-    namespace: str = Query(default="default"),
+    namespace: str = Query(default="default", pattern=r"^[a-z0-9][a-z0-9\-]*$", max_length=255),
     session: AsyncSession = Depends(get_session),
 ) -> ResourceResponse:
     """Get a single resource by kind and name."""
@@ -113,7 +113,7 @@ async def update_resource(
     data: ResourceUpdate,
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
     name: str = Path(..., pattern=_NAME_PATTERN, max_length=255),
-    namespace: str = Query(default="default"),
+    namespace: str = Query(default="default", pattern=r"^[a-z0-9][a-z0-9\-]*$", max_length=255),
     session: AsyncSession = Depends(get_session),
 ) -> ResourceResponse:
     """Update a resource by kind and name (optimistic locking via version)."""
@@ -141,7 +141,7 @@ async def update_resource(
 async def delete_resource(
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
     name: str = Path(..., pattern=_NAME_PATTERN, max_length=255),
-    namespace: str = Query(default="default"),
+    namespace: str = Query(default="default", pattern=r"^[a-z0-9][a-z0-9\-]*$", max_length=255),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Delete a resource by kind and name."""
