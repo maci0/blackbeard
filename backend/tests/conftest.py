@@ -1,0 +1,112 @@
+"""Shared test configuration and fixtures.
+
+IMPORTANT: The PostgreSQL-specific column types (JSONB, UUID) are monkey-patched
+to SQLite-compatible equivalents here — *before* any blackbeard models are imported
+— so that integration tests can use an in-memory SQLite database without requiring
+a live PostgreSQL instance.
+"""
+
+# ---------------------------------------------------------------------------
+# Patch postgresql types → SQLite-compatible equivalents
+# This must happen at import time, before any blackbeard module is loaded.
+# ---------------------------------------------------------------------------
+import uuid as _uuid_mod
+
+import sqlalchemy.dialects.postgresql as _pg_dialect
+from sqlalchemy import JSON
+from sqlalchemy.types import TypeDecorator, String
+
+
+class _UUIDAsString(TypeDecorator):
+    """Drop-in replacement for postgresql.UUID that works on SQLite.
+
+    Uses TypeDecorator so that process_bind_param / process_result_value are
+    actually invoked by SQLAlchemy's bind/result pipeline.
+
+    Accepts the `as_uuid` kwarg (used by the models) and stores values as a
+    VARCHAR(36) string, converting uuid.UUID ↔ str transparently.
+    """
+
+    impl = String
+    cache_ok = True
+
+    def __init__(self, as_uuid: bool = False, *args, **kw):  # noqa: FBT001, FBT002
+        self.as_uuid = as_uuid
+        # Remove as_uuid from kw before passing to String (it doesn't understand it)
+        super().__init__(length=36, *args, **kw)
+
+    def process_bind_param(self, value, dialect):  # type: ignore[override]
+        if value is None:
+            return value
+        return str(value)
+
+    def process_result_value(self, value, dialect):  # type: ignore[override]
+        if value is None:
+            return value
+        if self.as_uuid:
+            return _uuid_mod.UUID(value) if not isinstance(value, _uuid_mod.UUID) else value
+        return value
+
+
+_pg_dialect.JSONB = JSON          # type: ignore[attr-defined]
+_pg_dialect.UUID = _UUIDAsString  # type: ignore[attr-defined]
+
+# ---------------------------------------------------------------------------
+# Import all models so their tables are registered with Base.metadata before
+# any test fixture calls Base.metadata.create_all().
+# ---------------------------------------------------------------------------
+import blackbeard.models.resource   # noqa: F401, E402 — registers resource tables
+import blackbeard.models.execution  # noqa: F401, E402 — registers execution tables
+from blackbeard.models.database import Base  # noqa: E402 — needed by db_session fixture
+
+# ---------------------------------------------------------------------------
+# Standard fixtures (shared across all test modules)
+# ---------------------------------------------------------------------------
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.pool import StaticPool
+
+from blackbeard.models.database import get_session
+from blackbeard.main import app
+
+API_KEY_HEADER = {"X-API-Key": "change-me-in-production"}
+
+
+@pytest.fixture
+async def db_session():
+    """Create an in-memory SQLite database and yield a single session for the test."""
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    session_factory = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+    async with session_factory() as session:
+        yield session
+
+    await engine.dispose()
+
+
+@pytest.fixture
+async def client(db_session: AsyncSession):
+    """HTTP test client wired to the in-memory SQLite session."""
+
+    async def override_get_session():
+        yield db_session
+
+    app.dependency_overrides[get_session] = override_get_session
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+    app.dependency_overrides.clear()

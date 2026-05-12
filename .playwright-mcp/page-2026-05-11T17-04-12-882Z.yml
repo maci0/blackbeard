@@ -1,0 +1,140 @@
+- generic:
+  - generic:
+    - generic:
+      - complementary:
+        - generic:
+          - heading [level=1]: Blackbeard
+          - paragraph: Agent Management Platform
+        - navigation:
+          - link:
+            - /url: /studio
+            - img
+            - text: Studio
+          - link:
+            - /url: /resources
+            - img
+            - text: Resources
+          - link:
+            - /url: /executions
+            - img
+            - text: Executions
+          - link:
+            - /url: /models
+            - img
+            - text: Models
+          - link:
+            - /url: /tools
+            - img
+            - text: Tools
+        - generic: v0.1.0
+      - main:
+        - generic:
+          - generic:
+            - generic:
+              - generic: Crew
+              - textbox:
+                - /placeholder: crew-name
+                - text: my-crew
+            - generic:
+              - button:
+                - img
+                - text: Save
+              - button:
+                - img
+                - text: Run
+          - generic:
+            - complementary:
+              - generic:
+                - paragraph: Palette
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                  - generic: Agent
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                  - generic: Task
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                  - generic: Tool
+              - generic:
+                - paragraph: Drag onto canvas
+            - generic:
+              - application:
+                - group [ref=e274]:
+                  - generic [ref=e275]:
+                    - generic [ref=e277]:
+                      - img [ref=e279]
+                      - generic [ref=e282]: Agent
+                    - generic [ref=e283]:
+                      - paragraph [ref=e284]: Research Lead
+                      - paragraph [ref=e285]: No goal set
+                      - generic [ref=e287]: gpt-4o
+                - img
+                - generic:
+                  - button [disabled]:
+                    - img
+                  - button:
+                    - img
+                  - button:
+                    - img
+                - generic:
+                  - img
+            - complementary:
+              - generic:
+                - generic:
+                  - generic: Agent Properties
+                - generic:
+                  - button:
+                    - img
+                  - button:
+                    - img
+              - generic:
+                - tablist:
+                  - tab [selected]: properties
+                  - tab: yaml
+                - tabpanel:
+                  - generic:
+                    - generic:
+                      - generic: Role
+                      - textbox:
+                        - /placeholder: Senior Researcher
+                        - text: Research Lead
+                    - generic:
+                      - generic: Goal
+                      - textbox:
+                        - /placeholder: What should this agent achieve?
+                    - generic:
+                      - generic: Backstory
+                      - textbox:
+                        - /placeholder: Agent background and expertise...
+                    - generic:
+                      - generic: LLM
+                      - textbox:
+                        - /placeholder: gpt-4o
+                        - text: gpt-4o
+                    - generic:
+                      - checkbox
+                      - generic: Verbose
+                - tabpanel
+  - dialog "Run Crew" [ref=e327]:
+    - generic [ref=e328]:
+      - generic [ref=e329]:
+        - heading "Run Crew" [level=2] [ref=e330]
+        - paragraph [ref=e331]: Kick off my-crew with optional inputs
+      - button [active] [ref=e332] [cursor=pointer]:
+        - img [ref=e333]
+    - generic [ref=e336]:
+      - generic [ref=e337]:
+        - generic [ref=e338]: Crew Inputs (JSON)
+        - 'textbox "{ \"topic\": \"AI safety\" }" [ref=e339]': "{}"
+      - generic [ref=e340]:
+        - button "Cancel" [ref=e341] [cursor=pointer]
+        - button "Run" [ref=e342] [cursor=pointer]:
+          - img [ref=e343]
+          - text: Run

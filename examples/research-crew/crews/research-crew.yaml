@@ -1,0 +1,21 @@
+apiVersion: blackbeard/v1
+kind: Crew
+metadata:
+  name: research-crew
+  namespace: default
+  labels:
+    type: research
+spec:
+  description: "A crew that researches a topic and produces a comprehensive report"
+  process: sequential
+  agents:
+    - "ref:agents/researcher"
+    - "ref:agents/writer"
+  tasks:
+    - "ref:tasks/research-topic"
+    - "ref:tasks/write-report"
+  verbose: true
+  inputs:
+    - name: topic
+      description: "The topic to research"
+      required: true

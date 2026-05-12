@@ -1,0 +1,12 @@
+apiVersion: blackbeard/v1
+kind: Tool
+metadata:
+  name: web-search
+  namespace: default
+  labels:
+    category: search
+spec:
+  type: python
+  class_path: crewai_tools.SerperDevTool
+  description: "Search the web for current information"
+  sandbox: none

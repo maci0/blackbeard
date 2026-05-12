@@ -1,0 +1,64 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - heading "Blackbeard" [level=1] [ref=e6]
+      - paragraph [ref=e7]: Agent Management Platform
+    - navigation [ref=e8]:
+      - link "Studio" [active] [ref=e9] [cursor=pointer]:
+        - /url: /studio
+        - img [ref=e10]
+        - text: Studio
+      - link "Resources" [ref=e15] [cursor=pointer]:
+        - /url: /resources
+        - img [ref=e16]
+        - text: Resources
+      - link "Executions" [ref=e20] [cursor=pointer]:
+        - /url: /executions
+        - img [ref=e21]
+        - text: Executions
+      - link "Models" [ref=e23] [cursor=pointer]:
+        - /url: /models
+        - img [ref=e24]
+        - text: Models
+      - link "Tools" [ref=e27] [cursor=pointer]:
+        - /url: /tools
+        - img [ref=e28]
+        - text: Tools
+    - generic [ref=e30]: v0.1.0
+  - main [ref=e31]:
+    - generic [ref=e132]:
+      - generic [ref=e133]:
+        - generic [ref=e134]:
+          - generic [ref=e135]: Crew
+          - textbox "crew-name" [ref=e136]: my-crew
+        - generic [ref=e137]:
+          - button "Save" [ref=e138] [cursor=pointer]:
+            - img [ref=e139]
+            - text: Save
+          - button "Run" [ref=e143] [cursor=pointer]:
+            - img [ref=e144]
+            - text: Run
+      - generic [ref=e146]:
+        - complementary [ref=e147]:
+          - paragraph [ref=e149]: Palette
+          - generic [ref=e150]:
+            - generic [ref=e151]:
+              - img [ref=e154]
+              - generic [ref=e157]: Agent
+            - generic [ref=e158]:
+              - img [ref=e161]
+              - generic [ref=e164]: Task
+            - generic [ref=e165]:
+              - img [ref=e168]
+              - generic [ref=e170]: Tool
+          - paragraph [ref=e172]: Drag onto canvas
+        - application [ref=e174]:
+          - img
+          - generic "Control Panel" [ref=e177]:
+            - button "Zoom In" [ref=e178] [cursor=pointer]:
+              - img [ref=e179]
+            - button "Zoom Out" [ref=e181] [cursor=pointer]:
+              - img [ref=e182]
+            - button "Fit View" [ref=e184] [cursor=pointer]:
+              - img [ref=e185]
+          - img "Mini Map" [ref=e188]

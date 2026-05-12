@@ -1,0 +1,105 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - heading "Blackbeard" [level=1] [ref=e6]
+        - paragraph [ref=e7]: Agent Management Platform
+      - navigation [ref=e8]:
+        - link "Studio" [ref=e9] [cursor=pointer]:
+          - /url: /studio
+          - img [ref=e10]
+          - text: Studio
+        - link "Resources" [ref=e15] [cursor=pointer]:
+          - /url: /resources
+          - img [ref=e16]
+          - text: Resources
+        - link "Executions" [ref=e20] [cursor=pointer]:
+          - /url: /executions
+          - img [ref=e21]
+          - text: Executions
+        - link "Models" [ref=e23] [cursor=pointer]:
+          - /url: /models
+          - img [ref=e24]
+          - text: Models
+        - link "Tools" [ref=e27] [cursor=pointer]:
+          - /url: /tools
+          - img [ref=e28]
+          - text: Tools
+      - generic [ref=e30]: v0.1.0
+    - main [ref=e31]:
+      - generic [ref=e216]:
+        - generic [ref=e217]:
+          - generic [ref=e218]:
+            - generic [ref=e219]: Crew
+            - textbox "crew-name" [ref=e220]: my-crew
+          - generic [ref=e221]:
+            - button "Save" [ref=e222] [cursor=pointer]:
+              - img [ref=e223]
+              - text: Save
+            - button "Run" [ref=e227] [cursor=pointer]:
+              - img [ref=e228]
+              - text: Run
+        - generic [ref=e230]:
+          - complementary [ref=e231]:
+            - paragraph [ref=e233]: Palette
+            - generic [ref=e234]:
+              - generic [ref=e235]:
+                - img [ref=e238]
+                - generic [ref=e241]: Agent
+              - generic [ref=e242]:
+                - img [ref=e245]
+                - generic [ref=e248]: Task
+              - generic [ref=e249]:
+                - img [ref=e252]
+                - generic [ref=e254]: Tool
+            - paragraph [ref=e256]: Drag onto canvas
+          - application [ref=e258]:
+            - group [ref=e274]:
+              - generic [ref=e275]:
+                - generic [ref=e277]:
+                  - img [ref=e279]
+                  - generic [ref=e282]: Agent
+                - generic [ref=e283]:
+                  - paragraph [ref=e284]: Research Lead
+                  - paragraph [ref=e285]: No goal set
+                  - generic [ref=e287]: gpt-4o
+            - img
+            - generic "Control Panel" [ref=e261]:
+              - button "Zoom In" [disabled]:
+                - img
+              - button "Zoom Out" [ref=e265] [cursor=pointer]:
+                - img [ref=e266]
+              - button "Fit View" [ref=e268] [cursor=pointer]:
+                - img [ref=e269]
+            - img "Mini Map" [ref=e272]
+          - complementary [ref=e290]:
+            - generic [ref=e291]:
+              - generic [ref=e294]: Agent Properties
+              - generic [ref=e295]:
+                - button "Delete node" [ref=e296] [cursor=pointer]:
+                  - img [ref=e297]
+                - button "Close" [ref=e300] [cursor=pointer]:
+                  - img [ref=e301]
+            - generic [ref=e304]:
+              - tablist [ref=e305]:
+                - tab "properties" [ref=e306] [cursor=pointer]
+                - tab "yaml" [active] [selected] [ref=e307] [cursor=pointer]
+              - tabpanel "yaml" [ref=e325]:
+                - paragraph [ref=e346]: Read-only preview of the resource YAML
+                - code [ref=e350]:
+                  - generic [ref=e351]:
+                    - textbox "Editor content" [ref=e352]
+                    - textbox [ref=e353]
+                    - generic [ref=e382]:
+                      - generic [ref=e384]: "apiVersion: blackbeard.io/v1"
+                      - generic [ref=e386]: "kind: Agent"
+                      - generic [ref=e388]: "metadata:"
+                      - generic [ref=e390]: "name: research-lead"
+                      - generic [ref=e392]: "spec:"
+                      - generic [ref=e394]: "role: Research Lead"
+                      - generic [ref=e396]: "llm: gpt-4o"
+                      - generic [ref=e398]: "verbose: false"
+                      - generic [ref=e400]: "tools: []"
+  - generic [ref=e401]:
+    - alert
+    - alert

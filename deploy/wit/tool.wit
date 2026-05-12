@@ -1,0 +1,29 @@
+/// Blackbeard Tool Interface
+///
+/// All WASM tools must implement this interface.
+/// The host provides input as a JSON string, and the tool
+/// returns output as a JSON string.
+
+package blackbeard:tool@0.1.0;
+
+interface types {
+    /// Tool execution result
+    record tool-result {
+        /// JSON-encoded output data
+        output: string,
+        /// Whether the execution succeeded
+        success: bool,
+        /// Error message if success is false
+        error: option<string>,
+    }
+}
+
+world tool {
+    use types.{tool-result};
+
+    /// Execute the tool with JSON-encoded input
+    export run: func(input: string) -> tool-result;
+
+    /// Return tool metadata (name, description, schema)
+    export describe: func() -> string;
+}

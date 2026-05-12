@@ -1,0 +1,87 @@
+- generic:
+  - generic:
+    - generic:
+      - complementary:
+        - generic:
+          - heading [level=1]: Blackbeard
+          - paragraph: Agent Management Platform
+        - navigation:
+          - link:
+            - /url: /studio
+            - img
+            - text: Studio
+          - link:
+            - /url: /resources
+            - img
+            - text: Resources
+          - link:
+            - /url: /executions
+            - img
+            - text: Executions
+          - link:
+            - /url: /models
+            - img
+            - text: Models
+          - link:
+            - /url: /tools
+            - img
+            - text: Tools
+        - generic: v0.1.0
+      - main:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - heading [level=1]: Models
+                - paragraph: LLM connection configurations
+              - generic:
+                - button:
+                  - img
+                  - text: Refresh
+                - button:
+                  - img
+                  - text: Add Model
+            - generic:
+              - img
+              - text: Invalid or missing API key. Set X-API-Key header.
+            - generic:
+              - generic:
+                - img
+              - paragraph: No LLM connections
+              - paragraph: Add your first model connection to get started
+              - button:
+                - img
+                - text: Add Model
+  - dialog "Add LLM Connection" [ref=e118]:
+    - generic [ref=e119]:
+      - generic [ref=e120]:
+        - heading "Add LLM Connection" [level=2] [ref=e121]
+        - paragraph [ref=e122]: Configure a new language model connection
+      - button [active] [ref=e123] [cursor=pointer]:
+        - img [ref=e124]
+    - generic [ref=e127]:
+      - generic [ref=e128]:
+        - generic [ref=e129]:
+          - generic [ref=e130]: Name *
+          - textbox "my-gpt4-connection" [ref=e131]
+        - generic [ref=e132]:
+          - generic [ref=e133]: Provider
+          - combobox [ref=e134]:
+            - option "openai" [selected]
+            - option "anthropic"
+            - option "vertex_ai"
+            - option "azure"
+            - option "ollama"
+            - option "other"
+        - generic [ref=e135]:
+          - generic [ref=e136]: Model *
+          - textbox "gpt-4o" [ref=e137]
+        - generic [ref=e138]:
+          - generic [ref=e139]: Temperature
+          - spinbutton [ref=e140]: "0.7"
+        - generic [ref=e141]:
+          - generic [ref=e142]: Max tokens
+          - spinbutton [ref=e143]: "4096"
+      - generic [ref=e144]:
+        - button "Cancel" [ref=e145] [cursor=pointer]
+        - button "Add connection" [ref=e146] [cursor=pointer]

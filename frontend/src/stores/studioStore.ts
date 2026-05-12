@@ -1,0 +1,174 @@
+import { create } from 'zustand'
+import {
+  addEdge,
+  applyEdgeChanges,
+  applyNodeChanges,
+  type Connection,
+  type Edge,
+  type EdgeChange,
+  type Node,
+  type NodeChange,
+} from '@xyflow/react'
+
+const MAX_HISTORY = 30
+
+let lastHistoryPush = 0
+
+interface HistorySnapshot {
+  nodes: Node[]
+  edges: Edge[]
+}
+
+interface StudioState {
+  nodes: Node[]
+  edges: Edge[]
+  selectedNodeId: string | null
+  dirty: boolean
+  history: HistorySnapshot[]
+  historyIndex: number
+  canUndo: boolean
+  canRedo: boolean
+
+  onNodesChange: (changes: NodeChange[]) => void
+  onEdgesChange: (changes: EdgeChange[]) => void
+  onConnect: (connection: Connection) => void
+  addNode: (node: Node) => void
+  removeNode: (id: string) => void
+  updateNodeData: (id: string, data: Record<string, unknown>) => void
+  setSelectedNode: (id: string | null) => void
+  setNodes: (nodes: Node[]) => void
+  setEdges: (edges: Edge[]) => void
+  markClean: () => void
+  undo: () => void
+  redo: () => void
+}
+
+export const useStudioStore = create<StudioState>()((set, get) => {
+  function pushHistory() {
+    const { nodes, edges, history, historyIndex } = get()
+    const newHistory = history.slice(0, historyIndex + 1)
+    newHistory.push({ nodes: structuredClone(nodes), edges: structuredClone(edges) })
+    if (newHistory.length > MAX_HISTORY) newHistory.shift()
+    const newIndex = newHistory.length - 1
+    set({
+      history: newHistory,
+      historyIndex: newIndex,
+      canUndo: newIndex >= 0,
+      canRedo: false,
+    })
+  }
+
+  return {
+    nodes: [],
+    edges: [],
+    selectedNodeId: null,
+    dirty: false,
+    history: [],
+    historyIndex: -1,
+    canUndo: false,
+    canRedo: false,
+
+    onNodesChange: (changes) => {
+      // Only push history for structural changes or when a drag operation ends,
+      // not for every intermediate position update during a drag.
+      const hasStructuralChange = changes.some(
+        (c) =>
+          c.type === 'remove' ||
+          c.type === 'add' ||
+          c.type === 'replace' ||
+          (c.type === 'position' && c.dragging === false),
+      )
+      if (hasStructuralChange) pushHistory()
+      set((state) => ({ nodes: applyNodeChanges(changes, state.nodes), dirty: true }))
+    },
+
+    onEdgesChange: (changes) => {
+      const hasStructuralChange = changes.some(
+        (c) => c.type === 'remove' || c.type === 'add' || c.type === 'replace',
+      )
+      if (hasStructuralChange) pushHistory()
+      set((state) => ({ edges: applyEdgeChanges(changes, state.edges), dirty: true }))
+    },
+
+    onConnect: (connection) => {
+      pushHistory()
+      set((state) => ({ edges: addEdge(connection, state.edges), dirty: true }))
+    },
+
+    addNode: (node) => {
+      pushHistory()
+      set((state) => ({ nodes: [...state.nodes, node], dirty: true }))
+    },
+
+    removeNode: (id) => {
+      pushHistory()
+      set((state) => ({
+        nodes: state.nodes.filter((n) => n.id !== id),
+        edges: state.edges.filter((e) => e.source !== id && e.target !== id),
+        selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
+        dirty: true,
+      }))
+    },
+
+    updateNodeData: (id, data) => {
+      const now = Date.now()
+      if (now - lastHistoryPush > 500) {
+        pushHistory()
+        lastHistoryPush = now
+      }
+      set((state) => ({
+        nodes: state.nodes.map((n) =>
+          n.id === id ? { ...n, data: { ...n.data, ...data } } : n,
+        ),
+        dirty: true,
+      }))
+    },
+
+    setSelectedNode: (id) => set({ selectedNodeId: id }),
+    setNodes: (nodes) => set({ nodes }),
+    setEdges: (edges) => set({ edges }),
+    markClean: () => set({ dirty: false }),
+
+    undo: () => {
+      const { history, historyIndex } = get()
+      if (historyIndex < 0) return
+      // Save the live canvas state at the tip so redo can restore it
+      if (historyIndex === history.length - 1) {
+        const { nodes, edges } = get()
+        const extended = [...history, { nodes: structuredClone(nodes), edges: structuredClone(edges) }]
+        if (extended.length > MAX_HISTORY + 1) extended.shift()
+        set({ history: extended })
+      }
+      // Re-read after the potential extension
+      const currentHistory = get().history
+      const prev = currentHistory[historyIndex]
+      if (prev) {
+        const newIndex = historyIndex - 1
+        set({
+          nodes: prev.nodes,
+          edges: prev.edges,
+          historyIndex: newIndex,
+          dirty: true,
+          canUndo: newIndex >= 0,
+          canRedo: currentHistory[newIndex + 2] !== undefined,
+        })
+      }
+    },
+
+    redo: () => {
+      const { history, historyIndex } = get()
+      const next = history[historyIndex + 2]
+      if (next) {
+        const newIndex = historyIndex + 1
+        set({
+          nodes: next.nodes,
+          edges: next.edges,
+          historyIndex: newIndex,
+          dirty: true,
+          canUndo: newIndex >= 0,
+          canRedo: history[newIndex + 2] !== undefined,
+        })
+      }
+    },
+  }
+})

@@ -1,0 +1,140 @@
+"""Agent policy enforcement.
+
+Implements:
+- Tool allowlist/denylist enforcement
+- LLM budget limits (via LiteLLM virtual key max_budget)
+- Sandbox minimum tier enforcement
+- Policy resolution chain: agent.spec.policy → crew.spec.default_agent_policy → default
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+class PolicyDeniedError(Exception):
+    """Raised when a policy check denies an action."""
+
+    def __init__(self, agent: str, action: str, reason: str):
+        self.agent = agent
+        self.action = action
+        self.reason = reason
+        super().__init__(f"Policy denied for agent '{agent}': {action} — {reason}")
+
+
+class AgentPolicy:
+    """Represents a resolved agent policy."""
+
+    def __init__(self, spec: dict[str, Any]):
+        self.spec = spec
+        self._tools_config = spec.get("tools", {})
+        self._budget = spec.get("budget", {})
+        self._sandbox = spec.get("sandbox", {})
+
+    @property
+    def tool_mode(self) -> str:
+        """Tool access mode: 'allowlist', 'denylist', or 'all'."""
+        return self._tools_config.get("mode", "all")
+
+    @property
+    def allowed_tools(self) -> set[str]:
+        """Set of allowed tool names (when mode=allowlist)."""
+        return set(self._tools_config.get("allow", []))
+
+    @property
+    def denied_tools(self) -> set[str]:
+        """Set of denied tool names (when mode=denylist)."""
+        return set(self._tools_config.get("deny", []))
+
+    @property
+    def max_budget_usd(self) -> float | None:
+        """Maximum LLM spend in USD for this agent."""
+        return self._budget.get("max_usd")
+
+    @property
+    def max_tokens(self) -> int | None:
+        """Maximum total tokens for this agent."""
+        return self._budget.get("max_tokens")
+
+    @property
+    def minimum_sandbox_tier(self) -> str:
+        """Minimum sandbox tier required by policy."""
+        return self._sandbox.get("minimum_tier", "none")
+
+    def check_tool_access(self, agent_name: str, tool_name: str) -> None:
+        """Check if an agent is allowed to use a tool.
+
+        Raises PolicyDeniedError if denied.
+        """
+        if self.tool_mode == "allowlist":
+            if tool_name not in self.allowed_tools:
+                raise PolicyDeniedError(
+                    agent=agent_name,
+                    action=f"use tool '{tool_name}'",
+                    reason=f"Tool not in allowlist. Allowed: {sorted(self.allowed_tools)}",
+                )
+        elif self.tool_mode == "denylist":
+            if tool_name in self.denied_tools:
+                raise PolicyDeniedError(
+                    agent=agent_name,
+                    action=f"use tool '{tool_name}'",
+                    reason="Tool is in denylist",
+                )
+        # mode == "all" → everything allowed
+
+
+# Default policy — no restrictions
+DEFAULT_POLICY = AgentPolicy({})
+
+
+def resolve_policy(
+    agent_spec: dict,
+    crew_spec: dict | None = None,
+    policies: dict[str, dict] | None = None,
+) -> AgentPolicy:
+    """Resolve the effective policy for an agent.
+
+    Resolution chain:
+    1. agent.spec.policy (ref to AgentPolicy resource)
+    2. crew.spec.default_agent_policy (ref to AgentPolicy resource)
+    3. DEFAULT_POLICY (no restrictions)
+
+    Args:
+        agent_spec: The agent's spec dict
+        crew_spec: The crew's spec dict (optional)
+        policies: Dict of policy name → policy spec (optional)
+
+    Returns:
+        Resolved AgentPolicy
+    """
+    policies = policies or {}
+
+    # Check agent-level policy
+    agent_policy_ref = agent_spec.get("policy")
+    if agent_policy_ref:
+        policy_name = _extract_name(agent_policy_ref)
+        if policy_name in policies:
+            return AgentPolicy(policies[policy_name])
+        logger.warning(f"Agent policy '{policy_name}' not found, checking crew default")
+
+    # Check crew-level default
+    if crew_spec:
+        crew_policy_ref = crew_spec.get("default_agent_policy")
+        if crew_policy_ref:
+            policy_name = _extract_name(crew_policy_ref)
+            if policy_name in policies:
+                return AgentPolicy(policies[policy_name])
+            logger.warning(f"Crew default policy '{policy_name}' not found, using default")
+
+    return DEFAULT_POLICY
+
+
+def _extract_name(ref_or_name: str) -> str:
+    """Extract resource name from a ref string or plain name."""
+    if ref_or_name.startswith("ref:"):
+        parts = ref_or_name.split("/")
+        return parts[-1] if len(parts) > 1 else ref_or_name
+    return ref_or_name

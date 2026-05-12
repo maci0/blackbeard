@@ -1,0 +1,6 @@
+# Development overrides — auto-loaded by docker/podman compose.
+# Remove or rename this file for production-like deployments.
+services:
+  api:
+    volumes:
+      - ./backend:/app

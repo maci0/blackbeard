@@ -1,0 +1,245 @@
+services:
+
+  # ── API (FastAPI backend) ──────────────────────────────────────────────────
+  api:
+    build:
+      context: backend/
+      dockerfile: ../deploy/docker/Dockerfile.api
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://blackbeard:blackbeard@postgres:5432/blackbeard}
+      VALKEY_URL: ${VALKEY_URL:-valkey://default:valkey-dev-secret@valkey:6379/0}
+      LITELLM_PROXY_URL: ${LITELLM_PROXY_URL:-http://litellm:4000}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master-key}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse-web:3000}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      BLACKBEARD_API_KEY: ${BLACKBEARD_API_KEY:-change-me-in-production}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      CLOUD_ML_REGION: ${CLOUD_ML_REGION:-us-east5}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials.json
+    volumes:
+      - ${GOOGLE_APPLICATION_CREDENTIALS}:/app/credentials.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/api/v1/health').raise_for_status()"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks: [frontend, backend]
+
+  # ── UI (React/Vite frontend) ───────────────────────────────────────────────
+  ui:
+    build:
+      context: frontend/
+      dockerfile: ../deploy/docker/Dockerfile.ui
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks: [frontend]
+
+  # ── PostgreSQL 17 ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: blackbeard
+      POSTGRES_PASSWORD: blackbeard
+      POSTGRES_DB: blackbeard
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blackbeard -d blackbeard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [backend]
+
+  # ── Valkey (Redis-compatible cache) ────────────────────────────────────────
+  valkey:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: ["valkey-server", "--requirepass", "valkey-dev-secret"]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=valkey-dev-secret valkey-cli ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [backend]
+
+  # ── LiteLLM Proxy ─────────────────────────────────────────────────────────
+  litellm:
+    image: ghcr.io/berriai/litellm:main-v1.63.11
+    ports:
+      - "127.0.0.1:4000:4000"
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master-key}
+      DATABASE_URL: postgresql://blackbeard:blackbeard@postgres:5432/litellm
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      CLOUD_ML_REGION: ${CLOUD_ML_REGION:-us-east5}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials.json
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: http://langfuse-web:3000
+    volumes:
+      - ./deploy/litellm/config.yaml:/app/config.yaml
+      - ${GOOGLE_APPLICATION_CREDENTIALS}:/app/credentials.json:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks: [backend]
+
+  # ── Langfuse v3 (observability) ────────────────────────────────────────────
+  # Langfuse v3 requires ClickHouse, MinIO (S3-compatible), and Redis.
+  langfuse-web:
+    image: langfuse/langfuse:3.38.1
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment: &langfuse-env
+      DATABASE_URL: postgresql://blackbeard:blackbeard@postgres:5432/langfuse
+      NEXTAUTH_SECRET: blackbeard-langfuse-secret
+      NEXTAUTH_URL: http://localhost:3001
+      SALT: blackbeard-salt
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: langfuse-redis-secret
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [backend]
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3.38.1
+    environment:
+      <<: *langfuse-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [backend]
+
+  langfuse-clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 1s
+    restart: unless-stopped
+    mem_limit: 2g
+    networks: [backend]
+
+  langfuse-minio:
+    image: quay.io/minio/minio:RELEASE.2024-12-18T13-15-44Z
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: miniosecret
+    ports:
+      - "127.0.0.1:9090:9000"
+    volumes:
+      - langfuse_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 1s
+    restart: unless-stopped
+    networks: [backend]
+
+  langfuse-redis:
+    image: redis:7-alpine
+    command: >
+      --requirepass langfuse-redis-secret
+      --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=langfuse-redis-secret redis-cli ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [backend]
+
+volumes:
+  pgdata:
+  langfuse_clickhouse_data:
+  langfuse_clickhouse_logs:
+  langfuse_minio_data:
+
+networks:
+  frontend:
+  backend:

@@ -1,0 +1,19 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: research-topic
+  namespace: default
+spec:
+  description: >
+    Research the topic: {topic}
+
+    Provide a comprehensive analysis including:
+    1. Current state and key developments
+    2. Major players and stakeholders
+    3. Challenges and opportunities
+    4. Future outlook and predictions
+  expected_output: >
+    A detailed research brief with sections covering current state,
+    key players, challenges, opportunities, and future outlook.
+    Include specific data points and references where possible.
+  agent: "ref:agents/researcher"

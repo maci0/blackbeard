@@ -1,0 +1,21 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: write-report
+  namespace: default
+spec:
+  description: >
+    Using the research findings, write a comprehensive report on: {topic}
+
+    The report should be well-structured with:
+    - Executive summary
+    - Key findings
+    - Detailed analysis
+    - Recommendations
+    - Conclusion
+  expected_output: >
+    A polished, publication-ready report in markdown format with
+    clear sections, data-backed insights, and actionable recommendations.
+  agent: "ref:agents/writer"
+  context:
+    - "ref:tasks/research-topic"
