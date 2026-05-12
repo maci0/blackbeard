@@ -217,7 +217,7 @@ metadata:
   labels:
     category: search
 spec:
-  type: python                        # python | mcp | rest | composio
+  type: python                        # python | wasm | mcp-stdio | mcp-http | rest | integration | composio | custom
   implementation: "crewai_tools:SerperDevTool"
   description: "Search the web using Serper.dev API"
   parameters:
@@ -269,7 +269,7 @@ spec:
       rpm: 200
 ```
 
-See PRD 06 for how LLMConnection resources map to LiteLLM Proxy configuration.
+See PRD 06 for how `rpm`, `tpm`, `fallback_to`, `context_window_fallback`, and `deployments` fields map to LiteLLM Proxy configuration.
 
 ### 2.7 KnowledgeSource
 
@@ -345,7 +345,7 @@ All resource kinds follow the same `apiVersion/kind/metadata/spec` envelope and 
 
 ### 2.10 Namespace
 
-A logical subdivision within the organization for isolating resources and applying default policies.
+A logical isolation boundary for resources. Namespaces scope RBAC, policies, and guardrails.
 
 ```yaml
 # namespaces/production.yaml
@@ -355,19 +355,22 @@ metadata:
   name: production
 spec:
   description: "Production environment"
-  default_agent_policy: ref:agent-policies/standard
-  default_sandbox_tier: wasm              # floor for all agents in this namespace
-  required_guardrails:
-    - ref: guardrails/no-pii-in-output
-  labels:
-    environment: production
+  defaults:
+    agent_policy: ref:agent-policies/standard
+    sandbox_tier: wasm
+    guardrails:
+      - ref: guardrails/no-pii-in-output
+  resource_quotas:
+    max_agents: 50
+    max_crews: 20
+    max_concurrent_executions: 10
 ```
 
-**Namespace lifecycle:**
-- A `default` namespace always exists and cannot be deleted.
-- Resources created without an explicit namespace are placed in `default`.
-- Deleting a namespace requires all resources within it to be deleted or moved first.
-- Namespace-level defaults (`default_agent_policy`, `default_sandbox_tier`, `required_guardrails`) are inherited by all resources in the namespace unless overridden at a more specific level.
+**Design notes:**
+- Every resource belongs to exactly one namespace. The `default` namespace is implicit if not specified.
+- Namespace defaults (`defaults.agent_policy`, `defaults.sandbox_tier`, `defaults.guardrails`) are inherited by all resources in the namespace unless overridden at the resource level.
+- Namespace quotas are enforced at resource creation time.
+- Namespace-scoped RoleBindings (PRD 03) use `scope.namespace` to target a specific namespace.
 
 ## 3. Reference Resolution
 
@@ -384,7 +387,7 @@ All `ref:` values are resolved at load time by the **Resource Loader**:
 When a resource is deleted, the system checks for inbound references:
 
 - **Block by default**: If other resources reference the target, deletion returns a `409 Conflict` with a list of dependents. The user must update or delete dependents first.
-- **Force delete**: `DELETE /api/v1/agents/{name}?force=true` (replace `agents` with any resource kind in lowercase plural) deletes the resource and marks all inbound references as **broken**. Broken refs are surfaced in `blackbeard validate` and in the Studio UI as warning badges.
+- **Force delete**: `DELETE /api/v1/agents/{name}?force=true` (replace `agents` with any resource kind in lowercase plural) deletes the resource and marks all inbound references as **broken**. Broken references are tracked via the `status` column in `resource_refs` (set to `broken` on force-delete of the target resource). Broken refs are surfaced in `blackbeard validate` and in the Studio UI as warning badges.
 - **Cascade delete**: Not supported in v1 to prevent accidental data loss.
 
 ### Namespace-scoped resolution
@@ -451,6 +454,8 @@ Indexes:
 
 **Query performance**: The single-table design scales to ~100K resources without materialized views. The `resource_refs` table handles cross-reference queries (e.g., "find all agents that reference tool X") efficiently via indexed joins. For JSONB spec queries (e.g., filtering by `spec.llm`), use GIN indexes on frequently-queried paths. If a specific resource kind exceeds 10K rows and JSONB queries become slow, add kind-specific partial indexes: `CREATE INDEX idx_agents_llm ON resources((spec->>'llm')) WHERE kind = 'Agent'`.
 
+**Scalability note:** The single `resources` table works well for small-to-medium deployments (< 10,000 resources). For larger deployments, consider kind-specific materialized views or composite indexes on `(kind, namespace, name)` for frequently-queried kinds. The `resource_refs` table is the primary mechanism for cross-reference queries and should be indexed on both `(source_id)` and `(target_kind, target_name)`.
+
 ## 7. API Surface
 
 ```
@@ -465,6 +470,8 @@ GET    /api/v1/agents/{name}/refs         # list inbound/outbound references
 ```
 
 Replace `agents` with any resource kind in lowercase plural form: `tasks`, `crews`, `flows`, `tools`, `llm-connections`, `knowledge-sources`, `environment-variables`, `roles`, `role-bindings`, `agent-policies`, etc.
+
+**Convention**: All API paths use lowercase plural kind names: `/api/v1/agents/{name}`, `/api/v1/tasks/{name}`, `/api/v1/crews/{name}`, etc.
 
 Namespace-scoped variant:
 ```

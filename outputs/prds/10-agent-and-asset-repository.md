@@ -102,6 +102,22 @@ Configurable per-org:
 | **Review** | Publication requires approval from a user with `approve` permission |
 | **Locked** | Only admins can publish; all others submit proposals |
 
+## Asset Lifecycle
+
+Published assets have a lifecycle status:
+
+| Status | Visibility | Behavior |
+|--------|-----------|----------|
+| `active` | Visible in search, installable | Normal operation |
+| `deprecated` | Visible with warning banner, installable with CLI warning | `blackbeard repo install` prints: "WARNING: {asset} is deprecated. Reason: {message}. Suggested replacement: {ref}" |
+| `yanked` | Hidden from search, existing references show warning | Cannot be newly installed. Existing references continue to work but `blackbeard validate` emits a warning. Used for security vulnerabilities. |
+
+Deprecation and yanking are performed by asset publishers or org admins:
+```bash
+blackbeard repo deprecate tools/old-search@1.0.0 --reason "Use tools/new-search instead" --replacement tools/new-search@2.0.0
+blackbeard repo yank tools/vulnerable-tool@0.5.0 --reason "CVE-2026-XXXX: Remote code execution"
+```
+
 ## 5. Consuming Assets
 
 ### 5.1 Reference in YAML
@@ -146,6 +162,8 @@ spec:
 | `goal: "Research trends"` | `goal: "Research energy"` | `goal: "Research energy"` (replaced) |
 | `checkpoint: {enabled: true, max: 10}` | `checkpoint: {enabled: false}` | `checkpoint: {enabled: false}` (`max` is lost — full replace) |
 | `memory: true` | (not in overrides) | `memory: true` (unchanged) |
+
+**Warning:** Overriding a list field (e.g., `tools`) replaces the entire list, not extends it. To add a tool to a repository agent's existing tool list, you must include the original tools plus your addition in the override.
 
 To extend a list rather than replace it, use the `extend` syntax:
 ```yaml
@@ -206,6 +224,8 @@ blackbeard repo install agents/researcher@1.2.0
 blackbeard repo install tools/serper-search@2.0.0
 blackbeard repo install crews/research-crew@1.0.0   # references the above
 ```
+
+**v1 constraint:** Transitive dependency resolution with semver ranges is post-v1. For v1, all repository references must pin exact versions (`@2.0.0`, not `@^2.0.0`). The `@latest` tag is supported but resolves to a specific version at install time and is recorded as the exact version in the lockfile.
 
 Post-v1 will add `blackbeard repo install crews/research-crew@1.0.0 --resolve-deps` with semver range resolution, conflict detection, and lockfile generation.
 

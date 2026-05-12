@@ -172,8 +172,8 @@ services:
     image: langfuse/langfuse:latest
     ports: ["3001:3000"]
 
-  presidio-analyzer:
-    # Presidio runs as a library inside workers — no separate service needed
+  # Presidio runs as a Python library inside the worker process
+  # (`pip install presidio-analyzer presidio-anonymizer`), not as a separate service.
 
   infisical:
     image: infisical/infisical:latest
@@ -210,5 +210,7 @@ Every integration has a simpler fallback for smaller deployments:
 | Ory Kratos/Hydra | Built-in JWT auth + OIDC library | Loses MFA, account recovery, passwordless |
 | OPA | In-process Python policy evaluator | Loses Rego ecosystem, harder to audit |
 | MinIO | Local filesystem | Loses S3 API, distributed storage |
+
+The MVP implementations (in-process policy check, PostgreSQL-based RBAC) serve as the simple fallbacks listed above. Migration path: MVP ships with in-process checks → post-MVP adds OPA sidecar (same policy logic, different evaluation engine) → SpiceDB replaces PostgreSQL permission queries. Each migration is additive — the simpler implementation remains as a fallback configuration option.
 
 The Helm chart / docker-compose supports profiles: `blackbeard --profile minimal` vs `blackbeard --profile full`.

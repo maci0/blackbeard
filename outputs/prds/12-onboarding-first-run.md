@@ -62,6 +62,8 @@ Each step has:
 - "Next" / "Back" / "Skip tour" buttons
 - Clicking outside the tooltip advances to the next step
 
+**Element loading:** The tour waits for each target element to be present in the DOM before showing the step, with a 5-second timeout. If the target element doesn't appear within the timeout (e.g., React Flow canvas still initializing), the step is skipped with a console warning and the tour advances to the next step.
+
 ### 5.3 "Load Example" Enhancement
 
 The existing "Load example crew" button on the empty canvas should be more prominent during onboarding. After the tour completes, if the canvas is still empty, show a pulsing highlight on the "Load example crew" button with a tooltip: "Try loading an example to see how crews work."
@@ -73,6 +75,8 @@ Add a small "?" icon or "Help" link at the bottom of the sidebar (above the vers
   - "Restart tour" → Re-triggers the guided tour
   - "Documentation" → Opens docs/getting-started.md (or external docs URL)
   - "Keyboard shortcuts" → Shows a shortcuts cheat sheet dialog
+
+**Documentation hosting:** For MVP, the documentation link points to the GitHub repository's `docs/` directory. Post-MVP, documentation will be hosted on a dedicated site (GitHub Pages or similar) at `docs.blackbeard.sh`.
 
 ## 6. State Management
 

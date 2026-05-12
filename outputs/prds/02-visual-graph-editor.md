@@ -122,7 +122,7 @@ A second tab on the canvas switches to **Execution View**:
 - **Error recovery**: If the SSE stream disconnects, the UI polls `GET /executions/{id}` every 5s as fallback. A "Reconnecting..." banner shows at the top of the canvas. When SSE reconnects, polling stops.
 - **Stale execution**: If an execution hasn't emitted events for >5 minutes, a "Execution may be stalled" warning appears on the current task node.
 
-**Node-to-execution mapping**: Canvas nodes use the convention `{kind}-{name}` as their React Flow node ID (e.g., `task-research-ai`, `agent-researcher`). Execution SSE events carry `task_name` and `agent_name` fields. The UI maps events to nodes by constructing the node ID from the event's resource name. If a node ID doesn't match any canvas node (e.g., a dynamically-created subtask in hierarchical mode), the event is displayed in a "Unmapped Events" panel below the canvas.
+**Node-to-execution mapping**: Canvas nodes use the convention `{kind}-{name}` as their React Flow node ID (e.g., `task-research-ai`, `agent-researcher`). Execution SSE events carry `task_name` and `agent_name` fields. The UI maps events to nodes by constructing the node ID from the event's resource name. If a node ID doesn't match any canvas node (e.g., a dynamically-created subtask in hierarchical mode), the event is displayed in a "Unmapped Events" panel below the canvas. This convention must match the SSE event payload format defined in PRD 05. Execution SSE events carry `event_type`, `task_name`, and `agent_name` fields that map to canvas nodes via `{kind}-{name}` node IDs.
 
 ## 8. AI Copilot
 
@@ -176,7 +176,7 @@ Copilot always generates YAML that passes validation. User can accept/reject eac
 ## 12. Canvas Persistence
 
 - Each Crew or Flow resource has an associated **canvas layout** stored server-side as a JSON blob (node positions, zoom level, viewport offset).
-- Canvas layout is stored in a `canvas_layouts` table: `(resource_kind, resource_name, namespace, layout JSONB, updated_at)`.
+- Canvas layout is stored in a `canvas_layouts` table: `(resource_kind VARCHAR(63) NOT NULL, resource_name VARCHAR(255) NOT NULL, namespace VARCHAR(255) NOT NULL DEFAULT 'default', layout JSONB, updated_at TIMESTAMPTZ)`. Unique constraint: `UNIQUE(resource_kind, resource_name, namespace)`.
 - Layout is saved automatically on every canvas change (debounced, 500ms) and on explicit "Save".
 - A canvas displays **one Crew or Flow** at a time. Multi-crew canvases are deferred to post-MVP.
 - If no layout exists (e.g., resource created via CLI), the canvas auto-layouts using ELK.js on first open.
@@ -189,6 +189,8 @@ Copilot always generates YAML that passes validation. User can accept/reject eac
 - High-contrast mode for edges and labels.
 - Zoom controls accessible via keyboard shortcuts.
 
+**MVP scope:** Accessibility features are aspirational for MVP. The MVP ships with basic keyboard navigation (Tab to cycle nodes, Enter to select, Delete to remove) and ARIA labels on interactive elements. Full accessibility (custom tab order, screen reader announcements for canvas operations, high-contrast mode) is post-MVP.
+
 ## 14. Acceptance Criteria
 
 1. User can drag Agent, Task, and Tool nodes onto canvas and connect them with arrows.
@@ -199,3 +201,18 @@ Copilot always generates YAML that passes validation. User can accept/reject eac
 6. Export YAML produces a valid resource directory that `blackbeard validate` accepts.
 7. Canvas supports ≥50 nodes at 60fps during pan/zoom. ≥100 nodes at 30fps minimum. Measured with React Flow's built-in performance profiler.
 8. Undo/Redo works across all operations including node creation, deletion, edge changes, and property edits.
+
+## Verification Scenarios
+
+The following scenarios define the minimum acceptance criteria for Studio:
+
+| # | Scenario | Steps | Expected Result |
+|---|----------|-------|-----------------|
+| 1 | Add node | Drag Agent from Palette → drop on canvas | New Agent node appears; YAML resource created with default spec; API confirms resource exists |
+| 2 | Connect edge | Drag from Task A output port → Task B input port | Solid arrow appears; Task B's `context` array updated with `ref:tasks/A` |
+| 3 | Edit property | Select Agent node → change `role` in PropertyPanel | Agent node label updates; YAML spec updates; API PUT succeeds |
+| 4 | Save crew | Click Save button | All resources persisted via API; canvas layout saved to `canvas_layouts` table |
+| 5 | Run crew | Click Run button → wait for completion | Execution created; nodes show status badges (pending → running → completed); execution detail available |
+| 6 | YAML sync | Edit YAML in YAML tab → change agent name | Form fields update; canvas node label updates |
+| 7 | Undo/redo | Add node → Ctrl+Z → Ctrl+Shift+Z | Node removed on undo, restored on redo |
+| 8 | Delete node | Select node → press Delete | Node and its edges removed; resource deleted via API |

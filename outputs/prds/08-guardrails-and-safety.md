@@ -30,6 +30,10 @@ spec:
   implementation: "myproject.guardrails:validate_word_count"
   description: "Ensure output is between 100-500 words"
   max_retries: 3
+  severity: error                     # error | warning | info
+  # error: block execution if guardrail fails (default)
+  # warning: log warning and continue execution
+  # info: record result in trace but don't affect execution
   
   # For type: llm
   # prompt: |
@@ -51,6 +55,8 @@ spec:
   #   - ref: guardrails/no-profanity
   #   - "The output must be suitable for a general audience"  # inline LLM guardrail
 ```
+
+The `severity` field allows deploying guardrails in observation mode before enforcing them. Deploy a new guardrail with `severity: info` to see how often it triggers, then promote to `warning`, then to `error`.
 
 ### 2.3 Guardrail Execution
 
@@ -100,7 +106,7 @@ namespaces:
       - ref: guardrails/factual-grounding
 ```
 
-**Namespace resource**: Namespace-level guardrails are configured in the `Namespace` resource kind (defined in PRD 01, §2.10). The `required_guardrails` field on the Namespace resource specifies guardrails that apply to all tasks within that namespace.
+Namespace-level guardrails are configured in the Namespace resource's `spec.defaults.guardrails` field (see PRD 01, §2.10). All tasks within the namespace inherit these guardrails unless overridden at the crew or task level.
 
 ### 2.5 Guardrail Execution Order
 
@@ -112,10 +118,12 @@ When guardrails are assigned at multiple levels, they execute in this order:
 
 Within each level, guardrails execute in the order they are listed. If any guardrail fails and retries are exhausted, the task fails — subsequent guardrails are not run.
 
-**Conflict detection**: `blackbeard validate` performs basic conflict detection across guardrail levels:
-- Detects contradictory word count bounds (namespace min > task max).
-- Detects duplicate guardrails applied at multiple levels (warns, does not block).
-- Reports the effective guardrail chain for each task, showing which level each guardrail comes from.
+**Conflict detection in `blackbeard validate`:** The validator performs basic conflict detection for obviously contradictory guardrails:
+- Word count: if any guardrail requires >= N words and another requires <= M words where M < N, validation fails with a clear error
+- Mutually exclusive formats: if one guardrail requires JSON output and another requires plain text, validation warns
+- Duplicate detection: if the same guardrail ref appears at multiple levels (namespace + task), validation warns about redundancy
+
+This detection is best-effort — it catches common contradictions but cannot reason about arbitrary LLM-based guardrail interactions.
 
 Runtime conflicts that cannot be statically detected (e.g., two LLM-based guardrails with contradictory criteria) will cause the task to fail after exhausting retries. The failure message includes the full guardrail chain for debugging.
 
@@ -177,6 +185,25 @@ Respond with a JSON object:
 ```
 This prompt can be overridden per-guardrail via the `evaluation_prompt` field on the Guardrail resource.
 
+**Default evaluation prompt template:**
+```
+Given the following reference context and agent output, evaluate the factual faithfulness of the output.
+
+Reference context:
+{context}
+
+Agent output:
+{output}
+
+Score the output on a scale of 0.0 to 1.0:
+- 1.0: Every claim in the output is directly supported by the reference context
+- 0.5: Some claims are supported, others are unsupported but plausible
+- 0.0: The output contains fabricated information not present in the context
+
+Return ONLY a JSON object: {"score": <float>, "reasoning": "<brief explanation>"}
+```
+This template can be overridden via `HallucinationGuardrail.spec.evaluation_prompt`.
+
 ## 4. PII Redaction (Microsoft Presidio)
 
 ### 4.1 Overview
@@ -208,7 +235,7 @@ metadata:
   name: production-pii
 spec:
   enabled: true
-  language: en                        # ISO 639-1 code (default: en). Presidio supports: en, es, de, fr, it, pt, nl, he
+  language: "en"                      # ISO 639-1 language code. Default: "en". Presidio supports: en, es, de, fr, it, pt, nl, he, ar, ja, zh, ko, and others.
   scope:
     traces: true                      # redact in stored traces
     outputs: false                    # optionally redact in task outputs

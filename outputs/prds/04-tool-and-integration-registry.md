@@ -10,8 +10,8 @@ Provide a centralised catalogue for all tools, integrations, and MCP servers tha
 |------|-------------|-----------------|---------|
 | **Python** | A Python class/function implementing `BaseTool` | `none` if `trusted: true`, else `wasm` (auto-compiled via componentize-py) | `crewai_tools:SerperDevTool` |
 | **WASM** | A pre-compiled `.wasm` module implementing the `blackbeard:tool` WIT interface | `wasm` (always) | `tools/sentiment.wasm` |
-| **MCP (stdio)** | Local MCP server launched as a subprocess | `docker` | `npx @modelcontextprotocol/server-filesystem` |
-| **MCP (SSE/HTTP)** | Remote MCP server accessed over HTTP | `none` (remote call, no local code) | `https://mcp.example.com/sse` |
+| **MCP (stdio)** (`mcp-stdio`) | Local MCP server launched as a subprocess | `docker` | `npx @modelcontextprotocol/server-filesystem` |
+| **MCP (SSE/HTTP)** (`mcp-http`) | Remote MCP server accessed over HTTP | `none` (remote call, no local code) | `https://mcp.example.com/sse` |
 | **REST** | Generic HTTP API wrapped as a tool | `none` (remote call) | Any OpenAPI-described endpoint |
 | **Composio** | Composio-managed integration | `none` (remote call) | Pre-built OAuth connectors |
 | **Custom** | User-defined tool with arbitrary implementation | Configurable | Plugin SDK |
@@ -69,6 +69,8 @@ world blackbeard-tool {
 ```bash
 blackbeard tool compile --lang python --input tools/my_tool.py --output tools/my_tool.wasm
 ```
+
+**Known limitations:** `blackbeard tool compile --lang python` uses componentize-py, which supports pure Python packages only. Packages with C extensions (numpy, pandas, lxml, etc.) are not WASM-compatible and will fail compilation with a clear error message. For tools that require these packages, use `sandbox: docker` instead of `sandbox: wasm`.
 
 **Why distribute as WASM**:
 - Runs identically on any OS/arch without dependency hell.
@@ -204,7 +206,7 @@ spec:
 1. User navigates to **Settings → Integrations**.
 2. Clicks **Connect** on the desired connector.
 3. Redirected to provider's OAuth consent screen.
-4. On success, tokens are stored in the configured secrets backend (Infisical by default, or environment variables for MVP). Tokens are never stored in Blackbeard's resources database. At execution time, the engine retrieves the token from the secrets backend and injects it into the tool's runtime environment.
+4. On success, OAuth tokens are stored in Infisical (not Blackbeard's database). At execution time, the Execution Engine retrieves the OAuth token from Infisical using the tool's `auth.oauth_config.token_secret_path` field. Token refresh is handled by the Infisical SDK.
 5. An **Integration Token** is generated for the user.
 6. Agents reference integrations via the `apps` field or tool refs.
 
@@ -241,6 +243,8 @@ When an MCP server is registered:
 2. Discovered tools are imported as `Tool` resources with `type: mcp-*`.
 3. Tools are displayed in the registry with the MCP server as their source.
 4. Users can selectively enable/disable discovered tools.
+
+**MCP tool lifecycle:** When an MCP server's tool list changes (tools added, removed, or renamed), the changes are not automatically detected. Users must manually re-import tools via `blackbeard tools discover --mcp-server <name>`. Re-import is additive: new tools are created, existing tools are updated, but tools removed from the MCP server are NOT automatically deleted from Blackbeard (they are marked as `status: unavailable`). Automatic periodic re-sync is a post-v1 feature.
 
 ## 6. Registry UI
 

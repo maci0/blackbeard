@@ -102,6 +102,8 @@ Trace (execution-level)
 
 **Implementation split**: Sections 4.1 (Traces List) and 4.4 (Execution Detail summary cards, task list, link to Langfuse) are built in Blackbeard's UI. Sections 4.2 (Trace Detail View with span tree and agent thoughts) and 4.3 (Execution Timeline Gantt chart) are provided by Langfuse's native UI, accessed via direct URL links from Blackbeard. For MVP, all trace visualization is via Langfuse links — only the Traces List and Execution Detail pages are custom-built.
 
+**MVP scope:** For MVP, all trace visualization is via direct links to Langfuse's built-in UI. Blackbeard's Execution Detail page shows summary data (tokens, cost, duration, task list) from its own database and provides a 'View Trace in Langfuse' link. Custom trace visualizations (Gantt chart, agent thought inspector) described above are post-MVP features that would be built into Blackbeard's UI.
+
 ### 4.1 Traces List
 
 - Table: execution ID, automation name, status, duration, cost, timestamp.
@@ -154,7 +156,7 @@ Visual Gantt chart:
 
 Blackbeard-specific dashboards (§5.2 Agent Performance, §5.3 Policy Dashboard) are built in **Blackbeard's own UI**, not in Langfuse. They query Blackbeard's `executions` and `execution_tool_calls` tables for sandbox and policy data, and optionally query Langfuse's API for token/cost aggregations. Langfuse's built-in dashboards remain available for LLM-focused analytics.
 
-**Join key**: The `execution_id` is used as the Langfuse `trace_id` (set via `langfuse.trace(id=execution_id)`). This enables direct joins between Blackbeard's `executions` table and Langfuse's trace data. Dashboard queries aggregate token/cost data via Langfuse's `GET /api/public/traces/{trace_id}` endpoint. Results are cached in Valkey for 5 minutes to avoid hammering Langfuse's API.
+**Data join key:** The `execution_id` is used as Langfuse's `trace_id` (set via `langfuse_trace_id` parameter when creating the trace). This allows joining Blackbeard's `executions` table with Langfuse's trace data. Dashboard queries that need token/cost aggregations call Langfuse's `GET /api/public/traces/{trace_id}` endpoint. Dashboard data is cached in Valkey with a 60-second TTL.
 
 ## 6. Integration Configuration
 
@@ -192,7 +194,7 @@ spec:
 
 - Trace events are buffered and sent in batches (configurable: batch size, flush interval).
 - Traces are written asynchronously — they never block execution.
-- **Sampling**: Configurable via `ObservabilityConfig.spec.langfuse.sampling_rate` (default: 1.0 = trace everything). For high-volume deployments, set to 0.1–0.5. Sampling is per-execution (a sampled-out execution produces no trace at all, rather than partial traces). Policy denial events are always traced regardless of sampling rate. When a sampled-out execution encounters a policy denial, the denial upgrades the execution to sampled-in — a full trace is created retroactively from buffered events. This ensures policy denials always have complete execution context and avoids orphaned mini-traces.
+- **Sampling**: Configurable via `ObservabilityConfig.spec.langfuse.sampling_rate` (default: 1.0 = trace everything). For high-volume deployments, set to 0.1–0.5. Sampling is per-execution (a sampled-out execution produces no trace at all, rather than partial traces). Policy denial events are always traced regardless of sampling rate. When a sampled-out execution encounters a policy denial, the execution is upgraded from sampled-out to sampled-in — the full trace is created retroactively. This ensures all policy-relevant events have complete execution context. This may increase the effective sampling rate slightly, but policy denials are rare events and the impact is negligible.
 - Trace retention is managed in Langfuse's own configuration (default: 30 days). Blackbeard does not control Langfuse's data lifecycle.
 
 ## 8. Events Consumed
@@ -214,3 +216,22 @@ spec:
 7. PII is redacted from traces before they are sent to Langfuse (PRD 08, Presidio).
 8. Trace writes (async via Langfuse SDK) never add >5ms latency to execution critical path.
 9. Langfuse self-hosted instance is included in the default `docker-compose.yaml`.
+
+## Trace Data Retention
+
+Langfuse stores trace data in ClickHouse. Without retention policies, storage grows unboundedly.
+
+**Default retention:** 90 days. Traces older than 90 days are automatically deleted from ClickHouse.
+
+**Configuration:** Retention period is configurable via `PlatformConfig`:
+```yaml
+observability:
+  trace_retention_days: 90        # default
+  sampling_rate: 1.0              # 1.0 = trace everything (default for MVP)
+```
+
+**Langfuse unavailability:** Trace writes are fire-and-forget. If Langfuse is unavailable during execution:
+- Execution continues normally — tracing never blocks execution
+- Trace data for that execution is permanently lost
+- A warning is logged: `"Langfuse trace write failed for execution {id}: {error}"`
+- A metric `blackbeard_langfuse_trace_errors_total` is incremented for operator alerting

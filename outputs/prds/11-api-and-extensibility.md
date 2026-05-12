@@ -6,6 +6,8 @@ Define the public API surface, webhook streaming protocol, plugin SDK, and exten
 
 ## 2. REST API
 
+**Convention:** All API paths use lowercase plural resource names: `/api/v1/agents/{name}`, `/api/v1/tasks/{name}`, `/api/v1/crews/{name}`, etc. This follows REST conventions and Kubernetes API patterns.
+
 ### 2.1 Resource API (Uniform CRUD)
 
 All resources (PRD 01) are exposed through a uniform REST API:
@@ -133,7 +135,7 @@ service BlackbeardAPI {
 }
 ```
 
-*gRPC API is post-MVP. The proto definition above is a design target, not a v1 deliverable. MVP exposes REST API only.*
+*gRPC API is post-MVP. The proto definition above is a design target, not a v1 deliverable. `ExecutionEvent` message definition will be specified when gRPC implementation begins. MVP exposes REST API only.*
 
 ## 4. Webhook Streaming
 
@@ -184,6 +186,13 @@ spec:
 ```
 
 **Replay protection**: Each webhook delivery includes `X-Blackbeard-Timestamp` and `X-Blackbeard-Signature` (HMAC-SHA256 of `timestamp.body` using the webhook secret). Receivers should reject deliveries older than 5 minutes. Failed deliveries are retried with the same signature — receivers must be idempotent (use `execution_id` + `event` as dedup key).
+
+**Webhook management:** Webhook subscriptions are configured as part of the Automation resource's `spec.triggers` array (PRD 09). For MVP (before Automations exist), webhooks are not available — SSE is the only real-time event mechanism. Post-MVP, webhooks are managed through the Automation CRUD API:
+```
+POST   /api/v1/automations/{name}                 # Create automation with webhook trigger
+PATCH  /api/v1/automations/{name}                 # Update webhook config (hot-updatable)
+GET    /api/v1/automations/{name}/webhooks/test   # Send a test webhook event
+```
 
 ## 5. Plugin SDK
 
@@ -504,6 +513,8 @@ The widget provides:
 - Output display (rendered markdown, JSON, or custom template).
 - HITL feedback UI (when human-in-the-loop is triggered).
 
+*This feature is post-v1 and requires a separate technical design document. The specification above is a design target describing the intended user experience. Implementation details (component props, auth handling, bundle strategy, SSR support) will be specified before work begins.*
+
 ## 8. OpenAPI / AsyncAPI
 
 - **OpenAPI 3.1** spec auto-generated from the API routes and resource schemas.
@@ -516,6 +527,8 @@ The widget provides:
 *Python and TypeScript SDKs are post-MVP. The examples below show the target developer experience.*
 
 ### 9.1 Python SDK
+
+*Post-MVP. SDKs will be auto-generated from the OpenAPI specification.*
 
 ```python
 from blackbeard import BlackbeardClient
@@ -538,6 +551,8 @@ print(result.outputs)
 ```
 
 ### 9.2 TypeScript SDK
+
+*Post-MVP. SDKs will be auto-generated from the OpenAPI specification.*
 
 ```typescript
 import { BlackbeardClient } from '@blackbeard/sdk';
@@ -565,3 +580,26 @@ for await (const event of execution.stream()) {
 8. React component export produces a working embeddable widget.
 9. OpenAPI spec is auto-generated and valid; Swagger UI renders correctly.
 10. Python and TypeScript SDKs can create resources, kickoff executions, and stream results.
+
+## Error Code Taxonomy
+
+All API errors use the error format defined in §2.4. Error codes are namespaced by subsystem:
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `VALIDATION_FAILED` | 400 | Resource YAML/JSON failed schema validation |
+| `REF_NOT_FOUND` | 400 | A `ref:` target does not exist |
+| `CYCLE_DETECTED` | 400 | Circular reference detected in resource graph |
+| `RESOURCE_NOT_FOUND` | 404 | Requested resource does not exist |
+| `RESOURCE_CONFLICT` | 409 | Optimistic locking conflict (resource modified since last read) |
+| `POLICY_DENIED` | 403 | AgentPolicy denied the requested action |
+| `BUDGET_EXCEEDED` | 429 | LLM budget exceeded for this agent/execution |
+| `SANDBOX_ERROR` | 500 | Tool execution failed inside sandbox |
+| `SANDBOX_INFRA_ERROR` | 503 | Sandbox infrastructure failure (runtime crash, Docker unreachable) |
+| `LLM_TIMEOUT` | 504 | LLM call timed out |
+| `LLM_UNAVAILABLE` | 503 | LiteLLM Proxy unreachable |
+| `GUARDRAIL_FAILED` | 422 | Output guardrail validation failed after max retries |
+| `EXECUTION_FAILED` | 500 | Execution failed with an unrecoverable error |
+| `AUTH_REQUIRED` | 401 | Missing or invalid authentication |
+| `FORBIDDEN` | 403 | Authenticated but insufficient permissions |
+| `RATE_LIMITED` | 429 | API rate limit exceeded |

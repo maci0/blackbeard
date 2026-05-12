@@ -243,13 +243,24 @@ spec:
     inbound:
       mode: none                       # agents don't accept inbound connections
 
+**Wildcard matching semantics:** Network allow/deny patterns use suffix matching with these rules:
+- `*.example.com` matches `sub.example.com` and `deep.sub.example.com` (all subdomains)
+- `example.com` matches exactly `example.com` (no subdomains)
+- Port is required when specified: `*.google.com:443` matches only HTTPS
+- Without port: `*.google.com` matches all ports
+- CIDR notation is supported for IP ranges: `10.0.0.0/8`
+- The metadata endpoint `169.254.169.254` is always denied regardless of policy (hardcoded safety)
+
   # ── Sandbox ─────────────────────────────────────────────
   sandbox:
     minimum_tier: wasm                 # none | wasm | docker | microvm
                                        # floor: no tool may run below this tier
                                        # "none" = non-sandboxed allowed (for trusted tools)
     default_tier: wasm                 # tier used when a tool doesn't specify one
+    remote_tools_bypass_floor: true    # default: true. Remote tools (mcp-http, rest) skip minimum_tier check
     profile: ref:sandboxes/standard    # default sandbox profile for resource limits/network
+
+When `remote_tools_bypass_floor` is `true` (default), remote tools (types `mcp-http` and `rest`) that make outbound HTTP calls without executing local code bypass the `minimum_tier` floor. Set to `false` if your compliance posture requires all tool invocations, including remote API calls, to run inside a sandbox.
 
   # ── Code execution ──────────────────────────────────────
   code_execution:
@@ -368,7 +379,7 @@ metadata:
         verbs: [get]
 ```
 
-**Storage**: Entity-level access settings are part of `metadata.access` in the resource YAML. In the database, `metadata` fields (name, namespace, labels, access) are stored in dedicated columns — `access` is stored as a JSONB column on the `resources` table. This is separate from the `spec` JSONB column. Entity-level permissions are version-controlled alongside the resource definition and follow the same `apiVersion/kind/metadata/spec` envelope.
+**Storage**: Entity-level access controls are stored in `metadata.access` (not `spec`). This means access controls are NOT version-controlled with the resource spec. They are administrative metadata managed separately from the resource's functional definition. In the database, `metadata` fields (name, namespace, labels, access) are stored in dedicated columns. The `access` field is stored as a JSONB column on the `resources` table, separate from the `spec` JSONB column. When a resource spec is updated (creating a new version), the `metadata.access` block is carried forward unchanged unless explicitly modified.
 
 Two-layer evaluation:
 1. **Role-level**: "Does this subject's role allow `{verb}` on `{resource kind}`?"
@@ -420,7 +431,9 @@ Action requested (by human OR agent)
 └──────────────────┘
 ```
 
-**Performance**: Steps 2–5 are cached with a 30-second TTL, keyed by `(subject_kind, subject_name, namespace)`. The full authorization flow runs in <5ms for cached principals. Cache is invalidated proactively on role/policy/binding changes via the internal event bus, but in multi-worker deployments, propagation takes up to 2 seconds. This means a revoked user could remain authorized for up to 30 seconds on a worker that hasn't received the invalidation event. For security-critical deployments, set `RBAC_CACHE_TTL=0` to disable caching and always evaluate live.
+**Performance**: Steps 2-5 are cached with a 30-second TTL, keyed by `(subject_kind, subject_name, namespace)`. The full authorization flow runs in <5ms for cached principals. Cache is invalidated proactively on role/policy/binding changes via the internal event bus, but in multi-worker deployments, propagation takes up to 2 seconds. This means a revoked user could remain authorized for up to 30 seconds on a worker that hasn't received the invalidation event.
+
+**Cache configuration:** Default cache TTL is 30 seconds. For security-critical deployments, set `AUTHZ_CACHE_TTL=0` to disable caching (every request checks the database). In multi-worker deployments, cache invalidation propagates via the event bus with a worst-case consistency window equal to the cache TTL.
 
 For agents, policy denials are NOT silent 403s — they feed back into the agent's conversation as a system message: `"Policy violation: you are not allowed to invoke tool 'database-admin'. Available tools: [serper-search, wikipedia]."` This lets the agent adapt its approach rather than crash.
 

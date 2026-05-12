@@ -35,6 +35,8 @@ spec:
     llm_connections:
       - ref: llm-connections/openai-prod
   
+  service_account: ref:service-accounts/automation-runner
+  
   triggers:
     - type: api                       # always available
     - type: webhook
@@ -59,6 +61,20 @@ spec:
     visibility: private
     allowedRoles: [ref:roles/developer, ref:roles/operator]
 ```
+
+**Storage:** The Automation resource is stored in the generic `resources` table (PRD 01, §6), same as all other resources. Deployment-specific state is stored in the `automation_deployments` table (§2.1 below). The Automation lifecycle state machine (created → building → deploying → deployed → degraded → deleted) is tracked in `automation_deployments.status`, not in the `resources` table.
+
+**Hot-updatable fields** (do not require re-deployment):
+- `spec.triggers` — cron schedules, webhook config
+- `spec.access` — visibility, allowed roles
+- `spec.service_account`
+- `spec.runtime.environment_variables` (takes effect on next execution)
+
+**Cold fields** (require re-deployment):
+- `spec.source` — changing the crew/flow reference
+- `spec.runtime.default_agent_policy`, `spec.runtime.default_sandbox`
+- `spec.a2a`
+- `spec.versioning`
 
 ### 2.1 Automation Lifecycle
 
@@ -149,6 +165,14 @@ Source (git/zip/studio)
 └────────────────────────┘
 ```
 
+**Build artifacts:** The build pipeline produces a **resource bundle** — a compressed archive containing:
+- All resolved YAML resources (agents, tasks, tools, crews/flows)
+- Compiled WASM binaries for WASM tools
+- `metadata.json` with checksums (SHA-256), dependency versions, and build timestamp
+- `requirements.txt` for Python dependencies (installed into the worker's virtualenv at deploy time)
+
+Build artifacts are stored in MinIO at `s3://blackbeard-builds/{automation_name}/{version}/bundle.tar.gz`. The active version pointer is stored in `automation_deployments.artifact_url`.
+
 ### 4.1 Build Artifacts
 
 | Deployment Method | Build Artifact | Storage |
@@ -159,9 +183,13 @@ Source (git/zip/studio)
 
 **Resource snapshot**: At build time, all referenced resources (agents, tasks, tools, LLM connections, policies) are resolved and their current state is serialized into `resource_snapshot` (JSONB). This snapshot is immutable — the deployed version always uses these exact resource definitions, even if the source resources are later modified. This is what makes rollback instantaneous: restoring a previous version swaps the active snapshot pointer, not the resources.
 
+**Snapshot mechanism:** At deploy time, the system takes a full snapshot of all referenced resources by recursively resolving all `ref:` dependencies and serializing them into a single JSONB document stored in `automation_deployments.resource_snapshot`. This snapshot is immutable — subsequent changes to the source resources do not affect deployed versions. To apply changes, a new version must be deployed.
+
 **Python dependencies**: The build step generates a `requirements.txt` from all Python tool implementations and callback modules. Dependencies are installed into the worker's virtual environment. Workers use separate virtualenvs per automation to avoid dependency conflicts (post-MVP; MVP uses a shared environment).
 
 ## 5. Triggers
+
+**Trigger identity:** Automated triggers (cron, webhook) execute with a ServiceAccount identity. Each Automation specifies `spec.service_account` (defaults to the Automation's creator). The ServiceAccount's permissions are evaluated in the principal chain in place of a human User. See PRD 03 for principal chain evaluation.
 
 ### v1 Triggers
 
@@ -231,6 +259,18 @@ The principal chain for an A2A-initiated execution: `External ServiceAccount/Use
 - Rollback is instantaneous (swap the active version pointer).
 - **v1 strategy**: Simple version swap (deploy new, rollback to old). Blue-green and canary deployment strategies are deferred to post-v1.
 - **Health checks**: Deployed automations expose a health endpoint at `/api/v1/automations/{name}/health` returning `{status: "healthy"|"degraded"|"unhealthy", checks: {litellm: "ok", tools: "ok", ...}}`. Health checks verify: LiteLLM Proxy reachability, required tool availability, required LLM connection validity, and sandbox runtime readiness.
+
+**Health severity model:**
+
+| Check | Severity | Degraded if fails? | Unhealthy if fails? |
+|-------|----------|--------------------|--------------------|
+| Primary LLM reachable | Critical | — | Yes |
+| Fallback LLM reachable | Warning | Yes | No |
+| All tools available | Warning | Yes (if any unavailable) | Yes (if required tool unavailable) |
+| Sandbox runtime ready | Critical | — | Yes |
+| LiteLLM Proxy healthy | Critical | — | Yes |
+
+A 'degraded' automation accepts new executions but logs warnings. An 'unhealthy' automation rejects new kickoff requests with 503.
 
 ## 8. Webhook Streaming
 

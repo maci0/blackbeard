@@ -211,6 +211,8 @@ blackbeard/
 | 0.6 | Write the example `research-crew/` YAML files by hand | Valid YAML resources to test against | 0.5 |
 | 0.7 | WASM proof-of-concept spike: compile a simple Python tool to WASM via componentize-py, load in wasmtime-py with Component Model, invoke, measure startup | Spike report: works / doesn't work / needs fallback. If fail → switch Phase 4 to subprocess-based Wasmtime CLI | 2 |
 
+> **Gate:** The spike result gates Phase 4's approach. If the spike fails, Phase 4 switches to subprocess-based Wasmtime CLI immediately — do not wait until Phase 4 to discover this.
+
 **Deliverable**: Run `docker compose up`, hit `localhost:3000` and see the UI shell, hit `localhost:8000/api/v1/health` and get 200, LiteLLM responds on `:4000`, Langfuse on `:3001`.
 
 ---
@@ -254,7 +256,7 @@ curl localhost:8000/api/v1/crews/research-crew   # returns crew with resolved re
 |---|------|--------|------|
 | 2.0 | Create alembic migrations for `executions`, `execution_tasks`, `execution_tool_calls` tables | Alembic migration | 0.5 |
 | 2.1 | Implement Resource Loader: YAML resources → CrewAI Agent/Task/Crew objects | `loader.build_crew(crew_name) → crewai.Crew` | 3 |
-| 2.2 | Implement LiteLLM config generation: LLMConnection resources → `litellm_config.yaml` | Auto-regenerated on LLMConnection change | 2 |
+| 2.2 | Implement LiteLLM config generation: LLMConnection resources → `litellm_config.yaml` | Auto-regenerated on LLMConnection change. Includes schema validation before reload — malformed LLMConnection cannot crash LiteLLM (see PRD 06 config reload safety) | 2 |
 | 2.3 | Implement LiteLLM virtual key manager: create per-execution key with model restrictions | `key_manager.create_key(agent, execution) → api_key` | 2 |
 | 2.4 | Wire CrewAI `LLM` class to point at LiteLLM Proxy with per-agent virtual key | Agent LLM calls go through `http://litellm:4000` | 1 |
 | 2.5 | Implement execution lifecycle: `kickoff()` → create execution record → run crew → store result | `executions` table, status transitions | 2 |
@@ -265,6 +267,7 @@ curl localhost:8000/api/v1/crews/research-crew   # returns crew with resolved re
 | 2.7 | Implement callback resolver: dotted Python paths → callable | `"myproject.callbacks:on_done"` → function | 1 |
 | 2.8 | Implement API: `POST /api/v1/crews/{name}/kickoff`, `GET /api/v1/executions/{id}` | Kickoff and poll endpoints | 1 |
 | 2.9 | Implement SSE streaming endpoint: `GET /api/v1/executions/{id}/stream` | Real-time execution events for UI (task started/completed, tool calls, tokens) | 1 |
+| 2.9b | Define SSE event type enum and payload schemas (see PRD 05 SSE Event Types) | Documented event schema that frontend team can build against | 0.5 |
 | 2.10 | Implement `blackbeard kickoff` and `blackbeard status` CLI commands | CLI-driven execution | 1 |
 | 2.11 | Write tests: loader, executor, LiteLLM key lifecycle | Integration tests with real CrewAI (mocked LLM) | 2 |
 | 2.12 | Implement error handling: LLM timeout/retry, tool error feedback, callback failure isolation | Errors don't crash execution; agent receives error messages and adapts | 1.5 |
@@ -457,7 +460,7 @@ Phase 7 (resource management UI)
 Phase 8 (polish + ship)
 ```
 
-Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main parallelisation opportunity for a team. Note: Phase 6 tasks 6.12–6.13 (Run button and Execution View) depend on Phase 2 being complete.
+Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main parallelisation opportunity for a team. Note: Phase 6 tasks 6.12–6.13 (Run button and Execution View) depend on Phase 2 being complete. Phase 5 depends on Phase 4 for sandbox tier promotion tests (task 5.5: tool wants `none`, policy floor is `wasm` → promote).
 
 ---
 
@@ -473,6 +476,20 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 | **Langfuse self-hosted stability** | Langfuse Docker is production-tested. Pin version. If Langfuse is down, traces are lost but execution continues (async, fire-and-forget). |
 | **LiteLLM/Langfuse unavailability during execution** | Langfuse writes are fire-and-forget — if Langfuse is down, execution continues without traces. LiteLLM is critical — if down, kickoffs are rejected with 503. Health checks every 30s detect outages. |
 
+### Most Likely Failure Modes Per Phase
+
+| Phase | Most Likely Failure Mode | Mitigation |
+|-------|--------------------------|------------|
+| 0 | Docker compose networking issues between services | Test service discovery early; use explicit network aliases |
+| 1 | Schema validation edge cases (valid YAML that produces invalid CrewAI objects) | Property-based testing with Hypothesis |
+| 2 | Resource Loader ↔ CrewAI constructor mismatch (field name differences, type coercion) | Build comprehensive field mapping table; test with real CrewAI |
+| 3 | Langfuse SDK version incompatibility or trace hierarchy mapping | Pin Langfuse version; verify span parenting with sample traces |
+| 4 | Component Model / componentize-py failure | Run spike in Phase 0; decide fallback before Phase 4 starts |
+| 5 | Policy enforcement gaps (valid tool calls denied or denied calls allowed) | Exhaustive test matrix: (tool_type × policy_mode × sandbox_tier) |
+| 6 | Bidirectional YAML sync bugs; form ↔ canvas state inconsistency | Start unidirectional (YAML → canvas); add canvas → YAML incrementally |
+| 7 | UI performance with many resources; pagination edge cases | Test with 100+ resources; implement virtual scrolling if needed |
+| 8 | E2E test flakiness; race conditions in async execution | Use deterministic mock LLM; add generous timeouts |
+
 ---
 
 ## Testing Strategy
@@ -487,6 +504,12 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 **LLM mocking**: Integration tests use a mock LLM server (simple FastAPI app returning canned responses) registered as a LiteLLM model. No real LLM calls in CI. E2E tests optionally use real LLMs gated behind `RUN_E2E_WITH_LLM=true`.
 
 **CI pipeline**: lint → type-check → unit tests → integration tests (with testcontainers) → build Docker images → E2E smoke test.
+
+**Recommended additions to testing strategy:**
+- **Property-based testing** (Hypothesis) for schema validation — catches edge cases in YAML parsing that hand-written tests miss
+- **Load testing** definition: max concurrent executions (target: 4 per `MAX_CONCURRENT_EXECUTIONS`), max resources in DB (target: 1000+), max nodes on Studio canvas (target: 100)
+- **Accessibility testing** is deferred to post-MVP
+- **Frontend integration tests** for Studio should verify canvas ↔ API ↔ form consistency (e.g., drag node → API confirms resource → form shows correct values)
 
 ---
 
@@ -507,3 +530,21 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 - [ ] CI pipeline green: lint, type-check, unit tests, integration tests all pass
 - [ ] No secrets in Docker images, logs, or API responses (verified in security review)
 - [ ] README gets a developer from clone to running crew in < 5 minutes
+
+---
+
+## Glossary
+
+| Term | Definition | Used In |
+|------|-----------|---------|
+| **Resource** | Any YAML-defined entity in Blackbeard (Agent, Task, Crew, Tool, etc.) | All PRDs |
+| **Kickoff** | Starting an execution of a crew or flow | PRDs 05, 09 |
+| **Execution** | A single run of a crew/flow, identified by `execution_id` | PRDs 05, 07 |
+| **Automation** | A deployed instance of a Crew or Flow with triggers, versioning, and runtime config (post-MVP) | PRD 09 |
+| **Namespace** | A logical isolation boundary for resources, scoping RBAC and defaults | PRDs 01, 03 |
+| **Sandbox** | An isolated execution environment for tool code (none/wasm/docker/microvm) | PRDs 03, 05 |
+| **Tier** | The isolation level of a sandbox (none < wasm < docker < microvm) | PRD 05 |
+| **AgentPolicy** | Runtime constraints on what an agent can do (tools, LLMs, network, delegation) | PRD 03 |
+| **Virtual Key** | A LiteLLM API key with budget/model restrictions, scoped to an agent or execution | PRD 06 |
+| **ref:** | Cross-resource reference syntax in YAML (`ref:agents/researcher`) | PRD 01 |
+| **Principal Chain** | The identity chain for authorization: User → Crew → Agent | PRD 03 |

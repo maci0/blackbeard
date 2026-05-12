@@ -94,6 +94,29 @@
 | 8 | **Event-driven core** | Internal event bus (extends CrewAI's `crewai_event_bus`) propagates lifecycle events across modules. |
 | 9 | **Self-hosted first** | Docker Compose + Helm chart. No vendor lock-in. |
 
+### Upstream Compatibility
+
+Blackbeard wraps CrewAI as a dependency, not a fork. This creates a tight coupling that must be actively managed.
+
+**CrewAI API surface Blackbeard depends on:**
+
+| CrewAI API | Blackbeard Usage | Coupling Level |
+|------------|------------------|----------------|
+| `crewai.Agent`, `crewai.Task`, `crewai.Crew` | Resource Loader compiles YAML → these classes | High — constructor signature changes break us |
+| `crewai.LLM` | Configured to point at LiteLLM Proxy | Medium — only `api_base` and `api_key` fields used |
+| `crewai.tools.BaseTool` | Tool registry wraps tools in this base class | Medium |
+| `crewai.flow.Flow`, `@start`, `@listen`, `@router` | Flow YAML compiles to Flow subclasses | High |
+| `crewai.events` (event bus) | Blackbeard registers listeners for tracing, policy, webhooks | High — event types and payloads must be stable |
+| `crewai.Memory` | Inherited unchanged | Low |
+| `crewai.Task.guardrail` | Guardrail wiring during resource loading | Medium |
+
+**Compatibility strategy:**
+
+1. **Pin to specific CrewAI version** in `pyproject.toml`. Never use `>=` or `*` ranges.
+2. **All CrewAI imports go through `blackbeard.engine.compat`** — a shim module that isolates import paths and provides version-specific adapters.
+3. **CI runs against pinned version AND CrewAI latest weekly** — breaking changes detected before upgrade.
+4. **Resource schema evolution**: When CrewAI adds new fields, Blackbeard's JSON Schema validators are updated to accept them as optional. When CrewAI removes fields, Blackbeard's validators emit deprecation warnings for one release cycle before removal.
+
 ### Target users
 
 | Persona | Description |
@@ -104,6 +127,8 @@
 | **Non-technical stakeholder** | Business users who view dashboards, approve HITL requests, and monitor costs. Does not write YAML or code. Primary consumer of observability UIs, budget reports, and approval workflows. |
 
 Blackbeard targets **teams of 3–20** building production agent workflows. Solo developers can use the `--profile minimal` deployment, but the platform's value increases with team size and governance needs.
+
+> These personas are also referenced in PRD 12 (Onboarding). See PRD 12 for how the onboarding experience maps to these personas.
 
 ### Module map
 
@@ -179,4 +204,4 @@ Event payload schemas for each module are defined in their respective PRDs (see 
 
 ---
 
-*Each PRD can be owned by an independent team, but cross-module dependencies exist — particularly around the resource model (PRD 01), execution engine (PRD 05), and RBAC (PRD 03). Dependencies are documented in each PRD.*
+*Each PRD can be owned by an independent team, but cross-module dependencies exist and are documented in each PRD's dependencies section.*

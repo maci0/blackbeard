@@ -94,6 +94,8 @@ POST /api/v1/crews/{name}/kickoff
 }
 ```
 
+The execution engine code path is identical regardless of entry point. The only difference is where runtime defaults come from (Automation resource vs. namespace/org defaults).
+
 Post-MVP, the Automation-based endpoint (`/api/v1/automations/{name}/kickoff`) wraps this with deployment versioning, triggers, and runtime configuration.
 
 ### 3.2 Execution States
@@ -451,7 +453,7 @@ def select_sandbox(tool: Tool, agent_policy: AgentPolicy, org_config: OrgConfig)
     elif tool.spec.type in ("mcp-stdio",):
         requested_tier = "docker"               # needs OS environment
     elif tool.spec.type in ("mcp-http", "rest"):
-        if agent_policy.spec.sandbox.get("remote_bypass_floor", True):
+        if agent_policy.spec.sandbox.get("remote_tools_bypass_floor", True):
             requested_tier = "none"             # remote call, no local code to sandbox
         else:
             requested_tier = agent_policy.spec.sandbox.default_tier or "none"
@@ -480,7 +482,7 @@ def select_sandbox(tool: Tool, agent_policy: AgentPolicy, org_config: OrgConfig)
 
 **Why remote tools bypass the policy floor**: Tools of type `mcp-http` and `rest` execute no local code — they make an outbound HTTP call to a remote service. Sandboxing local code execution is meaningless when no local code runs. Network-level restrictions for these tools are enforced by the agent's `network.outbound` policy (PRD 03), not by the sandbox tier.
 
-**Policy control**: The bypass is controlled by `AgentPolicy.spec.sandbox.remote_bypass_floor` (default: `true`). When set to `false`, even remote tools are subject to the policy floor — though sandboxing a remote HTTP call has no practical isolation effect, it ensures the policy floor is universally applied for compliance-sensitive environments.
+**Policy control**: This behavior is controlled by `AgentPolicy.sandbox.remote_tools_bypass_floor` (PRD 03). When set to `false`, remote tools are also subject to the minimum tier floor. Default is `true` for backward compatibility. (Though sandboxing a remote HTTP call has no practical isolation effect, enforcing the floor universally may be required for compliance-sensitive environments.)
 
 ### 6.6 Pool & Warm-Start
 
@@ -636,6 +638,31 @@ data: {"type": "task_completed", "task": "research-ai", "tokens": 4200}
 data: {"type": "execution_completed", "total_tokens": 15600}
 ```
 
+### SSE Event Types
+
+Each SSE event has a `type` field and a typed `data` payload:
+
+| Event Type | Payload Fields | Description |
+|------------|---------------|-------------|
+| `execution.started` | `execution_id`, `crew_name`, `total_tasks` | Execution has begun |
+| `task.started` | `execution_id`, `task_name`, `agent_name` | Task assigned to agent, LLM calls beginning |
+| `task.completed` | `execution_id`, `task_name`, `agent_name`, `output_preview`, `tokens`, `duration_ms` | Task finished successfully |
+| `task.failed` | `execution_id`, `task_name`, `agent_name`, `error` | Task failed after retries |
+| `tool_call.started` | `execution_id`, `task_name`, `tool_name`, `sandbox_tier` | Tool invocation beginning |
+| `tool_call.completed` | `execution_id`, `task_name`, `tool_name`, `duration_ms`, `success` | Tool invocation finished |
+| `llm_call.completed` | `execution_id`, `task_name`, `agent_name`, `model`, `prompt_tokens`, `completion_tokens`, `cost_usd` | LLM call finished |
+| `policy.denied` | `execution_id`, `task_name`, `agent_name`, `action`, `reason` | Policy enforcement blocked an action |
+| `guardrail.failed` | `execution_id`, `task_name`, `guardrail_name`, `retry_count` | Guardrail validation failed |
+| `execution.completed` | `execution_id`, `status`, `output`, `total_tokens`, `total_cost_usd`, `duration_ms` | Execution finished |
+| `execution.failed` | `execution_id`, `error`, `failed_task` | Execution failed |
+
+**SSE wire format:**
+```
+event: task.completed
+data: {"execution_id":"exec-abc","task_name":"research-ai","agent_name":"researcher","tokens":4200,"duration_ms":12400}
+
+```
+
 ---
 
 ## 12. Async Execution Backends
@@ -650,29 +677,25 @@ The backend is selected via configuration (`EXECUTION_BACKEND=in-process|tempora
 **`WorkflowBackend` protocol**:
 
 ```python
-from typing import Protocol, AsyncIterator
-
 class WorkflowBackend(Protocol):
+    """Interface for execution backends. MVP uses InProcessBackend; post-MVP adds TemporalBackend."""
+
     async def start_execution(
-        self, execution_id: str, crew: "crewai.Crew", inputs: dict
+        self, execution_id: str, crew_name: str, inputs: dict
     ) -> None:
-        """Submit crew for execution. Returns immediately."""
+        """Start a crew/flow execution. Non-blocking — execution runs in background."""
         ...
 
-    async def get_status(self, execution_id: str) -> "ExecutionStatus":
+    async def get_status(self, execution_id: str) -> ExecutionStatus:
         """Get current execution status, progress, and token usage."""
         ...
 
     async def cancel(self, execution_id: str) -> None:
-        """Cancel a running execution. Best-effort for in-process backend."""
+        """Cancel a running execution. Best-effort — may not stop immediately."""
         ...
 
-    async def resume(self, execution_id: str, feedback: str) -> None:
+    async def resume(self, execution_id: str, feedback: dict) -> None:
         """Resume a paused execution with human feedback."""
-        ...
-
-    async def stream_events(self, execution_id: str) -> AsyncIterator["ExecutionEvent"]:
-        """Yield execution events as they occur."""
         ...
 ```
 
@@ -708,6 +731,7 @@ All callback fields in YAML (`callbacks.step`, `callbacks.on_complete`, etc.):
 | **Out-of-memory (sandbox)** | Sandbox is killed. Agent receives `resource_limit_exceeded` error. Execution continues with remaining tasks if possible. |
 | **Database connection lost** | Execution pauses, retries DB connection with backoff. If unrecoverable, execution fails and last checkpoint is preserved. |
 | **Callback raises exception** | If `callbacks_fail_open: true` (default), log error and continue. If `false`, task fails. |
+| **Sandbox infrastructure failure** (`sandbox_infrastructure`): Sandbox runtime itself failed (Wasmtime crash, Docker daemon unreachable, module cache corruption) | Retry with same tier once. If retry fails, fail execution with `SANDBOX_INFRA_ERROR`. Do NOT fall back to a lower tier (this would violate the policy floor). Log infrastructure failure for operator alerting. |
 
 ---
 
@@ -716,9 +740,9 @@ All callback fields in YAML (`callbacks.step`, `callbacks.on_complete`, etc.):
 ```sql
 executions
   id              UUID PK
-  automation_id   UUID FK → resources (kind=Automation) NULL
-  resource_kind   VARCHAR(64)            -- Crew or Flow (used when no Automation)
-  resource_name   VARCHAR(255)           -- crew/flow name (used when no Automation)
+  automation_id   UUID FK → resources (kind=Automation) NULLABLE
+  resource_kind   VARCHAR(32) NOT NULL   -- 'Crew' or 'Flow' (direct reference for MVP)
+  resource_name   VARCHAR(255) NOT NULL  -- name of the crew/flow being executed
   status          VARCHAR(32)
   inputs          JSONB
   outputs         JSONB
@@ -765,6 +789,8 @@ execution_checkpoints
   state           JSONB
   created_at      TIMESTAMPTZ
 ```
+
+> **Note on `automation_id` vs `resource_kind`/`resource_name`**: For MVP (before Automation resources exist), `automation_id` is NULL and `resource_kind` + `resource_name` identify the crew directly. Post-MVP, `automation_id` references the Automation, and `resource_kind`/`resource_name` are still populated for queryability.
 
 Indexes:
   idx_exec_automation     ON executions(automation_id)
