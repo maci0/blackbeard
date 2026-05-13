@@ -37,13 +37,14 @@ npm run test -- --run            # vitest (single run)
 ```bash
 ./run.sh                         # build + start all services (auto-detects docker compose / podman-compose)
 ./run.sh --detach                # background mode
+bash deploy/seed.sh              # seed DB with example crew using Ollama (requires running stack + ollama)
 ```
 
 ## Architecture
 
 ### Backend (FastAPI + CrewAI)
 
-**Resource system**: All entities (Agent, Task, Crew, etc.) are stored as generic `Resource` rows with a JSONB `spec` column, validated against per-kind JSON schemas (`resources/spec_schemas.py`). Resources reference each other via `ref:agents/my-agent` strings, tracked in a `ResourceRef` table. `kinds.py` is the single source of truth for the kind registry and URL plural mapping.
+**Resource system**: All entities (Agent, Task, Crew, etc.) are stored as generic `Resource` rows with a JSONB `spec` column, validated against per-kind JSON schemas (`resources/spec_schemas.py`). Resources reference each other with strings like `ref:agents/researcher`, tracked in a `ResourceRef` table. `kinds.py` is the single source of truth for the kind registry and URL plural mapping.
 
 **Execution flow**: `POST /api/v1/crews/{name}/kickoff` → creates `Execution` record → submits to `ThreadPoolExecutor` → background thread builds CrewAI objects via `ResourceLoader` (resolves refs, builds LLM/Agent/Task/Crew) → calls `crew.kickoff(inputs=...)` → stores result + token usage. Each crew run gets its own thread with an isolated asyncio event loop to avoid blocking the FastAPI async loop.
 
