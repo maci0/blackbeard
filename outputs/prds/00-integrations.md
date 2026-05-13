@@ -37,7 +37,7 @@ Build the **orchestration and UX layer**. Delegate infrastructure to battle-test
 | **LLM routing** | **LiteLLM Proxy** | 100+ providers, load balancing, fallbacks, spend tracking per key/team, rate limiting, health checks, virtual keys with budgets | PRD 06: Map AgentPolicy → LiteLLM virtual keys. Generate LiteLLM config from `LLMConnection` resources. Consume spend data for dashboards. |
 | **Policy engine** | **Open Policy Agent (OPA)** | General-purpose policy evaluation via Rego language. Sub-millisecond decisions. Used by K8s, Envoy, Terraform. | PRD 03: AgentPolicy YAML compiles to Rego policies. Every tool call, LLM call, delegation, file access is an OPA query. OPA runs as a sidecar. Rego is the internal policy language — users never write it, they use the GUI/YAML. |
 | **Identity & auth** | **Ory Kratos** (identity) + **Ory Hydra** (OAuth2/OIDC) | User registration, login, password/passwordless, MFA, SSO, OIDC provider, session management, account recovery | PRD 03: Blackbeard delegates all human authentication to Ory. No custom auth code. Users/sessions/SSO managed by Kratos. OAuth2 flows by Hydra. |
-| **Fine-grained authorization** | **SpiceDB** (Google Zanzibar) | Relationship-based access control. Schema + relationships → permission checks. Handles entity-level visibility, inheritance, and cross-cutting. Horizontally scalable. | PRD 03: Entity-level permissions (§6) use SpiceDB instead of custom DB queries. "Can user X run crew Y?" and "Can agent A access tool B?" are SpiceDB checks. Namespace/org hierarchy modeled as SpiceDB relationships. |
+| **Fine-grained authorization** | **SpiceDB** (Google Zanzibar) | Relationship-based access control. Schema + relationships → permission checks. Handles entity-level visibility, inheritance, and cross-cutting. Horizontally scalable. | PRD 03: Entity-level permissions (PRD 03, section 6) use SpiceDB instead of custom DB queries. "Can user X run crew Y?" and "Can agent A access tool B?" are SpiceDB checks. Namespace/org hierarchy modeled as SpiceDB relationships. |
 | **PII detection & redaction** | **Microsoft Presidio** | NLP + regex-based PII detection for 20+ entity types, customizable recognizers, anonymizer/deanonymizer. MIT licensed. 8k GitHub stars. | PRD 08: Presidio is the PII engine. `PIIConfig` YAML maps to Presidio recognizer config. Custom recognizers (regex/deny-list) added via Presidio's extension API. Presidio runs as a library, not a service. |
 | **Observability & traces** | **Langfuse** (self-hosted) | LLM-native tracing with spans, token/cost tracking, prompt management, evaluations, OpenTelemetry backend. Fully open-source (MIT). | PRD 07: Langfuse is the trace backend and UI. CrewAI events → Langfuse traces via Langfuse SDK. LiteLLM natively supports Langfuse callbacks. Blackbeard embeds Langfuse UI or links to it. Saves building an entire trace storage + visualization layer. |
 | **Secrets management** | **Infisical** | Secret storage, rotation, dynamic secrets, RBAC, audit logs, K8s operator, CLI, SDK. 26k GitHub stars. | All PRDs: `EnvironmentVariable` resources with `value_from: secret` resolve through Infisical's API. API keys, OAuth tokens, LLM keys stored in Infisical, never in Blackbeard's DB. |
@@ -129,8 +129,10 @@ Everything else is delegated to proven infrastructure.
 
 ## Deployment: One `docker-compose up`
 
+The YAML below is a **reference full-profile** stack (API, worker, LiteLLM, Temporal, OPA, SpiceDB, Ory, etc.). The **repository's** default [`docker-compose.yaml`](../../docker-compose.yaml) follows the MVP: it starts the services needed for local development (for example API, UI, Postgres, Valkey, LiteLLM, Langfuse, Clickhouse/MinIO as required by those images) and **does not** require Temporal, OPA, SpiceDB, or Ory until those milestones ship. See [`MVP-IMPLEMENTATION-PLAN.md`](./MVP-IMPLEMENTATION-PLAN.md).
+
 ```yaml
-# docker-compose.yaml (simplified)
+# docker-compose.yaml (simplified, full-profile reference)
 services:
   blackbeard-api:
     image: ghcr.io/blackbeard/api:latest

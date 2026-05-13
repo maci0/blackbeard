@@ -211,7 +211,7 @@ blackbeard repo fork agents/market-research-agent@2.0.0 --as my-research-agent
 
 The forked asset is a standalone resource — it has no link back to the original. Changes to the original do not propagate. This is intentional: forks are for customization, not tracking.
 
-To stay in sync with upstream, use `ref: repo:` with `overrides` (§5.3) instead of forking.
+To stay in sync with upstream, use `ref: repo:` with `overrides` (section 5.3 of this PRD) instead of forking.
 
 ## 6. Discovery (UI)
 

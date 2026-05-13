@@ -80,36 +80,28 @@ export const useResourceStore = create<ResourceState>((set) => ({
       const next = new Set([...state.loadingKinds, ...kinds])
       return { loadingKinds: next, loading: next.size > 0, error: null }
     })
-    try {
-      const results = await Promise.allSettled(
-        ALL_PLURALS.map((kind) =>
-          api
-            .get<{ items: Resource[]; total: number }>(`/api/v1/${kind}`)
-            .then((r) => ({ kind, items: r.items })),
-        ),
-      )
-      const updated: Record<string, Resource[]> = {}
-      for (const result of results) {
-        if (result.status === 'fulfilled') {
-          updated[result.value.kind] = result.value.items
-        }
+    const results = await Promise.allSettled(
+      ALL_PLURALS.map((kind) =>
+        api
+          .get<{ items: Resource[]; total: number }>(`/api/v1/${kind}`)
+          .then((r) => ({ kind, items: r.items })),
+      ),
+    )
+    const updated: Record<string, Resource[]> = {}
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        updated[result.value.kind] = result.value.items
       }
-      set((state) => {
-        const next = new Set(state.loadingKinds)
-        for (const k of kinds) next.delete(k)
-        return {
-          resources: { ...state.resources, ...updated },
-          loadingKinds: next,
-          loading: next.size > 0,
-        }
-      })
-    } catch (err) {
-      set((state) => {
-        const next = new Set(state.loadingKinds)
-        for (const k of kinds) next.delete(k)
-        return { error: (err as Error).message, loadingKinds: next, loading: next.size > 0 }
-      })
     }
+    set((state) => {
+      const next = new Set(state.loadingKinds)
+      for (const k of kinds) next.delete(k)
+      return {
+        resources: { ...state.resources, ...updated },
+        loadingKinds: next,
+        loading: next.size > 0,
+      }
+    })
   },
 
   createResource: async (resource) => {

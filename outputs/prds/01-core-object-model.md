@@ -28,10 +28,10 @@ spec:
   llm: gpt-4o                          # string or LLMConfig ref
   function_calling_llm: gpt-4o-mini    # optional, cheaper model for tool calls
   tools:
-    - ref: tools/serper-search          # reference to a Tool resource
-    - ref: tools/wikipedia
+    - "ref:tools/serper-search"
+    - "ref:tools/wikipedia"
   knowledge_sources:
-    - ref: knowledge/company-docs
+    - "ref:knowledge/company-docs"
   max_iter: 20
   max_rpm: 60
   max_execution_time: 300              # seconds
@@ -56,7 +56,7 @@ spec:
     step: "myproject.callbacks:on_agent_step"       # Python qualified name
     before_action: null
     after_action: null
-  policy: null                         # ref:agent-policies/<name> — overrides crew/namespace default
+  policy: null                         # set to "ref:agent-policies/<name>" to override crew/namespace default
   embedder:
     provider: openai
     config:
@@ -86,11 +86,11 @@ spec:
     Make sure you find any interesting and relevant information.
   expected_output: |
     A list with 10 bullet points of the most relevant information about {topic}.
-  agent: ref:agents/researcher
+  agent: "ref:agents/researcher"
   tools:
-    - ref: tools/serper-search
+    - "ref:tools/serper-search"
   context:
-    - ref: tasks/gather-sources        # depends on output of this task
+    - "ref:tasks/gather-sources"       # depends on output of this task
   async_execution: false
   human_input: false
   markdown: true
@@ -98,7 +98,7 @@ spec:
   output_format: raw                   # raw | json | pydantic
   output_schema: null                  # JSON Schema or Pydantic model ref
   guardrails:
-    - ref: guardrails/word-count-limit
+    - "ref:guardrails/word-count-limit"
     - "The output must contain at least 5 cited sources"   # LLM-based string
   guardrail_max_retries: 3
   callbacks:
@@ -118,11 +118,11 @@ metadata:
   name: research-crew
 spec:
   agents:
-    - ref: agents/researcher
-    - ref: agents/analyst
+    - "ref:agents/researcher"
+    - "ref:agents/analyst"
   tasks:
-    - ref: tasks/research-ai
-    - ref: tasks/write-report
+    - "ref:tasks/research-ai"
+    - "ref:tasks/write-report"
   process: sequential                 # sequential | hierarchical
   manager_llm: gpt-4o                # required if hierarchical
   manager_agent: null                 # optional custom manager
@@ -144,10 +144,10 @@ spec:
     step: null
     task: null
   default_guardrails:                  # applied to all tasks unless task overrides
-    - ref: guardrails/no-pii-in-output
-  default_agent_policy: ref:agent-policies/standard   # applied to all agents unless agent overrides
+    - "ref:guardrails/no-pii-in-output"
+  default_agent_policy: "ref:agent-policies/standard"   # applied to all agents unless agent overrides
   knowledge_sources:
-    - ref: knowledge/company-docs
+    - "ref:knowledge/company-docs"
   embedder:
     provider: openai
 ```
@@ -174,7 +174,7 @@ spec:
       trigger: start
     - name: research
       type: crew
-      crew: ref:crews/research-crew
+      crew: "ref:crews/research-crew"
       trigger:
         listen: generate-topic
     - name: review
@@ -193,7 +193,7 @@ spec:
         listen: approved              # listens to router label
     - name: revise
       type: crew
-      crew: ref:crews/research-crew
+      crew: "ref:crews/research-crew"
       trigger:
         listen: needs-revision
   routing:
@@ -259,9 +259,9 @@ spec:
   
   # Routing & fallbacks (PRD 06)
   fallback_to:
-    - ref: llm-connections/anthropic-claude-sonnet
+    - "ref:llm-connections/anthropic-claude-sonnet"
   context_window_fallback:
-    - ref: llm-connections/openai-gpt4o-mini
+    - "ref:llm-connections/openai-gpt4o-mini"
   
   # Load balancing: multiple deployments of the same model (PRD 06)
   deployments:
@@ -346,7 +346,7 @@ PRD 01 defines the core **workload resources** above. Additional resource kinds 
 | ServiceAccount | PRD 01 | Identity | Machine identity for CI/CD, triggers, A2A |
 | Plugin | PRD 11 | Extensibility | Plugin manifest and configuration |
 
-All resource kinds follow the same `apiVersion/kind/metadata/spec` envelope and are stored in the unified `resources` table (§7). Each kind has its own JSON Schema for `spec` validation.
+All resource kinds follow the same `apiVersion/kind/metadata/spec` envelope and are stored in the unified `resources` table (section 7). Each kind has its own JSON Schema for `spec` validation.
 
 ### 2.10 Namespace
 
@@ -361,10 +361,10 @@ metadata:
 spec:
   description: "Production environment"
   defaults:
-    agent_policy: ref:agent-policies/standard
+    agent_policy: "ref:agent-policies/standard"
     sandbox_tier: wasm
     guardrails:
-      - ref: guardrails/no-pii-in-output
+      - "ref:guardrails/no-pii-in-output"
   resource_quotas:
     max_agents: 50
     max_crews: 20
@@ -395,11 +395,11 @@ spec:
     - name: primary
       expires_at: "2027-01-01T00:00:00Z"   # optional, null = no expiry
   permissions:
-    inherit_from: ref:users/admin@example.com   # optional, inherit creator's permissions
+    inherit_from: "ref:users/admin@example.com"   # optional; @ in name is post-MVP / illustrative
 ```
 
 **Design notes:**
-- ServiceAccounts are subjects in RBAC (PRD 03 §2.1) — they can be bound to Roles via RoleBindings.
+- ServiceAccounts are subjects in RBAC (PRD 03, section 2.1) — they can be bound to Roles via RoleBindings.
 - Each Automation references a ServiceAccount via `spec.service_account` (PRD 09). When a scheduled trigger fires, the ServiceAccount is the initiating principal in the execution's principal chain.
 - API keys associated with ServiceAccounts are stored encrypted. For MVP, encryption uses `BLACKBEARD_API_KEY` as the key derivation input. Post-MVP, keys are stored in Infisical.
 - ServiceAccounts are namespace-scoped like all other resources.
@@ -412,22 +412,24 @@ Resources reference each other using `ref:` syntax. This is the canonical specif
 
 | Form | Syntax | Example | Used For |
 |------|--------|---------|----------|
-| **Local ref** | `ref: <kind-plural>/<name>` | `ref: agents/researcher` | Same-namespace reference |
-| **Cross-namespace** | `ref: <namespace>/<kind-plural>/<name>` | `ref: production/agents/researcher` | Explicit namespace |
-| **Repository** | `ref: repo:<kind-plural>/<name>@<version>` | `ref: repo:agents/market-researcher@2.0.0` | Asset from repository (PRD 10) |
+| **Local ref** | `ref:<kind-plural>/<name>` | `ref:agents/researcher` | Same-namespace reference |
+| **Cross-namespace** | `ref:<namespace>/<kind-plural>/<name>` | `ref:production/agents/researcher` | Explicit namespace |
+| **Repository** | `ref:repo:<kind-plural>/<name>@<version>` | `ref:repo:agents/market-researcher@2.0.0` | Asset from repository (PRD 10) |
 | **Label selector** | `"<kind-plural>/label:<key>=<value>"` | `"tools/label:category=search"` | Match by label (quoted string, not a ref) |
+
+**Canonical string:** No space after `ref:`. The runtime parser expects a single string (see `refs.py` in the backend).
 
 ### 3.2 Syntax Rules
 
-1. `ref:` is always a **value prefix** in list items: `- ref: tools/serper-search`
-2. When `ref` is a **field name** (e.g., `spec.source.ref`), the value is a bare path without the `ref:` prefix: `ref: crews/research-crew`
+1. Every cross-resource pointer uses the **`ref:<kind-plural>/<name>`** form (quoted in YAML), e.g. `- "ref:tools/serper-search"` or `agent: "ref:agents/researcher"`.
+2. Do not split `ref` into a separate YAML mapping key for resource pointers — the stored value must be the full `ref:…` string so validation and loading match the JSON Schema (`items: { "type": "string" }` for `tools`, `agents`, etc.).
 3. Label selectors are **quoted strings**, not refs. They are resolved at runtime, not at validation time.
 4. Repository refs require explicit version pinning for v1 (`@2.0.0`). `@latest` resolves to a specific version at install time.
 5. Cross-namespace refs require the referencing subject to have `get` permission on the target namespace.
 
 ### 3.3 Resolution
 
-References are resolved via topological sort with cycle detection (§4). Resolution order:
+References are resolved via topological sort with cycle detection (section 4). Resolution order:
 1. Parse the ref string → extract kind, name, optional namespace
 2. Look up in `resource_refs` table
 3. If cross-namespace, verify RBAC permission
@@ -456,9 +458,9 @@ When a resource is deleted, the system checks for inbound references:
 
 References are resolved within the **current namespace** by default:
 
-- `ref: agents/researcher` resolves to `agents/researcher` in the same namespace as the referencing resource.
-- `ref: production/agents/researcher` explicitly targets the `production` namespace.
-- `ref: repo:agents/researcher@1.0.0` resolves from the asset repository (PRD 10), which is namespace-independent.
+- `ref:agents/researcher` resolves to `agents/researcher` in the same namespace as the referencing resource.
+- `ref:production/agents/researcher` explicitly targets the `production` namespace.
+- `ref:repo:agents/researcher@1.0.0` resolves from the asset repository (PRD 10), which is namespace-independent.
 
 If a reference is ambiguous (resource exists in multiple namespaces), the resolver returns an error requiring an explicit namespace prefix.
 
@@ -562,7 +564,7 @@ All endpoints honour RBAC (PRD 03).
 
 ## 11. Acceptance Criteria
 
-1. All workload resource kinds defined in this PRD (§2.1–2.8) can be created via YAML file upload and API. Other resource kinds (§2.9) are validated and created by their respective modules.
+1. All workload resource kinds defined in this PRD (sections 2.1–2.8) can be created via YAML file upload and API. Other resource kinds (section 2.9) are validated and created by their respective modules.
 2. `ref:` cross-references resolve correctly; cycles produce a clear error.
 3. Resources are persisted in PostgreSQL and queryable by kind, name, label.
 4. `blackbeard validate` CLI passes on valid resources and fails with actionable errors on invalid ones.

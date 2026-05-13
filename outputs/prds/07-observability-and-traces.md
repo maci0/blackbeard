@@ -154,7 +154,7 @@ Visual Gantt chart:
 
 ### 5.4 Dashboard Implementation
 
-Blackbeard-specific dashboards (§5.2 Agent Performance, §5.3 Policy Dashboard) are built in **Blackbeard's own UI**, not in Langfuse. They query Blackbeard's `executions` and `execution_tool_calls` tables for sandbox and policy data, and optionally query Langfuse's API for token/cost aggregations. Langfuse's built-in dashboards remain available for LLM-focused analytics.
+Blackbeard-specific dashboards (section 5.2 Agent Performance, section 5.3 Policy Dashboard) are built in **Blackbeard's own UI**, not in Langfuse. They query Blackbeard's `executions` and `execution_tool_calls` tables for sandbox and policy data, and optionally query Langfuse's API for token/cost aggregations. Langfuse's built-in dashboards remain available for LLM-focused analytics.
 
 **Data join key:** The `execution_id` is used as Langfuse's `trace_id` (set via `langfuse_trace_id` parameter when creating the trace). This allows joining Blackbeard's `executions` table with Langfuse's trace data. Dashboard queries that need token/cost aggregations call Langfuse's `GET /api/public/traces/{trace_id}` endpoint. Dashboard data is cached in Valkey with a 60-second TTL.
 

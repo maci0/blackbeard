@@ -61,7 +61,9 @@ npm run test -- --run            # vitest (single run)
 
 ### Infrastructure
 
-**docker-compose.yaml**: 10 services — api, ui, postgres (18), valkey (9), litellm, langfuse-web, langfuse-worker, clickhouse, minio, redis. API and UI containers run read-only with `cap_drop: ALL` and `no-new-privileges`.
+**docker-compose.yaml**: 10 services — api, ui, postgres (18), valkey (9), litellm, langfuse-web, langfuse-worker, clickhouse, minio, redis. API and UI containers run with `no-new-privileges`. Infrastructure containers (postgres, valkey, litellm, langfuse) additionally use `cap_drop: ALL`.
+
+DB schema is managed via `Base.metadata.create_all()` in entrypoint.sh (not Alembic). This only creates new tables — it cannot alter existing tables. Schema changes require dropping and recreating the database.
 
 **CI**: GitHub Actions — backend (ruff + mypy + pytest with Postgres service) → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (parallel, cached).
 

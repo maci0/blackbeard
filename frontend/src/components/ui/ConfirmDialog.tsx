@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 
@@ -22,10 +23,22 @@ export function ConfirmDialog({
   onConfirm,
   loading,
 }: ConfirmDialogProps) {
+  const [submitting, setSubmitting] = useState(false)
+  const busy = loading || submitting
+
   const btnClass =
     confirmVariant === 'destructive'
       ? 'bg-red-600 text-white hover:bg-red-700'
       : 'bg-primary text-primary-foreground hover:opacity-90'
+
+  const handleConfirm = async () => {
+    setSubmitting(true)
+    try {
+      await onConfirm()
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -46,11 +59,11 @@ export function ConfirmDialog({
               </button>
             </Dialog.Close>
             <button
-              onClick={() => void onConfirm()}
-              disabled={loading}
+              onClick={() => void handleConfirm()}
+              disabled={busy}
               className={`rounded-lg px-4 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${btnClass}`}
             >
-              {loading ? 'Processing…' : confirmLabel}
+              {busy ? 'Processing...' : confirmLabel}
             </button>
           </div>
           <Dialog.Close asChild>

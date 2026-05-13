@@ -30,12 +30,20 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="max-w-md text-sm text-muted-foreground">
             An unexpected error occurred. Try reloading the page.
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            Reload
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => this.setState({ hasError: false })}
+              className="rounded-md border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              Reload
+            </button>
+          </div>
         </div>
       )
     }

@@ -175,19 +175,24 @@ async def readiness(
             )
             return {"status": "down", "reason": type(e).__name__}
 
-    try:
-        db_result, valkey_result, litellm_result = await asyncio.wait_for(
-            asyncio.gather(_check_database(), _check_valkey(), _check_litellm()),
-            timeout=10.0,
-        )
-    except TimeoutError:
-        logger.error(
-            "Readiness check timed out after 10s",
-            extra={"event": "readiness_timeout"},
-        )
-        db_result = {"status": "down", "reason": "timeout"}
-        valkey_result = {"status": "down", "reason": "timeout"}
-        litellm_result = {"status": "down", "reason": "timeout"}
+    timeout_result: dict[str, object] = {"status": "down", "reason": "timeout"}
+
+    async def _with_timeout(coro: Any, label: str) -> dict[str, object]:
+        try:
+            return await asyncio.wait_for(coro, timeout=10.0)
+        except TimeoutError:
+            logger.warning(
+                "Health check: %s timed out after 10s",
+                label,
+                extra={"event": "health_check_timeout", "component": label},
+            )
+            return dict(timeout_result)
+
+    db_result, valkey_result, litellm_result = await asyncio.gather(
+        _with_timeout(_check_database(), "database"),
+        _with_timeout(_check_valkey(), "valkey"),
+        _with_timeout(_check_litellm(), "litellm"),
+    )
     checks: dict[str, dict[str, object]] = {
         "database": db_result,
         "valkey": valkey_result,

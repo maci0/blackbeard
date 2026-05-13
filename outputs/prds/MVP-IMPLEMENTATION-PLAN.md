@@ -53,7 +53,7 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 | Layer | Technology |
 |-------|------------|
 | **Backend** | Python 3.12+, FastAPI, SQLAlchemy, Pydantic v2 |
-| **Database** | PostgreSQL 17 |
+| **Database** | PostgreSQL 18 (17+ supported) |
 | **Cache** | Valkey 8 (Redis-compatible) |
 | **LLM gateway** | LiteLLM Proxy |
 | **Observability** | Langfuse (self-hosted) |
@@ -65,7 +65,7 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 | **State** | Zustand |
 | **Styling** | Tailwind CSS + shadcn/ui |
 | **CLI** | Click (Python) |
-| **CrewAI** | `crewai[tools]` latest |
+| **CrewAI** | `crewai` with a narrow range in `pyproject.toml` (e.g. `>=1.14,<2`); pin an exact version for release builds per PRD 00 (Compatibility strategy) |
 
 ---
 
@@ -100,8 +100,9 @@ blackbeard/
 │   │   │   ├── loader.py              # YAML → CrewAI objects
 │   │   │   ├── executor.py            # Kickoff and manage runs
 │   │   │   ├── policy.py              # AgentPolicy enforcement
-│   │   │   ├── sandbox.py             # Sandbox manager (none + wasm)
-│   │   │   └── wasm_runtime.py        # Wasmtime wrapper
+│   │   │   └── sandbox/               # Sandbox manager (none + wasm)
+│   │   │       ├── selector.py        # Tier selection (tool + policy)
+│   │   │       └── wasm_runtime.py    # Wasmtime wrapper
 │   │   │
 │   │   ├── litellm/                   # LiteLLM integration
 │   │   │   ├── config_gen.py          # LLMConnection → litellm config.yaml

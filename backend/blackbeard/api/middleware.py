@@ -178,6 +178,11 @@ async def body_size_limiter(request: Request, call_next: RequestResponseEndpoint
             headers={"X-Request-Id": rid},
         )
 
+    # NOTE: An empty Content-Length header (e.g. "Content-Length: ") will be
+    # treated as "no Content-Length present" and fall through to the chunked-body
+    # read path below.  This is acceptable because in production, nginx sits in
+    # front of the API and enforces its own client_max_body_size for streaming /
+    # chunked requests before they reach this middleware.
     content_length = request.headers.get("content-length")
     if content_length:
         try:

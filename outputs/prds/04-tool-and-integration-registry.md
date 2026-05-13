@@ -16,13 +16,13 @@ Provide a centralised catalogue for all tools, integrations, and MCP servers tha
 | **Composio** | Composio-managed integration | `none` (remote call) | Pre-built OAuth connectors |
 | **Custom** | User-defined tool with arbitrary implementation | Configurable | Plugin SDK |
 
-All sandbox tiers (`none`, `wasm`, `docker`, `microvm`) are production-valid. The default shown above is a starting point — it can be overridden by the tool's `sandbox` field, the agent's AgentPolicy (PRD 03), or the org default. See PRD 05 §6 for full sandbox architecture.
+All sandbox tiers (`none`, `wasm`, `docker`, `microvm`) are production-valid. The default shown above is a starting point — it can be overridden by the tool's `sandbox` field, the agent's AgentPolicy (PRD 03), or the org default. See PRD 05, section 6 for full sandbox architecture.
 
 **Auto-compilation note**: Python to WASM auto-compilation via componentize-py is best-effort. Not all Python packages are WASM-compatible (e.g., those with C extensions). If compilation fails, the tool falls back to its declared sandbox tier or the agent's policy default. The build log surfaces the failure with a clear message.
 
 ### WASM Tools
 
-WASM tools are first-class citizens — pre-compiled to `.wasm` and executed in the WASM sandbox tier (PRD 05 §6). They provide strong isolation with near-zero overhead and are the **recommended format for distributing third-party tools**.
+WASM tools are first-class citizens — pre-compiled to `.wasm` and executed in the WASM sandbox tier (PRD 05, section 6). They provide strong isolation with near-zero overhead and are the **recommended format for distributing third-party tools**.
 
 **Supported source languages**: Rust, Go, C/C++, Python (via componentize-py), JavaScript/TypeScript (via javy or ComponentizeJS), Zig, Swift.
 

@@ -112,8 +112,8 @@ Blackbeard wraps CrewAI as a dependency, not a fork. This creates a tight coupli
 
 **Compatibility strategy:**
 
-1. **Pin to specific CrewAI version** in `pyproject.toml`. Never use `>=` or `*` ranges.
-2. **All CrewAI imports go through `blackbeard.engine.compat`** — a shim module that isolates import paths and provides version-specific adapters.
+1. **Pin CrewAI to an exact version for release builds** (e.g. `crewai==1.x.y` in `pyproject.toml`). During active development, a **narrow upper-bounded range** (such as `>=1.14,<2`) is acceptable until the first stability cut; avoid unbounded `>=` or `*` ranges.
+2. **Target: all CrewAI imports go through `blackbeard.engine.compat`** — a shim module that isolates import paths and provides version-specific adapters. Until that module exists, imports may be direct; introducing the shim is part of hardening before a declared stable release.
 3. **CI runs against pinned version AND CrewAI latest weekly** — breaking changes detected before upgrade.
 4. **Resource schema evolution**: When CrewAI adds new fields, Blackbeard's JSON Schema validators are updated to accept them as optional. When CrewAI removes fields, Blackbeard's validators emit deprecation warnings for one release cycle before removal.
 
@@ -147,10 +147,11 @@ Blackbeard targets **teams of 3–20** building production agent workflows. Solo
 | 09 | **Deployment & Automation** | — | Build, deploy, version, rollback, triggers, webhooks, A2A |
 | 10 | **Agent & Asset Repository** | MinIO | Shared library of reusable agents, tasks, tools, and templates |
 | 11 | **API & Extensibility** | — | Public REST/gRPC API, webhook streaming, React component export, plugin SDK |
+| 12 | **Onboarding & First-Run** | — | Guided tour, welcome flow, progressive disclosure in Studio (PRD 12) |
 
 ### Cross-cutting concerns
 
-- **Persistence**: PostgreSQL for relational data, MinIO (S3-compatible) for artifacts, Valkey for caching.
+- **Persistence**: PostgreSQL for relational data (reference compose uses PostgreSQL 18; 17+ is supported), MinIO (S3-compatible) for artifacts, Valkey for caching.
 - **Workflow orchestration**: Temporal for durable crew/flow executions.
   - Temporal uses its own persistence backend. Default: shares the Blackbeard PostgreSQL instance with a separate `temporal` database. For production deployments with high workflow volume, a dedicated PostgreSQL instance is recommended.
 - **Auth & identity**: Ory Kratos (identity) + Ory Hydra (OAuth2/OIDC).
@@ -173,7 +174,7 @@ All modules communicate asynchronously via a shared **event bus**. Every resourc
 **Event envelope**:
 ```json
 {
-  "event": "execution.task_completed",
+  "event": "execution.task.completed",
   "timestamp": "2026-05-10T12:01:23Z",
   "source": "execution-worker-01",
   "data": {
@@ -185,7 +186,7 @@ All modules communicate asynchronously via a shared **event bus**. Every resourc
 }
 ```
 
-**Naming convention**: `{module}.{noun}.{verb}` — e.g., `execution.task.completed`, `agent.policy.denied`, `resource.agent.created`, `litellm.key.budget_exceeded`.
+**Naming convention**: `{module}.{noun}.{verb}` using **dots only** (no underscores inside the name) — e.g. `execution.task.completed`, `agent.policy.denied`, `resource.created`, `litellm.key.budget_exceeded`. Producers MUST use the canonical names defined in PRD 05 (SSE / internal bus).
 
 Event payload schemas for each module are defined in their respective PRDs (see "Events Emitted" sections).
 

@@ -102,7 +102,7 @@ All other fields (strings, numbers, booleans, enums, tags) use auto-generated in
 | Undo/Redo | Ctrl+Z / Ctrl+Shift+Z | Full undo stack (50 levels) |
 | Copy/Paste | Ctrl+C / Ctrl+V | Deep-copies selected nodes with new names |
 | Search | Ctrl+K | Fuzzy search all nodes on canvas |
-| Validate | Toolbar button | Runs validation (PRD 01 §5) and highlights errors on nodes |
+| Validate | Toolbar button | Runs validation (PRD 01, section 6) and highlights errors on nodes |
 
 > **Note:** Validate is available via the toolbar button. The keyboard shortcut was removed to avoid conflict with browser paste-without-formatting (`Ctrl+Shift+V`).
 

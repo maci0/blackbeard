@@ -16,8 +16,6 @@ import {
 import { User, ListChecks, Wrench, Sparkles } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
 import { getDefaultNodeData } from '@/lib/utils'
-import { useDarkMode } from '@/lib/hooks'
-
 import AgentNode from './nodes/AgentNode'
 import TaskNode from './nodes/TaskNode'
 import ToolNode from './nodes/ToolNode'
@@ -72,7 +70,7 @@ function minimapNodeColor(node: Node): string {
 
 function CanvasInner() {
   const { screenToFlowPosition } = useReactFlow()
-  const isDark = useDarkMode()
+  const isDark = document.documentElement.classList.contains('dark')
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, setSelectedNode } =
     useStudioStore()
   const nodesRef = useRef(nodes)

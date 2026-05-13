@@ -5,8 +5,8 @@ import json from 'highlight.js/lib/languages/json'
 import 'highlight.js/styles/github-dark.min.css'
 import { cn } from '@/lib/utils'
 
-hljs.registerLanguage('yaml', yaml)
-hljs.registerLanguage('json', json)
+if (!hljs.getLanguage('yaml')) hljs.registerLanguage('yaml', yaml)
+if (!hljs.getLanguage('json')) hljs.registerLanguage('json', json)
 
 interface CodeBlockProps {
   code: string

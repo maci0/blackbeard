@@ -88,7 +88,7 @@ spec:
   conditions: []                      # optional: label selectors, field matchers
 ```
 
-**Standalone vs. embedded**: Rules are always embedded within Roles — they are not independently addressable resources. The `Rule` entry in the resource catalogue (PRD 01, §2.9) indicates that Rules follow the same schema validation, but they do not have their own CRUD endpoints or database rows. Rules are created, updated, and deleted as part of their parent Role resource. The `kind: Rule` in the YAML above is for schema documentation; in practice, rules appear as entries in `spec.rules` arrays within Role resources.
+**Standalone vs. embedded**: Rules are always embedded within Roles — they are not independently addressable resources. The `Rule` entry in the resource catalogue (PRD 01, section 2.9) indicates that Rules follow the same schema validation, but they do not have their own CRUD endpoints or database rows. Rules are created, updated, and deleted as part of their parent Role resource. The `kind: Rule` in the YAML above is for schema documentation; in practice, rules appear as entries in `spec.rules` arrays within Role resources.
 
 ### 2.5 Role
 
@@ -599,7 +599,7 @@ All RBAC resources (Role, RoleBinding, AgentPolicy, SSOConfig, APIKey, Sandbox) 
 - Version-controlled in Git alongside agent/crew definitions.
 - Applied via CLI: `blackbeard apply -f agent-policies/restricted.yaml`.
 - Managed via API: `POST /api/v1/agent-policies`.
-- Managed via GUI (§9).
+- Managed via GUI (section 9).
 
 GitOps workflows for access control are first-class.
 

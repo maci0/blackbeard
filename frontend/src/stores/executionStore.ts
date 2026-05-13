@@ -74,7 +74,7 @@ export const useExecutionStore = create<ExecutionState>((set) => ({
   },
 
   fetchExecution: async (id: string) => {
-    set({ loading: true, error: null })
+    set({ loading: true, error: null, currentExecution: null })
     try {
       const execution = await api.get<Execution>(`/api/v1/executions/${id}`)
       set({ currentExecution: execution, loading: false })

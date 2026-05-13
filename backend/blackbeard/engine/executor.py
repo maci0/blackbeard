@@ -186,13 +186,10 @@ async def kickoff(
                 },
             )
             error_msg = _sanitize_error(str(exc))
-            # Try the running event loop first; fall back to a throwaway loop if unavailable
-            try:
-                task = asyncio.ensure_future(_mark_failed_async(execution_id, error_msg))
-                _background_tasks.add(task)
-                task.add_done_callback(_background_tasks.discard)
-            except RuntimeError:
-                _mark_failed_sync(execution_id, error_msg)
+            # This callback runs in the executor thread, which has no running
+            # asyncio event loop, so we always use the synchronous helper that
+            # spins up a throwaway loop.
+            _mark_failed_sync(execution_id, error_msg)
 
     future.add_done_callback(_on_thread_error)
 

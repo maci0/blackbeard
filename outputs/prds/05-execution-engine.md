@@ -9,7 +9,8 @@ The Execution Engine is the runtime that loads YAML resource definitions, resolv
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                    API Gateway / CLI                          │
-│              POST /api/v1/automations/{name}/kickoff           │
+│   POST /api/v1/crews/{name}/kickoff (MVP)                      │
+│   POST /api/v1/automations/{name}/kickoff (post-MVP)           │
 └──────────────────────┬───────────────────────────────────────┘
                        │
                        ▼
@@ -46,7 +47,7 @@ The Execution Engine is the runtime that loads YAML resource definitions, resolv
 │  ┌────────────────┐  ┌──────────────┐  ┌──────────────┐      │
 │  │  Policy        │  │  Sandbox     │  │  Callback    │      │
 │  │  Enforcer      │  │  Manager     │  │  Resolver    │      │
-│  │  (PRD 03)      │  │  (§6)        │  │  (imports)   │      │
+│  │  (PRD 03)      │  │  (section 6) │  │  (imports)   │      │
 │  └────────────────┘  └──────────────┘  └──────────────┘      │
 │                                                              │
 │  ┌────────────────┐  ┌──────────────┐                        │
@@ -163,7 +164,7 @@ Cancelled by user or API request. Active LLM calls terminate best-effort; sandbo
 
 1. Fetch the Automation record → get the Crew or Flow resource reference.
 2. Recursively resolve all `ref:` dependencies (agents, tasks, tools, knowledge sources).
-3. Resolve the **AgentPolicy** for each agent (agent-level > crew-level > namespace-level > org default — PRD 03 §3.1).
+3. Resolve the **AgentPolicy** for each agent (agent-level > crew-level > namespace-level > org default — PRD 03, section 3.1).
 4. Resolve the **Sandbox profile** for each agent based on its policy's `code_execution.sandbox` and each tool's `sandbox` field.
 5. Build the execution graph (DAG for sequential; tree for hierarchical; event graph for flows).
 6. Validate the graph: no cycles (except explicit flow loops), all refs resolved, all tools available and policy-allowed.
@@ -231,10 +232,10 @@ spec:
   # ── Enforcement relationship ────────────────────────────────
   # The Sandbox resource's `network` section defines template defaults.
   # At runtime, the effective network rules come from the agent's
-  # AgentPolicy `network.outbound` configuration (PRD 03 §3).
+  # AgentPolicy `network.outbound` configuration (PRD 03, section 3).
   # The AgentPolicy takes precedence — the Sandbox template is only
   # used when no AgentPolicy is specified. All network patterns follow
-  # the matching semantics defined in PRD 03 §3 (suffix matching,
+  # the matching semantics defined in PRD 03, section 3 (suffix matching,
   # optional port).
   #
   # Port is optional. When omitted, all ports are allowed for the
@@ -555,8 +556,8 @@ agent_llm = LLM(
 CrewAI doesn't know it's talking to LiteLLM — it sees an OpenAI-compatible API. LiteLLM handles provider dispatch, load balancing, fallbacks, and spend tracking.
 
 **Policy enforcement at the LLM layer:**
-- **Model access**: The agent's virtual key restricts which models it can call (PRD 06 §4.2).
-- **Budget**: The virtual key has a `max_budget` derived from the AgentPolicy's `llm.max_cost_per_execution_usd` (PRD 06 §4.4).
+- **Model access**: The agent's virtual key restricts which models it can call (PRD 06, section 4.2).
+- **Budget**: The virtual key has a `max_budget` derived from the AgentPolicy's `llm.max_cost_per_execution_usd` (PRD 06, section 4.4).
 - **Per-task token limits**: `llm.max_tokens_per_task` is enforced by Blackbeard's policy enforcer (not LiteLLM), by tracking token usage per task and stopping the agent if exceeded.
 - **Context window**: If `respect_context_window: true` (default), CrewAI monitors token count and summarises earlier messages when approaching the limit.
 
@@ -584,7 +585,7 @@ Agent requests tool call
          │ VALID ▼
 ┌──────────────────────────┐
 │  3. Sandbox Selection    │  Pick tier: in-process / WASM / Docker / MicroVM
-│     (§6.5)               │  Resolve sandbox profile
+│     (section 6.5)        │  Resolve sandbox profile
 └────────┬─────────────────┘
          │
          ▼
@@ -869,7 +870,7 @@ Indexes:
 | `execution.cancelled` | `{execution_id, cancelled_by, reason}` |
 | `execution.checkpointed` | `{execution_id, checkpoint_id}` |
 
-**Event naming convention:** All events use dotted namespace format. The SSE event type names (§11) are the canonical names used across all subsystems (internal event bus, Langfuse listener, webhook payloads). Event producers MUST use these exact names.
+**Event naming convention:** All events use dotted namespace format. The SSE event type names (section 11 of this PRD) are the canonical names used across all subsystems (internal event bus, Langfuse listener, webhook payloads). Event producers MUST use these exact names.
 
 ---
 

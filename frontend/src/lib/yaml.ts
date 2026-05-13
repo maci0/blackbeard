@@ -82,7 +82,12 @@ export function resourceToYaml(resource: Resource): string {
 
 export function parseYaml(yamlStr: string): Record<string, unknown> {
   const result = yaml.load(yamlStr)
-  if (result === null || result === undefined || typeof result !== 'object') {
+  if (
+    result === null ||
+    result === undefined ||
+    typeof result !== 'object' ||
+    Array.isArray(result)
+  ) {
     return {}
   }
   return result as Record<string, unknown>

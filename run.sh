@@ -40,4 +40,4 @@ echo "  LiteLLM:  http://localhost:4000"
 echo "  Langfuse: http://localhost:3001"
 echo ""
 
-$COMPOSE up "$@"
+exec $COMPOSE up "$@"

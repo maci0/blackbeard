@@ -29,7 +29,7 @@ services:
       CLOUD_ML_REGION: ${CLOUD_ML_REGION:-us-east5}
       GOOGLE_APPLICATION_CREDENTIALS: /app/credentials.json
     volumes:
-      - ${GOOGLE_APPLICATION_CREDENTIALS}:/app/credentials.json:ro
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-deploy/docker/empty-credentials.json}:/app/credentials.json:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,6 +43,8 @@ services:
     mem_limit: 2g
     tmpfs:
       - /tmp
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 10s
@@ -64,6 +66,8 @@ services:
       - api
     restart: unless-stopped
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
       interval: 10s
@@ -145,7 +149,7 @@ services:
       LANGFUSE_HOST: http://langfuse-web:3000
     volumes:
       - ./deploy/litellm/config.yaml:/app/config.yaml
-      - ${GOOGLE_APPLICATION_CREDENTIALS}:/app/credentials.json:ro
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-deploy/docker/empty-credentials.json}:/app/credentials.json:ro
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     depends_on:
       postgres:

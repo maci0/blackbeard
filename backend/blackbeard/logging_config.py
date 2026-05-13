@@ -95,5 +95,6 @@ def configure_logging(debug: bool = False) -> None:
 
     app_logger = logging.getLogger("blackbeard")
     app_logger.setLevel(level)
+    app_logger.handlers.clear()
     app_logger.addHandler(handler)
     app_logger.propagate = False

@@ -12,6 +12,8 @@ Define the public API surface, webhook streaming protocol, plugin SDK, and exten
 
 All resources (PRD 01) are exposed through a uniform REST API:
 
+**MVP vs full platform (execution):** Crews are kicked off with `POST /api/v1/crews/{name}/kickoff` until the `Automation` resource and deployment lifecycle (PRD 09) exist. The `automations/*` routes below are the post-MVP surface; they wrap the same execution engine with versioning, triggers, and rollback. See PRD 05 section 3.1.
+
 ```
 # Resources (replace 'agents' with any resource kind in lowercase plural)
 GET    /api/v1/agents                          List resources
@@ -23,7 +25,8 @@ DELETE /api/v1/agents/{name}                   Delete
 POST   /api/v1/agents/{name}/validate          Dry-run validation
 
 # Execution
-POST   /api/v1/automations/{name}/kickoff      Start execution
+POST   /api/v1/crews/{name}/kickoff            Start execution (MVP; same engine as Automation path)
+POST   /api/v1/automations/{name}/kickoff      Start execution (post-MVP; PRD 09)
 GET    /api/v1/executions/{id}                 Get execution status
 GET    /api/v1/executions/{id}/stream          SSE stream of execution events
 POST   /api/v1/executions/{id}/resume          Resume with human feedback
@@ -44,7 +47,7 @@ GET    /api/v1/auth/me                         Current user info
 POST   /api/v1/auth/sso/callback               SSO callback
 ```
 
-All resource kinds in the catalogue (PRD 01 §2.9), including `IntegrationConnector`, `MCPServer`, `ServiceAccount`, `Namespace`, `ObservabilityConfig`, `LLMRoutingConfig`, and `PlatformConfig`, are exposed through the same uniform CRUD pattern. Resource kind maps to lowercase-hyphenated-plural path: `integration-connectors`, `mcp-servers`, `service-accounts`, `namespaces`, `observability-configs`, `llm-routing-configs`, `platform-configs`.
+All resource kinds in the catalogue (PRD 01, section 2.9), including `IntegrationConnector`, `MCPServer`, `ServiceAccount`, `Namespace`, `ObservabilityConfig`, `LLMRoutingConfig`, and `PlatformConfig`, are exposed through the same uniform CRUD pattern. Resource kind maps to lowercase-hyphenated-plural path: `integration-connectors`, `mcp-servers`, `service-accounts`, `namespaces`, `observability-configs`, `llm-routing-configs`, `platform-configs`.
 
 ### 2.2 Authentication
 
@@ -569,8 +572,11 @@ client = BlackbeardClient(url="https://blackbeard.sh", api_key="ck_...")
 # Create an agent
 agent = client.agents.create_from_yaml("agents/researcher.yaml")
 
-# Kickoff
-execution = client.automations.kickoff("research-pipeline-prod", inputs={"topic": "AI"})
+# Kickoff (MVP): Crew resource — matches POST /api/v1/crews/{name}/kickoff
+execution = client.crews.kickoff("research-crew", inputs={"topic": "AI"})
+
+# Kickoff (post-MVP): Automation with versioning / triggers — PRD 09
+# execution = client.automations.kickoff("research-pipeline-prod", inputs={"topic": "AI"})
 
 # Stream results
 for event in execution.stream():
@@ -590,9 +596,12 @@ import { BlackbeardClient } from '@blackbeard/sdk';
 
 const client = new BlackbeardClient({ url: '...', apiKey: '...' });
 
-const execution = await client.automations.kickoff('research-pipeline-prod', {
-  inputs: { topic: 'AI' }
+// MVP: Crew kickoff — matches POST /api/v1/crews/{name}/kickoff
+const execution = await client.crews.kickoff('research-crew', {
+  inputs: { topic: 'AI' },
 });
+
+// Post-MVP: client.automations.kickoff('research-pipeline-prod', { inputs: { topic: 'AI' } });
 
 for await (const event of execution.stream()) {
   console.log(event.type, event.data);
@@ -610,11 +619,11 @@ for await (const event of execution.stream()) {
 7. CLI `blackbeard kickoff` starts an execution and `blackbeard status` shows progress.
 8. React component export produces a working embeddable widget.
 9. OpenAPI spec is auto-generated and valid; Swagger UI renders correctly.
-10. Python and TypeScript SDKs can create resources, kickoff executions, and stream results.
+10. Python and TypeScript SDKs can create resources, kick off crews (MVP) or automations (post-MVP), and stream results.
 
 ## Error Code Taxonomy
 
-All API errors use the error format defined in §2.4. Error codes are namespaced by subsystem:
+All API errors use the error format defined in section 2.4. Error codes are namespaced by subsystem:
 
 | Code | HTTP Status | Description |
 |------|-------------|-------------|

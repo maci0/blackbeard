@@ -13,7 +13,7 @@ Provide configurable safety mechanisms that validate, filter, and redact agent o
 | **Function-based** | Python callable returning `(bool, Any)` | Deterministic, fast |
 | **LLM-based** | String description → agent's LLM evaluates | Flexible, subjective criteria |
 | **Schema-based** | JSON Schema / Pydantic model validation | Structural correctness |
-| **Hallucination** | Compares output against reference context for factual grounding (§3) | LLM-evaluated with score threshold |
+| **Hallucination** | Compares output against reference context for factual grounding (section 3) | LLM-evaluated with score threshold |
 | **Composite** | Ordered chain of the above | Sequential pipeline |
 
 **Performance impact**: Function-based and schema-based guardrails are near-instant (<10ms). LLM-based and hallucination guardrails each require an LLM call (typically 1-3s with a cheap model). For a crew with N tasks and M LLM-based guardrails per task, this adds up to N*M additional LLM calls (plus retries). Budget these costs when designing guardrail chains. Use `gpt-4o-mini` or equivalent for guardrail evaluation unless precision justifies a more expensive model.
@@ -107,7 +107,7 @@ namespaces:
         - ref: guardrails/factual-grounding
 ```
 
-Namespace-level guardrails are configured in the Namespace resource's `spec.defaults.guardrails` field (see PRD 01, §2.10). All tasks within the namespace inherit these guardrails unless overridden at the crew or task level.
+Namespace-level guardrails are configured in the Namespace resource's `spec.defaults.guardrails` field (see PRD 01, section 2.10). All tasks within the namespace inherit these guardrails unless overridden at the crew or task level.
 
 ### 2.5 Guardrail Execution Order
 
@@ -327,19 +327,19 @@ Agent produces output
     ▼
 ┌────────────────────┐
 │  Guardrails        │  Validate structure, content, quality
-│  (§2)              │  Retry if failed
+│  (section 2)       │  Retry if failed
 └────────┬───────────┘
          │
          ▼
 ┌────────────────────┐
 │  Hallucination     │  Check factual grounding against context
-│  Detection (§3)    │  Retry if score below threshold
+│  Detection (section 3)   │  Retry if score below threshold
 └────────┬───────────┘
          │
          ▼
 ┌────────────────────┐
 │  PII Redaction     │  Mask sensitive data before storage
-│  (§4)              │  (traces, logs — optionally outputs)
+│  (section 4)       │  (traces, logs — optionally outputs)
 └────────┬───────────┘
          │
          ▼

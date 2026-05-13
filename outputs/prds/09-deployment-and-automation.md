@@ -64,7 +64,7 @@ spec:
 
 **Worker topology:** Post-MVP topology. MVP runs API and worker in a single process (`api` service). Post-MVP separates into `api` (HTTP server) and `worker` (execution engine) services for independent scaling.
 
-**Storage:** The Automation resource is stored in the generic `resources` table (PRD 01, §6), same as all other resources. Deployment-specific state is stored in the `automation_deployments` table (§2.1 below). The Automation lifecycle state machine (created → building → deploying → deployed → degraded → deleted) is tracked in `automation_deployments.status`, not in the `resources` table.
+**Storage:** The Automation resource is stored in the generic `resources` table (PRD 01, section 7), same as all other resources. Deployment-specific state is stored in the `automation_deployments` table (section 2.1 below). The Automation lifecycle state machine (created → building → deploying → deployed → degraded → deleted) is tracked in `automation_deployments.status`, not in the `resources` table.
 
 **Hot-updatable fields** (do not require re-deployment):
 - `spec.triggers` — cron schedules, webhook config
@@ -98,7 +98,7 @@ created → building → deploying → deployed → degraded → deleted
 | `degraded` | Deployed but health checks failing (e.g., LiteLLM unreachable, tool unavailable) |
 | `deleted` | Soft-deleted — executions stopped, triggers unregistered |
 
-The Automation resource is stored in the generic `resources` table (PRD 01, §6). Deployment-specific state is stored in a dedicated table:
+The Automation resource is stored in the generic `resources` table (PRD 01, section 7). Deployment-specific state is stored in a dedicated table:
 
 ```sql
 automation_deployments
@@ -296,7 +296,7 @@ spec:
 
 ## 9. React Component Export
 
-See PRD 11 §7 for the React component export specification. This feature is post-v1.
+See PRD 11, section 7 for the React component export specification. This feature is post-v1.
 
 ## 10. Automations Dashboard (UI)
 

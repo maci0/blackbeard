@@ -12,7 +12,7 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
   return (
     <div className="page-enter flex flex-col items-center justify-center py-16 text-center">
       <div className="mb-4 text-muted-foreground/40 [&>svg]:h-12 [&>svg]:w-12">{icon}</div>
-      <p className="text-sm font-medium text-foreground">{title}</p>
+      <h2 className="text-sm font-medium text-foreground">{title}</h2>
       <p className="mt-1 max-w-xs text-xs text-muted-foreground">{description}</p>
       {action && (
         <Link

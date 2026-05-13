@@ -212,6 +212,7 @@ export default function ResourceDetail() {
       setYamlContent(resourceToYaml(updated))
       setEditMode(false)
       setSaveSuccess(true)
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       saveTimerRef.current = setTimeout(() => setSaveSuccess(false), 5000)
     } catch (err) {
       setSaveError((err as Error).message)
