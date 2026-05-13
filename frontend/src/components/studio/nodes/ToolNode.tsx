@@ -14,7 +14,7 @@ export default memo(function ToolNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'w-[160px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
+        'w-[140px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
         selected
           ? 'border-emerald-400 shadow-md shadow-emerald-100 ring-2 ring-emerald-300 ring-offset-1'
           : 'border-slate-200 hover:border-emerald-200 hover:shadow-md dark:border-slate-700',

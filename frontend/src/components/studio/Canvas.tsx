@@ -165,6 +165,8 @@ function CanvasInner() {
       onDragOver={onDragOver}
       fitView
       fitViewOptions={{ padding: 0.2 }}
+      snapToGrid
+      snapGrid={[20, 20]}
       deleteKeyCode={['Delete', 'Backspace']}
       proOptions={{ hideAttribution: true }}
       className="studio-canvas"

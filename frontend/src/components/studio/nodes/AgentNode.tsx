@@ -13,7 +13,7 @@ export default memo(function AgentNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'w-[200px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
+        'w-[160px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
         selected
           ? 'border-violet-400 shadow-md shadow-violet-100 ring-2 ring-violet-300 ring-offset-1'
           : 'border-slate-200 hover:border-violet-200 hover:shadow-md dark:border-slate-700',

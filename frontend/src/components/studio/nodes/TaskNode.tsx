@@ -12,7 +12,7 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'w-[200px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
+        'w-[160px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
         selected
           ? 'border-blue-400 shadow-md shadow-blue-100 ring-2 ring-blue-300 ring-offset-1'
           : 'border-slate-200 hover:border-blue-200 hover:shadow-md dark:border-slate-700',

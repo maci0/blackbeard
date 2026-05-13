@@ -141,14 +141,14 @@ function StudioInner() {
         const agentNodes: Node[] = agentResources.map((agent, i) => ({
           id: `agent-${agent.metadata.name}`,
           type: 'agent',
-          position: { x: 100, y: 80 + i * 230 },
+          position: { x: 80, y: 60 + i * 200 },
           data: { ...agent.spec },
         }))
 
         const taskNodes: Node[] = taskResources.map((task, i) => ({
           id: `task-${task.metadata.name}`,
           type: 'task',
-          position: { x: 460, y: 80 + i * 230 },
+          position: { x: 360, y: 60 + i * 200 },
           data: { ...task.spec },
         }))
 
@@ -286,7 +286,7 @@ function StudioInner() {
       {
         id: 'agent-researcher',
         type: 'agent',
-        position: { x: 100, y: 80 },
+        position: { x: 80, y: 60 },
         data: {
           role: 'Researcher',
           goal: 'Find accurate and relevant information on any topic',
@@ -296,7 +296,7 @@ function StudioInner() {
       {
         id: 'agent-writer',
         type: 'agent',
-        position: { x: 100, y: 310 },
+        position: { x: 80, y: 260 },
         data: {
           role: 'Writer',
           goal: 'Write clear, engaging content based on research findings',
@@ -306,7 +306,7 @@ function StudioInner() {
       {
         id: 'task-research',
         type: 'task',
-        position: { x: 460, y: 80 },
+        position: { x: 360, y: 60 },
         data: {
           name: 'research-topic',
           description: 'Research the given topic thoroughly and compile key findings',
@@ -317,7 +317,7 @@ function StudioInner() {
       {
         id: 'task-write',
         type: 'task',
-        position: { x: 460, y: 310 },
+        position: { x: 360, y: 260 },
         data: {
           name: 'write-report',
           description: 'Write a comprehensive report based on the research findings',
