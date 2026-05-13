@@ -35,8 +35,8 @@ open http://localhost:3000
 ## Apply Example Crew
 
 ```bash
-# Install CLI
-cd backend && pip install -e . && cd ..
+# Install CLI (requires uv)
+cd backend && uv sync && cd ..
 
 # Validate and apply the research crew
 blackbeard validate -f examples/research-crew/
@@ -168,17 +168,16 @@ curl -X PATCH http://localhost:8000/api/v1/executions/{id}/cancel \
 ```bash
 # Backend
 cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install uv && uv pip install -e ".[dev]"
-pytest                          # run all tests
-ruff check .                    # lint
-mypy blackbeard/ --ignore-missing-imports  # type check
+uv sync --extra dev             # install deps (requires uv: https://docs.astral.sh/uv/)
+uv run pytest tests/ -x         # run all tests (in-memory SQLite, no services needed)
+uv run ruff check .             # lint
+uv run mypy blackbeard/ --ignore-missing-imports  # type check
 
 # Frontend
 cd frontend
-npm install
+npm ci                          # install deps
 npm run dev                     # dev server on :3000
-npm run typecheck               # TypeScript check
+npm run check                   # typecheck + lint + format check
 npm run build                   # production build
 ```
 
@@ -187,10 +186,10 @@ npm run build                   # production build
 | Layer | Technology |
 |-------|------------|
 | Backend | Python 3.13+, FastAPI, SQLAlchemy, Pydantic v2 |
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS, shadcn/ui |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS, Radix UI |
 | Graph Editor | React Flow (xyflow v12) |
-| Database | PostgreSQL 17 |
-| Cache | Valkey 8 |
+| Database | PostgreSQL 18 |
+| Cache | Valkey 9 |
 | LLM Gateway | LiteLLM Proxy |
 | Observability | Langfuse (self-hosted) |
 | WASM Runtime | wasmtime-py |

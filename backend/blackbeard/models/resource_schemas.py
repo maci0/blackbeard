@@ -6,12 +6,16 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 if TYPE_CHECKING:
     from blackbeard.models.resource import Resource
 
 from blackbeard.kinds import ALL_KINDS, NAME_PATTERN
+
+# Label key/value constraints (prevent abuse via oversized JSONB labels)
+_MAX_LABEL_KEY_LEN = 63
+_MAX_LABEL_VALUE_LEN = 255
 
 
 class ResourceMetadata(BaseModel):
@@ -21,6 +25,23 @@ class ResourceMetadata(BaseModel):
     namespace: str = Field(default="default", max_length=255, pattern=NAME_PATTERN)
     labels: dict[str, str] = Field(default_factory=dict, max_length=50)
 
+    @model_validator(mode="after")
+    def _validate_label_sizes(self) -> ResourceMetadata:
+        for k, v in self.labels.items():
+            if len(k) > _MAX_LABEL_KEY_LEN:
+                raise ValueError(
+                    f"Label key too long ({len(k)} chars, max {_MAX_LABEL_KEY_LEN}): '{k[:20]}...'"
+                )
+            if len(v) > _MAX_LABEL_VALUE_LEN:
+                raise ValueError(
+                    f"Label value too long for key '{k}' "
+                    f"({len(v)} chars, max {_MAX_LABEL_VALUE_LEN})"
+                )
+        return self
+
+
+_SUPPORTED_API_VERSIONS = frozenset({"blackbeard/v1"})
+
 
 class ResourceCreate(BaseModel):
     """Schema for creating a resource via API or YAML apply."""
@@ -29,6 +50,16 @@ class ResourceCreate(BaseModel):
     kind: str = Field(..., min_length=1)
     metadata: ResourceMetadata
     spec: dict[str, Any] = Field(..., min_length=1, max_length=500)
+
+    @field_validator("apiVersion")
+    @classmethod
+    def api_version_must_be_supported(cls, v: str) -> str:
+        if v not in _SUPPORTED_API_VERSIONS:
+            raise ValueError(
+                f"Unsupported apiVersion '{v}'. "
+                f"Supported: {', '.join(sorted(_SUPPORTED_API_VERSIONS))}"
+            )
+        return v
 
     @field_validator("kind")
     @classmethod

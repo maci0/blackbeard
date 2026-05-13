@@ -53,7 +53,7 @@ export function serializeValue(value: unknown, indent: number): string {
     )
   }
 
-  return typeof value === 'string' ? value : JSON.stringify(value)
+  return JSON.stringify(value)
 }
 
 export function resourceToYaml(resource: Resource): string {

@@ -126,7 +126,7 @@ def _log_request(request: Request, response: Response, start: float) -> None:
             "http_status": status,
             "duration_ms": round(duration_ms, 1),
             "client_ip": client_ip,
-            "user_agent": user_agent,
+            "user_agent": user_agent[:200] if user_agent else "",
         },
     )
 
@@ -159,6 +159,7 @@ async def security_headers_middleware(
 
 
 MAX_BODY_BYTES = 10 * 1024 * 1024  # 10 MB
+_MAX_BODY_MB = MAX_BODY_BYTES // (1024 * 1024)
 
 
 async def body_size_limiter(request: Request, call_next: RequestResponseEndpoint) -> Response:
@@ -212,10 +213,9 @@ async def body_size_limiter(request: Request, call_next: RequestResponseEndpoint
                     "content_length": length,
                 },
             )
-            max_mb = MAX_BODY_BYTES // (1024 * 1024)
             return _reject(
                 413,
-                f"Request body too large (limit: {max_mb}MB)",
+                f"Request body too large (limit: {_MAX_BODY_MB}MB)",
             )
 
     if request.method in ("POST", "PUT", "PATCH") and not content_length:
@@ -233,10 +233,9 @@ async def body_size_limiter(request: Request, call_next: RequestResponseEndpoint
                     "body_bytes": len(body),
                 },
             )
-            max_mb = MAX_BODY_BYTES // (1024 * 1024)
             return _reject(
                 413,
-                f"Request body too large (limit: {max_mb}MB)",
+                f"Request body too large (limit: {_MAX_BODY_MB}MB)",
             )
 
     return await call_next(request)
@@ -257,6 +256,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
             "error_type": type(exc).__name__,
             "http_method": request.method,
             "http_path": request.url.path,
+            "request_id": rid,
         },
     )
     return JSONResponse(

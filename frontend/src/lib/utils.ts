@@ -32,7 +32,7 @@ export function getDefaultNodeData(type: string): Record<string, unknown> {
         role: 'New Agent',
         goal: '',
         backstory: '',
-        llm: 'gpt-4o',
+        llm: '',
         tools: [],
         verbose: false,
       }

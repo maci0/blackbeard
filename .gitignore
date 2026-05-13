@@ -46,3 +46,4 @@ credentials.json
 # Tool state
 .sisyphus/
 .playwright-mcp/
+test-*.png

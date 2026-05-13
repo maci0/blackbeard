@@ -872,7 +872,7 @@ def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) ->
                 data = fetch()
 
                 if is_json:
-                    out.print(json.dumps(data, default=str))
+                    out.print_json(json.dumps(data, default=str))
                 else:
                     if not first:
                         console.print("\n[dim]─── refreshed ───[/]\n")

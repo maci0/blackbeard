@@ -39,13 +39,15 @@ logger = logging.getLogger(__name__)
 
 _SAFE_ERROR_PREFIXES = ("Crew '", "Agent '", "Task '", "Tool '", "Resource '", "Kind '")
 
-_CREW_RELEVANT_KINDS = [
+_CREW_RELEVANT_KINDS = (
     ResourceKind.CREW,
     ResourceKind.AGENT,
     ResourceKind.TASK,
     ResourceKind.LLM_CONNECTION,
     ResourceKind.TOOL,
-]
+)
+
+_NAMESPACE_RESOURCE_LIMIT = 500
 
 
 def _sanitize_error(error_msg: str) -> str:
@@ -56,9 +58,6 @@ def _sanitize_error(error_msg: str) -> str:
         return error_msg
     return "Execution failed — check server logs for details"
 
-
-# Background tasks that must be kept alive to prevent garbage collection (RUF006)
-_background_tasks: set[asyncio.Task[None]] = set()
 
 # Each crew run gets its own thread + event loop to avoid blocking the main async loop
 _executor = ThreadPoolExecutor(
@@ -90,10 +89,24 @@ async def _load_crew_resources(
         .where(Resource.namespace == namespace)
         .where(Resource.kind.in_(_CREW_RELEVANT_KINDS))
         .options(defer(Resource.raw_yaml), defer(Resource.labels))
-        .limit(500)
+        .limit(_NAMESPACE_RESOURCE_LIMIT + 1)
     )
 
-    resources = {f"{r.kind.value}/{r.name}": r for r in result.scalars()}
+    rows = list(result.scalars())
+    if len(rows) > _NAMESPACE_RESOURCE_LIMIT:
+        logger.warning(
+            "Namespace '%s' has >%d resources; some refs may not resolve",
+            namespace,
+            _NAMESPACE_RESOURCE_LIMIT,
+            extra={
+                "event": "namespace_resource_limit",
+                "namespace": namespace,
+                "limit": _NAMESPACE_RESOURCE_LIMIT,
+            },
+        )
+        rows = rows[:_NAMESPACE_RESOURCE_LIMIT]
+
+    resources = {f"{r.kind.value}/{r.name}": r for r in rows}
     if f"Crew/{crew_name}" not in resources:
         raise ExecutionError(f"Crew '{crew_name}' not found in namespace '{namespace}'")
 
@@ -186,9 +199,9 @@ async def kickoff(
                 },
             )
             error_msg = _sanitize_error(str(exc))
-            # This callback runs in the executor thread, which has no running
-            # asyncio event loop, so we always use the synchronous helper that
-            # spins up a throwaway loop.
+            # Use the synchronous helper that spins up a throwaway event loop,
+            # since this callback may run in a thread context where we cannot
+            # await directly.
             _mark_failed_sync(execution_id, error_msg)
 
     future.add_done_callback(_on_thread_error)
@@ -398,6 +411,7 @@ async def _run_crew_async(
                     "total_tokens": execution.total_tokens or 0,
                     "prompt_tokens": execution.prompt_tokens or 0,
                     "completion_tokens": execution.completion_tokens or 0,
+                    "cost_usd": float(execution.cost_usd) if execution.cost_usd else 0.0,
                     "duration_s": round(duration_s or 0, 1),
                 },
             )

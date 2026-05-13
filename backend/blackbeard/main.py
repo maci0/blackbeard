@@ -10,7 +10,7 @@ from typing import Any, cast
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-import blackbeard.models.execution
+import blackbeard.models.execution  # register Execution tables
 import blackbeard.models.resource  # noqa: F401 — register Resource/ResourceRef tables
 from blackbeard import __version__
 from blackbeard.api.executions import router as executions_router

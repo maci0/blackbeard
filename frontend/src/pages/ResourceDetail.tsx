@@ -229,6 +229,7 @@ export default function ResourceDetail() {
       void navigate('/resources')
     } catch (err) {
       setDeleteError((err as Error).message)
+      setDeleteOpen(false)
     } finally {
       setDeleting(false)
     }

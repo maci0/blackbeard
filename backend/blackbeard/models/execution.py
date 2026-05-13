@@ -116,6 +116,7 @@ class Execution(Base):
 
     __table_args__ = (
         Index("ix_execution_crew", "crew_name", "crew_namespace"),
+        Index("ix_execution_namespace", "crew_namespace"),
         Index("ix_execution_status_created", "status", "created_at"),
         Index("ix_execution_created_at", "created_at"),
         CheckConstraint("total_tokens >= 0", name="ck_execution_total_tokens_nonneg"),

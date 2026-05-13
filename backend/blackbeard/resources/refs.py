@@ -70,21 +70,26 @@ def parse_ref(value: str, field: str = "") -> RefInfo | None:
     return RefInfo(kind=kind, name=name, raw=value, field=field)
 
 
+_MAX_REF_WALK_DEPTH = 20
+
+
 def extract_refs(spec: dict[str, Any], prefix: str = "spec") -> list[RefInfo]:
     """Recursively extract all refs from a spec dict."""
     refs: list[RefInfo] = []
 
-    def _walk(obj: object, path: str) -> None:
+    def _walk(obj: object, path: str, depth: int = 0) -> None:
+        if depth > _MAX_REF_WALK_DEPTH:
+            return
         if isinstance(obj, str):
             ref = parse_ref(obj, field=path)
             if ref is not None:
                 refs.append(ref)
         elif isinstance(obj, list):
             for i, item in enumerate(obj):
-                _walk(item, f"{path}[{i}]")
+                _walk(item, f"{path}[{i}]", depth + 1)
         elif isinstance(obj, dict):
             for key, val in obj.items():
-                _walk(val, f"{path}.{key}")
+                _walk(val, f"{path}.{key}", depth + 1)
 
     _walk(spec, prefix)
     return refs

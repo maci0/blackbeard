@@ -51,7 +51,16 @@ def get_langfuse() -> Langfuse | None:
             )
             return _client
         except Exception as e:
-            logger.warning("Failed to initialize Langfuse client: %s", e, exc_info=True)
+            logger.warning(
+                "Failed to initialize Langfuse client: %s",
+                e,
+                exc_info=True,
+                extra={
+                    "event": "langfuse_init_failed",
+                    "error_type": type(e).__name__,
+                    "langfuse_host": settings.langfuse_host,
+                },
+            )
             return None
 
 

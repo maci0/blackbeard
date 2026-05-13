@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type DragEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import {
   ReactFlow,
   Background,
@@ -70,7 +70,17 @@ function minimapNodeColor(node: Node): string {
 
 function CanvasInner() {
   const { screenToFlowPosition } = useReactFlow()
-  const isDark = document.documentElement.classList.contains('dark')
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'))
+    })
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
+    return () => observer.disconnect()
+  }, [])
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, setSelectedNode } =
     useStudioStore()
   const nodesRef = useRef(nodes)

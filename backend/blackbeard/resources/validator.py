@@ -1,6 +1,7 @@
 """Resource validation: JSON Schema + ref format validation."""
 
 import ipaddress
+import socket
 from typing import Any
 from urllib.parse import urlparse
 
@@ -82,34 +83,43 @@ class ValidationError:
         return {"field": self.field, "message": self.message}
 
 
+def _is_internal_ip(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Check if an IP address is internal/private/reserved."""
+    if (
+        addr.is_private
+        or addr.is_reserved
+        or addr.is_loopback
+        or addr.is_link_local
+        or addr.is_unspecified
+    ):
+        return True
+    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
+        m = addr.ipv4_mapped
+        if m.is_private or m.is_reserved or m.is_loopback or m.is_link_local or m.is_unspecified:
+            return True
+    return False
+
+
 def _is_internal_host(hostname: str) -> bool:
     hostname_lower = hostname.lower()
     if hostname_lower in _INTERNAL_HOSTNAMES:
         return True
     if any(hostname_lower.endswith(s) for s in _INTERNAL_DOMAIN_SUFFIXES):
         return True
+    # Standard IP address check
     try:
         addr = ipaddress.ip_address(hostname_lower)
-        if (
-            addr.is_private
-            or addr.is_reserved
-            or addr.is_loopback
-            or addr.is_link_local
-            or addr.is_unspecified
-        ):
-            return True
-        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
-            m = addr.ipv4_mapped
-            if (
-                m.is_private
-                or m.is_reserved
-                or m.is_loopback
-                or m.is_link_local
-                or m.is_unspecified
-            ):
-                return True
-        return False
+        return _is_internal_ip(addr)
     except ValueError:
+        pass
+    # Catch obfuscated IP representations (hex, octal, decimal) that bypass
+    # ipaddress.ip_address() but resolve via socket.inet_aton().
+    # Examples: 0x7f000001, 2130706433, 017700000001 all resolve to 127.0.0.1.
+    try:
+        packed = socket.inet_aton(hostname_lower)
+        addr = ipaddress.IPv4Address(packed)
+        return _is_internal_ip(addr)
+    except (OSError, ValueError):
         return False
 
 

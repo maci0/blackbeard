@@ -85,7 +85,7 @@ async def list_executions(
         description="Filter by execution status",
     ),
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
-    offset: int = Query(default=0, ge=0, description="Results to skip"),
+    offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     session: AsyncSession = Depends(get_session),
 ) -> ExecutionListResponse:
     """List executions with optional filters."""

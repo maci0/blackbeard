@@ -125,6 +125,7 @@ export default function ExecutionDetail() {
     useExecutionStore()
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     await fetchExecution(id)
@@ -302,6 +303,26 @@ export default function ExecutionDetail() {
           </div>
         )}
 
+        {/* Cancel error */}
+        {cancelError && (
+          <div
+            role="alert"
+            className="mb-6 flex items-center justify-between rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            <span className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {cancelError}
+            </span>
+            <button
+              onClick={() => setCancelError(null)}
+              className="text-xs underline underline-offset-2"
+              aria-label="Dismiss cancel error"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* Tasks */}
         <div>
           <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
@@ -369,8 +390,12 @@ export default function ExecutionDetail() {
         onConfirm={() => {
           void (async () => {
             setCancelling(true)
+            setCancelError(null)
             try {
               await cancelExecution(id)
+              setShowCancelConfirm(false)
+            } catch (err) {
+              setCancelError((err as Error).message)
               setShowCancelConfirm(false)
             } finally {
               setCancelling(false)
