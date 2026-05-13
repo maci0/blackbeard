@@ -11,7 +11,7 @@ import { X, Trash2 } from 'lucide-react'
 import { CodeBlock } from '@/components/ui/CodeBlock'
 import { Link } from 'react-router-dom'
 import { useStudioStore } from '@/stores/studioStore'
-import { useResourceStore } from '@/stores/resourceStore'
+import { useResourceStore, type Resource } from '@/stores/resourceStore'
 import { modKey } from '@/lib/platform'
 import { nodeToYaml } from '@/lib/yaml'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -138,6 +138,8 @@ function FieldGroup({ label, children }: { label: string; children: React.ReactN
 /* Per-type property forms                                             */
 /* ------------------------------------------------------------------ */
 
+const EMPTY_RESOURCES: Resource[] = []
+
 function AgentForm({
   data,
   onChange,
@@ -148,7 +150,8 @@ function AgentForm({
   const str = (key: string) => (data[key] as string | undefined) ?? ''
   const bool = (key: string) => (data[key] as boolean | undefined) ?? false
 
-  const llmConnections = useResourceStore((state) => state.resources['llm-connections'] ?? [])
+  const llmConnections =
+    useResourceStore((state) => state.resources['llm-connections']) ?? EMPTY_RESOURCES
   const hasLlmData = useResourceStore((state) => 'llm-connections' in state.resources)
   const fetchResources = useResourceStore((state) => state.fetchResources)
 
