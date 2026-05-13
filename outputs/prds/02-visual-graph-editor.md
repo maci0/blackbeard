@@ -102,7 +102,9 @@ All other fields (strings, numbers, booleans, enums, tags) use auto-generated in
 | Undo/Redo | Ctrl+Z / Ctrl+Shift+Z | Full undo stack (50 levels) |
 | Copy/Paste | Ctrl+C / Ctrl+V | Deep-copies selected nodes with new names |
 | Search | Ctrl+K | Fuzzy search all nodes on canvas |
-| Validate | Toolbar button or Ctrl+Shift+V | Runs validation (PRD 01 §5) and highlights errors on nodes |
+| Validate | Toolbar button | Runs validation (PRD 01 §5) and highlights errors on nodes |
+
+> **Note:** Validate is available via the toolbar button. The keyboard shortcut was removed to avoid conflict with browser paste-without-formatting (`Ctrl+Shift+V`).
 
 ## 7. Execution View
 
@@ -120,7 +122,7 @@ A second tab on the canvas switches to **Execution View**:
 - Errors highlight the failed node in red with the error message inline.
 - **Loading state**: While waiting for execution to start, all nodes show a pulsing gray border. A "Connecting to execution..." overlay appears if SSE connection takes >3s.
 - **Error recovery**: If the SSE stream disconnects, the UI polls `GET /executions/{id}` every 5s as fallback. A "Reconnecting..." banner shows at the top of the canvas. When SSE reconnects, polling stops.
-- **Stale execution**: If an execution hasn't emitted events for >5 minutes, a "Execution may be stalled" warning appears on the current task node.
+- **Stale execution**: If an execution hasn't emitted events for >5 minutes, a "Execution may be stalled" warning appears on the current task node. The 5-minute threshold is configurable via execution metadata. For long-running LLM calls (reasoning models, large context), the threshold is automatically extended to `agent.max_execution_time * 1.5` if defined.
 
 **Node-to-execution mapping**: Canvas nodes use the convention `{kind}-{name}` as their React Flow node ID (e.g., `task-research-ai`, `agent-researcher`). Execution SSE events carry `task_name` and `agent_name` fields. The UI maps events to nodes by constructing the node ID from the event's resource name. If a node ID doesn't match any canvas node (e.g., a dynamically-created subtask in hierarchical mode), the event is displayed in a "Unmapped Events" panel below the canvas. This convention must match the SSE event payload format defined in PRD 05. Execution SSE events carry `event_type`, `task_name`, and `agent_name` fields that map to canvas nodes via `{kind}-{name}` node IDs.
 
@@ -176,7 +178,23 @@ Copilot always generates YAML that passes validation. User can accept/reject eac
 ## 12. Canvas Persistence
 
 - Each Crew or Flow resource has an associated **canvas layout** stored server-side as a JSON blob (node positions, zoom level, viewport offset).
-- Canvas layout is stored in a `canvas_layouts` table: `(resource_kind VARCHAR(63) NOT NULL, resource_name VARCHAR(255) NOT NULL, namespace VARCHAR(255) NOT NULL DEFAULT 'default', layout JSONB, updated_at TIMESTAMPTZ)`. Unique constraint: `UNIQUE(resource_kind, resource_name, namespace)`.
+- Canvas layout is stored in a `canvas_layouts` table with the following schema:
+
+**Database schema:**
+```sql
+canvas_layouts
+  id              UUID PK DEFAULT gen_random_uuid()
+  resource_kind   VARCHAR(32) NOT NULL
+  resource_name   VARCHAR(255) NOT NULL
+  namespace       VARCHAR(255) NOT NULL DEFAULT 'default'
+  layout          JSONB NOT NULL         -- React Flow node positions, viewport, zoom
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+
+  UNIQUE(resource_kind, resource_name, namespace)
+
+Indexes:
+  idx_canvas_layout_lookup ON canvas_layouts(resource_kind, resource_name, namespace)
+```
 - Layout is saved automatically on every canvas change (debounced, 500ms) and on explicit "Save".
 - A canvas displays **one Crew or Flow** at a time. Multi-crew canvases are deferred to post-MVP.
 - If no layout exists (e.g., resource created via CLI), the canvas auto-layouts using ELK.js on first open.

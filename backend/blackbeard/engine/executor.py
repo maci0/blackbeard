@@ -11,37 +11,47 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import defer, selectinload
 
 from blackbeard.config import settings
-from blackbeard.engine.loader import ResourceLoader, LoaderError
-from blackbeard.langfuse.listener import BlackbeardLangfuseListener
-from blackbeard.models.execution import (
+from blackbeard.engine.loader import ResourceLoader
+from blackbeard.kinds import ResourceKind
+from blackbeard.langfuse import BlackbeardLangfuseListener, get_langfuse
+from blackbeard.models import (
+    TERMINAL_STATUSES,
     Execution,
     ExecutionStatus,
     ExecutionTask,
+    Resource,
     TaskStatus,
+    async_session,
 )
-from blackbeard.kinds import ResourceKind
-from blackbeard.models.resource import Resource
-from blackbeard.models.database import async_session
+from blackbeard.resources.refs import parse_ref
 
 logger = logging.getLogger(__name__)
 
 _SAFE_ERROR_PREFIXES = ("Crew '", "Agent '", "Task '", "Tool '", "Resource '", "Kind '")
 
+_CREW_RELEVANT_KINDS = [
+    ResourceKind.CREW,
+    ResourceKind.AGENT,
+    ResourceKind.TASK,
+    ResourceKind.LLM_CONNECTION,
+    ResourceKind.TOOL,
+]
+
 
 def _sanitize_error(error_msg: str) -> str:
     """Return a user-safe error string, redacting internal details."""
-    if any(error_msg.startswith(p) for p in _SAFE_ERROR_PREFIXES):
+    if error_msg.startswith(_SAFE_ERROR_PREFIXES):
         if len(error_msg) > 500:
             return error_msg[:500] + "..."
         return error_msg
     return "Execution failed — check server logs for details"
 
-# Thread pool for running CrewAI (which is synchronous)
+# Each crew run gets its own thread + event loop to avoid blocking the main async loop
 _executor = ThreadPoolExecutor(
     max_workers=settings.max_concurrent_executions,
     thread_name_prefix="crew-exec",
@@ -49,40 +59,36 @@ _executor = ThreadPoolExecutor(
 
 
 def shutdown_executor(wait: bool = False) -> None:
-    """Shutdown the thread pool executor. Called during app lifespan shutdown."""
+    """Shutdown the thread pool executor, cancelling pending futures."""
     _executor.shutdown(wait=wait, cancel_futures=True)
     logger.info("Execution thread pool shut down")
 
 
 class ExecutionError(Exception):
-    """Raised when execution fails."""
+    pass
 
 
 async def _load_crew_resources(
     session: AsyncSession, crew_name: str, namespace: str = "default"
 ) -> dict[str, Resource]:
-    """Load a crew and all its referenced resources from the database.
+    """Load all resources in the crew's namespace from the database.
 
+    Loads the entire namespace rather than resolving refs recursively.
     Returns a dict keyed by 'Kind/name' for the ResourceLoader.
     """
     result = await session.execute(
-        select(Resource).where(
-            Resource.kind == ResourceKind.CREW,
-            Resource.name == crew_name,
-            Resource.namespace == namespace,
-        )
+        select(Resource)
+        .where(Resource.namespace == namespace)
+        .where(Resource.kind.in_(_CREW_RELEVANT_KINDS))
+        .options(defer(Resource.raw_yaml), defer(Resource.labels))
+        .limit(500)
     )
-    crew = result.scalar_one_or_none()
-    if not crew:
+
+    resources = {f"{r.kind.value}/{r.name}": r for r in result.scalars()}
+    if f"Crew/{crew_name}" not in resources:
         raise ExecutionError(f"Crew '{crew_name}' not found in namespace '{namespace}'")
 
-    # Load ALL resources in the namespace (simpler than recursive ref resolution)
-    result = await session.execute(
-        select(Resource).where(Resource.namespace == namespace)
-    )
-    all_resources = result.scalars().all()
-
-    return {f"{r.kind.value}/{r.name}": r for r in all_resources}
+    return resources
 
 
 async def kickoff(
@@ -112,13 +118,21 @@ async def kickoff(
     # Flush to assign execution.id before creating child ExecutionTask rows.
     await session.flush()
 
+    logger.info(
+        "Kickoff: execution_id=%s crew=%s namespace=%s input_keys=%s",
+        execution.id, crew_name, namespace, sorted(inputs.keys()),
+        extra={
+            "event": "execution_kickoff",
+            "execution_id": str(execution.id),
+            "crew_name": crew_name,
+            "namespace": namespace,
+        },
+    )
+
     task_refs = crew_resource.spec.get("tasks", [])
     for i, task_ref in enumerate(task_refs):
-        # Extract task name from ref
-        task_name = task_ref
-        if task_ref.startswith("ref:"):
-            parts = task_ref.split("/")
-            task_name = parts[-1] if len(parts) > 1 else task_ref
+        ref = parse_ref(task_ref)
+        task_name = ref.name if ref else task_ref
 
         exec_task = ExecutionTask(
             execution_id=execution.id,
@@ -146,17 +160,24 @@ async def kickoff(
         inputs,
     )
 
-    # Handle thread pool rejection or unexpected errors
     def _on_thread_error(fut: asyncio.Future) -> None:  # type: ignore[type-arg]
         exc = fut.exception()
         if exc is not None:
-            logger.error("Execution %s thread failed: %s", execution_id, exc, exc_info=True)
+            logger.error(
+                "Execution %s thread failed: %s", execution_id, exc,
+                exc_info=True,
+                extra={
+                    "event": "execution_thread_failed",
+                    "execution_id": str(execution_id),
+                    "crew_name": crew_name,
+                    "error_type": type(exc).__name__,
+                },
+            )
             error_msg = _sanitize_error(str(exc))
-            # Schedule on the main event loop instead of creating a new one
+            # Try the running event loop first; fall back to a throwaway loop if unavailable
             try:
                 asyncio.ensure_future(_mark_failed_async(execution_id, error_msg))
             except RuntimeError:
-                # Fallback if no running event loop (shouldn't happen in normal operation)
                 _mark_failed_sync(execution_id, error_msg)
 
     future.add_done_callback(_on_thread_error)
@@ -173,7 +194,15 @@ def _mark_failed_sync(execution_id: UUID, error: str) -> None:
         loop.run_until_complete(_mark_failed_async(execution_id, error))
         loop.close()
     except Exception as e:
-        logger.error("Failed to mark execution %s as failed: %s", execution_id, e)
+        logger.error(
+            "Failed to mark execution %s as failed: %s", execution_id, e,
+            exc_info=True,
+            extra={
+                "event": "execution_mark_failed_error",
+                "execution_id": str(execution_id),
+                "error_type": type(e).__name__,
+            },
+        )
 
 
 async def _mark_failed_async(execution_id: UUID, error: str) -> None:
@@ -185,15 +214,26 @@ async def _mark_failed_async(execution_id: UUID, error: str) -> None:
             .with_for_update()
         )
         execution = result.scalar_one_or_none()
-        if execution and execution.status in (ExecutionStatus.QUEUED, ExecutionStatus.RUNNING):
+        if not execution:
+            logger.warning(
+                "Cannot mark execution %s as failed: not found", execution_id,
+                extra={"event": "execution_mark_failed_missing", "execution_id": str(execution_id)},
+            )
+            return
+        if execution.status in (ExecutionStatus.QUEUED, ExecutionStatus.RUNNING):
             execution.status = ExecutionStatus.FAILED
             execution.error = error
             execution.completed_at = datetime.now(timezone.utc)
             await session.commit()
+        else:
+            logger.debug(
+                "Execution %s already in terminal state %s, skipping failure update",
+                execution_id, execution.status.value,
+            )
 
 
 def _snapshot_resource(resource: Resource) -> dict:
-    """Create a serializable snapshot of a resource for the background thread."""
+    """Snapshot kind/name/namespace/spec for background crew execution (excludes raw_yaml and labels)."""
     return {
         "kind": resource.kind.value,
         "name": resource.name,
@@ -208,7 +248,7 @@ def _run_crew_sync(
     crew_name: str,
     inputs: dict,
 ) -> None:
-    """Run a crew synchronously in a background thread."""
+    """Run a crew in a dedicated event loop, blocking until completion (for ThreadPoolExecutor)."""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -229,31 +269,57 @@ async def _run_crew_async(
     async with async_session() as session:
         execution = await _get_execution_for_update(session, execution_id)
         if not execution:
-            logger.error("Execution %s not found when starting run", execution_id)
+            logger.error(
+                "Execution %s not found when starting run", execution_id,
+                extra={
+                    "event": "execution_not_found",
+                    "execution_id": str(execution_id),
+                    "crew_name": crew_name,
+                },
+            )
             return
 
         if execution.status == ExecutionStatus.CANCELLED:
-            logger.info("Execution %s was cancelled before starting", execution_id)
+            logger.info(
+                "Execution %s was cancelled before starting", execution_id,
+                extra={
+                    "event": "execution_cancelled_before_start",
+                    "execution_id": str(execution_id),
+                    "crew_name": crew_name,
+                },
+            )
             return
 
         execution.status = ExecutionStatus.RUNNING
         execution.started_at = datetime.now(timezone.utc)
         await session.commit()
+        logger.info(
+            "Execution %s running: crew=%s", execution_id, crew_name,
+            extra={
+                "event": "execution_running",
+                "execution_id": str(execution_id),
+                "crew_name": crew_name,
+                "namespace": execution.crew_namespace,
+            },
+        )
 
         try:
-            mock_resources = {}
-            for key, snap in resource_snapshot.items():
-                r = Resource()
-                r.kind = ResourceKind(snap["kind"])
-                r.name = snap["name"]
-                r.namespace = snap["namespace"]
-                r.spec = snap["spec"]
-                mock_resources[key] = r
+            mock_resources = {
+                key: Resource(
+                    kind=ResourceKind(snap["kind"]),
+                    name=snap["name"],
+                    namespace=snap["namespace"],
+                    spec=snap["spec"],
+                )
+                for key, snap in resource_snapshot.items()
+            }
 
-            langfuse_listener = BlackbeardLangfuseListener(
-                execution_id=str(execution_id),
-                metadata={"crew_name": crew_name},
-            )
+            langfuse_listener = None
+            if get_langfuse() is not None:
+                langfuse_listener = BlackbeardLangfuseListener(
+                    execution_id=str(execution_id),
+                    metadata={"crew_name": crew_name},
+                )
 
             loader = ResourceLoader(mock_resources)
             crew = loader.build_crew(crew_name)
@@ -265,18 +331,21 @@ async def _run_crew_async(
                 return
 
             if execution.status == ExecutionStatus.CANCELLED:
-                logger.info("Execution %s cancelled during run", execution_id)
+                logger.info(
+                    "Execution %s cancelled during run", execution_id,
+                    extra={
+                        "event": "execution_cancelled_during_run",
+                        "execution_id": str(execution_id),
+                        "crew_name": crew_name,
+                    },
+                )
                 return
 
             execution.status = ExecutionStatus.COMPLETED
             execution.completed_at = datetime.now(timezone.utc)
 
-            if hasattr(result, "raw"):
-                execution.outputs = {"raw": str(result.raw)}
-            elif isinstance(result, str):
-                execution.outputs = {"raw": result}
-            else:
-                execution.outputs = {"raw": str(result)}
+            raw = result.raw if hasattr(result, "raw") else result
+            execution.outputs = {"raw": str(raw)}
 
             if hasattr(result, "token_usage"):
                 usage = result.token_usage
@@ -284,15 +353,51 @@ async def _run_crew_async(
                 execution.prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
                 execution.completion_tokens = getattr(usage, "completion_tokens", 0) or 0
 
-            if langfuse_listener.trace_id:
+            if langfuse_listener and langfuse_listener.trace_id:
                 execution.langfuse_trace_id = langfuse_listener.trace_id
                 execution.langfuse_trace_url = langfuse_listener.trace_url
 
             await session.commit()
-            logger.info("Execution %s completed successfully", execution_id)
+            duration_s = (
+                (execution.completed_at - execution.started_at).total_seconds()
+                if execution.started_at and execution.completed_at
+                else None
+            )
+            logger.info(
+                "Execution %s completed: crew=%s tokens=%d duration_s=%.1f",
+                execution_id,
+                crew_name,
+                execution.total_tokens or 0,
+                duration_s or 0,
+                extra={
+                    "event": "execution_completed",
+                    "execution_id": str(execution_id),
+                    "crew_name": crew_name,
+                    "namespace": execution.crew_namespace,
+                    "total_tokens": execution.total_tokens or 0,
+                    "prompt_tokens": execution.prompt_tokens or 0,
+                    "completion_tokens": execution.completion_tokens or 0,
+                    "duration_s": round(duration_s or 0, 1),
+                },
+            )
 
         except Exception as e:
-            logger.exception("Execution %s failed: %s", execution_id, e)
+            duration_s = (
+                (datetime.now(timezone.utc) - execution.started_at).total_seconds()
+                if execution.started_at
+                else None
+            )
+            logger.exception(
+                "Execution %s failed: %s (duration_s=%.1f)", execution_id, e, duration_s or 0,
+                extra={
+                    "event": "execution_failed",
+                    "execution_id": str(execution_id),
+                    "crew_name": crew_name,
+                    "namespace": execution.crew_namespace,
+                    "error_type": type(e).__name__,
+                    "duration_s": round(duration_s, 1) if duration_s else None,
+                },
+            )
 
             execution = await _get_execution_for_update(session, execution_id)
             if execution and execution.status != ExecutionStatus.CANCELLED:
@@ -300,14 +405,6 @@ async def _run_crew_async(
                 execution.error = _sanitize_error(str(e))
                 execution.completed_at = datetime.now(timezone.utc)
                 await session.commit()
-
-
-async def _get_execution(session: AsyncSession, execution_id: UUID) -> Execution | None:
-    """Get an execution by ID."""
-    result = await session.execute(
-        select(Execution).where(Execution.id == execution_id)
-    )
-    return result.scalar_one_or_none()
 
 
 async def _get_execution_for_update(session: AsyncSession, execution_id: UUID) -> Execution | None:
@@ -332,34 +429,49 @@ async def get_execution(
     return result.scalar_one_or_none()
 
 
+async def get_execution_status(
+    session: AsyncSession, execution_id: UUID
+) -> ExecutionStatus | None:
+    """Get only the execution status — lightweight query for polling."""
+    result = await session.execute(
+        select(Execution.status).where(Execution.id == execution_id)
+    )
+    return result.scalar_one_or_none()
+
+
 async def list_executions(
     session: AsyncSession,
     crew_name: str | None = None,
     namespace: str | None = None,
     status: ExecutionStatus | None = None,
-    limit: int = 50,
+    limit: int = 100,
     offset: int = 0,
 ) -> tuple[list[Execution], int]:
     """List executions with optional filters."""
-    query = select(Execution)
-    count_query = select(func.count(Execution.id))
-
+    filters = []
     if crew_name:
-        query = query.where(Execution.crew_name == crew_name)
-        count_query = count_query.where(Execution.crew_name == crew_name)
-
+        filters.append(Execution.crew_name == crew_name)
     if namespace:
-        query = query.where(Execution.crew_namespace == namespace)
-        count_query = count_query.where(Execution.crew_namespace == namespace)
-
+        filters.append(Execution.crew_namespace == namespace)
     if status:
-        query = query.where(Execution.status == status)
-        count_query = count_query.where(Execution.status == status)
+        filters.append(Execution.status == status)
 
-    total = (await session.execute(count_query)).scalar() or 0
-    query = query.order_by(Execution.created_at.desc()).limit(limit).offset(offset)
+    query = select(Execution).where(*filters)
+    count_query = select(func.count(Execution.id)).where(*filters)
+
+    query = (
+        query.options(selectinload(Execution.tasks))
+        .order_by(Execution.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     result = await session.execute(query)
     items = list(result.scalars().all())
+
+    if not offset and len(items) < limit:
+        total = len(items)
+    else:
+        total = (await session.execute(count_query)).scalar() or 0
 
     return items, total
 
@@ -378,10 +490,22 @@ async def cancel_execution(session: AsyncSession, execution_id: UUID) -> Executi
         return None
 
     if execution.status in (ExecutionStatus.QUEUED, ExecutionStatus.RUNNING):
+        prev_status = execution.status.value
         execution.status = ExecutionStatus.CANCELLED
         execution.completed_at = datetime.now(timezone.utc)
         await session.commit()
-    elif execution.status in (ExecutionStatus.COMPLETED, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED):
+        logger.info(
+            "Execution %s cancelled: crew=%s previous_status=%s",
+            execution_id, execution.crew_name, prev_status,
+            extra={
+                "event": "execution_cancelled",
+                "execution_id": str(execution_id),
+                "crew_name": execution.crew_name,
+                "namespace": execution.crew_namespace,
+                "previous_status": prev_status,
+            },
+        )
+    elif execution.status in TERMINAL_STATUSES:
         raise ExecutionError(
             f"Cannot cancel execution in terminal status '{execution.status.value}'"
         )

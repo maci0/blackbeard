@@ -34,18 +34,19 @@ def test_parse_valid_ref():
     assert ref.raw == "ref:agents/researcher"
 
 
-def test_parse_ref_all_kinds():
-    cases = [
-        ("ref:agents/my-agent", ResourceKind.AGENT),
-        ("ref:tasks/my-task", ResourceKind.TASK),
-        ("ref:crews/my-crew", ResourceKind.CREW),
-        ("ref:tools/my-tool", ResourceKind.TOOL),
-        ("ref:llm-connections/gpt4", ResourceKind.LLM_CONNECTION),
-    ]
-    for raw, expected_kind in cases:
-        ref = parse_ref(raw)
-        assert ref is not None, f"Expected RefInfo for {raw!r}"
-        assert ref.kind == expected_kind, f"Wrong kind for {raw!r}: got {ref.kind}"
+@pytest.mark.parametrize("raw,expected_kind", [
+    ("ref:agents/my-agent", ResourceKind.AGENT),
+    ("ref:tasks/my-task", ResourceKind.TASK),
+    ("ref:crews/my-crew", ResourceKind.CREW),
+    ("ref:tools/my-tool", ResourceKind.TOOL),
+    ("ref:llm-connections/gpt4", ResourceKind.LLM_CONNECTION),
+    ("ref:agent-policies/strict", ResourceKind.AGENT_POLICY),
+    ("ref:guardrails/pii-check", ResourceKind.GUARDRAIL),
+])
+def test_parse_ref_all_kinds(raw, expected_kind):
+    ref = parse_ref(raw)
+    assert ref is not None
+    assert ref.kind == expected_kind
 
 
 def test_parse_non_ref_returns_none():
@@ -55,19 +56,15 @@ def test_parse_non_ref_returns_none():
     assert parse_ref(42) is None  # type: ignore[arg-type]
 
 
-def test_parse_malformed_ref_raises():
-    """Strings that start with 'ref:' but don't match the pattern raise RefParseError."""
+@pytest.mark.parametrize("malformed_ref", [
+    "ref:bad",
+    "ref:/no-kind",
+    "ref:agents/",
+    "ref:agents/Name_With_Underscore",
+])
+def test_parse_malformed_ref_raises(malformed_ref):
     with pytest.raises(RefParseError):
-        parse_ref("ref:bad")  # missing slash / name
-
-    with pytest.raises(RefParseError):
-        parse_ref("ref:/no-kind")  # empty kind segment
-
-    with pytest.raises(RefParseError):
-        parse_ref("ref:agents/")  # empty name segment
-
-    with pytest.raises(RefParseError):
-        parse_ref("ref:agents/Name_With_Underscore")  # invalid name chars
+        parse_ref(malformed_ref)
 
 
 def test_parse_unknown_kind_raises():
@@ -147,7 +144,7 @@ def test_detect_simple_cycle():
         "Agent/b": ["Agent/a"],
     }
     result = detect_cycles(adjacency)
-    assert len(result) >= 1
+    assert len(result) == 1
     cycle = result[0]
     nodes_in_cycle = set(cycle)
     assert "Agent/a" in nodes_in_cycle and "Agent/b" in nodes_in_cycle
@@ -161,7 +158,7 @@ def test_detect_longer_cycle():
         "Crew/c": ["Agent/a"],
     }
     result = detect_cycles(adjacency)
-    assert len(result) >= 1
+    assert len(result) == 1
     cycle = result[0]
     nodes_in_cycle = set(cycle)
     assert "Agent/a" in nodes_in_cycle
@@ -231,3 +228,36 @@ def test_build_adjacency_no_refs():
     ]
     adj = build_adjacency(resources)
     assert adj["Agent/standalone"] == []
+
+
+def test_parse_ref_agent_policy():
+    ref = parse_ref("ref:agent-policies/strict")
+    assert ref is not None
+    assert ref.kind == ResourceKind.AGENT_POLICY
+    assert ref.name == "strict"
+
+
+def test_parse_ref_guardrail():
+    ref = parse_ref("ref:guardrails/pii-check")
+    assert ref is not None
+    assert ref.kind == ResourceKind.GUARDRAIL
+    assert ref.name == "pii-check"
+
+
+def test_extract_refs_deeply_nested():
+    spec = {
+        "level1": {
+            "level2": {
+                "level3": "ref:agents/deep-agent",
+            },
+        },
+    }
+    refs = extract_refs(spec)
+    assert len(refs) == 1
+    assert refs[0].name == "deep-agent"
+
+
+def test_detect_cycles_self_loop():
+    adjacency = {"Agent/a": ["Agent/a"]}
+    result = detect_cycles(adjacency)
+    assert len(result) == 1

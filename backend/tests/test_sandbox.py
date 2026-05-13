@@ -49,6 +49,14 @@ class TestModuleCache:
         assert cache.get("b") is None
         assert cache.get("c") is c
 
+    def test_cache_put_updates_existing_value(self):
+        cache = ModuleCache(max_size=10)
+        old_val, new_val = object(), object()
+        cache.put("key1", old_val)  # type: ignore[arg-type]
+        cache.put("key1", new_val)  # type: ignore[arg-type]
+        assert cache.get("key1") is new_val
+        assert cache.size == 1
+
     def test_cache_clear(self):
         cache = ModuleCache(max_size=10)
         cache.put("x", object())  # type: ignore[arg-type]
@@ -98,10 +106,10 @@ class TestWasmSandbox:
         sandbox = WasmSandbox(fuel_limit=1_000, cache_size=5)
         assert sandbox.cache_size == 0
 
-    def test_sandbox_load_missing_module(self):
+    def test_sandbox_invoke_missing_module(self):
         sandbox = WasmSandbox()
-        with pytest.raises(WasmExecutionError, match="not found|Invalid WASM module path"):
-            sandbox._load_module("/nonexistent/path/tool.wasm")
+        with pytest.raises(WasmExecutionError, match="Invalid WASM module path"):
+            sandbox.invoke("/nonexistent/path/tool.wasm", "{}")
 
     def test_sandbox_cache_size(self):
         sandbox = WasmSandbox(cache_size=3)
@@ -125,8 +133,10 @@ class TestSandboxSelector:
         assert tier_rank("wasm") < tier_rank("docker")
         assert tier_rank("docker") < tier_rank("microvm")
 
-    def test_tier_rank_unknown(self):
+    def test_tier_rank_unknown_falls_back_to_none(self):
         assert tier_rank("unknown_tier") == 0
+        assert tier_rank("unknown_tier") == tier_rank("none")
+        assert tier_rank("unknown_tier") < tier_rank("wasm")
 
     def test_select_default(self):
         # No policy → tool tier wins
@@ -150,3 +160,12 @@ class TestSandboxSelector:
 
         result = select_sandbox(tool_tier="microvm")
         assert result == "wasm"
+
+    def test_select_policy_promotes_to_unsupported_falls_to_wasm(self):
+        # Policy requires docker (unsupported) → falls back to wasm
+        result = select_sandbox(tool_tier="none", policy_minimum="docker")
+        assert result == "wasm"
+
+    def test_select_policy_and_tool_both_none(self):
+        result = select_sandbox(tool_tier="none", policy_minimum="none")
+        assert result == "none"

@@ -121,6 +121,16 @@ router_settings:
 
 **Users never edit LiteLLM config directly** — they manage `LLMConnection` resources in Blackbeard, and Blackbeard regenerates the LiteLLM config on every change.
 
+### Config Lifecycle
+
+1. **Generation**: On `LLMConnection` create/update/delete, regenerate `litellm_config.yaml` to a temporary file
+2. **Validation**: Schema-validate the generated YAML against LiteLLM's config schema
+3. **Concurrency**: Acquire a Valkey distributed lock (`blackbeard:litellm:config-lock`, TTL 30s) before generation. Prevents two concurrent `LLMConnection` updates from producing a corrupted config.
+4. **Reload**: Call `POST /config/update` on LiteLLM Proxy with the new config
+5. **Rollback**: If LiteLLM rejects the config (400 response), release the lock, preserve the old config, and return 422 to the user with LiteLLM's error message
+6. **Startup ordering**: docker-compose `depends_on` with healthcheck ensures LiteLLM is ready before Blackbeard generates initial config. On first startup with no `LLMConnection` resources, generate a minimal valid config.
+7. **In-flight requests**: LiteLLM handles config reload atomically, so in-flight requests complete with the old config and new requests use the new config.
+
 ## 4. AgentPolicy → LiteLLM Virtual Keys
 
 The key integration: Blackbeard maps each agent's policy constraints to a **LiteLLM virtual key** with matching budgets, rate limits, and model access.

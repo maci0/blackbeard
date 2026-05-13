@@ -68,6 +68,34 @@ s3://blackbeard-repo/
 
 The repository index (searchable catalogue of all published assets) is stored in PostgreSQL for fast querying. MinIO stores the actual asset files. `metadata.json` is generated at publish time and includes: version, author, description, tags, dependencies, checksums (SHA-256), and publish timestamp.
 
+**Database schema (repository index):**
+```sql
+repository_assets
+  id              UUID PK DEFAULT gen_random_uuid()
+  kind            VARCHAR(32) NOT NULL     -- Agent, Tool, Crew, etc.
+  name            VARCHAR(255) NOT NULL
+  version         VARCHAR(32) NOT NULL     -- semver: 1.0.0, 2.1.0-beta
+  status          VARCHAR(16) NOT NULL DEFAULT 'active'  -- active | deprecated | yanked
+  author          VARCHAR(255)
+  description     TEXT
+  tags            TEXT[]                   -- PostgreSQL array
+  dependencies    JSONB                    -- [{kind, name, version_range}]
+  checksums       JSONB                    -- {sha256: '...'}
+  artifact_url    TEXT NOT NULL            -- MinIO URL: s3://blackbeard-repo/...
+  download_count  INTEGER NOT NULL DEFAULT 0
+  deprecation_msg TEXT                     -- set when status = deprecated
+  replacement_ref TEXT                     -- suggested replacement asset ref
+  published_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  published_by    VARCHAR(255)
+
+  UNIQUE(kind, name, version)
+
+Indexes:
+  idx_repo_search ON repository_assets(kind, status)
+  idx_repo_tags   ON repository_assets USING GIN(tags)
+  idx_repo_name   ON repository_assets(name)
+```
+
 ## 4. Publishing
 
 ```bash

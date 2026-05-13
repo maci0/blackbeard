@@ -82,6 +82,8 @@ from sqlalchemy.pool import StaticPool
 from blackbeard.models.database import get_session
 from blackbeard.main import app
 
+API_KEY_HEADER = {"X-API-Key": "change-me-in-production"}
+
 
 @pytest.fixture
 async def db_session():

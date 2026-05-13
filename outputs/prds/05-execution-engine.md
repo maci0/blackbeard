@@ -104,9 +104,16 @@ Post-MVP, the Automation-based endpoint (`/api/v1/automations/{name}/kickoff`) w
 queued → loading → running → completed
                      │
                      ├──→ failed
-                     ├──→ waiting_for_human
-                     └──→ paused (checkpoint)
+                     ├──→ cancelled
+                     ├──→ waiting_for_human ──→ cancelled
+                     │         │
+                     │         └──→ failed (HITL timeout, default 24h)
+                     └──→ paused (checkpoint) ──→ cancelled
+                               │
+                               └──→ failed (TTL expired, default 7d)
 ```
+
+**Terminal states:** `completed`, `failed`, `cancelled`. Timeout behavior: agent `max_execution_time` exceeded → `failed` with `error_code: EXECUTION_TIMEOUT`. HITL waiting has a configurable timeout (default 24h, set via `spec.human_feedback.timeout` on the Task resource) ... expiry → `failed`. Paused checkpoints have a TTL (default 7d, configurable via PlatformConfig `execution.checkpoint_ttl`) ... expiry → `failed` with garbage collection.
 
 ### 3.3 Status Polling
 
@@ -131,6 +138,26 @@ GET /api/v1/executions/{execution_id}
   }
 }
 ```
+
+### 3.4 Cancellation
+
+```
+POST /api/v1/executions/{id}/cancel
+{
+  "reason": "User requested cancellation"    // optional
+}
+
+→ 200 OK
+{
+  "execution_id": "exec-abc123",
+  "status": "cancelled",
+  "cancelled_at": "2026-05-10T12:05:00Z"
+}
+```
+
+Cancellation is best-effort for running executions. The in-flight LLM call may complete before cancellation takes effect; its result is discarded. Active sandbox instances are terminated immediately. Cancellation from `queued` or `loading` states is immediate.
+
+Cancelled by user or API request. Active LLM calls terminate best-effort; sandbox instances destroyed.
 
 ## 4. Resource Loading
 
@@ -200,6 +227,18 @@ spec:
     dns:
       allowed: true
       servers: ["8.8.8.8"]           # override DNS to prevent internal resolution
+  
+  # ── Enforcement relationship ────────────────────────────────
+  # The Sandbox resource's `network` section defines template defaults.
+  # At runtime, the effective network rules come from the agent's
+  # AgentPolicy `network.outbound` configuration (PRD 03 §3).
+  # The AgentPolicy takes precedence — the Sandbox template is only
+  # used when no AgentPolicy is specified. All network patterns follow
+  # the matching semantics defined in PRD 03 §3 (suffix matching,
+  # optional port).
+  #
+  # Port is optional. When omitted, all ports are allowed for the
+  # matching host.
   
   # ── Filesystem policy ───────────────────────────────────────
   filesystem:
@@ -569,7 +608,7 @@ Agent requests tool call
          ▼
 ┌──────────────────────────┐
 │  7. Audit & Metrics      │  Log: tool, args hash, duration, sandbox tier, status
-│                          │  Emit event: execution.tool_called
+│                          │  Emit event: tool_call.completed
 └────────┬─────────────────┘
          │
          ▼
@@ -655,6 +694,7 @@ Each SSE event has a `type` field and a typed `data` payload:
 | `guardrail.failed` | `execution_id`, `task_name`, `guardrail_name`, `retry_count` | Guardrail validation failed |
 | `execution.completed` | `execution_id`, `status`, `output`, `total_tokens`, `total_cost_usd`, `duration_ms` | Execution finished |
 | `execution.failed` | `execution_id`, `error`, `failed_task` | Execution failed |
+| `execution.cancelled` | `execution_id`, `cancelled_by`, `reason` | Execution cancelled by user or API |
 
 **SSE wire format:**
 ```
@@ -743,6 +783,7 @@ executions
   automation_id   UUID FK → resources (kind=Automation) NULLABLE
   resource_kind   VARCHAR(32) NOT NULL   -- 'Crew' or 'Flow' (direct reference for MVP)
   resource_name   VARCHAR(255) NOT NULL  -- name of the crew/flow being executed
+  namespace       VARCHAR(255) NOT NULL DEFAULT 'default'
   status          VARCHAR(32)
   inputs          JSONB
   outputs         JSONB
@@ -795,6 +836,7 @@ execution_checkpoints
 Indexes:
   idx_exec_automation     ON executions(automation_id)
   idx_exec_status         ON executions(status)
+  idx_exec_ns_status      ON executions(namespace, status)
   idx_exec_created_by     ON executions(created_by)
   idx_exec_started_at     ON executions(started_at DESC)
   idx_exec_tasks_exec     ON execution_tasks(execution_id)
@@ -809,19 +851,25 @@ Indexes:
 |-------|---------|
 | `execution.queued` | `{execution_id, automation_id, inputs}` |
 | `execution.started` | `{execution_id, principal_chain}` |
-| `execution.task_started` | `{execution_id, task_name, agent_name}` |
-| `execution.task_completed` | `{execution_id, task_name, token_usage, duration}` |
-| `execution.task_failed` | `{execution_id, task_name, error}` |
-| `execution.tool_called` | `{execution_id, tool_name, sandbox_tier, duration, status}` |
-| `execution.tool_sandbox_created` | `{execution_id, tool_name, sandbox_tier, sandbox_id}` |
-| `execution.tool_sandbox_destroyed` | `{sandbox_id, duration, resource_usage}` |
-| `execution.policy_denied` | `{execution_id, agent, action, resource, policy, rule}` |
+| `task.started` | `{execution_id, task_name, agent_name}` |
+| `task.completed` | `{execution_id, task_name, token_usage, duration}` |
+| `task.failed` | `{execution_id, task_name, error}` |
+| `tool_call.started` | `{execution_id, task_name, tool_name, sandbox_tier}` |
+| `tool_call.completed` | `{execution_id, task_name, tool_name, sandbox_tier, duration, status}` |
+| `tool_call.sandbox_created` | `{execution_id, tool_name, sandbox_tier, sandbox_id}` |
+| `tool_call.sandbox_destroyed` | `{sandbox_id, duration, resource_usage}` |
+| `llm_call.completed` | `{execution_id, task_name, agent_name, model, prompt_tokens, completion_tokens, cost_usd}` |
+| `policy.denied` | `{execution_id, agent, action, resource, policy, rule}` |
+| `guardrail.failed` | `{execution_id, task_name, guardrail_name, retry_count}` |
 | `execution.budget_warning` | `{execution_id, agent, budget_type, used, limit}` |
 | `execution.human_input_required` | `{execution_id, task_name, prompt}` |
 | `execution.human_input_received` | `{execution_id, feedback}` |
 | `execution.completed` | `{execution_id, outputs, token_usage, duration}` |
 | `execution.failed` | `{execution_id, error}` |
+| `execution.cancelled` | `{execution_id, cancelled_by, reason}` |
 | `execution.checkpointed` | `{execution_id, checkpoint_id}` |
+
+**Event naming convention:** All events use dotted namespace format. The SSE event type names (§11) are the canonical names used across all subsystems (internal event bus, Langfuse listener, webhook payloads). Event producers MUST use these exact names.
 
 ---
 

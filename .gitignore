@@ -24,6 +24,8 @@ Thumbs.db
 
 # Environment
 .env
+.env.local
+.env.*.local
 *.json.key
 
 # Podman/Docker
@@ -32,6 +34,7 @@ Thumbs.db
 # Test / Coverage
 .coverage
 htmlcov/
+coverage/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -39,3 +42,6 @@ htmlcov/
 # Build artifacts
 *.wasm
 credentials.json
+
+# Tool state
+.sisyphus/

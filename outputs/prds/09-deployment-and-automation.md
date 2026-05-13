@@ -24,7 +24,7 @@ spec:
       repository: "https://github.com/acme/research-crew"
       branch: main
       auto_deploy: true               # deploy on every push
-    replicas: 2                       # concurrent execution capacity
+    replicas: 2                       # concurrent execution capacity (post-MVP)
     
   runtime:
     default_agent_policy: ref:agent-policies/standard
@@ -61,6 +61,8 @@ spec:
     visibility: private
     allowedRoles: [ref:roles/developer, ref:roles/operator]
 ```
+
+**Worker topology:** Post-MVP topology. MVP runs API and worker in a single process (`api` service). Post-MVP separates into `api` (HTTP server) and `worker` (execution engine) services for independent scaling.
 
 **Storage:** The Automation resource is stored in the generic `resources` table (PRD 01, §6), same as all other resources. Deployment-specific state is stored in the `automation_deployments` table (§2.1 below). The Automation lifecycle state machine (created → building → deploying → deployed → degraded → deleted) is tracked in `automation_deployments.status`, not in the `resources` table.
 
@@ -294,14 +296,7 @@ spec:
 
 ## 9. React Component Export
 
-Automations can be exported as embeddable React components:
-
-```
-POST /api/v1/automations/{name}/export/react
-→ { component_url, embed_code, api_key }
-```
-
-The component provides a pre-built UI for kicking off the crew, viewing progress, and displaying results — embeddable in any React application.
+See PRD 11 §7 for the React component export specification. This feature is post-v1.
 
 ## 10. Automations Dashboard (UI)
 

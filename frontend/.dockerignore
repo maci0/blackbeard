@@ -2,3 +2,14 @@ node_modules/
 dist/
 .vite/
 *.log
+.env*
+.git/
+.gitignore
+coverage/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__/
+.eslintcache
+README.md

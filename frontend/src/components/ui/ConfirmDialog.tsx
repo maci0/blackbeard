@@ -30,29 +30,29 @@ export function ConfirmDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card border rounded-lg shadow-lg p-6 w-full max-w-md z-50">
+        <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in data-[state=closed]:fade-out" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card border rounded-lg shadow-lg p-6 w-full max-w-md z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95">
           <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>
           <Dialog.Description className="text-sm text-muted-foreground mt-2">
             {description}
           </Dialog.Description>
           <div className="flex justify-end gap-3 mt-6">
             <Dialog.Close asChild>
-              <button className="px-4 py-2 text-sm rounded-lg border hover:bg-muted transition-colors">
+              <button autoFocus className="px-4 py-2 text-sm rounded-lg border hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                 Cancel
               </button>
             </Dialog.Close>
             <button
               onClick={onConfirm}
               disabled={loading}
-              className={`px-4 py-2 text-sm rounded-lg disabled:opacity-50 ${btnClass}`}
+              className={`px-4 py-2 text-sm rounded-lg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${btnClass}`}
             >
               {loading ? 'Processing…' : confirmLabel}
             </button>
           </div>
           <Dialog.Close asChild>
             <button
-              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
+              className="absolute top-3 right-3 p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               aria-label="Close"
             >
               <X className="h-4 w-4" />

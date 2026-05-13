@@ -45,6 +45,10 @@ interface StudioState {
 
 export const useStudioStore = create<StudioState>()((set, get) => {
   function pushHistory() {
+    const now = Date.now()
+    if (now - lastHistoryPush < 100) return
+    lastHistoryPush = now
+
     const { nodes, edges, history, historyIndex } = get()
     const newHistory = history.slice(0, historyIndex + 1)
     newHistory.push({ nodes: structuredClone(nodes), edges: structuredClone(edges) })
@@ -130,21 +134,23 @@ export const useStudioStore = create<StudioState>()((set, get) => {
     markClean: () => set({ dirty: false }),
 
     undo: () => {
-      const { history, historyIndex } = get()
+      const state = get()
+      const { history, historyIndex } = state
       if (historyIndex < 0) return
       // Save the live canvas state at the tip so redo can restore it
+      let currentHistory = history
       if (historyIndex === history.length - 1) {
-        const { nodes, edges } = get()
-        const extended = [...history, { nodes: structuredClone(nodes), edges: structuredClone(edges) }]
-        if (extended.length > MAX_HISTORY + 1) extended.shift()
-        set({ history: extended })
+        currentHistory = [
+          ...history,
+          { nodes: structuredClone(state.nodes), edges: structuredClone(state.edges) },
+        ]
+        if (currentHistory.length > MAX_HISTORY + 1) currentHistory.shift()
       }
-      // Re-read after the potential extension
-      const currentHistory = get().history
       const prev = currentHistory[historyIndex]
       if (prev) {
         const newIndex = historyIndex - 1
         set({
+          history: currentHistory,
           nodes: prev.nodes,
           edges: prev.edges,
           historyIndex: newIndex,

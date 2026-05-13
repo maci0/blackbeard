@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
 
   # ── API (FastAPI backend) ──────────────────────────────────────────────────
@@ -31,13 +37,22 @@ services:
       litellm:
         condition: service_healthy
     restart: unless-stopped
+    stop_grace_period: 30s
+    logging: *default-logging
     mem_limit: 2g
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/api/v1/health').raise_for_status()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 60s
     networks: [frontend, backend]
 
   # ── UI (React/Vite frontend) ───────────────────────────────────────────────
@@ -45,16 +60,30 @@ services:
     build:
       context: frontend/
       dockerfile: ../deploy/docker/Dockerfile.ui
+      args:
+        VITE_API_KEY: ${BLACKBEARD_API_KEY:-change-me-in-production}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
       - api
     restart: unless-stopped
+    logging: *default-logging
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:3000/"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 5s
+    mem_limit: 256m
     networks: [frontend]
 
   # ── PostgreSQL 17 ──────────────────────────────────────────────────────────
@@ -69,12 +98,25 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./deploy/docker/initdb:/docker-entrypoint-initdb.d:ro
+    shm_size: 256m
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U blackbeard -d blackbeard"]
       interval: 5s
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 2g
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     networks: [backend]
 
   # ── Valkey (Redis-compatible cache) ────────────────────────────────────────
@@ -82,18 +124,24 @@ services:
     image: valkey/valkey:8-alpine
     ports:
       - "127.0.0.1:6379:6379"
-    command: ["valkey-server", "--requirepass", "valkey-dev-secret"]
+    command: ["valkey-server", "--requirepass", "valkey-dev-secret", "--maxmemory", "256mb"]
     healthcheck:
       test: ["CMD-SHELL", "REDISCLI_AUTH=valkey-dev-secret valkey-cli ping"]
       interval: 5s
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks: [backend]
 
   # ── LiteLLM Proxy ─────────────────────────────────────────────────────────
   litellm:
-    image: ghcr.io/berriai/litellm:main-v1.63.11
+    image: ghcr.io/berriai/litellm:v1.83.14-stable
     ports:
       - "127.0.0.1:4000:4000"
     environment:
@@ -113,8 +161,14 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 1g
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:4000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -124,12 +178,16 @@ services:
   # ── Langfuse v3 (observability) ────────────────────────────────────────────
   # Langfuse v3 requires ClickHouse, MinIO (S3-compatible), and Redis.
   langfuse-web:
-    image: langfuse/langfuse:3.38.1
+    image: langfuse/langfuse:3.173.0
     ports:
       - "127.0.0.1:3001:3000"
     # SECURITY: Replace NEXTAUTH_SECRET, SALT, and ENCRYPTION_KEY with
     # cryptographically random values before any non-local deployment.
     # Generate with: openssl rand -hex 32
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment: &langfuse-env
       DATABASE_URL: postgresql://blackbeard:blackbeard@postgres:5432/langfuse
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-blackbeard-langfuse-secret}
@@ -166,10 +224,22 @@ services:
       langfuse-redis:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/public/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks: [backend]
 
   langfuse-worker:
-    image: langfuse/langfuse-worker:3.38.1
+    image: langfuse/langfuse-worker:3.173.0
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       <<: *langfuse-env
     depends_on:
@@ -182,6 +252,14 @@ services:
       langfuse-redis:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/public/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks: [backend]
 
   langfuse-clickhouse:
@@ -201,7 +279,19 @@ services:
       retries: 10
       start_period: 1s
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 2g
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+      - SYS_NICE
     networks: [backend]
 
   langfuse-minio:
@@ -222,19 +312,35 @@ services:
       retries: 5
       start_period: 1s
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks: [backend]
 
   langfuse-redis:
     image: redis:7-alpine
     command: >
       --requirepass langfuse-redis-secret
+      --maxmemory 128mb
       --maxmemory-policy noeviction
+      --appendonly yes
+    volumes:
+      - langfuse_redis_data:/data
     healthcheck:
       test: ["CMD-SHELL", "REDISCLI_AUTH=langfuse-redis-secret redis-cli ping"]
       interval: 5s
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 256m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks: [backend]
 
 volumes:
@@ -242,6 +348,7 @@ volumes:
   langfuse_clickhouse_data:
   langfuse_clickhouse_logs:
   langfuse_minio_data:
+  langfuse_redis_data:
 
 networks:
   frontend:

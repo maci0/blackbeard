@@ -35,17 +35,25 @@ function App() {
             element={
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
-                  <p className="text-6xl font-bold text-muted-foreground/20 mb-2">404</p>
+                  <p className="text-6xl font-bold text-muted-foreground/20 mb-2" aria-hidden="true">404</p>
                   <h1 className="text-lg font-semibold mb-1">Page not found</h1>
                   <p className="text-sm text-muted-foreground mb-4">
-                    The page you're looking for doesn't exist.
+                    The page you're looking for doesn't exist or may have been moved.
                   </p>
-                  <Link
-                    to="/studio"
-                    className="inline-flex px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90 transition-opacity"
-                  >
-                    Go to Studio
-                  </Link>
+                  <div className="flex items-center gap-3 justify-center">
+                    <Link
+                      to="/studio"
+                      className="inline-flex px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90 transition-opacity"
+                    >
+                      Go to Studio
+                    </Link>
+                    <Link
+                      to="/resources"
+                      className="inline-flex px-4 py-2 text-sm border rounded-md hover:bg-accent transition-colors"
+                    >
+                      Browse Resources
+                    </Link>
+                  </div>
                 </div>
               </div>
             }

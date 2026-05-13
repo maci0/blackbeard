@@ -3,24 +3,33 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from blackbeard.kinds import ALL_KINDS, NAME_PATTERN
 
 
 class ResourceMetadata(BaseModel):
     """Resource metadata block (mirrors YAML metadata section)."""
 
-    name: str = Field(..., min_length=1, max_length=255, pattern=r"^[a-z0-9][a-z0-9\-]*$")
-    namespace: str = Field(default="default", max_length=255)
-    labels: dict[str, str] = Field(default_factory=dict)
+    name: str = Field(..., min_length=1, max_length=255, pattern=NAME_PATTERN)
+    namespace: str = Field(default="default", max_length=255, pattern=NAME_PATTERN)
+    labels: dict[str, str] = Field(default_factory=dict, max_length=50)
 
 
 class ResourceCreate(BaseModel):
     """Schema for creating a resource via API or YAML apply."""
 
     apiVersion: str = Field(default="blackbeard/v1")
-    kind: str
+    kind: str = Field(..., min_length=1)
     metadata: ResourceMetadata
-    spec: dict
+    spec: dict = Field(..., min_length=1, max_length=500)
+
+    @field_validator("kind")
+    @classmethod
+    def kind_must_be_valid(cls, v: str) -> str:
+        if v not in ALL_KINDS:
+            raise ValueError(f"Invalid kind '{v}'. Valid kinds: {', '.join(ALL_KINDS)}")
+        return v
 
 
 class ResourceUpdate(BaseModel):
@@ -28,7 +37,7 @@ class ResourceUpdate(BaseModel):
 
     metadata: ResourceMetadata | None = None
     spec: dict | None = None
-    version: int = Field(..., description="Current version for optimistic locking")
+    version: int = Field(..., ge=1, description="Current version for optimistic locking")
 
 
 class ResourceResponse(BaseModel):
@@ -48,10 +57,11 @@ class ResourceResponse(BaseModel):
     @classmethod
     def from_db(cls, resource) -> "ResourceResponse":  # type: ignore[no-untyped-def]
         """Build response from a SQLAlchemy Resource model."""
-        return cls(
+        return cls.model_construct(
             id=resource.id,
+            apiVersion="blackbeard/v1",
             kind=resource.kind.value,
-            metadata=ResourceMetadata(
+            metadata=ResourceMetadata.model_construct(
                 name=resource.name,
                 namespace=resource.namespace,
                 labels=resource.labels or {},
@@ -71,6 +81,4 @@ class ResourceListResponse(BaseModel):
     limit: int = 100
     offset: int = 0
     has_more: bool = False
-
-
 

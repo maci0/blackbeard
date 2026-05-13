@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, type DragEvent } from 'react'
+import { useCallback, useEffect, useRef, type DragEvent } from 'react'
 import {
   ReactFlow,
   Background,
@@ -17,6 +17,7 @@ import '@xyflow/react/dist/style.css'
 import { User, ListChecks, Wrench, Sparkles } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
 import { getDefaultNodeData } from '@/lib/utils'
+import { useDarkMode } from '@/lib/hooks'
 
 import AgentNode from './nodes/AgentNode'
 import TaskNode from './nodes/TaskNode'
@@ -72,10 +73,13 @@ function minimapNodeColor(node: Node): string {
 
 function CanvasInner() {
   const { screenToFlowPosition } = useReactFlow()
+  const isDark = useDarkMode()
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, setSelectedNode } =
     useStudioStore()
+  const nodesRef = useRef(nodes)
+  nodesRef.current = nodes
 
-  /* ── Undo / Redo keyboard shortcuts ── */
+  /* ── Keyboard shortcuts (undo/redo/save) ── */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
@@ -89,6 +93,10 @@ function CanvasInner() {
         e.preventDefault()
         useStudioStore.getState().redo()
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        document.querySelector<HTMLButtonElement>('[data-tour="save-button"]')?.click()
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -97,7 +105,7 @@ function CanvasInner() {
   /** Derive an edge type from the connected nodes and attach arrow marker */
   const handleConnect = useCallback(
     (connection: Connection) => {
-      const edgeType = pickEdgeType(nodes, connection)
+      const edgeType = pickEdgeType(nodesRef.current, connection)
       const enriched: Edge = {
         ...connection,
         id: `${connection.source}-${connection.target}-${Date.now()}`,
@@ -109,7 +117,7 @@ function CanvasInner() {
       }
       onConnect(enriched as Connection)
     },
-    [nodes, onConnect],
+    [onConnect],
   )
 
   const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
@@ -148,10 +156,6 @@ function CanvasInner() {
     setSelectedNode(null)
   }, [setSelectedNode])
 
-  // Keep edge types stable
-  const edgeTypes = useMemo(() => EDGE_TYPES, [])
-  const nodeTypes = useMemo(() => NODE_TYPES, [])
-
   return (
     <ReactFlow
       nodes={nodes}
@@ -159,8 +163,8 @@ function CanvasInner() {
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={handleConnect}
-      nodeTypes={nodeTypes}
-      edgeTypes={edgeTypes}
+      nodeTypes={NODE_TYPES}
+      edgeTypes={EDGE_TYPES}
       onNodeClick={onNodeClick}
       onPaneClick={onPaneClick}
       onDrop={onDrop}
@@ -171,7 +175,7 @@ function CanvasInner() {
       proOptions={{ hideAttribution: true }}
       className="studio-canvas"
     >
-      <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#e2e8f0" />
+      <Background variant={BackgroundVariant.Dots} gap={20} size={1} color={isDark ? '#334155' : '#e2e8f0'} />
       <Controls
         className="!border !border-border !rounded-lg !shadow-md !overflow-hidden"
         showInteractive={false}
@@ -179,7 +183,7 @@ function CanvasInner() {
       <MiniMap
         nodeColor={minimapNodeColor}
         className="!border !border-border !rounded-lg !shadow-md"
-        maskColor="rgba(248, 250, 252, 0.7)"
+        maskColor={isDark ? 'rgba(15, 23, 42, 0.7)' : 'rgba(248, 250, 252, 0.7)'}
         pannable
         zoomable
       />
@@ -196,7 +200,7 @@ function EmptyCanvasOverlay({ onLoadExample }: { onLoadExample?: () => void }) {
     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
       <div className="text-center pointer-events-auto select-none">
         {/* Icon cluster */}
-        <div className="flex items-center justify-center gap-3 mb-5">
+        <div aria-hidden="true" className="flex items-center justify-center gap-3 mb-5">
           <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
             <User className="w-5 h-5 text-violet-500" />
           </div>
@@ -235,7 +239,7 @@ export default function Canvas({ onLoadExample }: { onLoadExample?: () => void }
   const { nodes } = useStudioStore()
 
   return (
-    <div data-tour="canvas" className="flex-1 relative overflow-hidden bg-slate-50">
+    <div data-tour="canvas" className="flex-1 relative overflow-hidden bg-slate-50 dark:bg-slate-900">
       <CanvasInner />
       {nodes.length === 0 && <EmptyCanvasOverlay onLoadExample={onLoadExample} />}
     </div>

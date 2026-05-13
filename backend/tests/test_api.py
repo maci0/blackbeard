@@ -14,8 +14,7 @@ SQLite-compatible types *before* this module is imported.
 import pytest
 from httpx import AsyncClient
 
-# Fixtures (db_session, client) are provided by conftest.py
-API_KEY_HEADER = {"X-API-Key": "change-me-in-production"}
+from tests.conftest import API_KEY_HEADER
 
 # ---------------------------------------------------------------------------
 # Payload helpers
@@ -53,14 +52,12 @@ def _task_payload(name: str = "gather-data", agent_ref: str = "ref:agents/resear
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_requires_api_key(client: AsyncClient):
     """Requests without X-API-Key header should be rejected with 401."""
     response = await client.get("/api/v1/agents")
     assert response.status_code == 401
 
 
-@pytest.mark.asyncio
 async def test_health_is_public(client: AsyncClient):
     """Health endpoint should not require an API key."""
     response = await client.get("/api/v1/health")
@@ -72,14 +69,12 @@ async def test_health_is_public(client: AsyncClient):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_invalid_kind_plural(client: AsyncClient):
     """Unknown kind plural should return 422 (path pattern constraint rejects it)."""
     response = await client.get("/api/v1/invalid", headers=API_KEY_HEADER)
     assert response.status_code == 422
 
 
-@pytest.mark.asyncio
 async def test_create_resource_kind_mismatch(client: AsyncClient):
     """POST Agent to /api/v1/tools should fail with 422."""
     response = await client.post("/api/v1/tools", json={
@@ -97,7 +92,6 @@ async def test_create_resource_kind_mismatch(client: AsyncClient):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_list_agents_empty(client: AsyncClient):
     """GET /agents on an empty database should return empty list with total=0."""
     response = await client.get("/api/v1/agents", headers=API_KEY_HEADER)
@@ -107,7 +101,6 @@ async def test_list_agents_empty(client: AsyncClient):
     assert data["total"] == 0
 
 
-@pytest.mark.asyncio
 async def test_create_agent(client: AsyncClient):
     """POST /agents with a valid body should return 201 with a resource id."""
     response = await client.post(
@@ -122,7 +115,6 @@ async def test_create_agent(client: AsyncClient):
     assert data["spec"]["role"] == "Research Analyst"
 
 
-@pytest.mark.asyncio
 async def test_create_agent_invalid_spec(client: AsyncClient):
     """POST /agents with missing required spec fields should return 422."""
     bad_payload = {
@@ -133,13 +125,16 @@ async def test_create_agent_invalid_spec(client: AsyncClient):
     }
     response = await client.post("/api/v1/agents", json=bad_payload, headers=API_KEY_HEADER)
     assert response.status_code == 422
+    detail = response.json()["detail"].lower()
+    assert "role" in detail
 
 
-@pytest.mark.asyncio
 async def test_list_agents_after_create(client: AsyncClient):
     """Creating 2 agents and listing should return total=2."""
-    await client.post("/api/v1/agents", json=_agent_payload("agent-1"), headers=API_KEY_HEADER)
-    await client.post("/api/v1/agents", json=_agent_payload("agent-2"), headers=API_KEY_HEADER)
+    r1 = await client.post("/api/v1/agents", json=_agent_payload("agent-1"), headers=API_KEY_HEADER)
+    assert r1.status_code == 201
+    r2 = await client.post("/api/v1/agents", json=_agent_payload("agent-2"), headers=API_KEY_HEADER)
+    assert r2.status_code == 201
 
     response = await client.get("/api/v1/agents", headers=API_KEY_HEADER)
     assert response.status_code == 200
@@ -148,10 +143,10 @@ async def test_list_agents_after_create(client: AsyncClient):
     assert len(data["items"]) == 2
 
 
-@pytest.mark.asyncio
 async def test_get_agent(client: AsyncClient):
     """GET /agents/{name} should return the created agent."""
-    await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
+    r = await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
+    assert r.status_code == 201
 
     response = await client.get("/api/v1/agents/researcher", headers=API_KEY_HEADER)
     assert response.status_code == 200
@@ -160,14 +155,13 @@ async def test_get_agent(client: AsyncClient):
     assert data["kind"] == "Agent"
 
 
-@pytest.mark.asyncio
 async def test_get_agent_not_found(client: AsyncClient):
     """GET /agents/{name} for a non-existent agent should return 404."""
     response = await client.get("/api/v1/agents/nonexistent", headers=API_KEY_HEADER)
     assert response.status_code == 404
+    assert "detail" in response.json()
 
 
-@pytest.mark.asyncio
 async def test_update_agent(client: AsyncClient):
     """PUT /agents/{name} with correct version should succeed and bump version to 2."""
     create_resp = await client.post(
@@ -192,10 +186,10 @@ async def test_update_agent(client: AsyncClient):
     assert data["spec"]["role"] == "Senior Research Analyst"
 
 
-@pytest.mark.asyncio
 async def test_update_agent_version_conflict(client: AsyncClient):
     """PUT with the wrong version number should return 409 Conflict."""
-    await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
+    r = await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
+    assert r.status_code == 201
 
     update_payload = {
         "version": 99,  # wrong version
@@ -211,10 +205,10 @@ async def test_update_agent_version_conflict(client: AsyncClient):
     assert response.status_code == 409
 
 
-@pytest.mark.asyncio
 async def test_delete_agent(client: AsyncClient):
     """DELETE /agents/{name} should return 204 and subsequent GET should return 404."""
-    await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
+    r = await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
+    assert r.status_code == 201
 
     delete_resp = await client.delete("/api/v1/agents/researcher", headers=API_KEY_HEADER)
     assert delete_resp.status_code == 204
@@ -228,11 +222,11 @@ async def test_delete_agent(client: AsyncClient):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_create_task_with_refs(client: AsyncClient):
     """Creating a task with a ref should succeed and the ref should be stored."""
     # First create the referenced agent
-    await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
+    r = await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
+    assert r.status_code == 201
 
     # Create task with a ref to the agent
     response = await client.post(
@@ -249,7 +243,6 @@ async def test_create_task_with_refs(client: AsyncClient):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_create_agent_upsert(client: AsyncClient):
     """POSTing the same resource twice should upsert (update) rather than error."""
     payload = _agent_payload()
@@ -267,35 +260,21 @@ async def test_create_agent_upsert(client: AsyncClient):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_list_tasks_empty(client: AsyncClient):
-    response = await client.get("/api/v1/tasks", headers=API_KEY_HEADER)
+@pytest.mark.parametrize("endpoint", [
+    "/api/v1/tasks",
+    "/api/v1/crews",
+    "/api/v1/tools",
+    "/api/v1/llm-connections",
+])
+async def test_list_resources_empty(client: AsyncClient, endpoint: str):
+    """GET on any resource list endpoint with empty DB returns consistent shape."""
+    response = await client.get(endpoint, headers=API_KEY_HEADER)
     assert response.status_code == 200
-    assert response.json()["total"] == 0
+    data = response.json()
+    assert data["items"] == []
+    assert data["total"] == 0
 
 
-@pytest.mark.asyncio
-async def test_list_crews_empty(client: AsyncClient):
-    response = await client.get("/api/v1/crews", headers=API_KEY_HEADER)
-    assert response.status_code == 200
-    assert response.json()["total"] == 0
-
-
-@pytest.mark.asyncio
-async def test_list_tools_empty(client: AsyncClient):
-    response = await client.get("/api/v1/tools", headers=API_KEY_HEADER)
-    assert response.status_code == 200
-    assert response.json()["total"] == 0
-
-
-@pytest.mark.asyncio
-async def test_list_llm_connections_empty(client: AsyncClient):
-    response = await client.get("/api/v1/llm-connections", headers=API_KEY_HEADER)
-    assert response.status_code == 200
-    assert response.json()["total"] == 0
-
-
-@pytest.mark.asyncio
 async def test_create_and_get_llm_connection(client: AsyncClient):
     """End-to-end create+get for an LLMConnection resource."""
     payload = {

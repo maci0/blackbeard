@@ -25,11 +25,7 @@ export function getDuration(
 
 export function formatCost(cost: number | null | undefined): string {
   if (cost == null || cost === 0) return '—'
+  if (cost >= 1) return `$${cost.toFixed(2)}`
+  if (cost >= 0.01) return `$${cost.toFixed(3)}`
   return `$${cost.toFixed(4)}`
-}
-
-export function formatTokens(tokens: number | null | undefined): string {
-  if (tokens == null || tokens === 0) return '—'
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`
-  return String(tokens)
 }

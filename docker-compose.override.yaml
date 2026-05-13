@@ -4,3 +4,4 @@ services:
   api:
     volumes:
       - ./backend:/app
+      - /app/.venv

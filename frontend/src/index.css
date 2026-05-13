@@ -16,6 +16,12 @@
   animation: studio-edge-dash 0.5s linear infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .studio-edge-animated {
+    animation: none;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* React Flow handle overrides                                         */
 /* ------------------------------------------------------------------ */

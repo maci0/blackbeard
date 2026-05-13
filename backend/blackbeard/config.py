@@ -1,12 +1,14 @@
 """Application configuration via environment variables."""
 
-from pydantic_settings import BaseSettings
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Blackbeard application settings.
 
     All values can be overridden via environment variables.
+    Sensitive fields use SecretStr to prevent accidental exposure in logs/repr.
     """
 
     # App
@@ -14,22 +16,22 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # Auth
-    blackbeard_api_key: str = "change-me-in-production"
+    blackbeard_api_key: SecretStr = SecretStr("change-me-in-production")
 
     # Database
-    database_url: str = "postgresql+asyncpg://blackbeard:blackbeard@localhost:5432/blackbeard"
+    database_url: SecretStr = SecretStr("postgresql+asyncpg://blackbeard:blackbeard@localhost:5432/blackbeard")
 
     # Valkey (Redis-compatible cache)
-    valkey_url: str = "valkey://default:valkey-dev-secret@localhost:6379/0"
+    valkey_url: SecretStr = SecretStr("valkey://default:valkey-dev-secret@localhost:6379/0")
 
     # LiteLLM Proxy
     litellm_proxy_url: str = "http://localhost:4000"
-    litellm_master_key: str = "sk-litellm-master-key"
+    litellm_master_key: SecretStr = SecretStr("sk-litellm-master-key")
 
     # Langfuse
     langfuse_host: str = "http://localhost:3001"
     langfuse_public_key: str = ""
-    langfuse_secret_key: str = ""
+    langfuse_secret_key: SecretStr = SecretStr("")
 
     # GCP / Vertex AI
     google_cloud_project: str = ""
@@ -44,7 +46,7 @@ class Settings(BaseSettings):
     port: int = 8000
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
-    model_config = {"env_prefix": "", "case_sensitive": False}
+    model_config = SettingsConfigDict(env_prefix="", case_sensitive=False)
 
 
 settings = Settings()

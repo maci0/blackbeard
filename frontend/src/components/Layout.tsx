@@ -7,6 +7,7 @@ import {
   Cpu,
   Wrench,
 } from 'lucide-react'
+import { useDarkMode } from '@/lib/hooks'
 import WelcomeDialog from './onboarding/WelcomeDialog'
 import GuidedTour from './onboarding/GuidedTour'
 import HelpMenu from './onboarding/HelpMenu'
@@ -29,6 +30,7 @@ const navItems = [
 
 export default function Layout() {
   const navigate = useNavigate()
+  useDarkMode()
 
   const [showWelcome, setShowWelcome] = useState(false)
   const [showTour, setShowTour] = useState(false)

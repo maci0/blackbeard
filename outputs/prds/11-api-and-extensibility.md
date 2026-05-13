@@ -27,6 +27,7 @@ POST   /api/v1/automations/{name}/kickoff      Start execution
 GET    /api/v1/executions/{id}                 Get execution status
 GET    /api/v1/executions/{id}/stream          SSE stream of execution events
 POST   /api/v1/executions/{id}/resume          Resume with human feedback
+POST   /api/v1/executions/{id}/cancel          Cancel a running execution
 GET    /api/v1/executions/{id}/trace           Get full trace
 POST   /api/v1/automations/{name}/rollback     Rollback to version
 
@@ -42,6 +43,8 @@ POST   /api/v1/auth/token/refresh              Refresh JWT
 GET    /api/v1/auth/me                         Current user info
 POST   /api/v1/auth/sso/callback               SSO callback
 ```
+
+All resource kinds in the catalogue (PRD 01 §2.9), including `IntegrationConnector`, `MCPServer`, `ServiceAccount`, `Namespace`, `ObservabilityConfig`, `LLMRoutingConfig`, and `PlatformConfig`, are exposed through the same uniform CRUD pattern. Resource kind maps to lowercase-hyphenated-plural path: `integration-connectors`, `mcp-servers`, `service-accounts`, `namespaces`, `observability-configs`, `llm-routing-configs`, `platform-configs`.
 
 ### 2.2 Authentication
 
@@ -115,6 +118,34 @@ X-RateLimit-Reset: 1720000060
 ```
 
 Exceeding the limit returns `429 Too Many Requests` with a `Retry-After` header.
+
+### 2.7 PlatformConfig
+
+**PlatformConfig** is a singleton resource (one per deployment) that holds global defaults:
+
+```yaml
+apiVersion: blackbeard/v1
+kind: PlatformConfig
+metadata:
+  name: default
+spec:
+  api:
+    rate_limits:
+      jwt_requests_per_minute: 120
+      api_key_requests_per_minute: 60
+      unauthenticated_requests_per_minute: 10
+    cors_origins: ["http://localhost:3000"]
+  auth:
+    cache_ttl_seconds: 30              # 0 = disable caching
+  execution:
+    max_concurrent: 4
+    checkpoint_ttl_days: 7
+    hitl_timeout_hours: 24
+  defaults:
+    namespace: default
+    sandbox_tier: wasm
+    agent_policy: ref:agent-policies/standard
+```
 
 ## 3. gRPC API
 

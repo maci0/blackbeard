@@ -186,6 +186,8 @@ spec:
       service.name: "blackbeard"
 ```
 
+**Scoping:** One `ObservabilityConfig` per namespace. If absent, the org-level default applies. If no config exists at any level, Langfuse integration is enabled with default settings (sample rate 1.0, retention 90 days) and a startup info message is logged.
+
 **LiteLLM → Langfuse**: LiteLLM natively supports Langfuse as a callback. When enabled, every LLM call made through LiteLLM Proxy is automatically traced in Langfuse with model, tokens, cost, and latency — no custom code needed.
 
 **CrewAI → Langfuse**: Blackbeard registers a CrewAI `BaseEventListener` that maps CrewAI events to Langfuse SDK calls (`langfuse.trace()`, `trace.span()`, `trace.generation()`), adding Blackbeard-specific metadata (sandbox tier, policy decisions, agent name, execution ID).

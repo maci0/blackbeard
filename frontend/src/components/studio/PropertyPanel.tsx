@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState, createContext, useContext, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useState, createContext, useContext, lazy, Suspense, type ChangeEvent } from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
-import Editor from '@monaco-editor/react'
 import { X, Trash2 } from 'lucide-react'
+
+const Editor = lazy(() => import('@monaco-editor/react'))
 import { Link } from 'react-router-dom'
 import { useStudioStore } from '@/stores/studioStore'
 import { useResourceStore } from '@/stores/resourceStore'
-import { nodeToYaml } from '@/lib/utils'
+import { useDarkMode } from '@/lib/hooks'
+import { nodeToYaml } from '@/lib/yaml'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 /* ------------------------------------------------------------------ */
@@ -19,7 +21,7 @@ function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: str
   return (
     <label
       htmlFor={htmlFor}
-      className="block text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1"
+      className="block text-[11px] font-semibold text-muted-foreground tracking-wide mb-1"
     >
       {children}
     </label>
@@ -141,11 +143,12 @@ function AgentForm({
   const bool = (key: string) => (data[key] as boolean | undefined) ?? false
 
   const llmConnections = useResourceStore((state) => state.resources['llm-connections'] ?? [])
+  const hasLlmData = useResourceStore((state) => 'llm-connections' in state.resources)
   const fetchResources = useResourceStore((state) => state.fetchResources)
 
   useEffect(() => {
-    fetchResources('llm-connections')
-  }, [fetchResources])
+    if (!hasLlmData) fetchResources('llm-connections')
+  }, [hasLlmData, fetchResources])
 
   return (
     <div className="space-y-3">
@@ -304,8 +307,7 @@ function ToolForm({
           onChange={(v) => onChange('sandbox', v)}
           options={[
             { label: 'No sandbox', value: 'none' },
-            { label: 'Restricted', value: 'restricted' },
-            { label: 'Isolated', value: 'isolated' },
+            { label: 'WebAssembly (WASM)', value: 'wasm' },
           ]}
         />
       </FieldGroup>
@@ -316,6 +318,20 @@ function ToolForm({
 /* ------------------------------------------------------------------ */
 /* Panel header accent colours per type                                */
 /* ------------------------------------------------------------------ */
+
+const YAML_EDITOR_OPTIONS = {
+  readOnly: true,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  fontSize: 11,
+  lineNumbers: 'off' as const,
+  folding: false,
+  wordWrap: 'on' as const,
+  padding: { top: 12, bottom: 12 },
+  overviewRulerLanes: 0,
+  hideCursorInOverviewRuler: true,
+  scrollbar: { verticalScrollbarSize: 4 },
+}
 
 const TYPE_META: Record<string, { label: string; accent: string; border: string }> = {
   agent: { label: 'Agent', accent: 'bg-violet-500', border: 'border-violet-200' },
@@ -330,6 +346,7 @@ const TYPE_META: Record<string, { label: string; accent: string; border: string 
 export default function PropertyPanel() {
   const { nodes, selectedNodeId, updateNodeData, setSelectedNode, removeNode } = useStudioStore()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const isDark = useDarkMode()
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
 
@@ -341,7 +358,14 @@ export default function PropertyPanel() {
     [selectedNodeId, updateNodeData],
   )
 
-  if (!selectedNode) return null
+  if (!selectedNode) {
+    return (
+      <aside aria-label="Node properties" className="w-[300px] shrink-0 border-l bg-card flex flex-col items-center justify-center text-center p-6">
+        <p className="text-sm font-medium text-muted-foreground">No node selected</p>
+        <p className="text-xs text-muted-foreground/70 mt-1">Click a node on the canvas to edit its properties</p>
+      </aside>
+    )
+  }
 
   const nodeType = selectedNode.type ?? 'agent'
   const data = selectedNode.data as Record<string, unknown>
@@ -359,7 +383,7 @@ export default function PropertyPanel() {
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="p-2 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             title="Delete node"
             aria-label="Delete node"
           >
@@ -367,7 +391,7 @@ export default function PropertyPanel() {
           </button>
           <button
             onClick={() => setSelectedNode(null)}
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="p-2 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             title="Close"
             aria-label="Close panel"
           >
@@ -383,9 +407,9 @@ export default function PropertyPanel() {
             <Tabs.Trigger
               key={tab}
               value={tab}
-              className="flex-1 text-[11px] font-semibold uppercase tracking-wider px-3 py-2.5 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:border-b-2 data-[state=active]:border-primary transition-colors"
+              className="flex-1 text-xs font-semibold uppercase tracking-wider px-3 py-2.5 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:border-b-2 data-[state=active]:border-primary transition-colors"
             >
-              {tab}
+              {tab === 'yaml' ? 'YAML' : 'Properties'}
             </Tabs.Trigger>
           ))}
         </Tabs.List>
@@ -407,26 +431,16 @@ export default function PropertyPanel() {
               Read-only preview of the resource YAML
             </p>
           </div>
-          <div className="flex-1 min-h-0">
-            <Editor
-              height="100%"
-              language="yaml"
-              value={yamlContent}
-              theme="vs"
-              options={{
-                readOnly: true,
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                fontSize: 11,
-                lineNumbers: 'off',
-                folding: false,
-                wordWrap: 'on',
-                padding: { top: 12, bottom: 12 },
-                overviewRulerLanes: 0,
-                hideCursorInOverviewRuler: true,
-                scrollbar: { verticalScrollbarSize: 4 },
-              }}
-            />
+          <div className="flex-1 min-h-0" role="region" aria-label="YAML preview editor">
+            <Suspense fallback={<div className="p-4 text-xs text-muted-foreground">Loading editor…</div>}>
+              <Editor
+                height="100%"
+                language="yaml"
+                value={yamlContent}
+                theme={isDark ? 'vs-dark' : 'vs'}
+                options={YAML_EDITOR_OPTIONS}
+              />
+            </Suspense>
           </div>
         </Tabs.Content>
       </Tabs.Root>
@@ -435,7 +449,7 @@ export default function PropertyPanel() {
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
         title="Delete Node"
-        description={`Delete this ${meta.label.toLowerCase()} node and all its connections? You can undo with Cmd+Z.`}
+        description={`Delete this ${meta.label.toLowerCase()} node and all its connections? You can undo with ${/Mac|iPhone|iPad/.test(navigator.userAgent) ? 'Cmd' : 'Ctrl'}+Z.`}
         confirmLabel="Delete"
         confirmVariant="destructive"
         onConfirm={() => {

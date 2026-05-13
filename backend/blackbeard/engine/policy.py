@@ -11,6 +11,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from blackbeard.resources.refs import parse_ref
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,7 +27,7 @@ class PolicyDeniedError(Exception):
 
 
 class AgentPolicy:
-    """Represents a resolved agent policy."""
+    """Agent policy after resolution (agent → crew default → global default)."""
 
     def __init__(self, spec: dict[str, Any]):
         self.spec = spec
@@ -119,7 +121,10 @@ def resolve_policy(
         policy_name = _extract_name(agent_policy_ref)
         if policy_name in policies:
             return AgentPolicy(policies[policy_name])
-        logger.warning("Agent policy '%s' not found, checking crew default", policy_name)
+        logger.warning(
+            "Agent policy '%s' not found, checking crew default", policy_name,
+            extra={"event": "policy_not_found", "policy_name": policy_name, "fallback": "crew_default"},
+        )
 
     # Check crew-level default
     if crew_spec:
@@ -128,14 +133,15 @@ def resolve_policy(
             policy_name = _extract_name(crew_policy_ref)
             if policy_name in policies:
                 return AgentPolicy(policies[policy_name])
-            logger.warning("Crew default policy '%s' not found, using default", policy_name)
+            logger.warning(
+                "Crew default policy '%s' not found, using default", policy_name,
+                extra={"event": "policy_not_found", "policy_name": policy_name, "fallback": "global_default"},
+            )
 
     return DEFAULT_POLICY
 
 
 def _extract_name(ref_or_name: str) -> str:
     """Extract resource name from a ref string or plain name."""
-    if ref_or_name.startswith("ref:"):
-        parts = ref_or_name.split("/")
-        return parts[-1] if len(parts) > 1 else ref_or_name
-    return ref_or_name
+    ref = parse_ref(ref_or_name)
+    return ref.name if ref else ref_or_name

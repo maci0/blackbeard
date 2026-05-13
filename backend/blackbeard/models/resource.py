@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    CheckConstraint,
     Column,
     DateTime,
     Enum,
@@ -13,12 +14,13 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
-from blackbeard.models.database import Base
 from blackbeard.kinds import ResourceKind
+from blackbeard.models.database import Base
 
 
 class Resource(Base):
@@ -29,13 +31,22 @@ class Resource(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     kind = Column(Enum(ResourceKind), nullable=False, index=True)
     name = Column(String(255), nullable=False)
-    namespace = Column(String(255), nullable=False, default="default")
-    labels = Column(JSONB, nullable=False, default=dict)
+    namespace = Column(String(255), nullable=False, default="default", server_default=text("'default'"))
+    labels = Column(JSONB, nullable=False, default=dict, server_default=text("'{}'"))
     spec = Column(JSONB, nullable=False)
     raw_yaml = Column(Text, nullable=True)
-    version = Column(Integer, nullable=False, default=1)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    version = Column(Integer, nullable=False, default=1, server_default=text("1"))
+    created_at = Column(
+        DateTime(timezone=True), nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        server_default=text("now()"),
+    )
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        server_default=text("now()"),
+    )
 
     # Relationships
     outgoing_refs = relationship(
@@ -48,6 +59,8 @@ class Resource(Base):
     __table_args__ = (
         UniqueConstraint("kind", "name", "namespace", name="uq_resource_kind_name_ns"),
         Index("ix_resource_ns_kind", "namespace", "kind"),
+        Index("ix_resource_labels", "labels", postgresql_using="gin"),
+        CheckConstraint("version >= 1", name="ck_resource_version_positive"),
     )
 
     def __repr__(self) -> str:
@@ -63,7 +76,7 @@ class ResourceRef(Base):
     source_id = Column(UUID(as_uuid=True), ForeignKey("resources.id", ondelete="CASCADE"), nullable=False)
     target_kind = Column(Enum(ResourceKind), nullable=False)
     target_name = Column(String(255), nullable=False)
-    target_namespace = Column(String(255), nullable=False, default="default")
+    target_namespace = Column(String(255), nullable=False, default="default", server_default=text("'default'"))
     ref_field = Column(String(255), nullable=False)  # e.g. "spec.llm", "spec.tools[0]"
 
     source = relationship("Resource", foreign_keys=[source_id], back_populates="outgoing_refs")
@@ -71,6 +84,7 @@ class ResourceRef(Base):
     __table_args__ = (
         Index("ix_ref_source", "source_id"),
         Index("ix_ref_target", "target_kind", "target_name", "target_namespace"),
+        UniqueConstraint("source_id", "ref_field", name="uq_ref_source_field"),
     )
 
     def __repr__(self) -> str:

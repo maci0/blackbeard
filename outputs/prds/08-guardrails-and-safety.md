@@ -82,7 +82,7 @@ Task output produced
 
 ### 2.4 Guardrail Assignment
 
-Guardrails can be assigned at multiple levels:
+Guardrails can be assigned at multiple levels. The examples below show field excerpts from their parent resources (Crew, Namespace). See PRD 01 for full resource schemas.
 
 ```yaml
 # Per-task
@@ -98,12 +98,13 @@ crews:
     default_guardrails:
       - ref: guardrails/no-pii-in-output
 
-# Per-namespace (org-wide policy)
+# Per-namespace (org-wide policy, under spec.defaults)
 namespaces:
   production:
-    required_guardrails:
-      - ref: guardrails/no-pii-in-output
-      - ref: guardrails/factual-grounding
+    defaults:
+      guardrails:
+        - ref: guardrails/no-pii-in-output
+        - ref: guardrails/factual-grounding
 ```
 
 Namespace-level guardrails are configured in the Namespace resource's `spec.defaults.guardrails` field (see PRD 01, §2.10). All tasks within the namespace inherit these guardrails unless overridden at the crew or task level.
@@ -112,7 +113,7 @@ Namespace-level guardrails are configured in the Namespace resource's `spec.defa
 
 When guardrails are assigned at multiple levels, they execute in this order:
 
-1. **Namespace-level `required_guardrails`** — run first, cannot be skipped.
+1. **Namespace-level `defaults.guardrails`** — run first, cannot be skipped.
 2. **Crew-level `default_guardrails`** — run second, apply to all tasks in the crew.
 3. **Task-level `guardrails`** — run last, specific to the task.
 
@@ -184,25 +185,6 @@ Respond with a JSON object:
 }
 ```
 This prompt can be overridden per-guardrail via the `evaluation_prompt` field on the Guardrail resource.
-
-**Default evaluation prompt template:**
-```
-Given the following reference context and agent output, evaluate the factual faithfulness of the output.
-
-Reference context:
-{context}
-
-Agent output:
-{output}
-
-Score the output on a scale of 0.0 to 1.0:
-- 1.0: Every claim in the output is directly supported by the reference context
-- 0.5: Some claims are supported, others are unsupported but plausible
-- 0.0: The output contains fabricated information not present in the context
-
-Return ONLY a JSON object: {"score": <float>, "reasoning": "<brief explanation>"}
-```
-This template can be overridden via `HallucinationGuardrail.spec.evaluation_prompt`.
 
 ## 4. PII Redaction (Microsoft Presidio)
 
@@ -363,6 +345,8 @@ Agent produces output
          ▼
   Output stored / returned to user
 ```
+
+**Pipeline ordering is mandatory:** Guardrails → Hallucination Detection → PII Redaction. PII redaction is always the LAST safety layer before trace storage. Guardrails and hallucination detection operate on unredacted output. Reordering the pipeline causes incorrect guardrail failures (e.g., a guardrail checking for specific content would see redacted placeholders like `<EMAIL_ADDRESS>` instead of actual values).
 
 ## 6. Events Emitted
 

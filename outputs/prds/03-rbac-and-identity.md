@@ -433,7 +433,7 @@ Action requested (by human OR agent)
 
 **Performance**: Steps 2-5 are cached with a 30-second TTL, keyed by `(subject_kind, subject_name, namespace)`. The full authorization flow runs in <5ms for cached principals. Cache is invalidated proactively on role/policy/binding changes via the internal event bus, but in multi-worker deployments, propagation takes up to 2 seconds. This means a revoked user could remain authorized for up to 30 seconds on a worker that hasn't received the invalidation event.
 
-**Cache configuration:** Default cache TTL is 30 seconds. For security-critical deployments, set `AUTHZ_CACHE_TTL=0` to disable caching (every request checks the database). In multi-worker deployments, cache invalidation propagates via the event bus with a worst-case consistency window equal to the cache TTL.
+**Cache configuration:** Default cache TTL is 30 seconds. For security-critical deployments, set `AUTHZ_CACHE_TTL=0` to disable caching (every request checks the database). In multi-worker deployments, cache invalidation propagates via the event bus with a worst-case consistency window equal to the cache TTL. When `AUTHZ_CACHE_TTL=0`, every request queries the database directly. The event bus propagation delay is irrelevant in this mode since no cache exists to invalidate. Prefer configuring via `PlatformConfig.spec.auth.cache_ttl_seconds` (PRD 11) over the env var.
 
 For agents, policy denials are NOT silent 403s — they feed back into the agent's conversation as a system message: `"Policy violation: you are not allowed to invoke tool 'database-admin'. Available tools: [serper-search, wikipedia]."` This lets the agent adapt its approach rather than crash.
 
@@ -598,7 +598,7 @@ All RBAC resources (Role, RoleBinding, AgentPolicy, SSOConfig, APIKey, Sandbox) 
 
 - Version-controlled in Git alongside agent/crew definitions.
 - Applied via CLI: `blackbeard apply -f agent-policies/restricted.yaml`.
-- Managed via API: `POST /api/v1/AgentPolicy`.
+- Managed via API: `POST /api/v1/agent-policies`.
 - Managed via GUI (§9).
 
 GitOps workflows for access control are first-class.

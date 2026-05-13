@@ -4,8 +4,10 @@ import { Database, Search, ChevronRight, RefreshCw, AlertTriangle, X } from 'luc
 import { useResourceStore, type Resource } from '@/stores/resourceStore'
 import { KindBadge } from '@/components/ui/KindBadge'
 import { Spinner } from '@/components/ui/Spinner'
+import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/formatters'
 import { KIND_TO_PLURAL } from '@/lib/kinds'
+import { useDocumentTitle } from '@/lib/hooks'
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
@@ -26,14 +28,11 @@ export default function Resources() {
   const [kindFilter, setKindFilter] = useState('')
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    document.title = 'Resources | Blackbeard'
-    return () => { document.title = 'Blackbeard' }
-  }, [])
+  useDocumentTitle('Resources')
 
   useEffect(() => {
     fetchAllResources()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; fetchAllResources is stable
   }, [])
 
   // Flatten all resources from the store
@@ -74,9 +73,10 @@ export default function Resources() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => fetchAllResources()}
+              aria-label="Refresh resources"
               className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md bg-background hover:bg-accent transition-colors"
             >
-              <RefreshCw className="h-3.5 w-3.5" />
+              <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin motion-reduce:animate-none')} />
               Refresh
             </button>
             <button
@@ -95,7 +95,7 @@ export default function Resources() {
               <AlertTriangle className="h-4 w-4 shrink-0" />
               {error}
             </span>
-            <button onClick={() => fetchAllResources()} className="text-xs underline underline-offset-2">
+            <button onClick={() => fetchAllResources()} className="text-xs underline underline-offset-2" aria-label="Retry loading resources">
               Retry
             </button>
           </div>
@@ -105,7 +105,7 @@ export default function Resources() {
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <label htmlFor="resources-search" className="sr-only">Search resources by name</label>
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <input
               id="resources-search"
               type="text"
@@ -134,6 +134,7 @@ export default function Resources() {
           {(search || kindFilter) && (
             <button
               onClick={() => { setSearch(''); setKindFilter('') }}
+              aria-label="Clear all filters"
               className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="h-3.5 w-3.5" />
@@ -181,7 +182,7 @@ export default function Resources() {
                 ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-16 text-center">
-                      <Database className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
+                      <Database aria-hidden="true" className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
                       <p className="font-medium text-muted-foreground">No resources found</p>
                       {search || kindFilter ? (
                         <p className="text-sm text-muted-foreground/70 mt-1">
@@ -209,6 +210,7 @@ export default function Resources() {
                       }}
                       tabIndex={0}
                       role="row"
+                      aria-label={`${resource.kind}: ${resource.metadata.name} — press Enter to view details`}
                       className="border-b last:border-0 hover:bg-muted/40 cursor-pointer transition-colors group focus-visible:outline-none focus-visible:bg-muted/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     >
                       <td className="px-4 py-3">
@@ -217,7 +219,7 @@ export default function Resources() {
                       <td className="px-4 py-3 font-medium">{resource.metadata.name}</td>
                        <td className="px-4 py-3 text-muted-foreground">
                          {(!resource.metadata.namespace || resource.metadata.namespace === 'default')
-                           ? <span className="text-muted-foreground/40">—</span>
+                           ? <span className="text-muted-foreground/40" aria-label="default namespace">—</span>
                            : resource.metadata.namespace}
                        </td>
                       <td className="px-4 py-3 text-muted-foreground">
@@ -227,7 +229,7 @@ export default function Resources() {
                         {formatDate(resource.updated_at)}
                       </td>
                       <td className="px-4 py-3">
-                        <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                        <ChevronRight aria-hidden="true" className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
                       </td>
                     </tr>
                   ))

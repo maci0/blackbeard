@@ -94,7 +94,7 @@ export default function Palette() {
   return (
     <aside aria-label="Node palette" data-tour="palette" className="w-[108px] border-r bg-card flex flex-col shrink-0">
       <div className="px-3 pt-3 pb-2 border-b">
-        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
           Palette
         </p>
       </div>
@@ -104,8 +104,8 @@ export default function Palette() {
         ))}
       </div>
       <div className="p-2 pt-0">
-        <p className="text-[9px] text-muted-foreground text-center leading-tight">
-          Drag or press Enter
+        <p className="text-[10px] text-muted-foreground text-center leading-tight">
+          Drag onto canvas or press Enter to add
         </p>
       </div>
     </aside>

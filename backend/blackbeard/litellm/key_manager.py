@@ -14,6 +14,11 @@ from blackbeard.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Pre-build auth header once to avoid SecretStr extraction + f-string per call
+_AUTH_HEADERS: dict[str, str] = {
+    "Authorization": f"Bearer {settings.litellm_master_key.get_secret_value()}"
+}
+
 # Shared HTTP client for LiteLLM Proxy API calls — created once, reused across calls
 _client: httpx.AsyncClient | None = None
 _client_lock = threading.Lock()
@@ -46,7 +51,7 @@ async def create_execution_key(
 ) -> str | None:
     """Create a scoped virtual key via the LiteLLM Proxy API.
 
-    Returns the generated API key string, or None if the proxy is unreachable.
+    Returns the generated API key string, or None on any failure.
     """
     try:
         client = _get_client()
@@ -61,21 +66,33 @@ async def create_execution_key(
         response = await client.post(
             "/key/generate",
             json=payload,
-            headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
+            headers=_AUTH_HEADERS,
             timeout=10.0,
         )
 
         if response.status_code == 200:
             data = response.json()
             return data.get("key")
-        else:
-            logger.warning(
-                "Failed to create LiteLLM key: %d %s", response.status_code, response.text
-            )
-            return None
+        logger.warning(
+            "Failed to create LiteLLM key: HTTP %d", response.status_code,
+            extra={
+                "event": "litellm_key_create_failed",
+                "execution_id": execution_id,
+                "http_status": response.status_code,
+            },
+        )
+        return None
 
     except Exception as e:
-        logger.warning("LiteLLM key creation failed, using master key: %s", e)
+        logger.warning(
+            "LiteLLM key creation failed, using master key: %s: %s", type(e).__name__, e,
+            exc_info=True,
+            extra={
+                "event": "litellm_key_create_error",
+                "execution_id": execution_id,
+                "error_type": type(e).__name__,
+            },
+        )
         return None
 
 
@@ -86,12 +103,24 @@ async def delete_execution_key(key: str) -> bool:
         response = await client.post(
             "/key/delete",
             json={"keys": [key]},
-            headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
+            headers=_AUTH_HEADERS,
             timeout=10.0,
         )
+        if response.status_code != 200:
+            logger.warning(
+                "Failed to delete LiteLLM key: HTTP %d", response.status_code,
+                extra={
+                    "event": "litellm_key_delete_failed",
+                    "http_status": response.status_code,
+                },
+            )
         return response.status_code == 200
     except Exception as e:
-        logger.warning("Failed to delete LiteLLM key: %s", e)
+        logger.warning(
+            "Failed to delete LiteLLM key: %s: %s", type(e).__name__, e,
+            exc_info=True,
+            extra={"event": "litellm_key_delete_error", "error_type": type(e).__name__},
+        )
         return False
 
 
@@ -102,12 +131,23 @@ async def get_key_spend(key: str) -> dict | None:
         response = await client.get(
             "/key/info",
             params={"key": key},
-            headers={"Authorization": f"Bearer {settings.litellm_master_key}"},
+            headers=_AUTH_HEADERS,
             timeout=10.0,
         )
         if response.status_code == 200:
             return response.json()
+        logger.warning(
+            "Failed to get LiteLLM key spend: HTTP %d", response.status_code,
+            extra={
+                "event": "litellm_key_spend_failed",
+                "http_status": response.status_code,
+            },
+        )
         return None
     except Exception as e:
-        logger.warning("Failed to get key spend: %s", e)
+        logger.warning(
+            "Failed to get key spend: %s: %s", type(e).__name__, e,
+            exc_info=True,
+            extra={"event": "litellm_key_spend_error", "error_type": type(e).__name__},
+        )
         return None

@@ -1,5 +1,5 @@
 import { type ChangeEvent, useMemo } from 'react'
-import { Save, Play, Loader2, FolderOpen, ChevronDown, Undo2, Redo2, Loader } from 'lucide-react'
+import { Save, Play, Loader2, FolderOpen, ChevronDown, Undo2, Redo2 } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { toResourceName } from '@/lib/utils'
 import { type RunStatus, RunStatusBadge } from './RunStatusBadge'
@@ -95,12 +95,12 @@ export function Toolbar({
             >
               {crewsLoading ? (
                 <div className="px-3 py-2.5 text-[11px] text-muted-foreground flex items-center gap-2">
-                  <Loader className="w-3 h-3 animate-spin motion-reduce:animate-none" />
+                  <Loader2 className="w-3 h-3 animate-spin motion-reduce:animate-none" />
                   Loading…
                 </div>
               ) : crews.length === 0 ? (
                 <div className="px-3 py-2.5 text-[11px] text-muted-foreground italic">
-                  No saved crews found
+                  No saved crews yet — build one on the canvas and hit Save
                 </div>
               ) : (
                 crews.map((crewItem) => (
@@ -120,9 +120,7 @@ export function Toolbar({
 
       {/* Status badge — aria-live so screen readers announce state changes */}
       <div role="status" aria-live="polite" className="flex items-center">
-        {status === 'idle' ? (
-          <span className="sr-only">Ready</span>
-        ) : (
+        {status !== 'idle' && (
           <RunStatusBadge
             status={status}
             message={statusMessage}
@@ -166,7 +164,12 @@ export function Toolbar({
             <Save className="w-3.5 h-3.5" />
           )}
           Save
-          {dirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 ml-0.5" />}
+          {dirty && (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 ml-0.5" aria-hidden="true" />
+              <span className="sr-only">(unsaved changes)</span>
+            </>
+          )}
         </button>
 
         <button

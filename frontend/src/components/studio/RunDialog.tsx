@@ -25,15 +25,16 @@ export function RunDialog({
       JSON.parse(inputs)
       setError('')
       onRun(inputs)
-    } catch {
-      setError('Invalid JSON — fix before running')
+    } catch (e) {
+      const detail = e instanceof SyntaxError ? e.message : 'Unknown error'
+      setError(`Invalid JSON: ${detail}`)
     }
   }
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in data-[state=closed]:fade-out" />
+        <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in data-[state=closed]:fade-out" />
         <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[480px] max-w-[90vw] bg-card border border-border rounded-xl shadow-2xl p-0 overflow-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b bg-gradient-to-r from-emerald-600 to-emerald-500">
@@ -64,14 +65,14 @@ export function RunDialog({
               </label>
               <textarea
                 id="run-dialog-inputs"
-                className="w-full font-mono text-[12px] bg-muted/40 border border-border rounded-lg px-3 py-2.5 h-32 resize-none focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+                className="w-full font-mono text-[12px] bg-muted/40 border border-border rounded-lg px-3 py-2.5 h-32 resize-none focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
                 value={inputs}
-                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setInputs(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => { setInputs(e.target.value); if (error) setError('') }}
                 placeholder='{ "topic": "AI safety" }'
                 spellCheck={false}
               />
               {error && (
-                <p className="mt-1 text-[11px] text-destructive flex items-center gap-1">
+                <p role="alert" className="mt-1 text-[11px] text-destructive flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
                   {error}
                 </p>

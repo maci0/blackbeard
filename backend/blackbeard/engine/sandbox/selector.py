@@ -25,7 +25,7 @@ def tier_rank(tier: str) -> int:
     rank = _TIER_RANK.get(tier)
     if rank is not None:
         return rank
-    logger.warning(f"Unknown sandbox tier '{tier}', defaulting to 'none'")
+    logger.warning("Unknown sandbox tier '%s', defaulting to 'none'", tier)
     return 0
 
 
@@ -46,13 +46,12 @@ def select_sandbox(
     if policy_minimum:
         if tier_rank(policy_minimum) > tier_rank(effective):
             logger.info(
-                f"Sandbox tier promoted: {effective} → {policy_minimum} (policy minimum)"
+                "Sandbox tier promoted: %s → %s (policy minimum)", effective, policy_minimum
             )
             effective = policy_minimum
 
-    # MVP: only support none and wasm
     if effective not in ("none", "wasm"):
-        logger.warning(f"Sandbox tier '{effective}' not supported in MVP, falling back to 'wasm'")
+        logger.warning("Sandbox tier '%s' not yet implemented, falling back to 'wasm'", effective)
         effective = "wasm"
 
     return effective

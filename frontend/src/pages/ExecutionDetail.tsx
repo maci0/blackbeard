@@ -1,7 +1,6 @@
-import { useEffect, useCallback, useRef, useState } from 'react'
+import { useEffect, useCallback, useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
-  ArrowLeft,
   ExternalLink,
   XCircle,
   AlertTriangle,
@@ -11,13 +10,13 @@ import {
   DollarSign,
   Activity,
 } from 'lucide-react'
-import { useExecutionStore, type ExecutionTask } from '@/stores/executionStore'
+import { useDocumentTitle, usePolling } from '@/lib/hooks'
+import { useExecutionStore, TERMINAL_STATUSES, type ExecutionTask } from '@/stores/executionStore'
 import { StatusBadge, statusLabel } from '@/components/ui/StatusBadge'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { getDuration, formatDate } from '@/lib/formatters'
+import { getDuration, formatDate, formatCost } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
-import { TERMINAL_STATUSES } from '@/lib/kinds'
 
 /* ------------------------------------------------------------------ */
 /* Summary card                                                        */
@@ -89,6 +88,7 @@ function TaskRow({ task, index }: { task: ExecutionTask; index: number }) {
             <button
               onClick={() => setExpanded((v) => !v)}
               className="text-xs text-primary hover:underline mt-1"
+              aria-expanded={expanded}
             >
               {expanded ? 'Show less' : 'Show more'}
             </button>
@@ -112,10 +112,10 @@ function TaskRow({ task, index }: { task: ExecutionTask; index: number }) {
 
 export default function ExecutionDetail() {
   const { id = '' } = useParams<{ id: string }>()
-  const { currentExecution, loading, error, fetchExecution, cancelExecution } =
+  const { currentExecution, loading, error, fetchExecution, cancelExecution, pollExecution } =
     useExecutionStore()
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
 
   const load = useCallback(async () => {
     await fetchExecution(id)
@@ -123,27 +123,19 @@ export default function ExecutionDetail() {
 
   useEffect(() => {
     fetchExecution(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- id is the real dependency
+  }, [id])
 
-    intervalRef.current = setInterval(async () => {
-      await fetchExecution(id)
-      const exec = useExecutionStore.getState().currentExecution
-      if (exec && TERMINAL_STATUSES.has(exec.status)) {
-        clearInterval(intervalRef.current!)
-      }
-    }, 2000)
+  const isActive = currentExecution ? !TERMINAL_STATUSES.has(currentExecution.status) : false
+  const doPoll = useCallback(() => pollExecution(id), [pollExecution, id])
+  usePolling(doPoll, 2000, isActive)
 
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useDocumentTitle(currentExecution ? `${currentExecution.crew_name} run` : 'Execution')
 
-  /* ---- Document title ---- */
-  useEffect(() => {
-    document.title = currentExecution
-      ? `${currentExecution.crew_name} run | Blackbeard`
-      : 'Execution | Blackbeard'
-    return () => { document.title = 'Blackbeard' }
-  }, [currentExecution])
+  const sortedTasks = useMemo(
+    () => [...(currentExecution?.tasks ?? [])].sort((a, b) => a.order - b.order),
+    [currentExecution?.tasks],
+  )
 
   /* ---- Loading ---- */
   if (loading && !currentExecution) {
@@ -183,21 +175,25 @@ export default function ExecutionDetail() {
   }
 
   const execution = currentExecution
-  const isActive = !TERMINAL_STATUSES.has(execution.status)
-  const sortedTasks = [...(execution.tasks ?? [])].sort((a, b) => a.order - b.order)
 
   return (
     <div className="flex-1 overflow-auto">
       <div className="p-6 max-w-4xl mx-auto">
 
-        {/* Back */}
-        <Link
-          to="/executions"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-5"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Executions
-        </Link>
+        {/* Breadcrumb */}
+        <nav aria-label="Breadcrumb" className="mb-5">
+          <ol className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <li>
+              <Link to="/executions" className="hover:text-foreground transition-colors">
+                Executions
+              </Link>
+            </li>
+            <li aria-hidden="true" className="text-muted-foreground/40">›</li>
+            <li>
+              <span className="text-foreground font-medium">{execution.crew_name}</span>
+            </li>
+          </ol>
+        </nav>
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-6">
@@ -240,7 +236,7 @@ export default function ExecutionDetail() {
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           <SummaryCard
             icon={Activity}
             label="Status"
@@ -255,9 +251,7 @@ export default function ExecutionDetail() {
           <SummaryCard
             icon={DollarSign}
             label="Cost"
-            value={
-              execution.cost_usd > 0 ? `$${execution.cost_usd.toFixed(4)}` : '—'
-            }
+            value={formatCost(execution.cost_usd)}
           />
           <SummaryCard
             icon={Clock}
@@ -277,27 +271,42 @@ export default function ExecutionDetail() {
                 <p className="text-sm text-destructive/80 mt-1 font-mono whitespace-pre-wrap">
                   {execution.error}
                 </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Check your crew configuration and LLM connections, then{' '}
+                  <Link to="/studio" className="text-primary hover:underline underline-offset-2">
+                    try running again from the Studio
+                  </Link>.
+                </p>
               </div>
             </div>
           </div>
         )}
 
         {/* Tasks */}
-        {sortedTasks.length > 0 && (
-          <div>
-            <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
-              Tasks
-              <span className="text-xs font-normal text-muted-foreground">
-                ({sortedTasks.length})
-              </span>
-            </h2>
+        <div>
+          <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
+            Tasks
+            <span className="text-xs font-normal text-muted-foreground">
+              ({sortedTasks.length})
+            </span>
+          </h2>
+          {sortedTasks.length > 0 ? (
             <div className="space-y-3">
               {sortedTasks.map((task, idx) => (
                 <TaskRow key={task.id} task={task} index={idx} />
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="border-2 border-dashed rounded-lg flex items-center justify-center py-12 text-center">
+              <div>
+                <Clock aria-hidden="true" className="h-6 w-6 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  {isActive ? 'Waiting for tasks to start…' : 'No tasks recorded for this execution'}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Outputs */}
         {execution.outputs && Object.keys(execution.outputs).length > 0 && (
@@ -331,9 +340,15 @@ export default function ExecutionDetail() {
         description="The crew run will be stopped and cannot be resumed."
         confirmLabel="Cancel Execution"
         confirmVariant="destructive"
+        loading={cancelling}
         onConfirm={async () => {
-          await cancelExecution(id)
-          setShowCancelConfirm(false)
+          setCancelling(true)
+          try {
+            await cancelExecution(id)
+            setShowCancelConfirm(false)
+          } finally {
+            setCancelling(false)
+          }
         }}
       />
     </div>

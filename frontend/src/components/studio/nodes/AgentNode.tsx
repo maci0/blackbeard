@@ -7,6 +7,7 @@ export default memo(function AgentNode({ data, selected }: NodeProps) {
   const role = data['role'] as string | undefined
   const goal = data['goal'] as string | undefined
   const llm = data['llm'] as string | undefined
+  const llmDisplay = llm?.startsWith('ref:') ? llm.split('/').pop() || llm : llm
   const tools = Array.isArray(data['tools']) ? (data['tools'] as unknown[]) : []
 
   return (
@@ -15,7 +16,7 @@ export default memo(function AgentNode({ data, selected }: NodeProps) {
         'w-[200px] rounded-xl border bg-card shadow-sm overflow-hidden transition-all duration-150',
         selected
           ? 'border-violet-400 ring-2 ring-violet-300 ring-offset-1 shadow-violet-100 shadow-md'
-          : 'border-slate-200 hover:border-violet-200 hover:shadow-md',
+          : 'border-slate-200 dark:border-slate-700 hover:border-violet-200 hover:shadow-md',
       )}
     >
       <Handle
@@ -29,31 +30,31 @@ export default memo(function AgentNode({ data, selected }: NodeProps) {
         <div className="flex items-center justify-center w-5 h-5 rounded-md bg-white/20 text-white">
           <User className="w-3 h-3" />
         </div>
-        <span className="text-[10px] font-bold text-white/90 uppercase tracking-widest">
+        <span className="text-[11px] font-bold text-white/90 uppercase tracking-widest">
           Agent
         </span>
       </div>
 
       {/* Body */}
       <div className="px-3 py-2.5 space-y-1.5">
-        <p className="font-semibold text-sm text-foreground truncate leading-tight">
+        <p className="font-semibold text-sm text-foreground truncate leading-tight" title={role ?? 'Unnamed Agent'}>
           {role ?? 'Unnamed Agent'}
         </p>
         {goal ? (
           <p className="text-[11px] text-muted-foreground line-clamp-2 leading-snug">{goal}</p>
         ) : (
-          <p className="text-[11px] text-slate-300 italic">No goal set</p>
+          <p className="text-[11px] text-muted-foreground/60 italic">No goal set</p>
         )}
 
         {/* Badges */}
         <div className="flex flex-wrap gap-1 pt-0.5">
-          {llm && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-violet-50 text-violet-700 border border-violet-100">
-              {llm}
+          {llmDisplay && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-violet-50 text-violet-700 border border-violet-100 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800">
+              {llmDisplay}
             </span>
           )}
           {tools.length > 0 && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-slate-50 text-slate-600 border border-slate-100">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-slate-50 text-slate-600 border border-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
               {tools.length} tool{tools.length !== 1 ? 's' : ''}
             </span>
           )}

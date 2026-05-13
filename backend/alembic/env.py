@@ -1,16 +1,21 @@
 """Alembic environment configuration for async PostgreSQL."""
 
 import asyncio
+import os
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from blackbeard.models.database import Base
+from alembic import context
+from blackbeard.models import Base  # imports via __init__.py, which registers all ORM models
 
 # Alembic Config object
 config = context.config
+
+# Override alembic.ini URL with DATABASE_URL env var when set (e.g. in Docker)
+if os.environ.get("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:

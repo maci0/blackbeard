@@ -1,3 +1,5 @@
+import { CheckCircle2, XCircle, Clock, Ban } from 'lucide-react'
+
 const STATUS_CLASSES: Record<string, string> = {
   queued: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
   running: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
@@ -16,21 +18,32 @@ const STATUS_DISPLAY: Record<string, string> = {
   pending: 'Pending',
 }
 
+const STATUS_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  completed: CheckCircle2,
+  failed: XCircle,
+  cancelled: Ban,
+  pending: Clock,
+  queued: Clock,
+}
+
 export function statusLabel(status: string): string {
   return STATUS_DISPLAY[status] ?? status.charAt(0).toUpperCase() + status.slice(1)
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const classes = STATUS_CLASSES[status] || 'bg-gray-100 text-gray-700'
-  const label = STATUS_DISPLAY[status] ?? status.charAt(0).toUpperCase() + status.slice(1)
+  const classes = STATUS_CLASSES[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+  const label = statusLabel(status)
+  const Icon = STATUS_ICON[status]
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${classes}`}>
-      {status === 'running' && (
+      {status === 'running' ? (
         <span className="relative flex h-2 w-2">
           <span className="animate-ping motion-reduce:animate-none absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
         </span>
-      )}
+      ) : Icon ? (
+        <Icon className="h-3 w-3" aria-hidden="true" />
+      ) : null}
       {label}
     </span>
   )

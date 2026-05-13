@@ -1,7 +1,7 @@
 """Wasmtime wrapper for executing WASM tools in a sandbox.
 
 Provides isolated execution with:
-- Fuel metering (deterministic execution limits)
+- Fuel metering (instruction-count limits; wall-clock time varies by host CPU)
 - Capability-based access control (WASI permissions)
 - Module caching (LRU)
 """
@@ -21,18 +21,27 @@ import wasmtime
 
 logger = logging.getLogger(__name__)
 
+# Immutable base directory for WASM module path validation (set once at import time)
+_APP_BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
 # Safe environment variables to pass through to WASM tools (never leak secrets)
 _SAFE_ENV_VARS = ("PATH", "HOME", "USER", "LANG", "LC_ALL", "TZ", "TERM")
 
-# Default fuel limit (~100M instructions ≈ a few seconds of compute)
+# Default fuel limit (~100M instructions; actual wall-clock time varies by host CPU)
 DEFAULT_FUEL = 100_000_000
 
 # Default module cache size
 DEFAULT_CACHE_SIZE = 50
 
 
+def _log_extra(execution_id: str | None, **kwargs: Any) -> dict[str, Any]:
+    if execution_id:
+        kwargs["execution_id"] = execution_id
+    return kwargs
+
+
 class WasmExecutionError(Exception):
-    """Raised when WASM tool execution fails."""
+    pass
 
 
 class WasmTimeoutError(WasmExecutionError):
@@ -41,6 +50,8 @@ class WasmTimeoutError(WasmExecutionError):
 
 class WasmToolResult:
     """Result of a WASM tool execution."""
+
+    __slots__ = ("output", "success", "error", "duration_ms")
 
     def __init__(self, output: str, success: bool, error: str | None = None, duration_ms: int = 0):
         self.output = output
@@ -75,6 +86,7 @@ class ModuleCache:
     def put(self, key: str, module: wasmtime.Module) -> None:
         with self._lock:
             if key in self._cache:
+                self._cache[key] = module
                 self._cache.move_to_end(key)
             else:
                 if len(self._cache) >= self._max_size:
@@ -104,7 +116,6 @@ class WasmSandbox:
         self._cache = ModuleCache(max_size=cache_size)
         self._allowed_capabilities = allowed_capabilities or set()
 
-        # Create engine with fuel consumption enabled
         config = wasmtime.Config()
         config.consume_fuel = True
         config.cache = True
@@ -124,9 +135,8 @@ class WasmSandbox:
 
         path = Path(wasm_path)
         resolved = path.resolve()
-        cwd = Path.cwd().resolve()
-        if not str(resolved).startswith(str(cwd) + os.sep) and resolved != cwd:
-            raise WasmExecutionError(f"Invalid WASM module path: path must be within the application directory")
+        if not resolved.is_relative_to(_APP_BASE_DIR):
+            raise WasmExecutionError("Invalid WASM module path: path must be within the application directory")
         if not resolved.exists():
             raise WasmExecutionError(f"WASM module not found: {wasm_path}")
 
@@ -164,46 +174,69 @@ class WasmSandbox:
 
         return linker
 
-    def invoke(self, wasm_path: str, input_data: str | dict) -> WasmToolResult:
+    def _instantiate(self, wasm_path: str) -> tuple[wasmtime.Store, object]:
+        """Create store, load module, link, and instantiate."""
+        store = self._create_store()
+        module = self._load_module(wasm_path)
+        linker = self._create_linker(store)
+        return store, linker.instantiate(store, module)
+
+    def invoke(
+        self,
+        wasm_path: str,
+        input_data: str | dict,
+        execution_id: str | None = None,
+    ) -> WasmToolResult:
         """Execute a WASM tool with the given input.
 
         Args:
             wasm_path: Path to the .wasm file
             input_data: JSON string or dict to pass as input
+            execution_id: Optional execution ID for log correlation
 
         Returns:
             WasmToolResult with output, success status, and timing
         """
-        if isinstance(input_data, dict):
-            input_json = json.dumps(input_data)
-        else:
-            input_json = input_data
+        input_json = json.dumps(input_data) if isinstance(input_data, dict) else input_data
 
+        logger.info(
+            "WASM invoke: path=%s input_bytes=%d fuel=%d",
+            wasm_path, len(input_json), self._fuel_limit,
+            extra=_log_extra(
+                execution_id,
+                event="wasm_invoke", wasm_path=wasm_path,
+                input_bytes=len(input_json), fuel_limit=self._fuel_limit,
+            ),
+        )
         start_time = time.monotonic()
 
         try:
-            store = self._create_store()
-            module = self._load_module(wasm_path)
-            linker = self._create_linker(store)
+            store, instance = self._instantiate(wasm_path)
 
-            # Instantiate the module
-            instance = linker.instantiate(store, module)
-
-            # Look for the 'run' export
             run_func = instance.exports(store).get("run")
             if run_func is None:
-                # Try component model style
                 raise WasmExecutionError(
                     "WASM module does not export a 'run' function. "
                     "Ensure the module implements the blackbeard:tool interface."
                 )
 
-            # Call the function
             result = run_func(store, input_json)
 
             duration_ms = int((time.monotonic() - start_time) * 1000)
+            fuel_remaining = store.get_fuel()
+            fuel_consumed = self._fuel_limit - fuel_remaining
 
-            # Parse result — could be a string or structured
+            logger.info(
+                "WASM completed: path=%s duration_ms=%d fuel_consumed=%d",
+                wasm_path, duration_ms, fuel_consumed,
+                extra=_log_extra(
+                    execution_id,
+                    event="wasm_completed", wasm_path=wasm_path,
+                    duration_ms=duration_ms, fuel_consumed=fuel_consumed,
+                    fuel_remaining=fuel_remaining,
+                ),
+            )
+
             if isinstance(result, str):
                 try:
                     parsed = json.loads(result)
@@ -230,8 +263,17 @@ class WasmSandbox:
             duration_ms = int((time.monotonic() - start_time) * 1000)
             error_msg = str(e)
 
-            # Check for fuel exhaustion
-            if "fuel" in error_msg.lower() or "out of fuel" in error_msg.lower():
+            logger.error(
+                "WASM failed: path=%s duration_ms=%d error=%s",
+                wasm_path, duration_ms, error_msg,
+                extra=_log_extra(
+                    execution_id,
+                    event="wasm_failed", wasm_path=wasm_path,
+                    duration_ms=duration_ms, error_type=type(e).__name__,
+                ),
+            )
+
+            if "fuel" in error_msg.lower():
                 raise WasmTimeoutError(
                     f"WASM tool exceeded fuel limit ({self._fuel_limit}): {error_msg}"
                 ) from e
@@ -243,15 +285,22 @@ class WasmSandbox:
 
         except Exception as e:
             duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.error(
+                "WASM unexpected error: path=%s duration_ms=%d error=%s",
+                wasm_path, duration_ms, e,
+                exc_info=True,
+                extra=_log_extra(
+                    execution_id,
+                    event="wasm_unexpected_error", wasm_path=wasm_path,
+                    duration_ms=duration_ms, error_type=type(e).__name__,
+                ),
+            )
             raise WasmExecutionError(f"Unexpected error during WASM execution: {e}") from e
 
     def describe(self, wasm_path: str) -> dict | None:
         """Get tool metadata from a WASM module's 'describe' export."""
         try:
-            store = self._create_store()
-            module = self._load_module(wasm_path)
-            linker = self._create_linker(store)
-            instance = linker.instantiate(store, module)
+            store, instance = self._instantiate(wasm_path)
 
             describe_func = instance.exports(store).get("describe")
             if describe_func is None:
@@ -263,7 +312,11 @@ class WasmSandbox:
             return None
 
         except Exception as e:
-            logger.warning(f"Failed to get WASM tool description: {e}")
+            logger.warning(
+                "Failed to get WASM tool description: %s", e,
+                exc_info=True,
+                extra={"event": "wasm_describe_failed", "wasm_path": wasm_path, "error_type": type(e).__name__},
+            )
             return None
 
     @property

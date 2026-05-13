@@ -56,6 +56,7 @@ spec:
     step: "myproject.callbacks:on_agent_step"       # Python qualified name
     before_action: null
     after_action: null
+  policy: null                         # ref:agent-policies/<name> — overrides crew/namespace default
   embedder:
     provider: openai
     config:
@@ -142,6 +143,9 @@ spec:
     after_kickoff: "myproject.hooks:process_output"
     step: null
     task: null
+  default_guardrails:                  # applied to all tasks unless task overrides
+    - ref: guardrails/no-pii-in-output
+  default_agent_policy: ref:agent-policies/standard   # applied to all agents unless agent overrides
   knowledge_sources:
     - ref: knowledge/company-docs
   embedder:
@@ -339,9 +343,10 @@ PRD 01 defines the core **workload resources** above. Additional resource kinds 
 | Automation | PRD 09 | Deployment | Deployed instance of a Crew or Flow |
 | WebhookEndpoint | PRD 11 | Integration | External webhook subscription |
 | Namespace | PRD 01 | Configuration | Logical subdivision with default policies |
+| ServiceAccount | PRD 01 | Identity | Machine identity for CI/CD, triggers, A2A |
 | Plugin | PRD 11 | Extensibility | Plugin manifest and configuration |
 
-All resource kinds follow the same `apiVersion/kind/metadata/spec` envelope and are stored in the unified `resources` table (§6). Each kind has its own JSON Schema for `spec` validation.
+All resource kinds follow the same `apiVersion/kind/metadata/spec` envelope and are stored in the unified `resources` table (§7). Each kind has its own JSON Schema for `spec` validation.
 
 ### 2.10 Namespace
 
@@ -372,7 +377,64 @@ spec:
 - Namespace quotas are enforced at resource creation time.
 - Namespace-scoped RoleBindings (PRD 03) use `scope.namespace` to target a specific namespace.
 
-## 3. Reference Resolution
+### 2.11 ServiceAccount
+
+A machine identity for CI/CD pipelines, scheduled automations, and A2A protocol interactions.
+
+```yaml
+# service-accounts/automation-runner.yaml
+apiVersion: blackbeard/v1
+kind: ServiceAccount
+metadata:
+  name: automation-runner
+  labels:
+    purpose: scheduled-execution
+spec:
+  description: "Identity for scheduled and triggered automation executions"
+  api_keys:
+    - name: primary
+      expires_at: "2027-01-01T00:00:00Z"   # optional, null = no expiry
+  permissions:
+    inherit_from: ref:users/admin@example.com   # optional, inherit creator's permissions
+```
+
+**Design notes:**
+- ServiceAccounts are subjects in RBAC (PRD 03 §2.1) — they can be bound to Roles via RoleBindings.
+- Each Automation references a ServiceAccount via `spec.service_account` (PRD 09). When a scheduled trigger fires, the ServiceAccount is the initiating principal in the execution's principal chain.
+- API keys associated with ServiceAccounts are stored encrypted. For MVP, encryption uses `BLACKBEARD_API_KEY` as the key derivation input. Post-MVP, keys are stored in Infisical.
+- ServiceAccounts are namespace-scoped like all other resources.
+
+## 3. Reference Syntax
+
+Resources reference each other using `ref:` syntax. This is the canonical specification for all reference forms.
+
+### 3.1 Reference Forms
+
+| Form | Syntax | Example | Used For |
+|------|--------|---------|----------|
+| **Local ref** | `ref: <kind-plural>/<name>` | `ref: agents/researcher` | Same-namespace reference |
+| **Cross-namespace** | `ref: <namespace>/<kind-plural>/<name>` | `ref: production/agents/researcher` | Explicit namespace |
+| **Repository** | `ref: repo:<kind-plural>/<name>@<version>` | `ref: repo:agents/market-researcher@2.0.0` | Asset from repository (PRD 10) |
+| **Label selector** | `"<kind-plural>/label:<key>=<value>"` | `"tools/label:category=search"` | Match by label (quoted string, not a ref) |
+
+### 3.2 Syntax Rules
+
+1. `ref:` is always a **value prefix** in list items: `- ref: tools/serper-search`
+2. When `ref` is a **field name** (e.g., `spec.source.ref`), the value is a bare path without the `ref:` prefix: `ref: crews/research-crew`
+3. Label selectors are **quoted strings**, not refs. They are resolved at runtime, not at validation time.
+4. Repository refs require explicit version pinning for v1 (`@2.0.0`). `@latest` resolves to a specific version at install time.
+5. Cross-namespace refs require the referencing subject to have `get` permission on the target namespace.
+
+### 3.3 Resolution
+
+References are resolved via topological sort with cycle detection (§4). Resolution order:
+1. Parse the ref string → extract kind, name, optional namespace
+2. Look up in `resource_refs` table
+3. If cross-namespace, verify RBAC permission
+4. If repository ref, check local install first, then repository
+5. If label selector, query `resources` table with label filter
+
+## 4. Reference Resolution
 
 All `ref:` values are resolved at load time by the **Resource Loader**:
 
@@ -400,21 +462,21 @@ References are resolved within the **current namespace** by default:
 
 If a reference is ambiguous (resource exists in multiple namespaces), the resolver returns an error requiring an explicit namespace prefix.
 
-## 4. Versioning & Schema Evolution
+## 5. Versioning & Schema Evolution
 
 - Each resource has `apiVersion: blackbeard/v1`.
 - Breaking changes → new apiVersion (`blackbeard/v2`).
 - The loader supports multiple apiVersions simultaneously and applies schema migrations. When a resource at `blackbeard/v1` is loaded alongside resources at `blackbeard/v2`, the loader applies schema migrations to normalize all resources to the latest version before building the runtime graph.
 - Resources are stored in the database with their raw YAML plus a normalised relational projection for queries.
 
-## 5. Validation
+## 6. Validation
 
 - JSON Schema derived from each resource kind's spec.
 - Pre-save validation in the API layer.
 - CLI command: `blackbeard validate ./path/to/resources/` for offline checking.
 - Python callback paths are validated as importable at deployment time, not at definition time.
 
-## 6. Database Schema (Relational Projection)
+## 7. Database Schema (Relational Projection)
 
 ```
 resources
@@ -456,7 +518,7 @@ Indexes:
 
 **Scalability note:** The single `resources` table works well for small-to-medium deployments (< 10,000 resources). For larger deployments, consider kind-specific materialized views or composite indexes on `(kind, namespace, name)` for frequently-queried kinds. The `resource_refs` table is the primary mechanism for cross-reference queries and should be indexed on both `(source_id)` and `(target_kind, target_name)`.
 
-## 7. API Surface
+## 8. API Surface
 
 ```
 GET    /api/v1/agents                     # list resources of a kind
@@ -483,7 +545,7 @@ The unscoped URLs default to the user's active namespace.
 
 All endpoints honour RBAC (PRD 03).
 
-## 8. Events Emitted
+## 9. Events Emitted
 
 | Event | Payload |
 |-------|---------|
@@ -492,13 +554,13 @@ All endpoints honour RBAC (PRD 03).
 | `resource.deleted` | `{kind, name}` |
 | `resource.validation_failed` | `{kind, name, errors}` |
 
-## 9. Non-Goals (v1)
+## 10. Non-Goals (v1)
 
 - Multi-tenancy with full org hierarchy (single org for v1; multi-org deferred). Namespaces exist within the org for logical separation.
 - Git-based GitOps sync (planned for v2, not required for v1 launch).
 - Automatic Python code generation from YAML (YAML references code, never generates it).
 
-## 10. Acceptance Criteria
+## 11. Acceptance Criteria
 
 1. All workload resource kinds defined in this PRD (§2.1–2.8) can be created via YAML file upload and API. Other resource kinds (§2.9) are validated and created by their respective modules.
 2. `ref:` cross-references resolve correctly; cycles produce a clear error.

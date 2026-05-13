@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { api } from '@/api/client'
 
+export const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled'])
+
 export interface ExecutionTask {
   id: string
   task_name: string
@@ -9,6 +11,10 @@ export interface ExecutionTask {
   status: string
   output: string | null
   error: string | null
+  tokens_used: number
+  cost_usd: number
+  started_at: string | null
+  completed_at: string | null
 }
 
 export interface Execution {
@@ -20,12 +26,15 @@ export interface Execution {
   outputs: Record<string, unknown> | null
   error: string | null
   total_tokens: number
+  prompt_tokens: number
+  completion_tokens: number
   cost_usd: number
+  langfuse_trace_id: string | null
+  langfuse_trace_url: string | null
   created_at: string
   started_at: string | null
   completed_at: string | null
   tasks: ExecutionTask[]
-  langfuse_trace_url: string | null
 }
 
 interface ExecutionState {
@@ -39,6 +48,13 @@ interface ExecutionState {
   kickoff: (crewName: string, inputs: Record<string, unknown>) => Promise<Execution>
   cancelExecution: (id: string) => Promise<void>
   pollExecution: (id: string) => Promise<void>
+  pollExecutions: (crewName?: string) => Promise<void>
+}
+
+function executionsPath(crewName?: string): string {
+  return crewName
+    ? `/api/v1/executions?crew_name=${encodeURIComponent(crewName)}`
+    : '/api/v1/executions'
 }
 
 export const useExecutionStore = create<ExecutionState>((set) => ({
@@ -50,10 +66,7 @@ export const useExecutionStore = create<ExecutionState>((set) => ({
   fetchExecutions: async (crewName?: string) => {
     set({ loading: true, error: null })
     try {
-      const path = crewName
-        ? `/api/v1/executions?crew_name=${encodeURIComponent(crewName)}`
-        : '/api/v1/executions'
-      const result = await api.get<{ items: Execution[]; total: number }>(path)
+      const result = await api.get<{ items: Execution[]; total: number }>(executionsPath(crewName))
       set({ executions: result.items, loading: false })
     } catch (err) {
       set({ error: (err as Error).message, loading: false })
@@ -79,8 +92,7 @@ export const useExecutionStore = create<ExecutionState>((set) => ({
   },
 
   cancelExecution: async (id: string) => {
-    await api.post<void>(`/api/v1/executions/${id}/cancel`, {})
-    const updated = await api.get<Execution>(`/api/v1/executions/${id}`)
+    const updated = await api.patch<Execution>(`/api/v1/executions/${id}/cancel`)
     set((state) => ({
       executions: state.executions.map((e) => (e.id === id ? updated : e)),
       currentExecution: state.currentExecution?.id === id ? updated : state.currentExecution,
@@ -94,5 +106,14 @@ export const useExecutionStore = create<ExecutionState>((set) => ({
         state.currentExecution?.id === id ? execution : state.currentExecution,
       executions: state.executions.map((e) => (e.id === id ? execution : e)),
     }))
+  },
+
+  pollExecutions: async (crewName?: string) => {
+    try {
+      const result = await api.get<{ items: Execution[]; total: number }>(executionsPath(crewName))
+      set({ executions: result.items })
+    } catch {
+      // Silently ignore poll failures to avoid flashing errors
+    }
   },
 }))

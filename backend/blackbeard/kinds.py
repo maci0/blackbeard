@@ -20,14 +20,18 @@ class ResourceKind(str, enum.Enum):
 
 # Kind value string → URL plural path segment
 KIND_TO_PLURAL: dict[str, str] = {
-    "Agent": "agents",
-    "Task": "tasks",
-    "Crew": "crews",
-    "Tool": "tools",
-    "LLMConnection": "llm-connections",
-    "AgentPolicy": "agent-policies",
-    "Guardrail": "guardrails",
+    ResourceKind.AGENT.value: "agents",
+    ResourceKind.TASK.value: "tasks",
+    ResourceKind.CREW.value: "crews",
+    ResourceKind.TOOL.value: "tools",
+    ResourceKind.LLM_CONNECTION.value: "llm-connections",
+    ResourceKind.AGENT_POLICY.value: "agent-policies",
+    ResourceKind.GUARDRAIL.value: "guardrails",
 }
+
+assert set(KIND_TO_PLURAL.keys()) == {k.value for k in ResourceKind}, (
+    f"KIND_TO_PLURAL keys {set(KIND_TO_PLURAL.keys())} don't match ResourceKind values"
+)
 
 # URL plural → Kind value string
 PLURAL_TO_KIND: dict[str, str] = {v: k for k, v in KIND_TO_PLURAL.items()}
@@ -37,8 +41,8 @@ PLURAL_TO_KIND_ENUM: dict[str, ResourceKind] = {
     plural: ResourceKind(kind) for plural, kind in PLURAL_TO_KIND.items()
 }
 
-# All valid kind plural strings
-ALL_PLURALS: list[str] = list(KIND_TO_PLURAL.values())
-
 # All valid kind strings
 ALL_KINDS: list[str] = list(KIND_TO_PLURAL.keys())
+
+# Regex for valid resource/namespace names (used across API and CLI layers)
+NAME_PATTERN = r"^[a-z0-9][a-z0-9\-]*$"

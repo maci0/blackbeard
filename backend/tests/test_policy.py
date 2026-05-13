@@ -26,8 +26,8 @@ def test_default_policy_allows_all():
 
 def test_allowlist_allows_listed_tool():
     policy = AgentPolicy({"tools": {"mode": "allowlist", "allow": ["web_search", "calculator"]}})
-    # Should not raise
-    policy.check_tool_access("agent-1", "web_search")
+    result = policy.check_tool_access("agent-1", "web_search")
+    assert result is None
 
 
 def test_allowlist_denies_unlisted_tool():
@@ -46,8 +46,8 @@ def test_allowlist_denies_unlisted_tool():
 
 def test_denylist_allows_unlisted_tool():
     policy = AgentPolicy({"tools": {"mode": "denylist", "deny": ["file_writer"]}})
-    # "web_search" is not in deny list → should not raise
-    policy.check_tool_access("agent-1", "web_search")
+    result = policy.check_tool_access("agent-1", "web_search")
+    assert result is None
 
 
 def test_denylist_denies_listed_tool():
@@ -65,9 +65,8 @@ def test_denylist_denies_listed_tool():
 
 def test_all_mode_allows_everything():
     policy = AgentPolicy({"tools": {"mode": "all"}})
-    # Neither of these should raise
-    policy.check_tool_access("agent-1", "any_tool")
-    policy.check_tool_access("agent-1", "another_tool")
+    assert policy.check_tool_access("agent-1", "any_tool") is None
+    assert policy.check_tool_access("agent-1", "another_tool") is None
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +122,18 @@ def test_resolve_fallback_to_default():
     assert resolved is DEFAULT_POLICY
 
 
+def test_resolve_agent_policy_overrides_crew_default():
+    """Agent-level policy should take priority over crew-level default."""
+    agent_spec = {"role": "researcher", "policy": "agent-policy"}
+    crew_spec = {"default_agent_policy": "crew-policy"}
+    policies = {
+        "agent-policy": {"tools": {"mode": "allowlist", "allow": ["web_search"]}},
+        "crew-policy": {"tools": {"mode": "denylist", "deny": ["file_writer"]}},
+    }
+    resolved = resolve_policy(agent_spec, crew_spec=crew_spec, policies=policies)
+    assert resolved.tool_mode == "allowlist"
+
+
 def test_resolve_missing_agent_policy_falls_to_crew():
     """If agent references a non-existent policy, fall through to crew default."""
     agent_spec = {"role": "researcher", "policy": "ghost-policy"}
@@ -144,3 +155,38 @@ def test_policy_denied_error_message():
     assert err.agent == "my-agent"
     assert err.action == "use tool 'rm'"
     assert err.reason == "Tool is in denylist"
+
+
+# ---------------------------------------------------------------------------
+# Edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_allowlist_empty_denies_everything():
+    """An allowlist with no entries should deny all tools."""
+    policy = AgentPolicy({"tools": {"mode": "allowlist", "allow": []}})
+    with pytest.raises(PolicyDeniedError):
+        policy.check_tool_access("agent-1", "any_tool")
+
+
+def test_denylist_empty_allows_everything():
+    """A denylist with no entries should allow all tools."""
+    policy = AgentPolicy({"tools": {"mode": "denylist", "deny": []}})
+    assert policy.check_tool_access("agent-1", "any_tool") is None
+
+
+def test_default_policy_properties():
+    """DEFAULT_POLICY should have no budget or sandbox constraints."""
+    assert DEFAULT_POLICY.max_budget_usd is None
+    assert DEFAULT_POLICY.max_tokens is None
+    assert DEFAULT_POLICY.minimum_sandbox_tier == "none"
+    assert DEFAULT_POLICY.allowed_tools == set()
+    assert DEFAULT_POLICY.denied_tools == set()
+
+
+def test_resolve_policy_both_missing_use_default():
+    """When both agent and crew policies reference non-existent names, fall to default."""
+    agent_spec = {"role": "researcher", "policy": "ghost-agent"}
+    crew_spec = {"default_agent_policy": "ghost-crew"}
+    resolved = resolve_policy(agent_spec, crew_spec=crew_spec, policies={})
+    assert resolved is DEFAULT_POLICY

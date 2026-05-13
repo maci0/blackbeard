@@ -3,7 +3,8 @@ import { ReactFlowProvider, MarkerType } from '@xyflow/react'
 import { useNavigate } from 'react-router-dom'
 import { useStudioStore } from '@/stores/studioStore'
 import { api } from '@/api/client'
-import { capitalize, toResourceName } from '@/lib/utils'
+import { capitalize, toResourceName, parseRef } from '@/lib/utils'
+import { useDocumentTitle } from '@/lib/hooks'
 import { KIND_TO_PLURAL } from '@/lib/kinds'
 import Palette from '@/components/studio/Palette'
 import Canvas from '@/components/studio/Canvas'
@@ -28,6 +29,9 @@ function buildResourceBody(node: Node, crewName: string) {
     (data['name'] as string | undefined) ??
     node.id
 
+  // 'name' is used for metadata.name, not a spec field — exclude to avoid validation failure
+  const { name: _, ...spec } = data
+
   return {
     apiVersion: 'blackbeard/v1',
     kind: capitalize(type),
@@ -35,18 +39,8 @@ function buildResourceBody(node: Node, crewName: string) {
       name: toResourceName(rawName),
       labels: { crew: crewName },
     },
-    spec: data,
+    spec,
   }
-}
-
-/* ------------------------------------------------------------------ */
-/* Ref parser                                                          */
-/* ------------------------------------------------------------------ */
-
-function parseRef(ref: string): string {
-  // "ref:agents/my-agent" → "my-agent"
-  const idx = ref.lastIndexOf('/')
-  return idx >= 0 ? ref.slice(idx + 1) : ref
 }
 
 /* ------------------------------------------------------------------ */
@@ -69,11 +63,7 @@ function StudioInner() {
   const { nodes, selectedNodeId, setNodes, setEdges, markClean, dirty, canUndo, canRedo, undo, redo } =
     useStudioStore()
 
-  /* ── Document title ── */
-  useEffect(() => {
-    document.title = 'Studio | Blackbeard'
-    return () => { document.title = 'Blackbeard' }
-  }, [])
+  useDocumentTitle('Studio')
 
   /* ── Clear timeout on unmount ── */
   useEffect(() => {

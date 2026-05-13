@@ -5,7 +5,6 @@ lightweight Resource stubs and calls the config generator directly.
 """
 
 import yaml
-import pytest
 
 from blackbeard.litellm.config_gen import generate_litellm_config
 from blackbeard.kinds import ResourceKind
@@ -134,11 +133,14 @@ def test_generate_config_with_base_url():
 
 
 def test_generate_config_empty_list():
-    """Empty list of connections should produce a config with no model_list entries."""
+    """Empty list of connections should produce a valid config with all sections."""
     config_str = generate_litellm_config([])
     config = yaml.safe_load(config_str)
 
     assert config["model_list"] == []
+    assert "litellm_settings" in config
+    assert "general_settings" in config
+    assert "router_settings" in config
 
 
 def test_generate_config_structure():
@@ -182,3 +184,28 @@ def test_generate_config_is_valid_yaml():
     config_str = generate_litellm_config(conns)
     parsed = yaml.safe_load(config_str)
     assert isinstance(parsed, dict)
+
+
+def test_generate_config_model_name_with_special_chars():
+    """Model names with dots/slashes should be preserved in litellm_params."""
+    conn = make_llm_conn(
+        "special-conn",
+        {"provider": "vertex_ai", "model": "claude-3.5-sonnet@20240620"},
+    )
+    config_str = generate_litellm_config([conn])
+    config = yaml.safe_load(config_str)
+
+    entry = config["model_list"][0]
+    assert entry["model_name"] == "special-conn"
+    assert "claude-3.5-sonnet@20240620" in entry["litellm_params"]["model"]
+
+
+def test_generate_config_no_parameters_key():
+    """Connections without 'parameters' should not inject temperature/max_tokens."""
+    conn = make_llm_conn("bare-conn", {"provider": "openai", "model": "gpt-4o"})
+    config_str = generate_litellm_config([conn])
+    config = yaml.safe_load(config_str)
+
+    params = config["model_list"][0]["litellm_params"]
+    assert "temperature" not in params
+    assert "max_tokens" not in params

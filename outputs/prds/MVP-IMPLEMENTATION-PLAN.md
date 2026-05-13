@@ -423,7 +423,7 @@ Week 11  ████████ Phase 7 (finish) + Phase 8: Polish
 Week 12  ████████ Phase 8: Ship v0.1.0
 ```
 
-**Total**: ~14 weeks for a solo developer (includes buffer for WASM and Studio complexity), ~7 weeks for a pair, ~5 weeks for a team of 4.
+**Total**: ~12 weeks for a solo developer (includes 2 weeks buffer absorbed into Phase 4 WASM and Phase 6 Studio estimates), ~7 weeks for a pair, ~5 weeks for a team of 4.
 
 ---
 

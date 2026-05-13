@@ -7,8 +7,7 @@ The kind plural is mapped back to the ResourceKind enum.
 import re
 from collections import defaultdict
 
-from blackbeard.kinds import ResourceKind
-from blackbeard.kinds import PLURAL_TO_KIND_ENUM, KIND_TO_PLURAL, PLURAL_TO_KIND
+from blackbeard.kinds import PLURAL_TO_KIND_ENUM, ResourceKind
 
 REF_PATTERN = re.compile(r"^ref:([a-z\-]+)/([a-z0-9][a-z0-9\-]*)$")
 
@@ -29,6 +28,8 @@ class CycleError(Exception):
 class RefInfo:
     """Parsed reference information."""
 
+    __slots__ = ("kind", "name", "raw", "field")
+
     def __init__(self, kind: ResourceKind, name: str, raw: str, field: str):
         self.kind = kind
         self.name = name
@@ -43,7 +44,8 @@ def parse_ref(value: str, field: str = "") -> RefInfo | None:
     """Parse a ref string like 'ref:agents/researcher'.
 
     Returns None if the value is not a ref (just a plain string).
-    Raises RefParseError if it looks like a ref but is malformed.
+    Raises RefParseError if it looks like a ref but is malformed or
+    uses an unknown resource kind.
     """
     if not isinstance(value, str) or not value.startswith("ref:"):
         return None
@@ -98,16 +100,19 @@ def detect_cycles(
         color[node] = GRAY
         for neighbor in adjacency.get(node, []):
             if color[neighbor] == GRAY:
-                # Found a cycle — reconstruct it
-                cycle = [neighbor, node]
+                # Found a cycle — reconstruct path from node back to neighbor via parents
+                cycle = []
                 current = node
                 max_depth = len(adjacency) + 1
                 depth = 0
-                while current != neighbor and depth < max_depth:
+                while depth < max_depth:
+                    cycle.append(current)
+                    if current == neighbor:
+                        break
                     current = parent.get(current, "")
                     depth += 1
-                    if current and current != neighbor:
-                        cycle.append(current)
+                    if not current:
+                        break
                 cycle.reverse()
                 cycle.append(neighbor)  # close the cycle
                 cycles.append(cycle)

@@ -8,32 +8,32 @@ version = "0.1.0"
 description = "Open, self-hosted Agent Management Platform wrapping CrewAI"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.115,<1",
-    "uvicorn[standard]>=0.32,<1",
+    "fastapi>=0.136,<1",
+    "uvicorn[standard]>=0.34,<1",
     "sqlalchemy[asyncio]>=2.0,<3",
     "asyncpg>=0.30,<1",
-    "alembic>=1.14,<2",
-    "pydantic>=2.10,<3",
-    "pydantic-settings>=2.7,<3",
-    # valkey — add back when caching layer is implemented
-    "crewai>=0.108,<1",
-    "langfuse>=2.60,<3",
-    "wasmtime>=28,<30",
+    "alembic>=1.15,<2",
+    "pydantic>=2.11,<3",
+    "pydantic-settings>=2.9,<3",
+    # valkey health checks use redis.asyncio (wire-compatible); no valkey package needed
+    "crewai>=1.14,<2",
+    "langfuse>=4.6,<5",
+    "wasmtime>=42,<43",
     "click>=8.1,<9",
-    "rich>=13.0,<14",
+    "rich>=14.0,<15",
     "pyyaml>=6.0,<7",
-    "sse-starlette>=2.0,<3",
+    "sse-starlette>=2.2,<3",
     "httpx>=0.28,<1",
     "jsonschema>=4.23,<5",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0,<9",
-    "pytest-asyncio>=0.24,<1",
-    "pytest-cov>=6.0,<7",
-    "ruff>=0.8,<1",
-    "mypy>=1.13,<2",
+    "pytest>=8.3,<9",
+    "pytest-asyncio>=0.25,<1",
+    "pytest-cov>=6.1,<7",
+    "ruff>=0.11,<1",
+    "mypy>=1.15,<2",
     "aiosqlite>=0.20,<1",
 ]
 
@@ -41,14 +41,14 @@ dev = [
 blackbeard = "blackbeard.cli.__main__:cli"
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 strict = true
 plugins = ["pydantic.mypy"]
 

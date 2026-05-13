@@ -1,53 +1,34 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Play, ChevronRight, RefreshCw, AlertTriangle, ArrowRight } from 'lucide-react'
-import { useExecutionStore } from '@/stores/executionStore'
+import { useDocumentTitle, usePolling } from '@/lib/hooks'
+import { useExecutionStore, TERMINAL_STATUSES } from '@/stores/executionStore'
 import { cn } from '@/lib/utils'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Spinner } from '@/components/ui/Spinner'
 import { formatDate, getDuration, formatCost } from '@/lib/formatters'
-import { TERMINAL_STATUSES } from '@/lib/kinds'
 
 export default function Executions() {
   const navigate = useNavigate()
   const { executions, loading, error, fetchExecutions } = useExecutionStore()
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const loadExecutions = () => fetchExecutions()
 
   useEffect(() => {
     loadExecutions()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, [])
 
-  // Auto-refresh every 5s if any execution is still running
-  useEffect(() => {
-    const hasRunning = executions.some((e) => !TERMINAL_STATUSES.has(e.status))
+  const hasRunning = useMemo(
+    () => executions.some((e) => !TERMINAL_STATUSES.has(e.status)),
+    [executions],
+  )
 
-    if (hasRunning && !intervalRef.current) {
-      intervalRef.current = setInterval(() => {
-        fetchExecutions()
-      }, 5000)
-    } else if (!hasRunning && intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
+  const pollExecutions = useExecutionStore((state) => state.pollExecutions)
+  const doPoll = useCallback(() => pollExecutions(), [pollExecutions])
+  usePolling(doPoll, 5000, hasRunning)
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [executions])
-
-  const hasRunning = executions.some((e) => !TERMINAL_STATUSES.has(e.status))
-
-  useEffect(() => {
-    document.title = 'Executions | Blackbeard'
-    return () => { document.title = 'Blackbeard' }
-  }, [])
+  useDocumentTitle('Executions')
 
   return (
     <div className="flex-1 overflow-auto">
@@ -71,6 +52,7 @@ export default function Executions() {
           </div>
           <button
             onClick={loadExecutions}
+            aria-label="Refresh executions"
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md bg-background hover:bg-accent transition-colors"
           >
             <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin motion-reduce:animate-none')} />
@@ -85,7 +67,7 @@ export default function Executions() {
               <AlertTriangle className="h-4 w-4 shrink-0" />
               {error}
             </span>
-            <button onClick={loadExecutions} className="text-xs underline underline-offset-2">
+            <button onClick={loadExecutions} className="text-xs underline underline-offset-2" aria-label="Retry loading executions">
               Retry
             </button>
           </div>
@@ -124,7 +106,7 @@ export default function Executions() {
                 ) : executions.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-16 text-center">
-                      <Play className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
+                      <Play aria-hidden="true" className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
                       <p className="font-medium text-muted-foreground">No executions yet</p>
                       <p className="text-sm text-muted-foreground/70 mt-1">
                         Run a crew from the Studio to see results here
@@ -151,6 +133,7 @@ export default function Executions() {
                       }}
                       tabIndex={0}
                       role="row"
+                      aria-label={`${execution.crew_name} — ${execution.status} — press Enter to view details`}
                       className="border-b last:border-0 hover:bg-muted/40 cursor-pointer transition-colors group focus-visible:outline-none focus-visible:bg-muted/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     >
                       <td className="px-4 py-3">
@@ -160,10 +143,12 @@ export default function Executions() {
                       <td className="px-4 py-3 text-muted-foreground">
                         {execution.total_tokens > 0
                           ? execution.total_tokens.toLocaleString()
-                          : '—'}
+                          : <span aria-label="none">—</span>}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
-                        {formatCost(execution.cost_usd)}
+                        {execution.cost_usd > 0
+                          ? formatCost(execution.cost_usd)
+                          : <span aria-label="none">—</span>}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {formatDate(execution.created_at)}
@@ -172,7 +157,7 @@ export default function Executions() {
                         {getDuration(execution.started_at, execution.completed_at)}
                       </td>
                       <td className="px-4 py-3">
-                        <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                        <ChevronRight aria-hidden="true" className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
                       </td>
                     </tr>
                   ))

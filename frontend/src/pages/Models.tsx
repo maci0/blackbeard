@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { useDocumentTitle } from '@/lib/hooks'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   Plus,
@@ -10,6 +11,7 @@ import {
   Server,
   Thermometer,
   Hash,
+  Check,
 } from 'lucide-react'
 import { useResourceStore, type Resource } from '@/stores/resourceStore'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -21,11 +23,11 @@ import { cn } from '@/lib/utils'
 /* ------------------------------------------------------------------ */
 
 const PROVIDER_CLASSES: Record<string, string> = {
-  openai: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  anthropic: 'bg-violet-100 text-violet-700 border-violet-200',
-  vertex_ai: 'bg-blue-100 text-blue-700 border-blue-200',
-  azure: 'bg-sky-100 text-sky-700 border-sky-200',
-  ollama: 'bg-orange-100 text-orange-700 border-orange-200',
+  openai: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 dark:border-emerald-800',
+  anthropic: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900 dark:text-violet-300 dark:border-violet-800',
+  vertex_ai: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-800',
+  azure: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900 dark:text-sky-300 dark:border-sky-800',
+  ollama: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900 dark:text-orange-300 dark:border-orange-800',
 }
 
 const PROVIDER_DISPLAY: Record<string, string> = {
@@ -43,7 +45,7 @@ function ProviderBadge({ provider }: { provider: string }) {
     <span
       className={cn(
         'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border',
-        PROVIDER_CLASSES[provider] ?? 'bg-gray-100 text-gray-600 border-gray-200',
+        PROVIDER_CLASSES[provider] ?? 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
       )}
     >
       {label}
@@ -92,7 +94,7 @@ function ModelCard({
               e.stopPropagation()
               onDelete()
             }}
-            className="opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0"
+            className="opacity-40 group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0"
             title="Delete connection"
             aria-label="Delete connection"
           >
@@ -116,7 +118,7 @@ function ModelCard({
         {spec.model && (
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Model</span>
-            <span className="text-xs font-mono font-medium truncate max-w-[160px]">
+            <span className="text-xs font-mono font-medium truncate max-w-[160px]" title={spec.model}>
               {spec.model}
             </span>
           </div>
@@ -226,7 +228,7 @@ function AddModelDialog({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40" />
+        <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" />
         <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[480px] max-w-[90vw] bg-card border rounded-xl shadow-2xl overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b">
@@ -243,7 +245,7 @@ function AddModelDialog({
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="p-5 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <fieldset disabled={submitting} className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label htmlFor="model-name" className="block text-xs font-medium mb-1.5">
                   Name <span className="text-destructive">*</span>
@@ -255,7 +257,7 @@ function AddModelDialog({
                   value={form.name}
                   onChange={set('name')}
                   placeholder="my-gpt4-connection"
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono"
+                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono disabled:opacity-50"
                 />
               </div>
 
@@ -265,7 +267,7 @@ function AddModelDialog({
                   id="model-provider"
                   value={form.provider}
                   onChange={set('provider')}
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                 >
                   {PROVIDER_OPTIONS.map((p) => (
                     <option key={p.value} value={p.value}>
@@ -286,7 +288,7 @@ function AddModelDialog({
                   value={form.model}
                   onChange={set('model')}
                   placeholder="gpt-4o"
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono"
+                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono disabled:opacity-50"
                 />
               </div>
 
@@ -300,7 +302,7 @@ function AddModelDialog({
                   step="0.1"
                   value={form.temperature}
                   onChange={set('temperature')}
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                 />
                 <p className="text-xs text-muted-foreground/70 mt-1">Range: 0.0 – 2.0</p>
               </div>
@@ -313,11 +315,11 @@ function AddModelDialog({
                   min="1"
                   value={form.max_tokens}
                   onChange={set('max_tokens')}
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                 />
                 <p className="text-xs text-muted-foreground/70 mt-1">Minimum 1</p>
               </div>
-            </div>
+            </fieldset>
 
             {submitError && (
               <div role="alert" className="p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-center gap-2">
@@ -364,13 +366,16 @@ export default function Models() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => { if (successTimerRef.current) clearTimeout(successTimerRef.current) }
+  }, [])
 
   const models = resources['llm-connections'] ?? []
 
-  useEffect(() => {
-    document.title = 'LLM Connections | Blackbeard'
-    return () => { document.title = 'Blackbeard' }
-  }, [])
+  useDocumentTitle('LLM Connections')
 
   useEffect(() => {
     fetchResources('llm-connections')
@@ -395,6 +400,8 @@ export default function Models() {
         },
       })
       setAddOpen(false)
+      setSuccessMessage(`Connection "${form.name}" created`)
+      successTimerRef.current = setTimeout(() => setSuccessMessage(null), 5000)
     } catch (err) {
       setSubmitError((err as Error).message)
     } finally {
@@ -404,10 +411,13 @@ export default function Models() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return
+    const name = deleteTarget
     setDeleting(true)
     try {
-      await deleteResource('llm-connections', deleteTarget)
+      await deleteResource('llm-connections', name)
       setDeleteTarget(null)
+      setSuccessMessage(`Connection "${name}" deleted`)
+      successTimerRef.current = setTimeout(() => setSuccessMessage(null), 5000)
     } catch {
       // error already in store
     } finally {
@@ -437,7 +447,7 @@ export default function Models() {
               Refresh
             </button>
             <button
-              onClick={() => setAddOpen(true)}
+              onClick={() => { setSubmitError(null); setAddOpen(true) }}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90 transition-opacity"
             >
               <Plus className="h-4 w-4" />
@@ -446,11 +456,27 @@ export default function Models() {
           </div>
         </div>
 
+        {/* Success */}
+        {successMessage && (
+          <div role="status" className="mb-4 flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+            <Check className="h-4 w-4" />
+            {successMessage}
+            <button onClick={() => setSuccessMessage(null)} className="ml-auto p-0.5 rounded hover:bg-green-100 dark:hover:bg-green-900 transition-colors" aria-label="Dismiss">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Error */}
         {error && (
-          <div role="alert" className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            {error}
+          <div role="alert" className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {error}
+            </span>
+            <button onClick={() => fetchResources('llm-connections')} className="text-xs underline underline-offset-2" aria-label="Retry loading connections">
+              Retry
+            </button>
           </div>
         )}
 
@@ -465,7 +491,7 @@ export default function Models() {
         ) : models.length === 0 ? (
           <div className="border-2 border-dashed rounded-xl flex flex-col items-center justify-center py-24 px-6 text-center">
             <div className="p-4 rounded-full bg-muted mb-4">
-              <Cpu className="h-8 w-8 text-muted-foreground/50" />
+              <Cpu aria-hidden="true" className="h-8 w-8 text-muted-foreground/50" />
             </div>
             <p className="font-medium text-muted-foreground mb-1">No LLM connections</p>
             <p className="text-sm text-muted-foreground/70 mb-4">

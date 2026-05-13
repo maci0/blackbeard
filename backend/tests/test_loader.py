@@ -6,7 +6,7 @@ and litellm.LLM are all mocked so no network traffic is produced.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch
 
 from blackbeard.engine.loader import ResourceLoader, LoaderError
 from blackbeard.kinds import ResourceKind
@@ -122,6 +122,8 @@ def test_build_agent(mock_agent_cls, mock_llm_cls):
     assert kwargs["role"] == "Researcher"
     assert kwargs["goal"] == "Find things"
     assert kwargs["backstory"] == "Expert"
+    assert kwargs["verbose"] is True
+    assert kwargs["allow_delegation"] is False
 
 
 @patch("blackbeard.engine.loader.LLM")
@@ -148,6 +150,7 @@ def test_build_agent_with_llm_ref(mock_agent_cls, mock_llm_cls):
 
     _, kwargs = mock_agent_cls.call_args
     assert "llm" in kwargs
+    assert kwargs["llm"] is mock_llm_cls.return_value
 
 
 @patch("blackbeard.engine.loader.LLM")
@@ -199,6 +202,7 @@ def test_build_task(mock_task_cls, mock_agent_cls, mock_llm_cls):
     assert kwargs["description"] == "Do the thing"
     assert kwargs["expected_output"] == "The thing is done"
     assert "agent" in kwargs
+    assert kwargs["agent"] is mock_agent_cls.return_value
 
 
 @patch("blackbeard.engine.loader.LLM")
@@ -275,6 +279,8 @@ def test_build_crew(mock_crew_cls, mock_task_cls, mock_agent_cls, mock_llm_cls):
     _, kwargs = mock_crew_cls.call_args
     assert len(kwargs["agents"]) == 1
     assert len(kwargs["tasks"]) == 1
+    from crewai import Process
+    assert kwargs["process"] is Process.sequential
 
 
 # ---------------------------------------------------------------------------
@@ -293,27 +299,21 @@ def test_resolve_missing_ref_raises():
 @patch("blackbeard.engine.loader.Agent")
 def test_invalid_kind_raises(mock_agent_cls, mock_llm_cls):
     """Resolving a ref where the kind doesn't match should raise LoaderError."""
-    # Store a Task resource but try to load it as an Agent
     task_res = make_resource(
         ResourceKind.TASK,
         "oops",
         {"description": "D", "expected_output": "E"},
     )
-    loader = ResourceLoader(_resource_map(task_res))
-    # Try to build it as an LLMConnection via the agent path
+    loader = ResourceLoader({"Agent/oops": task_res})
     with pytest.raises(LoaderError, match="Expected Agent"):
-        # ref:agents/oops would look up "Agent/oops" — not found → LoaderError
-        # Instead, manually place it under Agent key to trigger kind mismatch
-        loader._resources["Agent/oops"] = task_res
-        loader._resources["Agent/oops"].kind = ResourceKind.TASK
         loader.build_agent("ref:agents/oops")
 
 
 def test_invalid_ref_string_raises():
-    """A non-ref string passed to _resolve_ref should raise LoaderError."""
+    """A non-ref string passed to build methods should raise LoaderError."""
     loader = ResourceLoader({})
     with pytest.raises(LoaderError, match="not a valid ref"):
-        loader._resolve_ref("not-a-ref-string")
+        loader.build_agent("not-a-ref-string")
 
 
 def test_build_crew_missing_crew_raises():
@@ -321,3 +321,159 @@ def test_build_crew_missing_crew_raises():
     loader = ResourceLoader({})
     with pytest.raises(LoaderError, match="not found"):
         loader.build_crew("ghost-crew")
+
+
+# ---------------------------------------------------------------------------
+# output_file path traversal protection (security-critical)
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+def test_build_task_rejects_path_traversal_in_output_file(mock_task_cls, mock_agent_cls, mock_llm_cls):
+    """output_file with path traversal should raise LoaderError."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "agent-a",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "bad-task",
+        {
+            "description": "D",
+            "expected_output": "E",
+            "agent": "ref:agents/agent-a",
+            "output_file": "../../../etc/passwd",
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res, task_res))
+    with pytest.raises(LoaderError, match="plain filename"):
+        loader.build_task("ref:tasks/bad-task")
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+def test_build_task_rejects_absolute_output_file(mock_task_cls, mock_agent_cls, mock_llm_cls):
+    """output_file with absolute path should raise LoaderError."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "agent-a",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "abs-task",
+        {
+            "description": "D",
+            "expected_output": "E",
+            "agent": "ref:agents/agent-a",
+            "output_file": "/tmp/output.txt",
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res, task_res))
+    with pytest.raises(LoaderError, match="plain filename"):
+        loader.build_task("ref:tasks/abs-task")
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+def test_build_task_accepts_safe_output_file(mock_task_cls, mock_agent_cls, mock_llm_cls):
+    """output_file with a plain filename should pass through."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "agent-a",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "safe-task",
+        {
+            "description": "D",
+            "expected_output": "E",
+            "agent": "ref:agents/agent-a",
+            "output_file": "report.json",
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res, task_res))
+    loader.build_task("ref:tasks/safe-task")
+
+    mock_task_cls.assert_called_once()
+    _, kwargs = mock_task_cls.call_args
+    assert kwargs["output_file"] == "report.json"
+
+
+# ---------------------------------------------------------------------------
+# Hierarchical crew with manager LLM
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+@patch("blackbeard.engine.loader.Crew")
+def test_build_crew_hierarchical_with_manager_llm(
+    mock_crew_cls, mock_task_cls, mock_agent_cls, mock_llm_cls
+):
+    """Hierarchical crew should set process=hierarchical and wire manager_llm."""
+    llm_res = make_resource(
+        ResourceKind.LLM_CONNECTION,
+        "mgr-llm",
+        {"provider": "openai", "model": "gpt-4o"},
+    )
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "agent-h",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "task-h",
+        {"description": "D", "expected_output": "E", "agent": "ref:agents/agent-h"},
+    )
+    crew_res = make_resource(
+        ResourceKind.CREW,
+        "hier-crew",
+        {
+            "process": "hierarchical",
+            "agents": ["ref:agents/agent-h"],
+            "tasks": ["ref:tasks/task-h"],
+            "manager_llm": "ref:llm-connections/mgr-llm",
+        },
+    )
+    loader = ResourceLoader(_resource_map(llm_res, agent_res, task_res, crew_res))
+    loader.build_crew("hier-crew")
+
+    _, kwargs = mock_crew_cls.call_args
+    assert kwargs["manager_llm"] is mock_llm_cls.return_value
+
+
+# ---------------------------------------------------------------------------
+# Task caching
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+def test_build_task_caching(mock_task_cls, mock_agent_cls, mock_llm_cls):
+    """build_task called twice returns the cached instance."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "ag",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "cached-task",
+        {"description": "D", "expected_output": "E", "agent": "ref:agents/ag"},
+    )
+    loader = ResourceLoader(_resource_map(agent_res, task_res))
+    t1 = loader.build_task("ref:tasks/cached-task")
+    t2 = loader.build_task("ref:tasks/cached-task")
+
+    assert t1 is t2
+    assert mock_task_cls.call_count == 1

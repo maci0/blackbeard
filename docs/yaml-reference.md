@@ -71,9 +71,9 @@ spec:
 | `max_rpm` | integer ≥ 1 | — | Rate limit for LLM calls |
 | `memory` | boolean | — | Enable cross-task memory |
 | `cache` | boolean | — | Cache tool results |
-| `system_template` | string | — | Custom system prompt template |
-| `prompt_template` | string | — | Custom task prompt template |
-| `response_template` | string | — | Custom response format template |
+| `system_template` | string | — | Custom system prompt template (stored but not yet passed to CrewAI at runtime) |
+| `prompt_template` | string | — | Custom task prompt template (stored but not yet passed to CrewAI at runtime) |
+| `response_template` | string | — | Custom response format template (stored but not yet passed to CrewAI at runtime) |
 
 ---
 
@@ -247,7 +247,7 @@ metadata:
     category: search
 spec:
   # --- Required ---
-  type: python                             # "python" or "wasm"
+  type: python                             # "python", "wasm", or "builtin"
 
   # --- For type: python ---
   class_path: crewai_tools.SerperDevTool  # Dotted import path to a BaseTool subclass
@@ -268,7 +268,7 @@ spec:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | `python`\|`wasm` | ✅ | Tool implementation type |
+| `type` | `python`\|`wasm`\|`builtin` | ✅ | Tool implementation type |
 | `class_path` | string | — | Dotted path to Python `BaseTool` subclass (required for `python`) |
 | `description` | string | — | Human-readable description of what the tool does |
 | `sandbox` | `none`\|`wasm` | — | Sandbox enforcement level (default `none`) |
@@ -327,15 +327,15 @@ spec:
 | `parameters.temperature` | number 0–2 | — | Sampling temperature |
 | `parameters.max_tokens` | integer ≥ 1 | — | Maximum response tokens |
 | `parameters.top_p` | number 0–1 | — | Nucleus sampling |
-| `parameters.frequency_penalty` | number | — | Frequency penalty |
-| `parameters.presence_penalty` | number | — | Presence penalty |
-| `parameters.stop` | string[] | — | Stop sequences |
+| `parameters.frequency_penalty` | number | — | Frequency penalty (stored but not yet passed to LiteLLM) |
+| `parameters.presence_penalty` | number | — | Presence penalty (stored but not yet passed to LiteLLM) |
+| `parameters.stop` | string[] | — | Stop sequences (stored but not yet passed to LiteLLM) |
 | `vertex.project` | string | — | GCP project (Vertex AI only) |
 | `vertex.location` | string | — | GCP region (Vertex AI only) |
-| `api_key_env` | string | — | Env var name holding the API key |
+| `api_key_env` | string | — | Env var name holding the API key (must be uppercase, ending in `_API_KEY`, `_KEY`, or `_SECRET`) |
 | `base_url` | string | — | Custom API base URL |
 
-> **Note:** Vertex AI project and region are configured in the LiteLLM proxy config (`deploy/litellm/config.yaml`), not in LLMConnection resources. The `vertex` section is optional — if omitted, the proxy's configuration is used.
+> **Note:** The `vertex` section is optional. If `vertex.project` or `vertex.location` are omitted, they fall back to the global `GOOGLE_CLOUD_PROJECT` and `CLOUD_ML_REGION` environment variables.
 
 ---
 

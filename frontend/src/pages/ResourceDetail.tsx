@@ -1,11 +1,14 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import * as TabsPrimitive from '@radix-ui/react-tabs'
-import Editor from '@monaco-editor/react'
-import { ArrowLeft, Trash2, Pencil, Save, X, AlertTriangle, Play, Check, Info } from 'lucide-react'
+import { Trash2, Pencil, Save, X, AlertTriangle, Play, Check, Info } from 'lucide-react'
+
+const Editor = lazy(() => import('@monaco-editor/react'))
 import { useResourceStore, type Resource } from '@/stores/resourceStore'
 import { api } from '@/api/client'
-import { cn, serializeValue } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { useDarkMode, useDocumentTitle } from '@/lib/hooks'
+import { resourceToYaml, parseYaml } from '@/lib/yaml'
 import { formatDate } from '@/lib/formatters'
 import { KindBadge } from '@/components/ui/KindBadge'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -13,125 +16,17 @@ import { RunDialog } from '@/components/studio/RunDialog'
 import { Spinner } from '@/components/ui/Spinner'
 
 /* ------------------------------------------------------------------ */
-/* YAML serializer                                                     */
+/* Shared primitives                                                   */
 /* ------------------------------------------------------------------ */
 
-function resourceToYaml(resource: Resource): string {
-  const lines = [
-    `apiVersion: ${resource.apiVersion}`,
-    `kind: ${resource.kind}`,
-    'metadata:',
-    `  name: ${resource.metadata.name}`,
-    `  namespace: ${resource.metadata.namespace || 'default'}`,
-  ]
-  const labels = resource.metadata.labels ?? {}
-  if (Object.keys(labels).length > 0) {
-    lines.push('  labels:')
-    for (const [k, v] of Object.entries(labels)) {
-      lines.push(`    ${k}: ${v}`)
-    }
-  }
-  lines.push('spec:')
-  for (const [k, v] of Object.entries(resource.spec)) {
-    const rendered = serializeValue(v, 2)
-    lines.push(rendered.startsWith('\n') ? `  ${k}:${rendered}` : `  ${k}: ${rendered}`)
-  }
-  lines.push(`version: ${resource.version}`)
-  return lines.join('\n')
-}
-
-/* ------------------------------------------------------------------ */
-/* Simple YAML parser (handles the common Blackbeard resource shape)   */
-/* ------------------------------------------------------------------ */
-
-function parseScalar(value: string): unknown {
-  if (!value || value === 'null' || value === '~') return null
-  if (value === 'true') return true
-  if (value === 'false') return false
-  if (/^-?\d+$/.test(value)) return parseInt(value, 10)
-  if (/^-?\d+\.\d+$/.test(value)) return parseFloat(value)
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value.slice(1, -1)
-  }
-  return value
-}
-
-function parseYaml(yamlStr: string): Record<string, unknown> {
-  const lines = yamlStr.split('\n')
-  const root: Record<string, unknown> = {}
-  const stack: Array<{ indent: number; obj: Record<string, unknown> }> = [
-    { indent: -2, obj: root },
-  ]
-
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i] ?? ''
-    i++
-    if (!line.trim() || line.trim().startsWith('#')) continue
-
-    const indent = line.search(/\S/)
-    const trimmed = line.trim()
-
-    // Pop stack to correct parent level
-    while (stack.length > 1 && (stack[stack.length - 1]?.indent ?? -2) >= indent) {
-      stack.pop()
-    }
-    const parent = stack[stack.length - 1]?.obj ?? root
-
-    // Skip bare list items (arrays handled below)
-    if (trimmed.startsWith('- ')) continue
-
-    const colonIdx = trimmed.indexOf(':')
-    if (colonIdx === -1) continue
-
-    const key = trimmed.slice(0, colonIdx).trim()
-    const rest = trimmed.slice(colonIdx + 1).trim()
-
-    if (rest === '|' || rest === '>') {
-      // Block scalar — collect following indented lines
-      const blockLines: string[] = []
-      const baseIndent = indent + 2
-      while (i < lines.length) {
-        const next = lines[i] ?? ''
-        if (!next.trim()) { blockLines.push(''); i++; continue }
-        if (next.search(/\S/) < baseIndent) break
-        blockLines.push(next.slice(baseIndent))
-        i++
-      }
-      parent[key] = blockLines.join('\n').trimEnd()
-    } else if (!rest) {
-      // Nested structure — peek ahead
-      const nextNonEmpty = lines.slice(i).find((l) => l.trim() && !l.trim().startsWith('#'))
-      if (nextNonEmpty && nextNonEmpty.trim().startsWith('- ')) {
-        // Array
-        const arr: unknown[] = []
-        parent[key] = arr
-        while (i < lines.length) {
-          const next = lines[i] ?? ''
-          if (!next.trim()) { i++; continue }
-          const ni = next.search(/\S/)
-          const nextTrimmed = next.trim()
-          if (ni <= indent && nextTrimmed && !nextTrimmed.startsWith('-')) break
-          if (nextTrimmed.startsWith('- ')) {
-            arr.push(parseScalar(nextTrimmed.slice(2).trim()))
-          }
-          i++
-        }
-      } else {
-        // Nested object
-        const obj: Record<string, unknown> = {}
-        parent[key] = obj
-        stack.push({ indent, obj })
-      }
-    } else {
-      parent[key] = parseScalar(rest)
-    }
-  }
-
-  return root
+function InlineAlert({ message }: { message: string | null }) {
+  if (!message) return null
+  return (
+    <div role="alert" className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-center gap-2">
+      <AlertTriangle className="h-4 w-4 shrink-0" />
+      {message}
+    </div>
+  )
 }
 
 /* ------------------------------------------------------------------ */
@@ -252,6 +147,12 @@ export default function ResourceDetail() {
   const [activeTab, setActiveTab] = useState('spec')
   const [showRunDialog, setShowRunDialog] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
+  const isDark = useDarkMode()
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
+  }, [])
 
   const loadResource = useCallback(async () => {
     setLoading(true)
@@ -271,12 +172,7 @@ export default function ResourceDetail() {
     loadResource()
   }, [loadResource])
 
-  useEffect(() => {
-    document.title = resource
-      ? `${resource.metadata.name} | Blackbeard`
-      : 'Resource | Blackbeard'
-    return () => { document.title = 'Blackbeard' }
-  }, [resource])
+  useDocumentTitle(resource ? resource.metadata.name : 'Resource')
 
   const handleEdit = () => {
     if (resource) setYamlContent(resourceToYaml(resource))
@@ -314,7 +210,7 @@ export default function ResourceDetail() {
       setYamlContent(resourceToYaml(updated))
       setEditMode(false)
       setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 3000)
+      saveTimerRef.current = setTimeout(() => setSaveSuccess(false), 5000)
     } catch (err) {
       setSaveError((err as Error).message)
     } finally {
@@ -387,14 +283,20 @@ export default function ResourceDetail() {
     <div className="flex-1 overflow-auto">
       <div className="p-6 max-w-4xl mx-auto">
 
-        {/* Back */}
-        <Link
-          to="/resources"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-5"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Resources
-        </Link>
+        {/* Breadcrumb */}
+        <nav aria-label="Breadcrumb" className="mb-5">
+          <ol className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <li>
+              <Link to="/resources" className="hover:text-foreground transition-colors">
+                Resources
+              </Link>
+            </li>
+            <li aria-hidden="true" className="text-muted-foreground/40">›</li>
+            <li>
+              <span className="text-foreground font-medium">{resource.metadata.name}</span>
+            </li>
+          </ol>
+        </nav>
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-6">
@@ -511,28 +413,21 @@ export default function ResourceDetail() {
         </div>
 
         {/* Save error */}
-        {saveError && (
-          <div role="alert" className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            {saveError}
-          </div>
-        )}
+        <InlineAlert message={saveError} />
 
         {/* Save success */}
         {saveSuccess && (
           <div role="status" className="mb-4 flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
             <Check className="h-4 w-4" />
             Saved successfully
+            <button onClick={() => setSaveSuccess(false)} className="ml-auto p-0.5 rounded hover:bg-green-100 dark:hover:bg-green-900 transition-colors" aria-label="Dismiss">
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
 
         {/* Run error */}
-        {runError && (
-          <div role="alert" className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            {runError}
-          </div>
-        )}
+        <InlineAlert message={runError} />
 
         {/* Tabs */}
         <TabsPrimitive.Root value={activeTab} onValueChange={setActiveTab}>
@@ -565,25 +460,27 @@ export default function ResourceDetail() {
                 <span>Editing in YAML mode. Changes will be validated on save.</span>
               </div>
             )}
-            <div className="border rounded-lg overflow-hidden">
-              <Editor
-                height="500px"
-                language="yaml"
-                value={yamlContent}
-                onChange={(v) => setYamlContent(v ?? '')}
-                options={{
-                  readOnly: !editMode,
-                  minimap: { enabled: false },
-                  fontSize: 13,
-                  lineNumbers: 'on',
-                  scrollBeyondLastLine: false,
-                  wordWrap: 'on',
-                  padding: { top: 12, bottom: 12 },
-                  renderLineHighlight: editMode ? 'line' : 'none',
-                  cursorStyle: editMode ? 'line' : 'underline',
-                }}
-                theme="vs"
-              />
+            <div className="border rounded-lg overflow-hidden" role="region" aria-label={editMode ? 'YAML editor' : 'YAML preview'}>
+              <Suspense fallback={<div className="h-[500px] flex items-center justify-center"><Spinner /></div>}>
+                <Editor
+                  height="500px"
+                  language="yaml"
+                  value={yamlContent}
+                  onChange={(v) => setYamlContent(v ?? '')}
+                  options={{
+                    readOnly: !editMode,
+                    minimap: { enabled: false },
+                    fontSize: 13,
+                    lineNumbers: 'on',
+                    scrollBeyondLastLine: false,
+                    wordWrap: 'on',
+                    padding: { top: 12, bottom: 12 },
+                    renderLineHighlight: editMode ? 'line' : 'none',
+                    cursorStyle: editMode ? 'line' : 'underline',
+                  }}
+                  theme={isDark ? 'vs-dark' : 'vs'}
+                />
+              </Suspense>
             </div>
             {!editMode && (
               <p className="mt-2 text-xs text-muted-foreground">
@@ -618,13 +515,16 @@ export default function ResourceDetail() {
         onConfirm={handleDelete}
         loading={deleting}
       />
-      {deleteOpen && deleteError && (
+      {deleteError && (
         <div
           role="alert"
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-sm w-full px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/30 text-sm text-destructive shadow-lg flex items-center gap-2"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {deleteError}
+          <button onClick={() => setDeleteError(null)} className="ml-auto p-0.5 rounded hover:bg-destructive/10 transition-colors" aria-label="Dismiss error">
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
 

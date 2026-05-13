@@ -17,7 +17,7 @@ export default memo(function ToolNode({ data, selected }: NodeProps) {
         'w-[160px] rounded-xl border bg-card shadow-sm overflow-hidden transition-all duration-150',
         selected
           ? 'border-emerald-400 ring-2 ring-emerald-300 ring-offset-1 shadow-emerald-100 shadow-md'
-          : 'border-slate-200 hover:border-emerald-200 hover:shadow-md',
+          : 'border-slate-200 dark:border-slate-700 hover:border-emerald-200 hover:shadow-md',
       )}
     >
       {/* Header strip */}
@@ -25,14 +25,14 @@ export default memo(function ToolNode({ data, selected }: NodeProps) {
         <div className="flex items-center justify-center w-5 h-5 rounded-md bg-white/20 text-white">
           <Wrench className="w-3 h-3" />
         </div>
-        <span className="text-[10px] font-bold text-white/90 uppercase tracking-widest">
+        <span className="text-[11px] font-bold text-white/90 uppercase tracking-widest">
           Tool
         </span>
       </div>
 
       {/* Body */}
       <div className="px-3 py-2.5 space-y-1.5">
-        <p className="font-semibold text-sm text-foreground truncate leading-tight">
+        <p className="font-semibold text-sm text-foreground truncate leading-tight" title={name ?? 'Unnamed Tool'}>
           {name ?? 'Unnamed Tool'}
         </p>
         {description && (
@@ -42,12 +42,12 @@ export default memo(function ToolNode({ data, selected }: NodeProps) {
         {/* Badges */}
         <div className="flex flex-wrap gap-1 pt-0.5">
           {toolType && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
               {toolType}
             </span>
           )}
           {sandboxLabel && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-100">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-100 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
               {sandboxLabel}
             </span>
           )}

@@ -43,7 +43,7 @@ interface ResourceState {
 }
 
 
-export const useResourceStore = create<ResourceState>((set, get) => ({
+export const useResourceStore = create<ResourceState>((set) => ({
   resources: {},
   loading: false,
   error: null,
@@ -92,18 +92,40 @@ export const useResourceStore = create<ResourceState>((set, get) => ({
     const kindPlural = KIND_TO_PLURAL[resource.kind]
     if (!kindPlural) throw new Error(`Unknown kind: ${resource.kind}`)
     const created = await api.post<Resource>(`/api/v1/${kindPlural}`, resource)
-    await get().fetchResources(kindPlural)
+    set((state) => {
+      const existing = state.resources[kindPlural] || []
+      const idx = existing.findIndex((r) => r.id === created.id)
+      const updated =
+        idx >= 0
+          ? existing.map((r, i) => (i === idx ? created : r))
+          : [...existing, created]
+      return { resources: { ...state.resources, [kindPlural]: updated } }
+    })
     return created
   },
 
   updateResource: async (kindPlural, name, data) => {
     const updated = await api.put<Resource>(`/api/v1/${kindPlural}/${name}`, data)
-    await get().fetchResources(kindPlural)
+    set((state) => ({
+      resources: {
+        ...state.resources,
+        [kindPlural]: (state.resources[kindPlural] || []).map((r) =>
+          r.metadata.name === name ? updated : r,
+        ),
+      },
+    }))
     return updated
   },
 
   deleteResource: async (kindPlural, name) => {
     await api.delete<void>(`/api/v1/${kindPlural}/${name}`)
-    await get().fetchResources(kindPlural)
+    set((state) => ({
+      resources: {
+        ...state.resources,
+        [kindPlural]: (state.resources[kindPlural] || []).filter(
+          (r) => r.metadata.name !== name,
+        ),
+      },
+    }))
   },
 }))

@@ -30,21 +30,27 @@ def get_langfuse() -> Langfuse | None:
         if _client is not None:
             return _client
 
-        if not settings.langfuse_public_key or not settings.langfuse_secret_key:
-            logger.info("Langfuse not configured (missing public/secret key), tracing disabled")
+        if not settings.langfuse_public_key or not settings.langfuse_secret_key.get_secret_value():
+            logger.info(
+                "Langfuse not configured (missing public/secret key), tracing disabled",
+                extra={"event": "langfuse_disabled"},
+            )
             return None
 
         try:
             _client = Langfuse(
                 public_key=settings.langfuse_public_key,
-                secret_key=settings.langfuse_secret_key,
+                secret_key=settings.langfuse_secret_key.get_secret_value(),
                 host=settings.langfuse_host,
                 release=f"blackbeard-{settings.app_name}",
             )
-            logger.info("Langfuse client initialized (host=%s)", settings.langfuse_host)
+            logger.info(
+                "Langfuse client initialized (host=%s)", settings.langfuse_host,
+                extra={"event": "langfuse_initialized", "langfuse_host": settings.langfuse_host},
+            )
             return _client
         except Exception as e:
-            logger.warning("Failed to initialize Langfuse client: %s", e)
+            logger.warning("Failed to initialize Langfuse client: %s", e, exc_info=True)
             return None
 
 
@@ -56,5 +62,9 @@ def shutdown_langfuse() -> None:
             _client.flush()
             _client.shutdown()
         except Exception as e:
-            logger.warning("Error shutting down Langfuse: %s", e)
+            logger.warning(
+                "Error shutting down Langfuse: %s", e,
+                exc_info=True,
+                extra={"event": "langfuse_shutdown_error", "error_type": type(e).__name__},
+            )
         _client = None

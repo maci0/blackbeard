@@ -3,6 +3,8 @@
 Used to validate the `spec` field of resources on create/update.
 """
 
+from blackbeard.kinds import ALL_KINDS
+
 AGENT_SCHEMA = {
     "type": "object",
     "required": ["role", "goal", "backstory"],
@@ -104,10 +106,10 @@ TOOL_SCHEMA = {
     "type": "object",
     "required": ["type"],
     "properties": {
-        "type": {"type": "string", "enum": ["python", "wasm"]},
+        "type": {"type": "string", "enum": ["python", "wasm", "builtin"]},
         "class_path": {"type": "string", "pattern": "^[a-zA-Z_][a-zA-Z0-9_.]*$"},
         "description": {"type": "string"},
-        "wasm_module": {"type": "string", "pattern": "^(?!.*\\.\\.).*\\.wasm$"},
+        "wasm_module": {"type": "string", "pattern": "^(?![/\\\\])(?!.*\\.\\.).*\\.wasm$"},
         "config": {"type": "object"},
         "sandbox": {"type": "string", "enum": ["none", "wasm"], "default": "none"},
         "capabilities": {
@@ -210,8 +212,6 @@ KIND_SCHEMAS: dict[str, dict] = {
     "AgentPolicy": AGENT_POLICY_SCHEMA,
     "Guardrail": GUARDRAIL_SCHEMA,
 }
-
-from blackbeard.kinds import ALL_KINDS  # noqa: E402
 
 # Verify all kinds have schemas — catches missing schemas at import time
 assert set(KIND_SCHEMAS.keys()) == set(ALL_KINDS), (

@@ -4,7 +4,7 @@ Open, self-hosted **Agent Management Platform** wrapping [CrewAI](https://crewai
 
 ## Quickstart
 
-**Prerequisites:** [Podman](https://podman.io/) (or Docker), [podman-compose](https://github.com/containers/podman-compose), GCP service account with Vertex AI access.
+**Prerequisites:** [Podman](https://podman.io/) (or Docker), [podman-compose](https://github.com/containers/podman-compose). Optional: GCP service account with Vertex AI access (not required to start services).
 
 ```bash
 # 1. Clone and enter the project
@@ -28,8 +28,8 @@ open http://localhost:3000
 |---------|-----|-------------|
 | UI | http://localhost:3000 | React visual editor + management |
 | API | http://localhost:8000 | FastAPI REST API |
-| API Docs (Swagger) | http://localhost:8000/docs | Interactive API documentation (no API key required) |
-| LiteLLM | http://localhost:4000 | LLM proxy (Vertex AI) |
+| API Docs (Swagger) | http://localhost:8000/docs | Interactive API documentation (debug mode only; no API key required) |
+| LiteLLM | http://localhost:4000 | LLM routing proxy (multi-provider) |
 | Langfuse | http://localhost:3001 | Execution traces |
 
 ## Apply Example Crew
@@ -111,7 +111,7 @@ blackbeard/
 
 ## API
 
-All endpoints require `X-API-Key` header (set via `BLACKBEARD_API_KEY` env var).
+All endpoints require `X-API-Key` header (set via `BLACKBEARD_API_KEY` env var), except health checks (`/api/v1/health*`) and API docs (`/docs`, `/redoc` — debug mode only).
 
 All API responses include an `X-Request-Id` header for tracing. Pass your own via the request header, or one is auto-generated.
 
@@ -139,22 +139,27 @@ curl -X POST -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
 curl -H "X-API-Key: $KEY" http://localhost:8000/api/v1/executions/<id>
 
 # Cancel a running execution
-curl -X POST http://localhost:8000/api/v1/executions/{id}/cancel \
+curl -X PATCH http://localhost:8000/api/v1/executions/{id}/cancel \
   -H "X-API-Key: $KEY"
 
-# SSE + health
-GET  /api/v1/executions/{id}/stream  # SSE stream of execution status events
-GET  /api/v1/health                  # liveness check
-GET  /api/v1/health/ready            # readiness check (probes database)
 ```
+
+**Other endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/executions/{id}/stream` | SSE stream of execution status events |
+| `GET` | `/api/v1/health` | Liveness check |
+| `GET` | `/api/v1/health/ready` | Readiness check (probes database, Valkey, and LiteLLM) |
 
 > **Note:** `POST` creates a new resource (201) or updates an existing one with the same name/namespace (200). Use the response status code to distinguish create from update.
 
 > If the `version` doesn't match the server's current version, the API returns `409 Conflict`. Fetch the resource first to get the current version.
 
 **Query Parameters** (on list endpoints):
-- `namespace` — Filter by namespace (default: all for resources, `default` for executions)
-- `limit` / `offset` — Pagination (default: 50-100)
+- `namespace` — Filter by namespace (default: all)
+- `label_selector` — Comma-separated label filters, e.g. `env=prod,team=ml` (resources only)
+- `limit` / `offset` — Pagination (default limit: 100, max: 1000)
 - `status` — Filter executions by status (`queued`, `running`, `completed`, `failed`, `cancelled`)
 - `crew_name` — Filter executions by crew name
 
@@ -181,7 +186,7 @@ npm run build                   # production build
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Python 3.12+, FastAPI, SQLAlchemy, Pydantic v2 |
+| Backend | Python 3.13+, FastAPI, SQLAlchemy, Pydantic v2 |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS, shadcn/ui |
 | Graph Editor | React Flow (xyflow v12) |
 | Database | PostgreSQL 17 |

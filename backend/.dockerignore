@@ -9,5 +9,11 @@ dist/
 build/
 tests/
 .env*
+.git/
+.gitignore
 credentials.json
 *.key
+htmlcov/
+.coverage
+*.md
+LICENSE*

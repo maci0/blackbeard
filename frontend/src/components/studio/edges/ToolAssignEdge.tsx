@@ -29,9 +29,7 @@ export default function ToolAssignEdge({
           strokeDasharray: '5 4',
         }}
       />
-      {/* Source dot */}
       <circle cx={sourceX} cy={sourceY} r={3} fill="#94a3b8" />
-      {/* Target dot */}
       <circle cx={targetX} cy={targetY} r={3} fill="#94a3b8" />
     </>
   )

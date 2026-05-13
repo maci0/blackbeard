@@ -97,6 +97,13 @@ spec:
   sandbox: null                       # none | wasm | docker | microvm (null = use default for type)
   trusted: false                      # informational: is this first-party reviewed code?
   
+  # ── Parameters (optional for Python tools — inferred from BaseTool.args_schema) ──
+  parameters:                            # required for WASM tools (WIT interface is untyped)
+    query:
+      type: string
+      required: true
+      description: "Search query"
+  
   # For type: python
   implementation: "crewai_tools:SerperDevTool"
   
@@ -147,6 +154,8 @@ spec:
   cache: true
   timeout: 30                         # seconds
 ```
+
+For Python tools, `parameters` is optional. If omitted, parameters are inferred from the tool's `BaseTool.args_schema` Pydantic model at load time. For WASM tools, `parameters` is required because the WIT interface uses untyped `list<tuple<string, string>>`. Parameters are used for: PropertyPanel form generation, `blackbeard validate` input checking, and API documentation.
 
 ## 4. Integration Connectors (OAuth Apps)
 
@@ -209,6 +218,10 @@ spec:
 4. On success, OAuth tokens are stored in Infisical (not Blackbeard's database). At execution time, the Execution Engine retrieves the OAuth token from Infisical using the tool's `auth.oauth_config.token_secret_path` field. Token refresh is handled by the Infisical SDK.
 5. An **Integration Token** is generated for the user.
 6. Agents reference integrations via the `apps` field or tool refs.
+
+**`IntegrationConnector` is deferred to post-MVP.** The full OAuth flow above applies to v1 GA. See the MVP Implementation Plan for MVP scope.
+
+**Token storage (MVP fallback):** The full product stores OAuth tokens in Infisical (PRD 00-integrations). MVP defers Infisical. For MVP, OAuth tokens are stored in an encrypted column in the `resources` table's `metadata` JSONB field under `metadata.oauth_state`. Encryption uses AES-256-GCM with a key derived from `BLACKBEARD_SECRET_KEY` env var. This is NOT the resource's `spec` ... OAuth state is mutable runtime data, not declarative configuration. Post-MVP migration: `blackbeard migrate-secrets` moves tokens from DB to Infisical.
 
 ## 5. MCP Server Management
 

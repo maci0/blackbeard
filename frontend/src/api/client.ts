@@ -2,6 +2,17 @@
 // In production builds, set VITE_API_BASE_URL to the backend origin.
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public detail: unknown,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 interface RequestOptions {
   method?: string
   body?: unknown
@@ -18,20 +29,39 @@ class ApiClient {
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const { method = 'GET', body, headers = {} } = options
 
-    const response = await fetch(`${API_BASE}${path}`, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.apiKey ? { 'X-API-Key': this.apiKey } : {}),
-        ...headers,
-      },
-      signal: AbortSignal.timeout(30_000),
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    })
+    let response: Response
+    try {
+      response = await fetch(`${API_BASE}${path}`, {
+        method,
+        headers: {
+          ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+          ...(this.apiKey ? { 'X-API-Key': this.apiKey } : {}),
+          ...headers,
+        },
+        signal: AbortSignal.timeout(30_000),
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      })
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'TimeoutError') {
+        throw new ApiError('Request timed out. Please try again.', 0, null)
+      }
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new ApiError('Request was cancelled.', 0, null)
+      }
+      if (err instanceof TypeError) {
+        throw new ApiError('Network error — check your connection and try again.', 0, null)
+      }
+      throw new ApiError('An unexpected error occurred.', 0, null)
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: response.statusText }))
-      throw new Error(error.detail || `HTTP ${response.status}`)
+      const detail = error.detail
+      const message =
+        typeof detail === 'string'
+          ? detail
+          : detail?.message ?? `HTTP ${response.status}`
+      throw new ApiError(message, response.status, detail)
     }
 
     if (response.status === 204 || !response.headers.get('content-type')?.includes('json')) {
@@ -51,6 +81,10 @@ class ApiClient {
 
   put<T>(path: string, body: unknown) {
     return this.request<T>(path, { method: 'PUT', body })
+  }
+
+  patch<T>(path: string, body?: unknown) {
+    return this.request<T>(path, { method: 'PATCH', ...(body !== undefined && { body }) })
   }
 
   delete<T>(path: string) {

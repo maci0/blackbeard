@@ -5,6 +5,7 @@ import time
 from graphlib import TopologicalSorter
 from importlib.metadata import version as pkg_version
 from pathlib import Path
+from typing import NoReturn
 
 import click
 import httpx
@@ -15,13 +16,23 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.syntax import Syntax
 from rich.table import Table
 
-from blackbeard.kinds import KIND_TO_PLURAL
+from blackbeard.kinds import ALL_KINDS, KIND_TO_PLURAL
+from blackbeard.models.execution import TERMINAL_STATUSES
 from blackbeard.resources.refs import build_adjacency, detect_cycles
 from blackbeard.resources.validator import validate_resource
 
 # Rich consoles — stderr for errors/progress, stdout for data
 console = Console(stderr=True)
 out = Console()
+
+_STATUS_COLORS: dict[str, str] = {
+    "completed": "green",
+    "failed": "red",
+    "cancelled": "yellow",
+    "running": "blue",
+    "queued": "cyan",
+    "pending": "cyan",
+}
 
 
 def _require_api_key(ctx: click.Context) -> str:
@@ -37,8 +48,35 @@ def _require_api_key(ctx: click.Context) -> str:
 
 
 def _output_json(data: object) -> None:
-    """Print data as formatted JSON to stdout."""
     out.print_json(json.dumps(data, default=str))
+
+
+def _extract_detail(response: httpx.Response) -> str:
+    try:
+        return response.json().get("detail", response.text)
+    except Exception:
+        return response.text
+
+
+def _handle_request_error(server: str, exc: httpx.RequestError) -> NoReturn:
+    console.print(
+        f"[red bold]Error:[/] Cannot reach server at [bold]{server}[/]\n"
+        f"  {exc}\n\n"
+        f"[dim]Suggestions:\n"
+        f"  • Is the server running? Try: curl {server}/api/v1/health\n"
+        f"  • Wrong URL? Set --server or BLACKBEARD_SERVER[/]"
+    )
+    raise SystemExit(1) from exc
+
+
+def _handle_http_error(response: httpx.Response) -> NoReturn:
+    detail = _extract_detail(response)
+    console.print(f"[red bold]Error:[/] HTTP {response.status_code}: {detail}")
+    if response.status_code == 401:
+        console.print("[dim]Hint: Check your API key (--api-key or BLACKBEARD_API_KEY)[/]")
+    elif response.status_code == 404:
+        console.print("[dim]Hint: Verify the resource name and namespace (-n)[/]")
+    raise SystemExit(1)
 
 
 def load_yaml_resources(path: Path) -> list[dict]:
@@ -49,16 +87,27 @@ def load_yaml_resources(path: Path) -> list[dict]:
     elif path.is_dir():
         files = sorted(path.rglob("*.yaml")) + sorted(path.rglob("*.yml"))
     else:
-        console.print(f"[red]Path not found:[/] {path}")
-        raise SystemExit(1)
+        console.print(f"[red bold]Error:[/] Path not found: [bold]{path}[/]")
+        raise SystemExit(2)
 
     resources: list[dict] = []
     for f in files:
-        with open(f) as fh:
-            for doc in yaml.safe_load_all(fh):
-                if doc and isinstance(doc, dict) and "kind" in doc:
-                    doc["_source_file"] = str(f)
-                    resources.append(doc)
+        try:
+            with open(f, encoding="utf-8") as fh:
+                for doc in yaml.safe_load_all(fh):
+                    if not doc or not isinstance(doc, dict):
+                        continue
+                    if "kind" in doc:
+                        doc["_source_file"] = str(f)
+                        resources.append(doc)
+                    elif "metadata" in doc or "spec" in doc:
+                        console.print(
+                            f"[yellow]Warning:[/] {f}: document has"
+                            " 'metadata'/'spec' but no 'kind' — skipped"
+                        )
+        except yaml.YAMLError as exc:
+            console.print(f"[red bold]Error:[/] Invalid YAML in [bold]{f}[/]: {exc}")
+            raise SystemExit(2) from exc
     return resources
 
 
@@ -68,7 +117,7 @@ def validate_resources(resources: list[dict]) -> tuple[list[tuple[dict, list]], 
     for res in resources:
         kind = res.get("kind", "")
         spec = res.get("spec", {})
-        errors = validate_resource(kind, spec)
+        errors, _ = validate_resource(kind, spec)
         if errors:
             per_errors.append((res, errors))
 
@@ -77,20 +126,16 @@ def validate_resources(resources: list[dict]) -> tuple[list[tuple[dict, list]], 
     return per_errors, cycles
 
 
-# ---------------------------------------------------------------------------
-# CLI group
-# ---------------------------------------------------------------------------
-
 @click.group()
 @click.version_option(version=pkg_version("blackbeard"))
-@click.option("--server", default="http://localhost:8000", envvar="BLACKBEARD_SERVER",
+@click.option("--server", "-s", default="http://localhost:8000", envvar="BLACKBEARD_SERVER",
               show_default=True, help="Blackbeard API server URL (env: BLACKBEARD_SERVER)")
-@click.option("--api-key", envvar="BLACKBEARD_API_KEY", required=False,
+@click.option("--api-key", "-k", envvar="BLACKBEARD_API_KEY", required=False,
               help="API key (env: BLACKBEARD_API_KEY)")
 @click.option("--namespace", "-n", default="default", envvar="BLACKBEARD_NAMESPACE",
               show_default=True, help="Resource namespace (env: BLACKBEARD_NAMESPACE)")
 @click.option("--json", "output_json", is_flag=True, default=False,
-              help="Output results as JSON (for scripting)")
+              help="Output results as JSON (for scripting; skips interactive prompts)")
 @click.pass_context
 def cli(
     ctx: click.Context, server: str, api_key: str | None,
@@ -104,21 +149,22 @@ def cli(
     ctx.obj["json"] = output_json
 
 
-# ---------------------------------------------------------------------------
-# validate
-# ---------------------------------------------------------------------------
-
-@cli.command()
+@cli.command(epilog="""\b
+Examples:
+  blackbeard validate -f crew.yaml
+  blackbeard validate -f examples/research-crew/
+  blackbeard validate -f crew.yaml --json
+""")
 @click.option("-f", "--file", "path", required=True, type=click.Path(exists=True),
               help="File or directory of YAML resources")
 @click.pass_context
 def validate(ctx: click.Context, path: str) -> None:
-    """Validate YAML resource files."""
+    """Validate YAML resource files without applying them."""
     resources = load_yaml_resources(Path(path))
 
     if not resources:
-        console.print("[yellow]No resource files found.[/]")
-        raise SystemExit(1)
+        console.print(f"[red bold]Error:[/] No resource files found in [bold]{path}[/]")
+        raise SystemExit(2)
 
     per_errors, cycles = validate_resources(resources)
     all_valid = not per_errors and not cycles
@@ -139,9 +185,10 @@ def validate(ctx: click.Context, path: str) -> None:
             "cycles": cycles,
         }
         _output_json(result)
-        raise SystemExit(0 if all_valid else 1)
+        if not all_valid:
+            raise SystemExit(1)
+        return
 
-    # Rich table output
     table = Table(title="Validation Results", show_lines=False)
     table.add_column("Status", width=3)
     table.add_column("Kind/Name", style="bold")
@@ -160,10 +207,10 @@ def validate(ctx: click.Context, path: str) -> None:
         else:
             table.add_row("[green]✓[/]", f"{kind}/{name}", source, "[green]OK[/]")
 
-    console.print(table)
+    out.print(table)
 
     if cycles:
-        console.print(Panel(
+        out.print(Panel(
             "\n".join(f"[red]•[/] {' → '.join(c)}" for c in cycles),
             title="[red]Dependency Cycles[/]",
             border_style="red",
@@ -173,30 +220,36 @@ def validate(ctx: click.Context, path: str) -> None:
     summary = f"[bold]{len(resources)}[/] resources: [green]{valid_count} valid[/]"
     if per_errors:
         summary += f", [red]{len(per_errors)} errors[/]"
-    console.print(f"\n{summary}")
+    out.print(f"\n{summary}")
 
-    raise SystemExit(0 if all_valid else 1)
+    if not all_valid:
+        raise SystemExit(1)
 
 
-# ---------------------------------------------------------------------------
-# apply
-# ---------------------------------------------------------------------------
-
-@cli.command()
+@cli.command(epilog="""\b
+Examples:
+  blackbeard apply -f crew.yaml
+  blackbeard apply -f crew.yaml -y
+  blackbeard apply -f examples/research-crew/ --dry-run
+  blackbeard apply -f examples/research-crew/ --json
+""")
 @click.option("-f", "--file", "path", required=True, type=click.Path(exists=True),
               help="File or directory of YAML resources")
-@click.option("--dry-run", is_flag=True, default=False, help="Validate without applying")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Validate and show what would be applied, without making changes")
+@click.option("-y", "--yes", is_flag=True, default=False,
+              help="Skip confirmation prompt")
 @click.pass_context
-def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
-    """Apply YAML resource files to the server."""
+def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
+    """Apply YAML resource files to the server (create or update)."""
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
 
     resources = load_yaml_resources(Path(path))
 
     if not resources:
-        console.print("[yellow]No resource files found.[/]")
-        raise SystemExit(1)
+        console.print(f"[red bold]Error:[/] No resource files found in [bold]{path}[/]")
+        raise SystemExit(2)
 
     # Local validation first
     per_errors, cycles = validate_resources(resources)
@@ -228,7 +281,16 @@ def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
                 kind = res.get("kind", "")
                 name = res.get("metadata", {}).get("name", "?")
                 console.print(f"  [cyan]→[/] {kind}/{name}: would apply")
-        raise SystemExit(0)
+        return
+
+    if not yes and not ctx.obj["json"]:
+        console.print(
+            f"\n[bold]{len(resources)}[/] resource(s) will be applied"
+            f" to [bold]{server}[/]."
+        )
+        if not click.confirm("Proceed?", default=True):
+            console.print("[yellow]Aborted.[/]")
+            return
 
     # Topologically sort resources by dependency order
     adjacency = build_adjacency(resources)
@@ -236,7 +298,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
         order = list(TopologicalSorter(adjacency).static_order())
         resources_by_key = {f"{r['kind']}/{r['metadata']['name']}": r for r in resources}
         sorted_resources = [resources_by_key[k] for k in order if k in resources_by_key]
-        sorted_keys = set(k for k in order if k in resources_by_key)
+        sorted_keys = {k for k in order if k in resources_by_key}
         for r in resources:
             key = f"{r['kind']}/{r['metadata']['name']}"
             if key not in sorted_keys:
@@ -244,62 +306,63 @@ def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
         resources = sorted_resources
     except (KeyError, ValueError) as exc:
         console.print(
-            f"[yellow]⚠ Could not sort by dependencies ({exc}),"
-            " applying in file order.[/]"
+            f"[yellow]Warning:[/] Could not sort by dependencies ({exc}),"
+            " applying in file order."
         )
 
     # Apply resources with progress
     headers = {"X-API-Key": api_key}
     results: list[dict] = []
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-        transient=True,
-    ) as progress:
-        task = progress.add_task("Applying resources...", total=len(resources))
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            transient=True,
+        ) as progress:
+            task = progress.add_task("Applying resources...", total=len(resources))
 
-        with httpx.Client(timeout=30.0) as client:
-            for res in resources:
-                kind = res.get("kind", "")
-                name = res.get("metadata", {}).get("name", "?")
-                label = f"{kind}/{name}"
-                progress.update(task, description=f"Applying {label}...")
+            with httpx.Client(timeout=30.0) as client:
+                for res in resources:
+                    kind = res.get("kind", "")
+                    name = res.get("metadata", {}).get("name", "?")
+                    label = f"{kind}/{name}"
+                    progress.update(task, description=f"Applying {label}...")
 
-                plural = KIND_TO_PLURAL.get(kind)
-                if not plural:
-                    results.append({
-                        "resource": label, "status": "error",
-                        "detail": f"Unknown kind '{kind}'",
-                    })
-                    progress.advance(task)
-                    continue
-
-                body = {k: v for k, v in res.items() if k != "_source_file"}
-                url = f"{server.rstrip('/')}/api/v1/{plural}"
-
-                try:
-                    response = client.post(url, json=body, headers=headers)
-                    if response.status_code in (200, 201):
-                        action = "created" if response.status_code == 201 else "updated"
-                        results.append({"resource": label, "status": action})
-                    else:
-                        try:
-                            detail = response.json().get("detail", response.text)
-                        except Exception:
-                            detail = response.text
+                    plural = KIND_TO_PLURAL.get(kind)
+                    if not plural:
+                        valid = ", ".join(sorted(KIND_TO_PLURAL))
                         results.append({
                             "resource": label, "status": "error",
-                            "detail": f"HTTP {response.status_code}: {detail}",
+                            "detail": f"Unknown kind '{kind}'. Valid kinds: {valid}",
                         })
-                except httpx.RequestError as exc:
-                    results.append({
-                        "resource": label, "status": "error",
-                        "detail": f"Connection failed: {exc}",
-                    })
+                        progress.advance(task)
+                        continue
 
-                progress.advance(task)
+                    body = {k: v for k, v in res.items() if k != "_source_file"}
+                    url = f"{server.rstrip('/')}/api/v1/{plural}"
+
+                    try:
+                        response = client.post(url, json=body, headers=headers)
+                        if response.status_code in (200, 201):
+                            action = "created" if response.status_code == 201 else "updated"
+                            results.append({"resource": label, "status": action})
+                        else:
+                            detail = _extract_detail(response)
+                            results.append({
+                                "resource": label, "status": "error",
+                                "detail": f"HTTP {response.status_code}: {detail}",
+                            })
+                    except httpx.RequestError as exc:
+                        results.append({
+                            "resource": label, "status": "error",
+                            "detail": f"Connection failed: {exc}",
+                        })
+
+                    progress.advance(task)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted.[/]")
 
     # Output results
     if ctx.obj["json"]:
@@ -318,13 +381,13 @@ def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
             else:
                 table.add_row("[blue]↻[/]", r["resource"], "[blue]updated[/]")
 
-        console.print(table)
+        out.print(table)
 
-        created = sum(1 for r in results if r["status"] in ("created", "updated"))
+        succeeded = sum(1 for r in results if r["status"] in ("created", "updated"))
         failed = sum(1 for r in results if r["status"] == "error")
-        console.print(
+        out.print(
             f"\n[bold]{len(results)}[/] resources:"
-            f" [green]{created} succeeded[/],"
+            f" [green]{succeeded} succeeded[/],"
             f" [red]{failed} failed[/]"
         )
 
@@ -332,11 +395,174 @@ def apply(ctx: click.Context, path: str, dry_run: bool) -> None:
         raise SystemExit(1)
 
 
-# ---------------------------------------------------------------------------
-# kickoff
-# ---------------------------------------------------------------------------
+@cli.command(epilog="""\b
+Examples:
+  blackbeard get Agent my-agent
+  blackbeard get Crew research-crew -n prod
+  blackbeard get LLMConnection openai --json
+""")
+@click.argument("kind", type=click.Choice(ALL_KINDS, case_sensitive=True))
+@click.argument("name")
+@click.pass_context
+def get(ctx: click.Context, kind: str, name: str) -> None:
+    """Get a single resource by kind and name."""
+    server = ctx.obj["server"]
+    api_key = _require_api_key(ctx)
+    namespace = ctx.obj["namespace"]
+    plural = KIND_TO_PLURAL[kind]
 
-@cli.command()
+    url = f"{server.rstrip('/')}/api/v1/{plural}/{name}"
+    headers = {"X-API-Key": api_key}
+
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(url, headers=headers, params={"namespace": namespace})
+    except httpx.RequestError as exc:
+        _handle_request_error(server, exc)
+
+    if response.status_code != 200:
+        _handle_http_error(response)
+
+    data = response.json()
+
+    if ctx.obj["json"]:
+        _output_json(data)
+        return
+
+    out.print(Syntax(json.dumps(data, indent=2, default=str), "json", theme="monokai"))
+
+
+@cli.command("list", epilog="""\b
+Examples:
+  blackbeard list Agent
+  blackbeard list Crew -n prod
+  blackbeard list Task --label team=backend
+  blackbeard list Agent --json
+""")
+@click.argument("kind", type=click.Choice(ALL_KINDS, case_sensitive=True))
+@click.option("--label", "-l", "labels", multiple=True, metavar="KEY=VALUE",
+              help="Filter by label (repeatable)")
+@click.option("--limit", default=100, show_default=True, type=click.IntRange(1, 1000),
+              help="Maximum number of results")
+@click.pass_context
+def list_resources_cmd(ctx: click.Context, kind: str, labels: tuple, limit: int) -> None:
+    """List resources of a given kind."""
+    server = ctx.obj["server"]
+    api_key = _require_api_key(ctx)
+    namespace = ctx.obj["namespace"]
+    plural = KIND_TO_PLURAL[kind]
+
+    params: dict = {"namespace": namespace, "limit": limit}
+    if labels:
+        label_parts = []
+        for item in labels:
+            if "=" not in item:
+                console.print(
+                    f"[red bold]Error:[/] Invalid --label:"
+                    f" expected KEY=VALUE, got: {item!r}"
+                )
+                raise SystemExit(2)
+            label_parts.append(item)
+        params["label_selector"] = ",".join(label_parts)
+
+    url = f"{server.rstrip('/')}/api/v1/{plural}"
+    headers = {"X-API-Key": api_key}
+
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(url, headers=headers, params=params)
+    except httpx.RequestError as exc:
+        _handle_request_error(server, exc)
+
+    if response.status_code != 200:
+        _handle_http_error(response)
+
+    data = response.json()
+
+    if ctx.obj["json"]:
+        _output_json(data)
+        return
+
+    items = data.get("items", [])
+    if not items:
+        console.print(f"[dim]No {kind} resources found in namespace '{namespace}'.[/]")
+        return
+
+    table = Table(title=f"{kind} Resources")
+    table.add_column("Name", style="bold")
+    table.add_column("Namespace", style="dim")
+    table.add_column("Version", justify="right")
+    table.add_column("Labels")
+
+    for item in items:
+        meta = item.get("metadata", {})
+        item_labels = meta.get("labels", {})
+        label_str = ", ".join(f"{k}={v}" for k, v in item_labels.items()) if item_labels else "—"
+        table.add_row(
+            meta.get("name", "?"),
+            meta.get("namespace", "?"),
+            str(item.get("version", "?")),
+            label_str,
+        )
+
+    out.print(table)
+    total = data.get("total", len(items))
+    if total > len(items):
+        out.print(f"[dim]Showing {len(items)} of {total} (use --limit to see more)[/]")
+
+
+@cli.command(epilog="""\b
+Examples:
+  blackbeard delete Agent my-agent
+  blackbeard delete Crew research-crew -n prod
+  blackbeard delete Agent my-agent -y
+""")
+@click.argument("kind", type=click.Choice(ALL_KINDS, case_sensitive=True))
+@click.argument("name")
+@click.option("-y", "--yes", is_flag=True, default=False,
+              help="Skip confirmation prompt")
+@click.pass_context
+def delete(ctx: click.Context, kind: str, name: str, yes: bool) -> None:
+    """Delete a resource by kind and name."""
+    server = ctx.obj["server"]
+    api_key = _require_api_key(ctx)
+    namespace = ctx.obj["namespace"]
+    plural = KIND_TO_PLURAL[kind]
+
+    if (
+        not yes
+        and not ctx.obj["json"]
+        and not click.confirm(f"Delete {kind}/{name} in namespace '{namespace}'?", default=False)
+    ):
+        console.print("[yellow]Aborted.[/]")
+        return
+
+    url = f"{server.rstrip('/')}/api/v1/{plural}/{name}"
+    headers = {"X-API-Key": api_key}
+
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.delete(url, headers=headers, params={"namespace": namespace})
+    except httpx.RequestError as exc:
+        _handle_request_error(server, exc)
+
+    if response.status_code not in (200, 204):
+        _handle_http_error(response)
+
+    if ctx.obj["json"]:
+        _output_json({"deleted": f"{kind}/{name}", "namespace": namespace})
+        return
+
+    console.print(f"[green]✓[/] Deleted [bold]{kind}/{name}[/] from namespace '{namespace}'")
+
+
+@cli.command(epilog="""\b
+Examples:
+  blackbeard kickoff research-crew
+  blackbeard kickoff research-crew --input topic="AI agents"
+  blackbeard kickoff research-crew --input topic="AI agents" --input depth=3
+  blackbeard kickoff research-crew -s http://prod:8000 -n prod --json
+""")
 @click.argument("crew_name")
 @click.option("--input", "inputs", multiple=True, metavar="KEY=VALUE",
               help="Input key=value pairs; values are parsed as JSON if valid (repeatable)")
@@ -350,40 +576,36 @@ def kickoff(ctx: click.Context, crew_name: str, inputs: tuple) -> None:
     api_key = _require_api_key(ctx)
     namespace = ctx.obj["namespace"]
 
-    # Parse key=value inputs
     parsed_inputs: dict = {}
     for item in inputs:
         if "=" not in item:
-            console.print(f"[red]Error:[/] Input must be in key=value format, got: {item!r}")
-            raise SystemExit(1)
+            console.print(f"[red bold]Error:[/] Invalid --input: expected KEY=VALUE, got: {item!r}")
+            console.print("[dim]Example: --input topic=\"AI agents\"[/]")
+            raise SystemExit(2)
         key, _, value = item.partition("=")
+        if not key:
+            console.print(f"[red bold]Error:[/] Invalid --input: key cannot be empty in {item!r}")
+            raise SystemExit(2)
         try:
             parsed_inputs[key] = json.loads(value)
         except (json.JSONDecodeError, ValueError):
             parsed_inputs[key] = value
 
-    url = f"{server.rstrip('/')}/api/v1/crews/{crew_name}/kickoff?namespace={namespace}"
+    url = f"{server.rstrip('/')}/api/v1/crews/{crew_name}/kickoff"
     headers = {"X-API-Key": api_key}
     body = {"inputs": parsed_inputs}
 
     with console.status("Submitting execution..."):
         try:
             with httpx.Client(timeout=30.0) as client:
-                response = client.post(url, json=body, headers=headers)
+                response = client.post(
+                    url, json=body, headers=headers, params={"namespace": namespace},
+                )
         except httpx.RequestError as exc:
-            console.print(
-                f"[red]Cannot reach server at {server}.[/]"
-                f" Check --server or BLACKBEARD_SERVER.\n{exc}"
-            )
-            raise SystemExit(1) from exc
+            _handle_request_error(server, exc)
 
     if response.status_code not in (200, 201, 202):
-        try:
-            detail = response.json().get("detail", response.text)
-        except Exception:
-            detail = response.text
-        console.print(f"[red]HTTP {response.status_code}:[/] {detail}")
-        raise SystemExit(1)
+        _handle_http_error(response)
 
     data = response.json()
 
@@ -394,7 +616,7 @@ def kickoff(ctx: click.Context, crew_name: str, inputs: tuple) -> None:
     execution_id = data.get("id", "unknown")
     status_val = data.get("status", "unknown")
 
-    console.print(Panel.fit(
+    out.print(Panel.fit(
         f"[bold]Execution ID:[/] {execution_id}\n[bold]Status:[/] {status_val}",
         title="[green]Execution Submitted[/]",
         border_style="green",
@@ -402,52 +624,48 @@ def kickoff(ctx: click.Context, crew_name: str, inputs: tuple) -> None:
     console.print(f"\nTrack with: [bold]blackbeard status {execution_id} --watch[/]")
 
 
-# ---------------------------------------------------------------------------
-# status
-# ---------------------------------------------------------------------------
-
-@cli.command()
+@cli.command(epilog="""\b
+Examples:
+  blackbeard status abc-123
+  blackbeard status abc-123 -w
+  blackbeard status abc-123 -w -i 5
+  blackbeard status abc-123 --json
+""")
 @click.argument("execution_id")
-@click.option("--watch", is_flag=True, default=False,
-              help="Poll until execution reaches a terminal state")
+@click.option("--watch", "-w", is_flag=True, default=False,
+              help="Poll until execution completes, fails, or is cancelled (Ctrl-C to stop)")
+@click.option("--interval", "-i", default=2, show_default=True, type=click.IntRange(1, 60),
+              help="Polling interval in seconds (used with --watch)")
 @click.pass_context
-def status(ctx: click.Context, execution_id: str, watch: bool) -> None:
-    """Check execution status."""
+def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) -> None:
+    """Show execution status and details."""
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
     is_json = ctx.obj["json"]
 
-    terminal_states = {"completed", "failed", "cancelled"}
+    interval_from_cli = (
+        ctx.get_parameter_source("interval") == click.core.ParameterSource.COMMANDLINE
+    )
+    if not watch and interval_from_cli and not is_json:
+        console.print("[yellow]Warning:[/] --interval/-i has no effect without --watch (-w)."
+                      " Add -w to enable polling.")
+
+    terminal_states = {s.value for s in TERMINAL_STATUSES}
     url = f"{server.rstrip('/')}/api/v1/executions/{execution_id}"
     headers = {"X-API-Key": api_key}
 
     def _status_color(s: str) -> str:
-        return {
-            "completed": "green",
-            "failed": "red",
-            "cancelled": "yellow",
-            "running": "blue",
-            "pending": "cyan",
-        }.get(s, "dim")
+        return _STATUS_COLORS.get(s, "dim")
 
     with httpx.Client(timeout=30.0) as client:
         def fetch() -> dict:
             try:
                 response = client.get(url, headers=headers)
             except httpx.RequestError as exc:
-                console.print(
-                f"[red]Cannot reach server at {server}.[/]"
-                f" Check --server or BLACKBEARD_SERVER.\n{exc}"
-            )
-                raise SystemExit(1) from exc
+                _handle_request_error(server, exc)
 
             if response.status_code != 200:
-                try:
-                    detail = response.json().get("detail", response.text)
-                except Exception:
-                    detail = response.text
-                console.print(f"[red]HTTP {response.status_code}:[/] {detail}")
-                raise SystemExit(1)
+                _handle_http_error(response)
 
             return response.json()
 
@@ -455,7 +673,6 @@ def status(ctx: click.Context, execution_id: str, watch: bool) -> None:
             status_val = data.get("status", "unknown")
             color = _status_color(status_val)
 
-            # Build info table
             table = Table(show_header=False, box=None, padding=(0, 2))
             table.add_column("Key", style="bold dim", width=14)
             table.add_column("Value")
@@ -484,7 +701,7 @@ def status(ctx: click.Context, execution_id: str, watch: bool) -> None:
             if trace:
                 table.add_row("Trace", f"[link={trace}]{trace}[/link]")
 
-            console.print(Panel(
+            out.print(Panel(
                 table,
                 title=f"Execution [{color}]{status_val}[/]",
                 border_style=color,
@@ -493,12 +710,12 @@ def status(ctx: click.Context, execution_id: str, watch: bool) -> None:
             # Error
             error = data.get("error")
             if error:
-                console.print(Panel(f"[red]{error}[/]", title="[red]Error[/]", border_style="red"))
+                out.print(Panel(f"[red]{error}[/]", title="[red]Error[/]", border_style="red"))
 
             # Outputs
             outputs = data.get("outputs")
             if outputs:
-                console.print(Panel(
+                out.print(Panel(
                     Syntax(json.dumps(outputs, indent=2, default=str), "json", theme="monokai"),
                     title="Outputs",
                     border_style="green",
@@ -525,7 +742,7 @@ def status(ctx: click.Context, execution_id: str, watch: bool) -> None:
                         str(t.get("tokens_used", 0)),
                     )
 
-                console.print(task_table)
+                out.print(task_table)
 
         if is_json and not watch:
             _output_json(fetch())
@@ -535,23 +752,27 @@ def status(ctx: click.Context, execution_id: str, watch: bool) -> None:
             render(fetch())
             return
 
-        # Watch mode with live updates
         console.print(f"[dim]Watching execution {execution_id} (Ctrl-C to stop)...[/]\n")
-        while True:
-            data = fetch()
+        try:
+            first = True
+            while True:
+                data = fetch()
 
-            if is_json:
-                _output_json(data)
-            else:
-                console.clear()
-                console.print(f"[dim]Watching execution {execution_id} (Ctrl-C to stop)...[/]\n")
-                render(data)
+                if is_json:
+                    _output_json(data)
+                else:
+                    if not first:
+                        console.print("\n[dim]─── refreshed ───[/]\n")
+                    render(data)
+                    first = False
 
-            current_status = data.get("status", "")
-            if current_status in terminal_states:
-                break
+                current_status = data.get("status", "")
+                if current_status in terminal_states:
+                    break
 
-            time.sleep(2)
+                time.sleep(interval)
+        except KeyboardInterrupt:
+            console.print("\n[dim]Stopped watching.[/]")
 
 
 if __name__ == "__main__":

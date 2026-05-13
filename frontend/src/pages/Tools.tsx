@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Wrench, Search, AlertTriangle, RefreshCw, Code2, Box, Shield } from 'lucide-react'
+import { useDocumentTitle } from '@/lib/hooks'
+import { Wrench, Search, AlertTriangle, RefreshCw, Code2, Box, Shield, X } from 'lucide-react'
 import { useResourceStore, type Resource } from '@/stores/resourceStore'
 import { Spinner } from '@/components/ui/Spinner'
 import { cn } from '@/lib/utils'
@@ -9,9 +10,9 @@ import { cn } from '@/lib/utils'
 /* ------------------------------------------------------------------ */
 
 const TYPE_CLASSES: Record<string, string> = {
-  python: 'bg-blue-100 text-blue-700 border-blue-200',
-  wasm: 'bg-violet-100 text-violet-700 border-violet-200',
-  builtin: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  python: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-800',
+  wasm: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900 dark:text-violet-300 dark:border-violet-800',
+  builtin: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 dark:border-emerald-800',
 }
 
 const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -33,7 +34,7 @@ function TypeBadge({ type }: { type: string }) {
     <span
       className={cn(
         'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border',
-        TYPE_CLASSES[type] ?? 'bg-gray-100 text-gray-600 border-gray-200',
+        TYPE_CLASSES[type] ?? 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
       )}
     >
       <Icon className="h-3 w-3" />
@@ -47,8 +48,8 @@ function TypeBadge({ type }: { type: string }) {
 /* ------------------------------------------------------------------ */
 
 const SANDBOX_CLASSES: Record<string, string> = {
-  none: 'bg-gray-100 text-gray-700',
-  wasm: 'bg-purple-100 text-purple-700',
+  none: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+  wasm: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
 }
 
 const SANDBOX_DISPLAY: Record<string, string> = {
@@ -89,9 +90,11 @@ function ToolCard({ resource }: { resource: Resource }) {
             </div>
             <div className="min-w-0">
               <p className="font-semibold text-sm truncate">{resource.metadata.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {resource.metadata.namespace || 'default'}
-              </p>
+              {resource.metadata.namespace && resource.metadata.namespace !== 'default' && (
+                <p className="text-xs text-muted-foreground">
+                  {resource.metadata.namespace}
+                </p>
+              )}
             </div>
           </div>
           {spec.type && <TypeBadge type={spec.type} />}
@@ -148,10 +151,7 @@ export default function Tools() {
 
   const tools = resources['tools'] ?? []
 
-  useEffect(() => {
-    document.title = 'Tools | Blackbeard'
-    return () => { document.title = 'Blackbeard' }
-  }, [])
+  useDocumentTitle('Tools')
 
   useEffect(() => {
     fetchResources('tools')
@@ -178,11 +178,12 @@ export default function Tools() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Tools</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Tool registry — python, wasm, and builtin tools
+              Tool registry — Python, WASM, and built-in tools
             </p>
           </div>
           <button
             onClick={() => fetchResources('tools')}
+            aria-label="Refresh tools"
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md bg-background hover:bg-accent transition-colors"
           >
             <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin motion-reduce:animate-none')} />
@@ -192,25 +193,46 @@ export default function Tools() {
 
         {/* Error */}
         {error && (
-          <div role="alert" className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            {error}
+          <div role="alert" className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {error}
+            </span>
+            <button onClick={() => fetchResources('tools')} className="text-xs underline underline-offset-2" aria-label="Retry loading tools">
+              Retry
+            </button>
           </div>
         )}
 
         {/* Search */}
         {tools.length > 0 && (
-          <div className="relative max-w-sm mb-5">
-            <label htmlFor="tools-search" className="sr-only">Search tools</label>
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <input
-              id="tools-search"
-              type="text"
-              placeholder="Search tools…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+          <div className="flex items-center gap-3 mb-5 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <label htmlFor="tools-search" className="sr-only">Search tools</label>
+              <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <input
+                id="tools-search"
+                type="text"
+                placeholder="Search tools…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            {search && (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  {filtered.length} of {tools.length} tools
+                </span>
+                <button
+                  onClick={() => setSearch('')}
+                  className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Clear search
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -225,7 +247,7 @@ export default function Tools() {
         ) : filtered.length === 0 ? (
           <div className="border-2 border-dashed rounded-xl flex flex-col items-center justify-center py-24 px-6 text-center">
             <div className="p-4 rounded-full bg-muted mb-4">
-              <Wrench className="h-8 w-8 text-muted-foreground/50" />
+              <Wrench aria-hidden="true" className="h-8 w-8 text-muted-foreground/50" />
             </div>
             <p className="font-medium text-muted-foreground mb-1">
               {search ? 'No tools match your search' : 'No tools registered'}
@@ -245,18 +267,11 @@ export default function Tools() {
             )}
           </div>
         ) : (
-          <>
-            {search && (
-              <p className="text-sm text-muted-foreground mb-4">
-                {filtered.length} of {tools.length} tools
-              </p>
-            )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filtered.map((resource) => (
-                <ToolCard key={resource.id} resource={resource} />
-              ))}
-            </div>
-          </>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filtered.map((resource) => (
+              <ToolCard key={resource.id} resource={resource} />
+            ))}
+          </div>
         )}
       </div>
     </div>
