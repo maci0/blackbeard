@@ -286,6 +286,33 @@ def _run_crew_sync(
         loop.close()
 
 
+def _thread_session_factory() -> Any:
+    """Create a fresh engine+session factory for the current thread's event loop.
+
+    asyncpg connections are bound to the event loop that created them, so the
+    executor thread (which runs its own loop) cannot share the main engine.
+    """
+    from sqlalchemy.ext.asyncio import (
+        AsyncSession as _AsyncSession,
+    )
+    from sqlalchemy.ext.asyncio import (
+        async_sessionmaker as asm,
+    )
+    from sqlalchemy.ext.asyncio import (
+        create_async_engine as cae,
+    )
+
+    thread_engine = cae(
+        settings.database_url.get_secret_value(),
+        echo=False,
+        pool_size=2,
+        max_overflow=3,
+        pool_pre_ping=True,
+        pool_timeout=30,
+    )
+    return asm(thread_engine, class_=_AsyncSession, expire_on_commit=False)
+
+
 async def _run_crew_async(
     execution_id: UUID,
     resource_snapshot: dict[str, dict[str, Any]],
@@ -293,7 +320,8 @@ async def _run_crew_async(
     inputs: dict[str, Any],
 ) -> None:
     """Run a crew and update the execution record with results."""
-    async with async_session() as session:
+    thread_session = _thread_session_factory()
+    async with thread_session() as session:
         execution = await _get_execution_for_update(session, execution_id)
         if not execution:
             logger.error(

@@ -84,6 +84,7 @@ class ResourceLoader:
 
         llm_kwargs: dict[str, Any] = {
             "model": model_str,
+            "base_url": settings.litellm_proxy_url,
             "api_base": settings.litellm_proxy_url,
             "api_key": settings.litellm_master_key.get_secret_value(),
         }
