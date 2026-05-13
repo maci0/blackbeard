@@ -199,10 +199,9 @@ async def kickoff(
                 },
             )
             error_msg = _sanitize_error(str(exc))
-            # Use the synchronous helper that spins up a throwaway event loop,
-            # since this callback may run in a thread context where we cannot
-            # await directly.
-            _mark_failed_sync(execution_id, error_msg)
+            # This callback runs on the main event loop thread, so we can
+            # schedule the async mark-failed coroutine directly.
+            loop.create_task(_mark_failed_async(execution_id, error_msg))  # noqa: RUF006
 
     future.add_done_callback(_on_thread_error)
 
