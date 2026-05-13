@@ -5,6 +5,7 @@ import os
 import platform
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any, cast
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -94,7 +95,7 @@ def _validate_startup_config() -> None:
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Application lifespan: startup and shutdown."""
     _validate_startup_config()
-    pool = engine.pool
+    pool = cast("Any", engine.pool)
     logger.info(
         "Blackbeard %s starting: debug=%s, max_concurrent_executions=%d, litellm=%s, langfuse=%s",
         app.version,

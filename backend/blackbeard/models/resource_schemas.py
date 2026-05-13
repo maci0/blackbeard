@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -28,7 +28,7 @@ class ResourceCreate(BaseModel):
     apiVersion: str = Field(default="blackbeard/v1")
     kind: str = Field(..., min_length=1)
     metadata: ResourceMetadata
-    spec: dict = Field(..., min_length=1, max_length=500)
+    spec: dict[str, Any] = Field(..., min_length=1, max_length=500)
 
     @field_validator("kind")
     @classmethod
@@ -42,7 +42,7 @@ class ResourceUpdate(BaseModel):
     """Schema for updating a resource (partial or full)."""
 
     metadata: ResourceMetadata | None = None
-    spec: dict | None = None
+    spec: dict[str, Any] | None = None
     version: int = Field(..., ge=1, description="Current version for optimistic locking")
 
 
@@ -53,7 +53,7 @@ class ResourceResponse(BaseModel):
     apiVersion: str = "blackbeard/v1"
     kind: str
     metadata: ResourceMetadata
-    spec: dict
+    spec: dict[str, Any]
     version: int
     created_at: datetime
     updated_at: datetime

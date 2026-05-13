@@ -5,7 +5,7 @@ import time
 from graphlib import TopologicalSorter
 from importlib.metadata import version as pkg_version
 from pathlib import Path
-from typing import NoReturn
+from typing import Any, NoReturn, cast
 
 import click
 import httpx
@@ -19,7 +19,7 @@ from rich.table import Table
 from blackbeard.kinds import ALL_KINDS, KIND_TO_PLURAL
 from blackbeard.models.execution import TERMINAL_STATUSES
 from blackbeard.resources.refs import build_adjacency, detect_cycles
-from blackbeard.resources.validator import validate_resource
+from blackbeard.resources.validator import ValidationError, validate_resource
 
 # Rich consoles — stderr for errors/progress, stdout for data
 console = Console(stderr=True)
@@ -43,7 +43,7 @@ def _require_api_key(ctx: click.Context) -> str:
             "[red bold]Error:[/] API key required. Set BLACKBEARD_API_KEY or pass --api-key."
         )
         raise SystemExit(1)
-    return key
+    return cast("str", key)
 
 
 def _output_json(data: object) -> None:
@@ -52,7 +52,13 @@ def _output_json(data: object) -> None:
 
 def _extract_detail(response: httpx.Response) -> str:
     try:
-        return response.json().get("detail", response.text)
+        body = response.json()
+        if isinstance(body, dict):
+            detail = body.get("detail", response.text)
+            if isinstance(detail, str):
+                return detail
+            return str(detail)
+        return response.text
     except Exception:
         return response.text
 
@@ -78,7 +84,7 @@ def _handle_http_error(response: httpx.Response) -> NoReturn:
     raise SystemExit(1)
 
 
-def load_yaml_resources(path: Path) -> list[dict]:
+def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
     """Load all YAML resource files from a file or directory."""
     files: list[Path] = []
     if path.is_file():
@@ -89,7 +95,7 @@ def load_yaml_resources(path: Path) -> list[dict]:
         console.print(f"[red bold]Error:[/] Path not found: [bold]{path}[/]")
         raise SystemExit(2)
 
-    resources: list[dict] = []
+    resources: list[dict[str, Any]] = []
     for f in files:
         try:
             with open(f, encoding="utf-8") as fh:
@@ -110,7 +116,9 @@ def load_yaml_resources(path: Path) -> list[dict]:
     return resources
 
 
-def validate_resources(resources: list[dict]) -> tuple[list[tuple[dict, list]], list[list[str]]]:
+def validate_resources(
+    resources: list[dict[str, Any]],
+) -> tuple[list[tuple[dict[str, Any], list[ValidationError]]], list[list[str]]]:
     """Validate resources and check for cycles."""
     per_errors = []
     for res in resources:
@@ -360,7 +368,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
 
     # Apply resources with progress
     headers = {"X-API-Key": api_key}
-    results: list[dict] = []
+    results: list[dict[str, Any]] = []
 
     try:
         with Progress(
@@ -518,14 +526,14 @@ Examples:
     help="Maximum number of results",
 )
 @click.pass_context
-def list_resources_cmd(ctx: click.Context, kind: str, labels: tuple, limit: int) -> None:
+def list_resources_cmd(ctx: click.Context, kind: str, labels: tuple[str, ...], limit: int) -> None:
     """List resources of a given kind."""
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
     namespace = ctx.obj["namespace"]
     plural = KIND_TO_PLURAL[kind]
 
-    params: dict = {"namespace": namespace, "limit": limit}
+    params: dict[str, Any] = {"namespace": namespace, "limit": limit}
     if labels:
         label_parts = []
         for item in labels:
@@ -647,7 +655,7 @@ Examples:
     help="Input key=value pairs; values are parsed as JSON if valid (repeatable)",
 )
 @click.pass_context
-def kickoff(ctx: click.Context, crew_name: str, inputs: tuple) -> None:
+def kickoff(ctx: click.Context, crew_name: str, inputs: tuple[str, ...]) -> None:
     """Kick off a crew execution.
 
     CREW_NAME is the name of the crew to run, e.g. research-crew.
@@ -656,7 +664,7 @@ def kickoff(ctx: click.Context, crew_name: str, inputs: tuple) -> None:
     api_key = _require_api_key(ctx)
     namespace = ctx.obj["namespace"]
 
-    parsed_inputs: dict = {}
+    parsed_inputs: dict[str, Any] = {}
     for item in inputs:
         if "=" not in item:
             console.print(f"[red bold]Error:[/] Invalid --input: expected KEY=VALUE, got: {item!r}")
@@ -759,7 +767,7 @@ def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) ->
 
     with httpx.Client(timeout=30.0) as client:
 
-        def fetch() -> dict:
+        def fetch() -> dict[str, Any]:
             try:
                 response = client.get(url, headers=headers)
             except httpx.RequestError as exc:
@@ -768,9 +776,9 @@ def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) ->
             if response.status_code != 200:
                 _handle_http_error(response)
 
-            return response.json()
+            return cast("dict[str, Any]", response.json())
 
-        def render(data: dict) -> None:
+        def render(data: dict[str, Any]) -> None:
             status_val = data.get("status", "unknown")
             color = _status_color(status_val)
 

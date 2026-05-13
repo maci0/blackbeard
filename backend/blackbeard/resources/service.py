@@ -162,7 +162,7 @@ class ResourceService:
             raise ResourceNotFoundError("unknown", str(resource_id))
         return resource
 
-    async def list(
+    async def list_resources(
         self,
         kind: str | None = None,
         namespace: str | None = None,

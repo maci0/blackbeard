@@ -3,6 +3,8 @@
 Used to validate the `spec` field of resources on create/update.
 """
 
+from typing import Any
+
 from blackbeard.kinds import ALL_KINDS
 
 AGENT_SCHEMA = {
@@ -206,7 +208,7 @@ GUARDRAIL_SCHEMA = {
 }
 
 # Map kind string → schema
-KIND_SCHEMAS: dict[str, dict] = {
+KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "Agent": AGENT_SCHEMA,
     "Task": TASK_SCHEMA,
     "Crew": CREW_SCHEMA,

@@ -17,14 +17,14 @@ def build_model_string(provider: str, model: str) -> str:
 _PASSTHROUGH_PARAMS = ("temperature", "max_tokens", "top_p")
 
 
-def apply_model_params(target: dict[str, Any], params: dict) -> None:
+def apply_model_params(target: dict[str, Any], params: dict[str, Any]) -> None:
     """Copy standard LLM parameters (temperature, max_tokens, top_p) into target dict."""
     for key in _PASSTHROUGH_PARAMS:
         if key in params:
             target[key] = params[key]
 
 
-def apply_vertex_params(target: dict[str, Any], vertex: dict) -> None:
+def apply_vertex_params(target: dict[str, Any], vertex: dict[str, Any]) -> None:
     """Apply Vertex AI project/location to target dict, falling back to global settings."""
     project = vertex.get("project") or settings.google_cloud_project
     location = vertex.get("location") or settings.cloud_ml_region

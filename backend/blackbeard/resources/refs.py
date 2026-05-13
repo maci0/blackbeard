@@ -4,8 +4,11 @@ Refs follow the format: "ref:<kind-plural>/<name>" e.g. "ref:agents/researcher"
 The kind plural is mapped back to the ResourceKind enum.
 """
 
+from __future__ import annotations
+
 import re
 from collections import defaultdict
+from typing import Any
 
 from blackbeard.kinds import PLURAL_TO_KIND_ENUM, ResourceKind
 
@@ -67,7 +70,7 @@ def parse_ref(value: str, field: str = "") -> RefInfo | None:
     return RefInfo(kind=kind, name=name, raw=value, field=field)
 
 
-def extract_refs(spec: dict, prefix: str = "spec") -> list[RefInfo]:
+def extract_refs(spec: dict[str, Any], prefix: str = "spec") -> list[RefInfo]:
     """Recursively extract all refs from a spec dict."""
     refs: list[RefInfo] = []
 
@@ -113,7 +116,7 @@ def detect_cycles(
                     cycle.append(current)
                     if current == neighbor:
                         break
-                    current = parent.get(current, "")
+                    current = parent.get(current) or ""
                     depth += 1
                     if not current:
                         break
@@ -133,7 +136,7 @@ def detect_cycles(
     return cycles
 
 
-def build_adjacency(resources: list[dict]) -> dict[str, list[str]]:
+def build_adjacency(resources: list[dict[str, Any]]) -> dict[str, list[str]]:
     """Build adjacency list from a list of resource dicts (parsed YAML).
 
     Each resource dict has 'kind', 'metadata.name', and 'spec'.

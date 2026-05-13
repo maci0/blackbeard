@@ -1,6 +1,7 @@
 """Resource validation: JSON Schema + ref format validation."""
 
 import ipaddress
+from typing import Any
 from urllib.parse import urlparse
 
 import jsonschema
@@ -112,7 +113,7 @@ def _is_internal_host(hostname: str) -> bool:
         return False
 
 
-def _validate_llm_connection_extra(spec: dict, errors: list[ValidationError]) -> None:
+def _validate_llm_connection_extra(spec: dict[str, Any], errors: list[ValidationError]) -> None:
     """Block SSRF via base_url and env var exfiltration via api_key_env."""
     api_key_env = spec.get("api_key_env")
     if isinstance(api_key_env, str) and api_key_env.startswith(_BLOCKED_ENV_PREFIXES):
@@ -160,7 +161,9 @@ def _validate_llm_connection_extra(spec: dict, errors: list[ValidationError]) ->
             )
 
 
-def validate_resource(kind: str, spec: dict) -> tuple[list[ValidationError], list[RefInfo] | None]:
+def validate_resource(
+    kind: str, spec: dict[str, Any]
+) -> tuple[list[ValidationError], list[RefInfo] | None]:
     """Validate a resource spec against its JSON Schema.
 
     Returns (errors, refs) where refs is the list of extracted RefInfo objects

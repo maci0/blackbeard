@@ -1,12 +1,15 @@
 """SQLAlchemy models for execution tracking."""
 
+from __future__ import annotations
+
 import enum
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
-    Column,
     DateTime,
     Enum,
     ForeignKey,
@@ -19,7 +22,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from blackbeard.models.database import Base
 
@@ -57,49 +60,54 @@ class Execution(Base):
 
     __tablename__ = "executions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    crew_name = Column(String(255), nullable=False)
-    crew_namespace = Column(
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    crew_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    crew_namespace: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
         default="default",
         server_default=text("'default'"),
     )
-    status = Column(
+    status: Mapped[ExecutionStatus] = mapped_column(
         Enum(ExecutionStatus, create_type=False, values_callable=lambda e: [x.value for x in e]),
         nullable=False,
         default=ExecutionStatus.QUEUED,
         server_default=text("'queued'"),
     )
-    inputs = Column(JSONB, nullable=False, default=dict, server_default=text("'{}'"))
-    outputs = Column(JSONB, nullable=True)
-    error = Column(Text, nullable=True)
+    inputs: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'")
+    )
+    outputs: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Token / cost tracking
-    total_tokens = Column(Integer, nullable=False, default=0, server_default=text("0"))
-    prompt_tokens = Column(Integer, nullable=False, default=0, server_default=text("0"))
-    completion_tokens = Column(Integer, nullable=False, default=0, server_default=text("0"))
-    cost_usd = Column(Numeric(10, 6), nullable=False, default=0.0, server_default=text("0"))
+    total_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    prompt_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    completion_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    cost_usd: Mapped[Decimal] = mapped_column(
+        Numeric(10, 6), nullable=False, default=Decimal("0"), server_default=text("0")
+    )
 
-    # LiteLLM virtual key for this execution
-    litellm_key = Column(String(255), nullable=True)
+    litellm_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    # Langfuse trace link
-    langfuse_trace_id = Column(String(255), nullable=True)
-    langfuse_trace_url = Column(String(1024), nullable=True)
+    langfuse_trace_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    langfuse_trace_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
-    # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(UTC),
         server_default=text("now()"),
     )
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Relationships
-    tasks = relationship(
+    tasks: Mapped[list[ExecutionTask]] = relationship(
         "ExecutionTask",
         back_populates="execution",
         cascade="all, delete-orphan",
@@ -125,39 +133,42 @@ class ExecutionTask(Base):
 
     __tablename__ = "execution_tasks"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    execution_id = Column(
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    execution_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("executions.id", ondelete="CASCADE"),
         nullable=False,
     )
-    task_name = Column(String(255), nullable=False)
-    agent_name = Column(String(255), nullable=True)
-    order = Column(Integer, nullable=False, default=0, server_default=text("0"))
-    status = Column(
+    task_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    agent_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    status: Mapped[TaskStatus] = mapped_column(
         Enum(TaskStatus, create_type=False, values_callable=lambda e: [x.value for x in e]),
         nullable=False,
         default=TaskStatus.PENDING,
         server_default=text("'pending'"),
     )
-    output = Column(Text, nullable=True)
-    error = Column(Text, nullable=True)
+    output: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Token tracking per task
-    tokens_used = Column(Integer, nullable=False, default=0, server_default=text("0"))
-    cost_usd = Column(Numeric(10, 6), nullable=False, default=0.0, server_default=text("0"))
+    tokens_used: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    cost_usd: Mapped[Decimal] = mapped_column(
+        Numeric(10, 6), nullable=False, default=Decimal("0"), server_default=text("0")
+    )
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(UTC),
         server_default=text("now()"),
     )
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    execution = relationship("Execution", back_populates="tasks")
-    tool_calls = relationship(
+    execution: Mapped[Execution] = relationship("Execution", back_populates="tasks")
+    tool_calls: Mapped[list[ExecutionToolCall]] = relationship(
         "ExecutionToolCall",
         back_populates="task",
         cascade="all, delete-orphan",
@@ -178,25 +189,25 @@ class ExecutionToolCall(Base):
 
     __tablename__ = "execution_tool_calls"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    task_id = Column(
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("execution_tasks.id", ondelete="CASCADE"),
         nullable=False,
     )
-    tool_name = Column(String(255), nullable=False)
-    input_data = Column(JSONB, nullable=True)
-    output_data = Column(JSONB, nullable=True)
-    error = Column(Text, nullable=True)
-    duration_ms = Column(Integer, nullable=True)
-    called_at = Column(
+    tool_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    input_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    output_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    called_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(UTC),
         server_default=text("now()"),
     )
 
-    task = relationship("ExecutionTask", back_populates="tool_calls")
+    task: Mapped[ExecutionTask] = relationship("ExecutionTask", back_populates="tool_calls")
 
     __table_args__ = (
         Index("ix_tool_call_task", "task_id"),

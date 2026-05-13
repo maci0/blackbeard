@@ -34,6 +34,7 @@ dev = [
     "pytest-cov>=6.1,<7",
     "ruff>=0.11,<1",
     "mypy>=1.15,<2",
+    "types-PyYAML>=6.0.12,<7",
     "aiosqlite>=0.20,<1",
 ]
 
@@ -75,7 +76,11 @@ runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 [tool.mypy]
 python_version = "3.13"
 strict = true
-plugins = ["pydantic.mypy"]
+plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
+
+[[tool.mypy.overrides]]
+module = "blackbeard.langfuse.listener"
+disable_error_code = ["untyped-decorator"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

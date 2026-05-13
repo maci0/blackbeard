@@ -4,6 +4,7 @@ import asyncio
 import logging
 import threading
 import time
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, Response
@@ -14,13 +15,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from blackbeard.config import settings
 from blackbeard.models import get_session
 
+_redis_from_url: Any = None
+_HAS_REDIS = False
 try:
-    from redis.asyncio import from_url as _redis_from_url
+    from redis.asyncio import from_url as _redis_from_url_import
 
+    _redis_from_url = _redis_from_url_import
     _HAS_REDIS = True
 except ImportError:
-    _redis_from_url = None  # type: ignore[assignment]
-    _HAS_REDIS = False
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +69,7 @@ async def health(response: Response) -> HealthResponse:
     return HealthResponse(status="ok", service="blackbeard")
 
 
-_valkey_client: object | None = None
+_valkey_client: Any = None
 _valkey_lock = asyncio.Lock()
 
 
@@ -84,7 +87,7 @@ async def _check_valkey() -> dict[str, object]:
                     url = settings.valkey_url.get_secret_value().replace("valkey://", "redis://", 1)
                     _valkey_client = _redis_from_url(url, socket_connect_timeout=2)
         t0 = time.monotonic()
-        await _valkey_client.ping()  # type: ignore[union-attr]
+        await _valkey_client.ping()
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
         return {"status": "up", "latency_ms": latency_ms}
     except Exception as e:
@@ -130,7 +133,7 @@ async def shutdown_health_clients() -> None:
         _health_client = None
     if _valkey_client is not None:
         try:
-            await _valkey_client.aclose()  # type: ignore[union-attr]
+            await _valkey_client.aclose()
         except Exception as e:
             logger.warning(
                 "Error closing valkey client: %s",

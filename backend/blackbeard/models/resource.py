@@ -1,11 +1,13 @@
 """SQLAlchemy models for the resource system."""
 
+from __future__ import annotations
+
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
-    Column,
     DateTime,
     Enum,
     ForeignKey,
@@ -17,7 +19,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from blackbeard.kinds import ResourceKind
 from blackbeard.models.database import Base
@@ -28,30 +30,34 @@ class Resource(Base):
 
     __tablename__ = "resources"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    kind = Column(
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    kind: Mapped[ResourceKind] = mapped_column(
         Enum(ResourceKind, create_type=False, values_callable=lambda e: [x.value for x in e]),
         nullable=False,
         index=True,
     )
-    name = Column(String(255), nullable=False)
-    namespace = Column(
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    namespace: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
         default="default",
         server_default=text("'default'"),
     )
-    labels = Column(JSONB, nullable=False, default=dict, server_default=text("'{}'"))
-    spec = Column(JSONB, nullable=False)
-    raw_yaml = Column(Text, nullable=True)
-    version = Column(Integer, nullable=False, default=1, server_default=text("1"))
-    created_at = Column(
+    labels: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'")
+    )
+    spec: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    raw_yaml: Mapped[str | None] = mapped_column(Text, nullable=True)
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(UTC),
         server_default=text("now()"),
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(UTC),
@@ -59,8 +65,7 @@ class Resource(Base):
         server_default=text("now()"),
     )
 
-    # Relationships
-    outgoing_refs = relationship(
+    outgoing_refs: Mapped[list[ResourceRef]] = relationship(
         "ResourceRef",
         foreign_keys="ResourceRef.source_id",
         back_populates="source",
@@ -83,26 +88,28 @@ class ResourceRef(Base):
 
     __tablename__ = "resource_refs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    source_id = Column(
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("resources.id", ondelete="CASCADE"),
         nullable=False,
     )
-    target_kind = Column(
+    target_kind: Mapped[ResourceKind] = mapped_column(
         Enum(ResourceKind, create_type=False, values_callable=lambda e: [x.value for x in e]),
         nullable=False,
     )
-    target_name = Column(String(255), nullable=False)
-    target_namespace = Column(
+    target_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_namespace: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
         default="default",
         server_default=text("'default'"),
     )
-    ref_field = Column(String(255), nullable=False)  # e.g. "spec.llm", "spec.tools[0]"
+    ref_field: Mapped[str] = mapped_column(String(255), nullable=False)
 
-    source = relationship("Resource", foreign_keys=[source_id], back_populates="outgoing_refs")
+    source: Mapped[Resource] = relationship(
+        "Resource", foreign_keys=[source_id], back_populates="outgoing_refs"
+    )
 
     __table_args__ = (
         Index("ix_ref_source", "source_id"),

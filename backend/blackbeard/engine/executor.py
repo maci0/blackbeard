@@ -9,8 +9,9 @@ import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from crewai.crews.crew_output import CrewOutput
 from sqlalchemy import func, select
 from sqlalchemy.orm import defer, selectinload
 
@@ -102,7 +103,7 @@ async def _load_crew_resources(
 async def kickoff(
     session: AsyncSession,
     crew_name: str,
-    inputs: dict | None = None,
+    inputs: dict[str, Any] | None = None,
     namespace: str = "default",
 ) -> Execution:
     """Start a crew execution.
@@ -195,9 +196,10 @@ async def kickoff(
 
     future.add_done_callback(_on_thread_error)
 
-    # Re-fetch with tasks eagerly loaded so callers can access execution.tasks
     loaded = await get_execution(session, execution_id)
-    return loaded  # type: ignore[return-value]
+    if loaded is None:
+        raise ExecutionError(f"Execution {execution_id} not found after kickoff")
+    return loaded
 
 
 def _mark_failed_sync(execution_id: UUID, error: str) -> None:
@@ -247,7 +249,7 @@ async def _mark_failed_async(execution_id: UUID, error: str) -> None:
             )
 
 
-def _snapshot_resource(resource: Resource) -> dict:
+def _snapshot_resource(resource: Resource) -> dict[str, Any]:
     """Snapshot kind/name/namespace/spec for background crew execution.
 
     Excludes raw_yaml and labels.
@@ -262,9 +264,9 @@ def _snapshot_resource(resource: Resource) -> dict:
 
 def _run_crew_sync(
     execution_id: UUID,
-    resource_snapshot: dict[str, dict],
+    resource_snapshot: dict[str, dict[str, Any]],
     crew_name: str,
-    inputs: dict,
+    inputs: dict[str, Any],
 ) -> None:
     """Run a crew in a dedicated event loop, blocking until completion (for ThreadPoolExecutor)."""
     loop = asyncio.new_event_loop()
@@ -277,9 +279,9 @@ def _run_crew_sync(
 
 async def _run_crew_async(
     execution_id: UUID,
-    resource_snapshot: dict[str, dict],
+    resource_snapshot: dict[str, dict[str, Any]],
     crew_name: str,
-    inputs: dict,
+    inputs: dict[str, Any],
 ) -> None:
     """Run a crew and update the execution record with results."""
     async with async_session() as session:
@@ -308,6 +310,7 @@ async def _run_crew_async(
             )
             return
 
+        running_namespace = execution.crew_namespace
         execution.status = ExecutionStatus.RUNNING
         execution.started_at = datetime.now(UTC)
         await session.commit()
@@ -319,7 +322,7 @@ async def _run_crew_async(
                 "event": "execution_running",
                 "execution_id": str(execution_id),
                 "crew_name": crew_name,
-                "namespace": execution.crew_namespace,
+                "namespace": running_namespace,
             },
         )
 
@@ -365,12 +368,14 @@ async def _run_crew_async(
             execution.status = ExecutionStatus.COMPLETED
             execution.completed_at = datetime.now(UTC)
 
-            execution.outputs = {"raw": result.raw}
-
-            usage = result.token_usage
-            execution.total_tokens = usage.total_tokens
-            execution.prompt_tokens = usage.prompt_tokens
-            execution.completion_tokens = usage.completion_tokens
+            if isinstance(result, CrewOutput):
+                execution.outputs = {"raw": result.raw}
+                usage = result.token_usage
+                execution.total_tokens = usage.total_tokens
+                execution.prompt_tokens = usage.prompt_tokens
+                execution.completion_tokens = usage.completion_tokens
+            else:
+                execution.outputs = {"raw": repr(result), "result_type": type(result).__name__}
 
             if langfuse_listener and langfuse_listener.trace_id:
                 execution.langfuse_trace_id = langfuse_listener.trace_id
@@ -415,7 +420,7 @@ async def _run_crew_async(
                     "event": "execution_failed",
                     "execution_id": str(execution_id),
                     "crew_name": crew_name,
-                    "namespace": execution.crew_namespace,
+                    "namespace": running_namespace,
                     "error_type": type(e).__name__,
                     "duration_s": round(duration_s, 1) if duration_s else None,
                 },

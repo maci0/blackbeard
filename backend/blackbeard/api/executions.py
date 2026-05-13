@@ -170,7 +170,8 @@ async def stream_execution(
     )
 
     async def event_generator() -> AsyncGenerator[dict[str, str]]:
-        last_status = None
+        last_status: ExecutionStatus | None = None
+        current_status: ExecutionStatus | None = None
         polls = 0
         try:
             while polls < max_polls:
@@ -206,7 +207,7 @@ async def stream_execution(
                             heartbeat = {"status": current_status.value}
                             yield {"event": "heartbeat", "data": json.dumps(heartbeat)}
 
-                if current_status in TERMINAL_STATUSES:
+                if current_status is not None and current_status in TERMINAL_STATUSES:
                     logger.info(
                         "SSE stream closed: execution_id=%s status=%s polls=%d",
                         execution_id,

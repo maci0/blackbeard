@@ -74,7 +74,7 @@ class BlackbeardLangfuseListener(BaseEventListener):
         langfuse = get_langfuse()
         if not langfuse:
             return None
-        return langfuse.get_trace_url(self._trace.trace_id)
+        return langfuse.get_trace_url(trace_id=self._trace.trace_id)
 
     def setup_listeners(self, crewai_event_bus: Any) -> None:
         """Register handlers for CrewAI events."""

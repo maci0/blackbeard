@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from typing import Any, cast
 
 import httpx
 
@@ -55,7 +56,7 @@ async def create_execution_key(
     """
     try:
         client = _get_client()
-        payload: dict = {
+        payload: dict[str, Any] = {
             "metadata": {"execution_id": execution_id},
         }
         if models:
@@ -72,7 +73,7 @@ async def create_execution_key(
 
         if response.status_code == 200:
             data = response.json()
-            return data.get("key")
+            return cast("str | None", data.get("key"))
         logger.warning(
             "Failed to create LiteLLM key: HTTP %d",
             response.status_code,
@@ -130,7 +131,7 @@ async def delete_execution_key(key: str) -> bool:
         return False
 
 
-async def get_key_spend(key: str) -> dict | None:
+async def get_key_spend(key: str) -> dict[str, Any] | None:
     """Get spend data for a LiteLLM virtual key."""
     try:
         client = _get_client()
@@ -141,7 +142,7 @@ async def get_key_spend(key: str) -> dict | None:
             timeout=10.0,
         )
         if response.status_code == 200:
-            return response.json()
+            return cast("dict[str, Any]", response.json())
         logger.warning(
             "Failed to get LiteLLM key spend: HTTP %d",
             response.status_code,

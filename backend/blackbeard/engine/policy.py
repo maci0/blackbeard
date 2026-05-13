@@ -9,7 +9,7 @@ Policy data covers tool access mode, budget limits, and sandbox tier.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from blackbeard.resources.refs import parse_ref
 
@@ -40,7 +40,7 @@ class AgentPolicy:
     @property
     def tool_mode(self) -> str:
         """Tool access mode: 'allowlist', 'denylist', or 'all'."""
-        return self._tools_config.get("mode", "all")
+        return cast("str", self._tools_config.get("mode", "all"))
 
     @property
     def allowed_tools(self) -> set[str]:
@@ -55,17 +55,17 @@ class AgentPolicy:
     @property
     def max_budget_usd(self) -> float | None:
         """Maximum LLM spend in USD for this agent."""
-        return self._budget.get("max_usd")
+        return cast("float | None", self._budget.get("max_usd"))
 
     @property
     def max_tokens(self) -> int | None:
         """Maximum total tokens for this agent."""
-        return self._budget.get("max_tokens")
+        return cast("int | None", self._budget.get("max_tokens"))
 
     @property
     def minimum_sandbox_tier(self) -> str:
         """Minimum sandbox tier required by policy."""
-        return self._sandbox.get("minimum_tier", "none")
+        return cast("str", self._sandbox.get("minimum_tier", "none"))
 
     def check_tool_access(self, agent_name: str, tool_name: str) -> None:
         """Check if an agent is allowed to use a tool.
@@ -93,9 +93,9 @@ DEFAULT_POLICY = AgentPolicy({})
 
 
 def resolve_policy(
-    agent_spec: dict,
-    crew_spec: dict | None = None,
-    policies: dict[str, dict] | None = None,
+    agent_spec: dict[str, Any],
+    crew_spec: dict[str, Any] | None = None,
+    policies: dict[str, dict[str, Any]] | None = None,
 ) -> AgentPolicy:
     """Resolve the effective policy for an agent.
 

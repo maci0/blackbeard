@@ -15,7 +15,7 @@ import threading
 import time
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import wasmtime
 
@@ -182,17 +182,18 @@ class WasmSandbox:
 
         return linker
 
-    def _instantiate(self, wasm_path: str) -> tuple[wasmtime.Store, object]:
+    def _instantiate(self, wasm_path: str) -> tuple[wasmtime.Store, wasmtime.Instance]:
         """Create store, load module, link, and instantiate."""
         store = self._create_store()
         module = self._load_module(wasm_path)
         linker = self._create_linker(store)
-        return store, linker.instantiate(store, module)
+        instance = linker.instantiate(store, module)
+        return store, instance
 
     def invoke(
         self,
         wasm_path: str,
-        input_data: str | dict,
+        input_data: str | dict[str, Any],
         execution_id: str | None = None,
     ) -> WasmToolResult:
         """Execute a WASM tool with the given input.
@@ -225,7 +226,8 @@ class WasmSandbox:
         try:
             store, instance = self._instantiate(wasm_path)
 
-            run_func = instance.exports(store).get("run")
+            exports = cast("Any", instance.exports(store))
+            run_func = exports.get("run")
             if run_func is None:
                 raise WasmExecutionError(
                     "WASM module does not export a 'run' function. "
@@ -321,18 +323,19 @@ class WasmSandbox:
             )
             raise WasmExecutionError(f"Unexpected error during WASM execution: {e}") from e
 
-    def describe(self, wasm_path: str) -> dict | None:
+    def describe(self, wasm_path: str) -> dict[str, Any] | None:
         """Get tool metadata from a WASM module's 'describe' export."""
         try:
             store, instance = self._instantiate(wasm_path)
 
-            describe_func = instance.exports(store).get("describe")
+            exports = cast("Any", instance.exports(store))
+            describe_func = exports.get("describe")
             if describe_func is None:
                 return None
 
             result = describe_func(store)
             if isinstance(result, str):
-                return json.loads(result)
+                return cast("dict[str, Any]", json.loads(result))
             return None
 
         except Exception as e:

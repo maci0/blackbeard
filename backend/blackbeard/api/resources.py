@@ -85,7 +85,7 @@ async def list_resources(
                 )
             labels[k] = v.strip()
     service = ResourceService(session)
-    items, total = await service.list(
+    items, total = await service.list_resources(
         kind=kind,
         namespace=namespace,
         labels=labels,
@@ -112,8 +112,8 @@ async def list_resources(
 )
 async def create_resource(
     data: ResourceCreate,
+    response: Response,
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
-    response: Response = ...,
     session: AsyncSession = Depends(get_session),
 ) -> ResourceResponse:
     """Create (or upsert) a resource of a given kind."""

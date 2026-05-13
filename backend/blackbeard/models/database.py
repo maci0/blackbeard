@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -74,7 +74,7 @@ def _after_cursor_execute(
 
 @event.listens_for(engine.sync_engine, "checkout")
 def _on_checkout(_dbapi_conn: Any, _connection_rec: Any, _connection_proxy: Any) -> None:
-    pool = engine.sync_engine.pool
+    pool = cast("Any", engine.sync_engine.pool)
     checked_out = pool.checkedout()
     pool_size = pool.size()
     overflow = pool.overflow()

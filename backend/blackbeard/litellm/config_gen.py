@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -31,7 +31,7 @@ def generate_litellm_config(llm_connections: list[Resource]) -> str:
 
         litellm_model = build_model_string(provider, model)
 
-        litellm_params: dict = {"model": litellm_model}
+        litellm_params: dict[str, Any] = {"model": litellm_model}
 
         if provider == "vertex_ai":
             apply_vertex_params(litellm_params, vertex)

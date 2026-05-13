@@ -17,7 +17,7 @@ class _RequestIdFilter(logging.Filter):
     """Injects request_id from contextvars into every log record."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        record.request_id = request_id_var.get("-")  # type: ignore[attr-defined]
+        record.request_id = request_id_var.get("-")
         return True
 
 
