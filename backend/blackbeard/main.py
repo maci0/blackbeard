@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-import blackbeard.models.execution  # noqa: F401 — register Execution tables
+import blackbeard.models.execution
 import blackbeard.models.resource  # noqa: F401 — register Resource/ResourceRef tables
 from blackbeard import __version__
 from blackbeard.api.executions import router as executions_router
@@ -49,9 +49,7 @@ def _validate_startup_config() -> None:
                 "Set a strong random value via environment variable, "
                 "or set DEBUG=true for local development."
             )
-        logger.warning(
-            "SECURITY: Using default API key — set BLACKBEARD_API_KEY for production"
-        )
+        logger.warning("SECURITY: Using default API key — set BLACKBEARD_API_KEY for production")
     elif len(api_key) < 16:
         raise RuntimeError(
             "Refusing to start: BLACKBEARD_API_KEY is too short (minimum 16 characters). "
@@ -65,9 +63,7 @@ def _validate_startup_config() -> None:
                 "Set a strong random value via environment variable, "
                 "or set DEBUG=true for local development."
             )
-        logger.warning(
-            "SECURITY: Using default LiteLLM master key — set LITELLM_MASTER_KEY"
-        )
+        logger.warning("SECURITY: Using default LiteLLM master key — set LITELLM_MASTER_KEY")
     if "*" in settings.cors_origins and not settings.debug:
         raise RuntimeError(
             "Refusing to start: CORS_ORIGINS contains wildcard '*'. "

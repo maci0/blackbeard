@@ -8,7 +8,7 @@ import contextvars
 import json
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
 
@@ -21,13 +21,33 @@ class _RequestIdFilter(logging.Filter):
         return True
 
 
-_LOG_RECORD_BUILTIN = frozenset({
-    "name", "msg", "args", "created", "relativeCreated", "exc_info",
-    "exc_text", "stack_info", "lineno", "funcName", "module", "filename",
-    "pathname", "process", "processName", "thread", "threadName",
-    "levelname", "levelno", "message", "msecs", "taskName",
-    "request_id",
-})
+_LOG_RECORD_BUILTIN = frozenset(
+    {
+        "name",
+        "msg",
+        "args",
+        "created",
+        "relativeCreated",
+        "exc_info",
+        "exc_text",
+        "stack_info",
+        "lineno",
+        "funcName",
+        "module",
+        "filename",
+        "pathname",
+        "process",
+        "processName",
+        "thread",
+        "threadName",
+        "levelname",
+        "levelno",
+        "message",
+        "msecs",
+        "taskName",
+        "request_id",
+    }
+)
 
 
 class _JsonFormatter(logging.Formatter):
@@ -35,7 +55,7 @@ class _JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_entry: dict[str, object] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -64,10 +84,12 @@ def configure_logging(debug: bool = False) -> None:
     handler.addFilter(_RequestIdFilter())
 
     if debug:
-        handler.setFormatter(logging.Formatter(
-            fmt="%(asctime)s %(levelname)-8s [%(request_id)s] %(name)s — %(message)s",
-            datefmt="%Y-%m-%dT%H:%M:%S",
-        ))
+        handler.setFormatter(
+            logging.Formatter(
+                fmt="%(asctime)s %(levelname)-8s [%(request_id)s] %(name)s — %(message)s",
+                datefmt="%Y-%m-%dT%H:%M:%S",
+            )
+        )
     else:
         handler.setFormatter(_JsonFormatter())
 

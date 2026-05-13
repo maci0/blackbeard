@@ -1,13 +1,13 @@
-import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import * as TabsPrimitive from '@radix-ui/react-tabs'
 import { Trash2, Pencil, Save, X, AlertTriangle, Play, Check, Info } from 'lucide-react'
 
-const Editor = lazy(() => import('@monaco-editor/react'))
+import { CodeBlock } from '@/components/ui/CodeBlock'
 import { useResourceStore, type Resource } from '@/stores/resourceStore'
 import { api } from '@/api/client'
 import { cn } from '@/lib/utils'
-import { useDarkMode, useDocumentTitle } from '@/lib/hooks'
+import { useDocumentTitle } from '@/lib/hooks'
 import { resourceToYaml, parseYaml } from '@/lib/yaml'
 import { formatDate } from '@/lib/formatters'
 import { KindBadge } from '@/components/ui/KindBadge'
@@ -22,7 +22,10 @@ import { Spinner } from '@/components/ui/Spinner'
 function InlineAlert({ message }: { message: string | null }) {
   if (!message) return null
   return (
-    <div role="alert" className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-center gap-2">
+    <div
+      role="alert"
+      className="mb-4 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+    >
       <AlertTriangle className="h-4 w-4 shrink-0" />
       {message}
     </div>
@@ -35,17 +38,17 @@ function InlineAlert({ message }: { message: string | null }) {
 
 function SpecValue({ value }: { value: unknown }): React.ReactElement {
   if (value === null || value === undefined) {
-    return <span className="text-muted-foreground italic text-xs">null</span>
+    return <span className="text-xs italic text-muted-foreground">null</span>
   }
   if (typeof value === 'boolean') {
     return (
-      <span className={value ? 'text-emerald-600 font-medium' : 'text-red-500 font-medium'}>
+      <span className={value ? 'font-medium text-emerald-600' : 'font-medium text-red-500'}>
         {String(value)}
       </span>
     )
   }
   if (typeof value === 'number') {
-    return <span className="text-blue-600 font-mono text-xs">{value}</span>
+    return <span className="font-mono text-xs text-blue-600">{value}</span>
   }
   if (typeof value === 'string') {
     const refMatch = value.match(/^ref:([a-z-]+)\/([a-z0-9][a-z0-9-]*)$/)
@@ -54,7 +57,7 @@ function SpecValue({ value }: { value: unknown }): React.ReactElement {
       return (
         <Link
           to={`/resources/${kindPlural}/${refName}`}
-          className="text-primary hover:underline font-mono text-xs"
+          className="font-mono text-xs text-primary hover:underline"
         >
           {value}
         </Link>
@@ -62,7 +65,7 @@ function SpecValue({ value }: { value: unknown }): React.ReactElement {
     }
     if (value.includes('\n')) {
       return (
-        <pre className="text-xs bg-muted/60 rounded-md p-2 overflow-x-auto whitespace-pre-wrap font-mono border">
+        <pre className="overflow-x-auto whitespace-pre-wrap rounded-md border bg-muted/60 p-2 font-mono text-xs">
           {value}
         </pre>
       )
@@ -70,12 +73,12 @@ function SpecValue({ value }: { value: unknown }): React.ReactElement {
     return <span className="break-all">{value}</span>
   }
   if (Array.isArray(value)) {
-    if (value.length === 0) return <span className="text-muted-foreground italic text-xs">[]</span>
+    if (value.length === 0) return <span className="text-xs italic text-muted-foreground">[]</span>
     return (
       <ul className="space-y-1">
-        {value.map((item, idx) => (
+        {(value as unknown[]).map((item: unknown, idx: number) => (
           <li key={idx} className="flex items-start gap-1.5">
-            <span className="text-muted-foreground/60 mt-0.5 select-none">•</span>
+            <span className="mt-0.5 select-none text-muted-foreground/60">•</span>
             <SpecValue value={item} />
           </li>
         ))}
@@ -84,10 +87,10 @@ function SpecValue({ value }: { value: unknown }): React.ReactElement {
   }
   if (typeof value === 'object') {
     return (
-      <div className="border-l-2 border-border pl-3 space-y-1.5">
+      <div className="space-y-1.5 border-l-2 border-border pl-3">
         {Object.entries(value as Record<string, unknown>).map(([k, v]) => (
-          <div key={k} className="flex gap-2 items-start">
-            <span className="text-xs font-medium text-muted-foreground shrink-0 min-w-[80px]">
+          <div key={k} className="flex items-start gap-2">
+            <span className="min-w-[80px] shrink-0 text-xs font-medium text-muted-foreground">
               {k}
             </span>
             <SpecValue value={v} />
@@ -96,26 +99,24 @@ function SpecValue({ value }: { value: unknown }): React.ReactElement {
       </div>
     )
   }
-  return <span>{String(value)}</span>
+  return <span>{typeof value === 'string' ? value : JSON.stringify(value)}</span>
 }
 
 function prettifyKey(key: string): string {
-  return key
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 function SpecDisplay({ spec }: { spec: Record<string, unknown> }) {
   const entries = Object.entries(spec)
   if (entries.length === 0) {
-    return <p className="text-sm text-muted-foreground italic">No spec fields defined.</p>
+    return <p className="text-sm italic text-muted-foreground">No spec fields defined.</p>
   }
   return (
     <dl className="divide-y divide-border">
       {entries.map(([key, value]) => (
-        <div key={key} className="grid grid-cols-[180px_1fr] gap-6 py-3 items-start">
+        <div key={key} className="grid grid-cols-[180px_1fr] items-start gap-6 py-3">
           <dt className="text-sm font-medium text-muted-foreground">{prettifyKey(key)}</dt>
-          <dd className="text-sm min-w-0">
+          <dd className="min-w-0 text-sm">
             <SpecValue value={value} />
           </dd>
         </div>
@@ -147,11 +148,12 @@ export default function ResourceDetail() {
   const [activeTab, setActiveTab] = useState('spec')
   const [showRunDialog, setShowRunDialog] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
-  const isDark = useDarkMode()
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    }
   }, [])
 
   const loadResource = useCallback(async () => {
@@ -169,7 +171,7 @@ export default function ResourceDetail() {
   }, [kindPlural, name])
 
   useEffect(() => {
-    loadResource()
+    void loadResource()
   }, [loadResource])
 
   useDocumentTitle(resource ? resource.metadata.name : 'Resource')
@@ -200,9 +202,9 @@ export default function ResourceDetail() {
       const updated = await updateResource(kindPlural, name, {
         spec,
         metadata: {
-          name: (meta?.name as string) ?? resource.metadata.name,
-          namespace: (meta?.namespace as string) ?? resource.metadata.namespace,
-          labels: (meta?.labels as Record<string, string>) ?? resource.metadata.labels,
+          name: meta?.name ?? resource.metadata.name,
+          namespace: meta?.namespace ?? resource.metadata.namespace,
+          labels: meta?.labels ?? resource.metadata.labels,
         },
         version: resource.version,
       })
@@ -223,7 +225,7 @@ export default function ResourceDetail() {
     setDeleteError(null)
     try {
       await deleteResource(kindPlural, name)
-      navigate('/resources')
+      void navigate('/resources')
     } catch (err) {
       setDeleteError((err as Error).message)
     } finally {
@@ -236,7 +238,7 @@ export default function ResourceDetail() {
     try {
       const inputs = JSON.parse(rawInputs) as Record<string, unknown>
       const result = await api.post<{ id: string }>(`/api/v1/crews/${name}/kickoff`, { inputs })
-      navigate(`/executions/${result.id}`)
+      void navigate(`/executions/${result.id}`)
     } catch (err) {
       setRunError((err as Error).message)
     }
@@ -245,7 +247,7 @@ export default function ResourceDetail() {
   /* ---- Loading / error states ---- */
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex flex-1 items-center justify-center">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Spinner size="md" className="text-muted-foreground" />
           <span className="text-sm">Loading resource…</span>
@@ -256,20 +258,20 @@ export default function ResourceDetail() {
 
   if (error || !resource) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex flex-1 items-center justify-center">
         <div className="text-center">
-          <AlertTriangle className="h-8 w-8 text-destructive mx-auto mb-3" />
+          <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" />
           <p className="font-medium">{error ?? 'Resource not found'}</p>
-          <div className="flex items-center gap-2 justify-center mt-4">
+          <div className="mt-4 flex items-center justify-center gap-2">
             <button
-              onClick={loadResource}
-              className="px-4 py-2 text-sm border rounded-md hover:bg-accent transition-colors"
+              onClick={() => void loadResource()}
+              className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent"
             >
               Retry
             </button>
             <Link
               to="/resources"
-              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90 transition-opacity"
+              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90"
             >
               Back to Resources
             </Link>
@@ -280,47 +282,48 @@ export default function ResourceDetail() {
   }
 
   return (
-    <div className="flex-1 overflow-auto">
-      <div className="p-6 max-w-4xl mx-auto">
-
+    <div className="page-enter flex-1 overflow-auto">
+      <div className="mx-auto max-w-4xl p-6">
         {/* Breadcrumb */}
         <nav aria-label="Breadcrumb" className="mb-5">
           <ol className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <li>
-              <Link to="/resources" className="hover:text-foreground transition-colors">
+              <Link to="/resources" className="transition-colors hover:text-foreground">
                 Resources
               </Link>
             </li>
-            <li aria-hidden="true" className="text-muted-foreground/40">›</li>
+            <li aria-hidden="true" className="text-muted-foreground/40">
+              ›
+            </li>
             <li>
-              <span className="text-foreground font-medium">{resource.metadata.name}</span>
+              <span className="font-medium text-foreground">{resource.metadata.name}</span>
             </li>
           </ol>
         </nav>
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3 flex-wrap">
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
             <KindBadge kind={resource.kind} />
             <h1 className="text-2xl font-semibold tracking-tight">{resource.metadata.name}</h1>
-            <span className="text-sm text-muted-foreground border rounded-full px-2 py-0.5">
+            <span className="rounded-full border px-2 py-0.5 text-sm text-muted-foreground">
               v{resource.version}
             </span>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
             {editMode ? (
               <>
                 <button
                   onClick={handleCancelEdit}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md hover:bg-accent transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent"
                 >
                   <X className="h-3.5 w-3.5" />
                   Cancel
                 </button>
                 <button
-                  onClick={handleSave}
+                  onClick={() => void handleSave()}
                   disabled={saving}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                   {saving ? (
                     <Spinner size="sm" className="text-white" />
@@ -334,8 +337,11 @@ export default function ResourceDetail() {
               <>
                 {resource.kind === 'Crew' && (
                   <button
-                    onClick={() => { setShowRunDialog(true); setRunError(null) }}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors"
+                    onClick={() => {
+                      setShowRunDialog(true)
+                      setRunError(null)
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm text-white transition-colors hover:bg-emerald-700"
                   >
                     <Play className="h-3.5 w-3.5" />
                     Run
@@ -343,14 +349,14 @@ export default function ResourceDetail() {
                 )}
                 <button
                   onClick={handleEdit}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md hover:bg-accent transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                   Edit
                 </button>
                 <button
                   onClick={() => setDeleteOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-destructive/30 text-destructive rounded-md hover:bg-destructive/10 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete
@@ -361,47 +367,43 @@ export default function ResourceDetail() {
         </div>
 
         {/* Metadata strip */}
-        <div className="flex flex-wrap items-center gap-6 mb-6 text-sm text-muted-foreground border rounded-lg px-4 py-3 bg-muted/20">
+        <div className="mb-6 flex flex-wrap items-center gap-6 rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
           {resource.metadata.namespace && resource.metadata.namespace !== 'default' && (
             <>
               <div>
                 <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
                   Namespace
                 </span>
-                <p className="font-medium text-foreground mt-0.5">
-                  {resource.metadata.namespace}
-                </p>
+                <p className="mt-0.5 font-medium text-foreground">{resource.metadata.namespace}</p>
               </div>
-              <div className="w-px h-8 bg-border" />
+              <div className="h-8 w-px bg-border" />
             </>
           )}
           <div>
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
               API Version
             </span>
-            <p className="font-mono text-xs text-foreground mt-0.5">{resource.apiVersion}</p>
+            <p className="mt-0.5 font-mono text-xs text-foreground">{resource.apiVersion}</p>
           </div>
-          <div className="w-px h-8 bg-border" />
+          <div className="h-8 w-px bg-border" />
           <div>
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
               Updated
             </span>
-            <p className="text-foreground mt-0.5">
-              {formatDate(resource.updated_at)}
-            </p>
+            <p className="mt-0.5 text-foreground">{formatDate(resource.updated_at)}</p>
           </div>
           {Object.keys(resource.metadata.labels ?? {}).length > 0 ? (
             <>
-              <div className="w-px h-8 bg-border" />
+              <div className="h-8 w-px bg-border" />
               <div>
                 <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
                   Labels
                 </span>
-                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                   {Object.entries(resource.metadata.labels ?? {}).map(([k, v]) => (
                     <span
                       key={k}
-                      className="inline-flex items-center text-xs bg-secondary text-secondary-foreground rounded px-1.5 py-0.5 font-mono"
+                      className="inline-flex items-center rounded bg-secondary px-1.5 py-0.5 font-mono text-xs text-secondary-foreground"
                     >
                       {k}={v}
                     </span>
@@ -417,10 +419,17 @@ export default function ResourceDetail() {
 
         {/* Save success */}
         {saveSuccess && (
-          <div role="status" className="mb-4 flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+          <div
+            role="status"
+            className="mb-4 flex items-center gap-2 text-sm text-green-600 dark:text-green-400"
+          >
             <Check className="h-4 w-4" />
             Saved successfully
-            <button onClick={() => setSaveSuccess(false)} className="ml-auto p-0.5 rounded hover:bg-green-100 dark:hover:bg-green-900 transition-colors" aria-label="Dismiss">
+            <button
+              onClick={() => setSaveSuccess(false)}
+              className="ml-auto rounded p-0.5 transition-colors hover:bg-green-100 dark:hover:bg-green-900"
+              aria-label="Dismiss"
+            >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -431,13 +440,13 @@ export default function ResourceDetail() {
 
         {/* Tabs */}
         <TabsPrimitive.Root value={activeTab} onValueChange={setActiveTab}>
-          <TabsPrimitive.List className="flex gap-0 border-b mb-6">
+          <TabsPrimitive.List className="mb-6 flex gap-0 border-b">
             {['spec', 'yaml'].map((tab) => (
               <TabsPrimitive.Trigger
                 key={tab}
                 value={tab}
                 className={cn(
-                  'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+                  '-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
                   'data-[state=active]:border-primary data-[state=active]:text-primary',
                   'data-[state=inactive]:border-transparent data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground',
                 )}
@@ -448,46 +457,41 @@ export default function ResourceDetail() {
           </TabsPrimitive.List>
 
           <TabsPrimitive.Content value="spec">
-            <div className="border rounded-lg bg-card p-4">
+            <div className="rounded-lg border bg-card p-4">
               <SpecDisplay spec={resource.spec} />
             </div>
           </TabsPrimitive.Content>
 
           <TabsPrimitive.Content value="yaml">
             {editMode && (
-              <div className="mb-3 p-2 rounded-md bg-blue-50 dark:bg-blue-950 text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
+              <div className="mb-3 flex items-center gap-2 rounded-md bg-blue-50 p-2 text-sm text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                 <Info className="h-4 w-4 shrink-0" />
                 <span>Editing in YAML mode. Changes will be validated on save.</span>
               </div>
             )}
-            <div className="border rounded-lg overflow-hidden" role="region" aria-label={editMode ? 'YAML editor' : 'YAML preview'}>
-              <Suspense fallback={<div className="h-[500px] flex items-center justify-center"><Spinner /></div>}>
-                <Editor
-                  height="500px"
-                  language="yaml"
+            <div
+              className="overflow-hidden rounded-lg border"
+              role="region"
+              aria-label={editMode ? 'YAML editor' : 'YAML preview'}
+            >
+              {editMode ? (
+                <textarea
                   value={yamlContent}
-                  onChange={(v) => setYamlContent(v ?? '')}
-                  options={{
-                    readOnly: !editMode,
-                    minimap: { enabled: false },
-                    fontSize: 13,
-                    lineNumbers: 'on',
-                    scrollBeyondLastLine: false,
-                    wordWrap: 'on',
-                    padding: { top: 12, bottom: 12 },
-                    renderLineHighlight: editMode ? 'line' : 'none',
-                    cursorStyle: editMode ? 'line' : 'underline',
-                  }}
-                  theme={isDark ? 'vs-dark' : 'vs'}
+                  onChange={(e) => setYamlContent(e.target.value)}
+                  className="h-[500px] w-full resize-none rounded-lg border bg-[#0d1117] p-4 font-mono text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-ring"
+                  spellCheck={false}
+                  aria-label="YAML editor"
                 />
-              </Suspense>
+              ) : (
+                <CodeBlock code={yamlContent} language="yaml" className="max-h-[500px]" />
+              )}
             </div>
             {!editMode && (
               <p className="mt-2 text-xs text-muted-foreground">
                 Click{' '}
                 <button
                   onClick={handleEdit}
-                  className="underline underline-offset-2 hover:text-foreground transition-colors"
+                  className="underline underline-offset-2 transition-colors hover:text-foreground"
                 >
                   Edit
                 </button>{' '}
@@ -496,7 +500,6 @@ export default function ResourceDetail() {
             )}
           </TabsPrimitive.Content>
         </TabsPrimitive.Root>
-
       </div>
 
       {/* Delete dialog */}
@@ -512,17 +515,21 @@ export default function ResourceDetail() {
         description={`Are you sure you want to delete "${resource.metadata.name}"? This action cannot be undone.`}
         confirmLabel="Delete"
         confirmVariant="destructive"
-        onConfirm={handleDelete}
+        onConfirm={() => void handleDelete()}
         loading={deleting}
       />
       {deleteError && (
         <div
           role="alert"
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-sm w-full px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/30 text-sm text-destructive shadow-lg flex items-center gap-2"
+          className="fixed bottom-6 left-1/2 z-50 flex w-full max-w-sm -translate-x-1/2 items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-lg"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {deleteError}
-          <button onClick={() => setDeleteError(null)} className="ml-auto p-0.5 rounded hover:bg-destructive/10 transition-colors" aria-label="Dismiss error">
+          <button
+            onClick={() => setDeleteError(null)}
+            className="ml-auto rounded p-0.5 transition-colors hover:bg-destructive/10"
+            aria-label="Dismiss error"
+          >
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -533,7 +540,7 @@ export default function ResourceDetail() {
         open={showRunDialog}
         onOpenChange={setShowRunDialog}
         crewName={resource.metadata.name}
-        onRun={handleRun}
+        onRun={(inputs) => void handleRun(inputs)}
       />
     </div>
   )

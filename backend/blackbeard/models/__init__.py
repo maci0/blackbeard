@@ -21,6 +21,7 @@ from blackbeard.models.execution import (
 from blackbeard.models.resource import Resource, ResourceRef
 
 __all__ = [
+    "TERMINAL_STATUSES",
     "Base",
     "Execution",
     "ExecutionStatus",
@@ -28,7 +29,6 @@ __all__ = [
     "ExecutionToolCall",
     "Resource",
     "ResourceRef",
-    "TERMINAL_STATUSES",
     "TaskStatus",
     "async_session",
     "get_session",

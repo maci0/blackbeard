@@ -21,16 +21,15 @@ import type { Resource } from '@/stores/resourceStore'
 /* ------------------------------------------------------------------ */
 
 function buildResourceBody(node: Node, crewName: string) {
-  const data = node.data as Record<string, unknown>
+  const data = node.data
   const type = node.type ?? 'unknown'
 
   const rawName =
-    (data['role'] as string | undefined) ??
-    (data['name'] as string | undefined) ??
-    node.id
+    (data['role'] as string | undefined) ?? (data['name'] as string | undefined) ?? node.id
 
   // 'name' is used for metadata.name, not a spec field — exclude to avoid validation failure
-  const { name: _, ...spec } = data
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { name: _unused, ...spec } = data
 
   return {
     apiVersion: 'blackbeard/v1',
@@ -60,8 +59,18 @@ function StudioInner() {
 
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const { nodes, selectedNodeId, setNodes, setEdges, markClean, dirty, canUndo, canRedo, undo, redo } =
-    useStudioStore()
+  const {
+    nodes,
+    selectedNodeId,
+    setNodes,
+    setEdges,
+    markClean,
+    dirty,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+  } = useStudioStore()
 
   useDocumentTitle('Studio')
 
@@ -198,7 +207,8 @@ function StudioInner() {
       await Promise.all(
         nodes.map((node) => {
           const body = buildResourceBody(node, crewName)
-          const plural = KIND_TO_PLURAL[capitalize(node.type ?? '')] ?? `${node.type ?? 'resource'}s`
+          const plural =
+            KIND_TO_PLURAL[capitalize(node.type ?? '')] ?? `${node.type ?? 'resource'}s`
           return api.post(`/api/v1/${plural}`, body)
         }),
       )
@@ -207,12 +217,12 @@ function StudioInner() {
       const agentNodes = nodes.filter((n) => n.type === 'agent')
       const taskNodes = nodes.filter((n) => n.type === 'task')
       const agentRefs = agentNodes.map((n) => {
-        const d = n.data as Record<string, unknown>
+        const d = n.data
         const raw = (d['role'] as string | undefined) ?? (d['name'] as string | undefined) ?? n.id
         return `ref:agents/${toResourceName(raw)}`
       })
       const taskRefs = taskNodes.map((n) => {
-        const d = n.data as Record<string, unknown>
+        const d = n.data
         const raw = (d['name'] as string | undefined) ?? n.id
         return `ref:tasks/${toResourceName(raw)}`
       })
@@ -271,16 +281,92 @@ function StudioInner() {
     [crewName, handleSave, applyStatus],
   )
 
+  const handleLoadExample = useCallback(() => {
+    const exampleNodes: Node[] = [
+      {
+        id: 'agent-researcher',
+        type: 'agent',
+        position: { x: 100, y: 80 },
+        data: {
+          role: 'Researcher',
+          goal: 'Find accurate and relevant information on any topic',
+          backstory: 'An expert research analyst with deep knowledge of search techniques',
+        },
+      },
+      {
+        id: 'agent-writer',
+        type: 'agent',
+        position: { x: 100, y: 310 },
+        data: {
+          role: 'Writer',
+          goal: 'Write clear, engaging content based on research findings',
+          backstory: 'A skilled content writer who transforms complex topics into readable prose',
+        },
+      },
+      {
+        id: 'task-research',
+        type: 'task',
+        position: { x: 460, y: 80 },
+        data: {
+          name: 'research-topic',
+          description: 'Research the given topic thoroughly and compile key findings',
+          expected_output: 'A detailed summary of findings with sources',
+          agent: 'ref:agents/researcher',
+        },
+      },
+      {
+        id: 'task-write',
+        type: 'task',
+        position: { x: 460, y: 310 },
+        data: {
+          name: 'write-report',
+          description: 'Write a comprehensive report based on the research findings',
+          expected_output: 'A well-structured report in markdown format',
+          agent: 'ref:agents/writer',
+          context: ['ref:tasks/research-topic'],
+        },
+      },
+    ]
+    const exampleEdges: Edge[] = [
+      {
+        id: 'edge-researcher-research',
+        source: 'agent-researcher',
+        target: 'task-research',
+        type: 'dataflow',
+        markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: '#94a3b8' },
+      },
+      {
+        id: 'edge-writer-write',
+        source: 'agent-writer',
+        target: 'task-write',
+        type: 'dataflow',
+        markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: '#94a3b8' },
+      },
+      {
+        id: 'edge-research-write',
+        source: 'task-research',
+        target: 'task-write',
+        type: 'dataflow',
+        markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: '#94a3b8' },
+      },
+    ]
+    setNodes(exampleNodes)
+    setEdges(exampleEdges)
+    setCrewName('research-crew')
+    markClean()
+    applyStatus('success', 'Example crew loaded')
+  }, [applyStatus, markClean, setEdges, setNodes])
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       <h1 className="sr-only">Studio</h1>
       <Toolbar
         crewName={crewName}
         onCrewNameChange={setCrewName}
-        onSave={handleSave}
+        onSave={() => void handleSave()}
         onRunClick={() => setRunDialogOpen(true)}
         onLoadCrew={handleLoadCrew}
-        onFetchCrews={fetchCrews}
+        onFetchCrews={() => void fetchCrews()}
         crews={crews}
         crewsLoading={crewsLoading}
         dirty={dirty}
@@ -288,7 +374,7 @@ function StudioInner() {
         statusMessage={statusMessage}
         executionId={executionId}
         onNavigateToExecution={
-          executionId ? () => navigate(`/executions/${executionId}`) : undefined
+          executionId ? () => void navigate(`/executions/${executionId}`) : undefined
         }
         canUndo={canUndo}
         canRedo={canRedo}
@@ -298,7 +384,7 @@ function StudioInner() {
 
       <div className="flex flex-1 overflow-hidden">
         <Palette />
-        <Canvas onLoadExample={() => handleLoadCrew('research-crew')} />
+        <Canvas onLoadExample={handleLoadExample} />
         {selectedNodeId && <PropertyPanel />}
       </div>
 
@@ -306,12 +392,14 @@ function StudioInner() {
         open={runDialogOpen}
         onOpenChange={setRunDialogOpen}
         crewName={crewName}
-        onRun={handleRun}
+        onRun={(inputs) => void handleRun(inputs)}
       />
 
       <ConfirmDialog
         open={!!pendingLoadCrew}
-        onOpenChange={(open) => { if (!open) setPendingLoadCrew(null) }}
+        onOpenChange={(open) => {
+          if (!open) setPendingLoadCrew(null)
+        }}
         title="Discard unsaved changes?"
         description="Loading a crew will replace your current canvas. Unsaved changes will be lost."
         confirmLabel="Discard & Load"

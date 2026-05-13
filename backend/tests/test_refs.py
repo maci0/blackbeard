@@ -11,14 +11,13 @@ import pytest
 
 from blackbeard.kinds import ResourceKind
 from blackbeard.resources.refs import (
-    RefParseError,
     RefInfo,
-    parse_ref,
-    extract_refs,
-    detect_cycles,
+    RefParseError,
     build_adjacency,
+    detect_cycles,
+    extract_refs,
+    parse_ref,
 )
-
 
 # ---------------------------------------------------------------------------
 # parse_ref
@@ -34,15 +33,18 @@ def test_parse_valid_ref():
     assert ref.raw == "ref:agents/researcher"
 
 
-@pytest.mark.parametrize("raw,expected_kind", [
-    ("ref:agents/my-agent", ResourceKind.AGENT),
-    ("ref:tasks/my-task", ResourceKind.TASK),
-    ("ref:crews/my-crew", ResourceKind.CREW),
-    ("ref:tools/my-tool", ResourceKind.TOOL),
-    ("ref:llm-connections/gpt4", ResourceKind.LLM_CONNECTION),
-    ("ref:agent-policies/strict", ResourceKind.AGENT_POLICY),
-    ("ref:guardrails/pii-check", ResourceKind.GUARDRAIL),
-])
+@pytest.mark.parametrize(
+    ("raw", "expected_kind"),
+    [
+        ("ref:agents/my-agent", ResourceKind.AGENT),
+        ("ref:tasks/my-task", ResourceKind.TASK),
+        ("ref:crews/my-crew", ResourceKind.CREW),
+        ("ref:tools/my-tool", ResourceKind.TOOL),
+        ("ref:llm-connections/gpt4", ResourceKind.LLM_CONNECTION),
+        ("ref:agent-policies/strict", ResourceKind.AGENT_POLICY),
+        ("ref:guardrails/pii-check", ResourceKind.GUARDRAIL),
+    ],
+)
 def test_parse_ref_all_kinds(raw, expected_kind):
     ref = parse_ref(raw)
     assert ref is not None
@@ -56,12 +58,15 @@ def test_parse_non_ref_returns_none():
     assert parse_ref(42) is None  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize("malformed_ref", [
-    "ref:bad",
-    "ref:/no-kind",
-    "ref:agents/",
-    "ref:agents/Name_With_Underscore",
-])
+@pytest.mark.parametrize(
+    "malformed_ref",
+    [
+        "ref:bad",
+        "ref:/no-kind",
+        "ref:agents/",
+        "ref:agents/Name_With_Underscore",
+    ],
+)
 def test_parse_malformed_ref_raises(malformed_ref):
     with pytest.raises(RefParseError):
         parse_ref(malformed_ref)
@@ -147,7 +152,8 @@ def test_detect_simple_cycle():
     assert len(result) == 1
     cycle = result[0]
     nodes_in_cycle = set(cycle)
-    assert "Agent/a" in nodes_in_cycle and "Agent/b" in nodes_in_cycle
+    assert "Agent/a" in nodes_in_cycle
+    assert "Agent/b" in nodes_in_cycle
 
 
 def test_detect_longer_cycle():

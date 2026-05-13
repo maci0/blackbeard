@@ -5,13 +5,13 @@ or making actual LLM/CrewAI API calls. crewai.Agent, crewai.Task, crewai.Crew,
 and litellm.LLM are all mocked so no network traffic is produced.
 """
 
-import pytest
 from unittest.mock import patch
 
-from blackbeard.engine.loader import ResourceLoader, LoaderError
+import pytest
+
+from blackbeard.engine.loader import LoaderError, ResourceLoader
 from blackbeard.kinds import ResourceKind
 from blackbeard.models.resource import Resource
-
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -90,7 +90,11 @@ def test_build_llm_parameters(mock_llm_cls):
     conn = make_resource(
         ResourceKind.LLM_CONNECTION,
         "param-llm",
-        {"provider": "openai", "model": "gpt-4o", "parameters": {"temperature": 0.2, "max_tokens": 512}},
+        {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "parameters": {"temperature": 0.2, "max_tokens": 512},
+        },
     )
     loader = ResourceLoader(_resource_map(conn))
     loader.build_llm("ref:llm-connections/param-llm")
@@ -218,7 +222,11 @@ def test_build_task_with_context(mock_task_cls, mock_agent_cls, mock_llm_cls):
     ctx_task_res = make_resource(
         ResourceKind.TASK,
         "context-task",
-        {"description": "Context work", "expected_output": "Context output", "agent": "ref:agents/agent1"},
+        {
+            "description": "Context work",
+            "expected_output": "Context output",
+            "agent": "ref:agents/agent1",
+        },
     )
     main_task_res = make_resource(
         ResourceKind.TASK,
@@ -280,6 +288,7 @@ def test_build_crew(mock_crew_cls, mock_task_cls, mock_agent_cls, mock_llm_cls):
     assert len(kwargs["agents"]) == 1
     assert len(kwargs["tasks"]) == 1
     from crewai import Process
+
     assert kwargs["process"] is Process.sequential
 
 
@@ -331,7 +340,9 @@ def test_build_crew_missing_crew_raises():
 @patch("blackbeard.engine.loader.LLM")
 @patch("blackbeard.engine.loader.Agent")
 @patch("blackbeard.engine.loader.Task")
-def test_build_task_rejects_path_traversal_in_output_file(mock_task_cls, mock_agent_cls, mock_llm_cls):
+def test_build_task_rejects_path_traversal_in_output_file(
+    mock_task_cls, mock_agent_cls, mock_llm_cls
+):
     """output_file with path traversal should raise LoaderError."""
     agent_res = make_resource(
         ResourceKind.AGENT,

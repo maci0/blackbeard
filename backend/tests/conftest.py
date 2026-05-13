@@ -11,6 +11,7 @@ a live PostgreSQL instance.
 # Must be set before blackbeard.config is imported.
 # ---------------------------------------------------------------------------
 import os as _os
+
 _os.environ.setdefault("DEBUG", "true")
 
 # ---------------------------------------------------------------------------
@@ -21,7 +22,7 @@ import uuid as _uuid_mod
 
 import sqlalchemy.dialects.postgresql as _pg_dialect
 from sqlalchemy import JSON
-from sqlalchemy.types import TypeDecorator, String
+from sqlalchemy.types import String, TypeDecorator
 
 
 class _UUIDAsString(TypeDecorator):
@@ -37,10 +38,10 @@ class _UUIDAsString(TypeDecorator):
     impl = String
     cache_ok = True
 
-    def __init__(self, as_uuid: bool = False, *args, **kw):  # noqa: FBT001, FBT002
+    def __init__(self, as_uuid: bool = False, *args, **kw):
         self.as_uuid = as_uuid
         # Remove as_uuid from kw before passing to String (it doesn't understand it)
-        super().__init__(length=36, *args, **kw)
+        super().__init__(*args, length=36, **kw)
 
     def process_bind_param(self, value, dialect):  # type: ignore[override]
         if value is None:
@@ -55,21 +56,16 @@ class _UUIDAsString(TypeDecorator):
         return value
 
 
-_pg_dialect.JSONB = JSON          # type: ignore[attr-defined]
+_pg_dialect.JSONB = JSON  # type: ignore[attr-defined]
 _pg_dialect.UUID = _UUIDAsString  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
 # Import all models so their tables are registered with Base.metadata before
 # any test fixture calls Base.metadata.create_all().
 # ---------------------------------------------------------------------------
-import blackbeard.models.resource   # noqa: F401, E402 — registers resource tables
-import blackbeard.models.execution  # noqa: F401, E402 — registers execution tables
-from blackbeard.models.database import Base  # noqa: E402 — needed by db_session fixture
-
 # ---------------------------------------------------------------------------
 # Standard fixtures (shared across all test modules)
 # ---------------------------------------------------------------------------
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
@@ -79,8 +75,13 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import StaticPool
 
-from blackbeard.models.database import get_session
+import blackbeard.models.execution
+import blackbeard.models.resource  # noqa: F401 — registers resource tables
 from blackbeard.main import app
+from blackbeard.models.database import (
+    Base,
+    get_session,
+)
 
 API_KEY_HEADER = {"X-API-Key": "change-me-in-production"}
 
@@ -96,9 +97,7 @@ async def db_session():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    session_factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with session_factory() as session:
         yield session
 

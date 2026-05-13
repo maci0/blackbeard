@@ -1,12 +1,18 @@
-import { useCallback, useEffect, useState, createContext, useContext, lazy, Suspense, type ChangeEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useState,
+  createContext,
+  useContext,
+  type ChangeEvent,
+} from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
 import { X, Trash2 } from 'lucide-react'
-
-const Editor = lazy(() => import('@monaco-editor/react'))
+import { CodeBlock } from '@/components/ui/CodeBlock'
 import { Link } from 'react-router-dom'
 import { useStudioStore } from '@/stores/studioStore'
 import { useResourceStore } from '@/stores/resourceStore'
-import { useDarkMode } from '@/lib/hooks'
+import { modKey } from '@/lib/platform'
 import { nodeToYaml } from '@/lib/yaml'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
@@ -21,7 +27,7 @@ function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: str
   return (
     <label
       htmlFor={htmlFor}
-      className="block text-[11px] font-semibold text-muted-foreground tracking-wide mb-1"
+      className="text-2xs mb-1 block font-semibold tracking-wide text-muted-foreground"
     >
       {children}
     </label>
@@ -41,7 +47,7 @@ function TextInput({
 }) {
   const fieldId = useContext(FieldIdContext)
   const cls =
-    'w-full text-[12px] text-foreground bg-background border border-border rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50 resize-none transition-colors'
+    'w-full text-xs text-foreground bg-background border border-border rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50 resize-none transition-colors'
 
   if (multiline) {
     return (
@@ -81,7 +87,7 @@ function SelectInput({
   return (
     <select
       id={fieldId || undefined}
-      className="w-full text-[12px] text-foreground bg-background border border-border rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring transition-colors"
+      className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
       value={value}
       onChange={(e: ChangeEvent<HTMLSelectElement>) => onChange(e.target.value)}
     >
@@ -104,14 +110,14 @@ function CheckboxInput({
   onChange: (v: boolean) => void
 }) {
   return (
-    <label className="flex items-center gap-2 cursor-pointer">
+    <label className="flex cursor-pointer items-center gap-2">
       <input
         type="checkbox"
-        className="rounded border-border w-3.5 h-3.5 accent-primary"
+        className="h-3.5 w-3.5 rounded border-border accent-primary"
         checked={checked}
         onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.checked)}
       />
-      <span className="text-[12px] text-foreground">{label}</span>
+      <span className="text-xs text-foreground">{label}</span>
     </label>
   )
 }
@@ -147,13 +153,17 @@ function AgentForm({
   const fetchResources = useResourceStore((state) => state.fetchResources)
 
   useEffect(() => {
-    if (!hasLlmData) fetchResources('llm-connections')
+    if (!hasLlmData) void fetchResources('llm-connections')
   }, [hasLlmData, fetchResources])
 
   return (
     <div className="space-y-3">
       <FieldGroup label="Role">
-        <TextInput value={str('role')} onChange={(v) => onChange('role', v)} placeholder="Senior Researcher" />
+        <TextInput
+          value={str('role')}
+          onChange={(v) => onChange('role', v)}
+          placeholder="Senior Researcher"
+        />
       </FieldGroup>
       <FieldGroup label="Goal">
         <TextInput
@@ -219,7 +229,11 @@ function TaskForm({
   return (
     <div className="space-y-3">
       <FieldGroup label="Name">
-        <TextInput value={str('name')} onChange={(v) => onChange('name', v)} placeholder="research_topic" />
+        <TextInput
+          value={str('name')}
+          onChange={(v) => onChange('name', v)}
+          placeholder="research_topic"
+        />
       </FieldGroup>
       <FieldGroup label="Description">
         <TextInput
@@ -244,11 +258,14 @@ function TaskForm({
           options={[
             { value: '', label: 'Select agent...' },
             ...agentNodes.map((node) => {
-              const nodeData = node.data as Record<string, unknown>
+              const nodeData = node.data
               const role = (nodeData.role as string | undefined) ?? ''
               const kebabName =
                 (nodeData.name as string | undefined) ||
-                role.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+                role
+                  .toLowerCase()
+                  .replace(/\s+/g, '-')
+                  .replace(/[^a-z0-9-]/g, '')
               return {
                 value: `ref:agents/${kebabName}`,
                 label: role || node.id,
@@ -273,7 +290,11 @@ function ToolForm({
   return (
     <div className="space-y-3">
       <FieldGroup label="Name">
-        <TextInput value={str('name')} onChange={(v) => onChange('name', v)} placeholder="web_search_tool" />
+        <TextInput
+          value={str('name')}
+          onChange={(v) => onChange('name', v)}
+          placeholder="web_search_tool"
+        />
       </FieldGroup>
       <FieldGroup label="Type">
         <SelectInput
@@ -319,20 +340,6 @@ function ToolForm({
 /* Panel header accent colours per type                                */
 /* ------------------------------------------------------------------ */
 
-const YAML_EDITOR_OPTIONS = {
-  readOnly: true,
-  minimap: { enabled: false },
-  scrollBeyondLastLine: false,
-  fontSize: 11,
-  lineNumbers: 'off' as const,
-  folding: false,
-  wordWrap: 'on' as const,
-  padding: { top: 12, bottom: 12 },
-  overviewRulerLanes: 0,
-  hideCursorInOverviewRuler: true,
-  scrollbar: { verticalScrollbarSize: 4 },
-}
-
 const TYPE_META: Record<string, { label: string; accent: string; border: string }> = {
   agent: { label: 'Agent', accent: 'bg-violet-500', border: 'border-violet-200' },
   task: { label: 'Task', accent: 'bg-blue-500', border: 'border-blue-200' },
@@ -346,7 +353,6 @@ const TYPE_META: Record<string, { label: string; accent: string; border: string 
 export default function PropertyPanel() {
   const { nodes, selectedNodeId, updateNodeData, setSelectedNode, removeNode } = useStudioStore()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const isDark = useDarkMode()
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
 
@@ -360,54 +366,68 @@ export default function PropertyPanel() {
 
   if (!selectedNode) {
     return (
-      <aside aria-label="Node properties" className="w-[300px] shrink-0 border-l bg-card flex flex-col items-center justify-center text-center p-6">
+      <aside
+        aria-label="Node properties"
+        className="flex w-[300px] shrink-0 flex-col items-center justify-center border-l bg-card p-6 text-center"
+      >
         <p className="text-sm font-medium text-muted-foreground">No node selected</p>
-        <p className="text-xs text-muted-foreground/70 mt-1">Click a node on the canvas to edit its properties</p>
+        <p className="mt-1 text-xs text-muted-foreground/70">
+          Click a node on the canvas to edit its properties
+        </p>
       </aside>
     )
   }
 
   const nodeType = selectedNode.type ?? 'agent'
-  const data = selectedNode.data as Record<string, unknown>
-  const meta = TYPE_META[nodeType] ?? { label: nodeType, accent: 'bg-slate-500', border: 'border-slate-200' }
+  const data = selectedNode.data
+  const meta = TYPE_META[nodeType] ?? {
+    label: nodeType,
+    accent: 'bg-slate-500',
+    border: 'border-slate-200',
+  }
   const yamlContent = nodeToYaml(nodeType, selectedNode.id, data)
 
   return (
-    <aside aria-label="Node properties" className="w-[300px] shrink-0 border-l bg-card flex flex-col overflow-hidden">
+    <aside
+      aria-label="Node properties"
+      className="flex w-[300px] shrink-0 flex-col overflow-hidden border-l bg-card"
+    >
       {/* Header */}
-      <div className={`flex items-center justify-between px-4 py-3 border-b ${meta.border} bg-card`}>
+      <div
+        className={`flex items-center justify-between border-b px-4 py-3 ${meta.border} bg-card`}
+      >
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${meta.accent}`} />
+          <div className={`h-2 w-2 rounded-full ${meta.accent}`} />
           <span className="text-sm font-semibold text-foreground">{meta.label} Properties</span>
         </div>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="p-2 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="rounded p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             title="Delete node"
             aria-label="Delete node"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={() => setSelectedNode(null)}
-            className="p-2 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="rounded p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             title="Close"
             aria-label="Close panel"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
       {/* Tabs */}
-      <Tabs.Root defaultValue="properties" className="flex flex-col flex-1 min-h-0">
-        <Tabs.List className="flex border-b bg-muted/30 shrink-0">
+      <Tabs.Root defaultValue="properties" className="flex min-h-0 flex-1 flex-col">
+        <Tabs.List className="flex shrink-0 border-b bg-muted/30">
           {['properties', 'yaml'].map((tab) => (
             <Tabs.Trigger
               key={tab}
               value={tab}
-              className="flex-1 text-xs font-semibold uppercase tracking-wider px-3 py-2.5 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:border-b-2 data-[state=active]:border-primary transition-colors"
+              className="flex-1 px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-foreground"
             >
               {tab === 'yaml' ? 'YAML' : 'Properties'}
             </Tabs.Trigger>
@@ -415,7 +435,7 @@ export default function PropertyPanel() {
         </Tabs.List>
 
         {/* Properties tab */}
-        <Tabs.Content value="properties" className="flex-1 overflow-y-auto p-4 min-h-0">
+        <Tabs.Content value="properties" className="min-h-0 flex-1 overflow-y-auto p-4">
           {nodeType === 'agent' && <AgentForm data={data} onChange={onChange} />}
           {nodeType === 'task' && <TaskForm data={data} onChange={onChange} />}
           {nodeType === 'tool' && <ToolForm data={data} onChange={onChange} />}
@@ -425,22 +445,12 @@ export default function PropertyPanel() {
         </Tabs.Content>
 
         {/* YAML tab */}
-        <Tabs.Content value="yaml" className="flex flex-col flex-1 min-h-0">
-          <div className="p-3 border-b">
-            <p className="text-[10px] text-muted-foreground">
-              Read-only preview of the resource YAML
-            </p>
+        <Tabs.Content value="yaml" className="flex min-h-0 flex-1 flex-col">
+          <div className="border-b p-3">
+            <p className="text-2xs text-muted-foreground">Read-only preview of the resource YAML</p>
           </div>
-          <div className="flex-1 min-h-0" role="region" aria-label="YAML preview editor">
-            <Suspense fallback={<div className="p-4 text-xs text-muted-foreground">Loading editor…</div>}>
-              <Editor
-                height="100%"
-                language="yaml"
-                value={yamlContent}
-                theme={isDark ? 'vs-dark' : 'vs'}
-                options={YAML_EDITOR_OPTIONS}
-              />
-            </Suspense>
+          <div className="min-h-0 flex-1 overflow-auto" role="region" aria-label="YAML preview">
+            <CodeBlock code={yamlContent} language="yaml" className="rounded-none border-0" />
           </div>
         </Tabs.Content>
       </Tabs.Root>
@@ -449,7 +459,7 @@ export default function PropertyPanel() {
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
         title="Delete Node"
-        description={`Delete this ${meta.label.toLowerCase()} node and all its connections? You can undo with ${/Mac|iPhone|iPad/.test(navigator.userAgent) ? 'Cmd' : 'Ctrl'}+Z.`}
+        description={`Delete this ${meta.label.toLowerCase()} node and all its connections? You can undo with ${modKey}+Z.`}
         confirmLabel="Delete"
         confirmVariant="destructive"
         onConfirm={() => {

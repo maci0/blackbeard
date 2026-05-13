@@ -1,16 +1,16 @@
 """Generic resource CRUD service."""
 
+from __future__ import annotations
+
 import logging
-from uuid import UUID
+from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from blackbeard.kinds import ResourceKind
 from blackbeard.models.resource import Resource, ResourceRef
-from blackbeard.models.resource_schemas import ResourceCreate, ResourceUpdate
 from blackbeard.resources.exceptions import (
     ResourceConflictError,
     ResourceNotFoundError,
@@ -18,6 +18,13 @@ from blackbeard.resources.exceptions import (
 )
 from blackbeard.resources.refs import RefInfo, RefParseError, extract_refs
 from blackbeard.resources.validator import validate_resource
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from blackbeard.models.resource_schemas import ResourceCreate, ResourceUpdate
 
 __all__ = [
     "ResourceService",
@@ -43,10 +50,14 @@ logger = logging.getLogger(__name__)
 class ResourceService:
     """CRUD operations for resources."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def create(self, data: ResourceCreate, raw_yaml: str | None = None) -> tuple[Resource, bool]:
+    async def create(
+        self,
+        data: ResourceCreate,
+        raw_yaml: str | None = None,
+    ) -> tuple[Resource, bool]:
         """Create or upsert a resource.
 
         If a resource with the same kind/name/namespace exists, it is updated
@@ -60,7 +71,10 @@ class ResourceService:
         if errors:
             logger.warning(
                 "Resource validation failed: %s/%s namespace=%s errors=%d",
-                data.kind, data.metadata.name, data.metadata.namespace, len(errors),
+                data.kind,
+                data.metadata.name,
+                data.metadata.namespace,
+                len(errors),
                 extra={
                     "event": "resource_validation_failed",
                     "resource_kind": data.kind,
@@ -120,7 +134,9 @@ class ResourceService:
 
         logger.info(
             "Resource created: %s/%s namespace=%s",
-            kind_enum.value, data.metadata.name, data.metadata.namespace,
+            kind_enum.value,
+            data.metadata.name,
+            data.metadata.namespace,
             extra={
                 "event": "resource_created",
                 "resource_kind": kind_enum.value,
@@ -140,9 +156,7 @@ class ResourceService:
 
     async def get_by_id(self, resource_id: UUID) -> Resource:
         """Get a resource by its UUID."""
-        result = await self.session.execute(
-            select(Resource).where(Resource.id == resource_id)
-        )
+        result = await self.session.execute(select(Resource).where(Resource.id == resource_id))
         resource = result.scalar_one_or_none()
         if not resource:
             raise ResourceNotFoundError("unknown", str(resource_id))
@@ -170,7 +184,11 @@ class ResourceService:
         count_query = select(func.count(Resource.id)).where(*filters)
 
         # Deterministic ordering for stable pagination
-        query = query.order_by(Resource.kind, Resource.namespace, Resource.name).limit(limit).offset(offset)
+        query = (
+            query.order_by(Resource.kind, Resource.namespace, Resource.name)
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.session.execute(query)
         items = list(result.scalars().all())
 
@@ -237,7 +255,10 @@ class ResourceService:
 
         logger.info(
             "Resource updated: %s/%s namespace=%s version=%d",
-            kind, name, namespace, resource.version,
+            kind,
+            name,
+            namespace,
+            resource.version,
             extra={
                 "event": "resource_updated",
                 "resource_kind": kind,
@@ -254,7 +275,10 @@ class ResourceService:
         await self.session.delete(resource)
         await self.session.flush()
         logger.info(
-            "Resource deleted: %s/%s namespace=%s", kind, name, namespace,
+            "Resource deleted: %s/%s namespace=%s",
+            kind,
+            name,
+            namespace,
             extra={
                 "event": "resource_deleted",
                 "resource_kind": kind,
@@ -277,7 +301,10 @@ class ResourceService:
         return result.scalar_one_or_none()
 
     async def _update_existing(
-        self, resource: Resource, data: ResourceCreate, raw_yaml: str | None,
+        self,
+        resource: Resource,
+        data: ResourceCreate,
+        raw_yaml: str | None,
         refs: list[RefInfo] | None = None,
     ) -> Resource:
         """Update an existing resource (used by create for upsert behavior)."""
@@ -290,7 +317,10 @@ class ResourceService:
         await self._sync_refs(resource, refs)
         logger.info(
             "Resource upserted: %s/%s namespace=%s version=%d",
-            resource.kind.value, resource.name, resource.namespace, resource.version,
+            resource.kind.value,
+            resource.name,
+            resource.namespace,
+            resource.version,
             extra={
                 "event": "resource_upserted",
                 "resource_kind": resource.kind.value,
@@ -309,23 +339,25 @@ class ResourceService:
             except RefParseError as e:
                 logger.warning(
                     "Skipping ref sync for %s/%s: %s",
-                    resource.kind.value, resource.name, e,
+                    resource.kind.value,
+                    resource.name,
+                    e,
                 )
                 return
 
-        await self.session.execute(
-            delete(ResourceRef).where(ResourceRef.source_id == resource.id)
-        )
+        await self.session.execute(delete(ResourceRef).where(ResourceRef.source_id == resource.id))
 
         if refs:
-            self.session.add_all([
-                ResourceRef(
-                    source_id=resource.id,
-                    target_kind=ref.kind,
-                    target_name=ref.name,
-                    target_namespace=resource.namespace,
-                    ref_field=ref.field,
-                )
-                for ref in refs
-            ])
+            self.session.add_all(
+                [
+                    ResourceRef(
+                        source_id=resource.id,
+                        target_kind=ref.kind,
+                        target_name=ref.name,
+                        target_namespace=resource.namespace,
+                        ref_field=ref.field,
+                    )
+                    for ref in refs
+                ]
+            )
             await self.session.flush()

@@ -1,12 +1,17 @@
 """Pydantic schemas for execution API request/response models."""
 
+from __future__ import annotations
+
 import enum
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
+
+if TYPE_CHECKING:
+    from blackbeard.models.execution import Execution
 
 
 def _enum_value(v: object) -> str:
@@ -33,12 +38,14 @@ class KickoffRequest(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _validate_input_sizes(self) -> "KickoffRequest":
+    def _validate_input_sizes(self) -> KickoffRequest:
         max_entries = 100
         max_key_len = 256
         max_val_len = 50_000
         if len(self.inputs) > max_entries:
-            raise ValueError(f"Too many input entries ({len(self.inputs)}), maximum is {max_entries}")
+            raise ValueError(
+                f"Too many input entries ({len(self.inputs)}), maximum is {max_entries}"
+            )
         for k, v in self.inputs.items():
             if not isinstance(k, str) or len(k) > max_key_len:
                 raise ValueError(f"Input key must be a string of at most {max_key_len} chars")
@@ -93,7 +100,7 @@ class ExecutionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
     @classmethod
-    def from_db(cls, execution) -> "ExecutionResponse":  # type: ignore[no-untyped-def]
+    def from_db(cls, execution: Execution) -> ExecutionResponse:
         """Build response from a SQLAlchemy Execution model."""
         raw_tasks = execution.tasks or []
         tasks = [

@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class PolicyDeniedError(Exception):
     """Raised when a policy check denies an action."""
 
-    def __init__(self, agent: str, action: str, reason: str):
+    def __init__(self, agent: str, action: str, reason: str) -> None:
         self.agent = agent
         self.action = action
         self.reason = reason
@@ -29,7 +29,7 @@ class PolicyDeniedError(Exception):
 class AgentPolicy:
     """Agent policy after resolution (agent → crew default → global default)."""
 
-    def __init__(self, spec: dict[str, Any]):
+    def __init__(self, spec: dict[str, Any]) -> None:
         self.spec = spec
         self._tools_config = spec.get("tools", {})
         self._budget = spec.get("budget", {})
@@ -79,13 +79,12 @@ class AgentPolicy:
                     action=f"use tool '{tool_name}'",
                     reason=f"Tool not in allowlist. Allowed: {sorted(self.allowed_tools)}",
                 )
-        elif self.tool_mode == "denylist":
-            if tool_name in self.denied_tools:
-                raise PolicyDeniedError(
-                    agent=agent_name,
-                    action=f"use tool '{tool_name}'",
-                    reason="Tool is in denylist",
-                )
+        elif self.tool_mode == "denylist" and tool_name in self.denied_tools:
+            raise PolicyDeniedError(
+                agent=agent_name,
+                action=f"use tool '{tool_name}'",
+                reason="Tool is in denylist",
+            )
         # mode == "all" → everything allowed
 
 
@@ -122,8 +121,13 @@ def resolve_policy(
         if policy_name in policies:
             return AgentPolicy(policies[policy_name])
         logger.warning(
-            "Agent policy '%s' not found, checking crew default", policy_name,
-            extra={"event": "policy_not_found", "policy_name": policy_name, "fallback": "crew_default"},
+            "Agent policy '%s' not found, checking crew default",
+            policy_name,
+            extra={
+                "event": "policy_not_found",
+                "policy_name": policy_name,
+                "fallback": "crew_default",
+            },
         )
 
     # Check crew-level default
@@ -134,8 +138,13 @@ def resolve_policy(
             if policy_name in policies:
                 return AgentPolicy(policies[policy_name])
             logger.warning(
-                "Crew default policy '%s' not found, using default", policy_name,
-                extra={"event": "policy_not_found", "policy_name": policy_name, "fallback": "global_default"},
+                "Crew default policy '%s' not found, using default",
+                policy_name,
+                extra={
+                    "event": "policy_not_found",
+                    "policy_name": policy_name,
+                    "fallback": "global_default",
+                },
             )
 
     return DEFAULT_POLICY

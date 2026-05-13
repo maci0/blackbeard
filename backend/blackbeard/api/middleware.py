@@ -1,13 +1,19 @@
 """API middleware: auth, request ID, body-size limiting, security headers, error handling."""
 
+from __future__ import annotations
+
 import hmac
 import logging
 import re
 import time
 import uuid
+from typing import TYPE_CHECKING
 
-from fastapi import Request, Response
 from starlette.responses import JSONResponse
+
+if TYPE_CHECKING:
+    from fastapi import Request, Response
+    from starlette.middleware.base import RequestResponseEndpoint
 
 from blackbeard.config import settings
 from blackbeard.logging_config import request_id_var
@@ -34,7 +40,7 @@ def get_request_id(request: Request) -> str:
     return str(uuid.uuid4())
 
 
-async def api_key_middleware(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
+async def api_key_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:
     """Validate X-API-Key header on all non-public endpoints."""
     request_id = get_request_id(request)
     request_id_var.set(request_id)
@@ -66,7 +72,10 @@ async def api_key_middleware(request: Request, call_next) -> Response:  # type: 
         duration_ms = (time.monotonic() - start) * 1000
         logger.warning(
             "Auth failed: %s %s from %s (%.0fms)",
-            request.method, path, client_ip, duration_ms,
+            request.method,
+            path,
+            client_ip,
+            duration_ms,
             extra={
                 "event": "auth_failure",
                 "http_method": request.method,
@@ -106,7 +115,10 @@ def _log_request(request: Request, response: Response, start: float) -> None:
     logger.log(
         level,
         "%s %s %d %.0fms",
-        request.method, path, status, duration_ms,
+        request.method,
+        path,
+        status,
+        duration_ms,
         extra={
             "event": "http_request",
             "http_method": request.method,
@@ -134,7 +146,10 @@ SECURITY_HEADERS = {
 }
 
 
-async def security_headers_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+async def security_headers_middleware(
+    request: Request,
+    call_next: RequestResponseEndpoint,
+) -> Response:
     """Add security headers to every response."""
     response = await call_next(request)
     for name, value in SECURITY_HEADERS.items():
@@ -146,7 +161,7 @@ async def security_headers_middleware(request: Request, call_next):  # type: ign
 MAX_BODY_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
-async def body_size_limiter(request: Request, call_next):  # type: ignore[no-untyped-def]
+async def body_size_limiter(request: Request, call_next: RequestResponseEndpoint) -> Response:
     """Reject requests with bodies exceeding the size limit.
 
     Checks both Content-Length header (fast reject) and actual body size
@@ -170,7 +185,8 @@ async def body_size_limiter(request: Request, call_next):  # type: ignore[no-unt
         except (ValueError, OverflowError):
             logger.warning(
                 "Invalid Content-Length header: %s %s",
-                request.method, request.url.path,
+                request.method,
+                request.url.path,
                 extra={
                     "event": "invalid_content_length",
                     "http_method": request.method,
@@ -181,7 +197,9 @@ async def body_size_limiter(request: Request, call_next):  # type: ignore[no-unt
         if length > MAX_BODY_BYTES:
             logger.warning(
                 "Request body too large: %s %s content_length=%d",
-                request.method, request.url.path, length,
+                request.method,
+                request.url.path,
+                length,
                 extra={
                     "event": "request_body_too_large",
                     "http_method": request.method,
@@ -189,14 +207,20 @@ async def body_size_limiter(request: Request, call_next):  # type: ignore[no-unt
                     "content_length": length,
                 },
             )
-            return _reject(413, f"Request body too large (limit: {MAX_BODY_BYTES // (1024 * 1024)}MB)")
+            max_mb = MAX_BODY_BYTES // (1024 * 1024)
+            return _reject(
+                413,
+                f"Request body too large (limit: {max_mb}MB)",
+            )
 
     if request.method in ("POST", "PUT", "PATCH") and not content_length:
         body = await request.body()
         if len(body) > MAX_BODY_BYTES:
             logger.warning(
                 "Request body too large (chunked): %s %s body_bytes=%d",
-                request.method, request.url.path, len(body),
+                request.method,
+                request.url.path,
+                len(body),
                 extra={
                     "event": "request_body_too_large",
                     "http_method": request.method,
@@ -204,7 +228,11 @@ async def body_size_limiter(request: Request, call_next):  # type: ignore[no-unt
                     "body_bytes": len(body),
                 },
             )
-            return _reject(413, f"Request body too large (limit: {MAX_BODY_BYTES // (1024 * 1024)}MB)")
+            max_mb = MAX_BODY_BYTES // (1024 * 1024)
+            return _reject(
+                413,
+                f"Request body too large (limit: {max_mb}MB)",
+            )
 
     return await call_next(request)
 
@@ -214,7 +242,10 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     rid = request_id_var.get("-")
     logger.error(
         "Unhandled exception on %s %s [request_id=%s]: %s",
-        request.method, request.url.path, rid, exc,
+        request.method,
+        request.url.path,
+        rid,
+        exc,
         exc_info=True,
         extra={
             "event": "unhandled_exception",

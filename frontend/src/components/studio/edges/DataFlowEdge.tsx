@@ -42,9 +42,9 @@ export default function DataFlowEdge({
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
               pointerEvents: 'none',
             }}
-            className="text-[9px] font-semibold tracking-wide text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded-full shadow-sm"
+            className="rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-slate-400 shadow-sm"
           >
-            {String(data.label)}
+            {typeof data.label === 'string' ? data.label : JSON.stringify(data.label)}
           </div>
         </EdgeLabelRenderer>
       )}

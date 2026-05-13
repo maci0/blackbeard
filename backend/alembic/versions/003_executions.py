@@ -19,17 +19,29 @@ depends_on: Union[str, Sequence[str], None] = None
 execution_status_enum = sa.Enum(
     "QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED",
     name="executionstatus",
+    create_type=False,
 )
 
 task_status_enum = sa.Enum(
     "PENDING", "RUNNING", "COMPLETED", "FAILED",
     name="taskstatus",
+    create_type=False,
 )
 
 
 def upgrade() -> None:
-    execution_status_enum.create(op.get_bind(), checkfirst=True)
-    task_status_enum.create(op.get_bind(), checkfirst=True)
+    op.execute(
+        "DO $$ BEGIN"
+        "  CREATE TYPE executionstatus AS ENUM ('QUEUED','RUNNING','COMPLETED','FAILED','CANCELLED');"
+        "  EXCEPTION WHEN duplicate_object THEN NULL;"
+        " END $$"
+    )
+    op.execute(
+        "DO $$ BEGIN"
+        "  CREATE TYPE taskstatus AS ENUM ('PENDING','RUNNING','COMPLETED','FAILED');"
+        "  EXCEPTION WHEN duplicate_object THEN NULL;"
+        " END $$"
+    )
 
     op.create_table(
         "executions",

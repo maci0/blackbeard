@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 class ResourceNotFoundError(Exception):
     """Raised when a resource is not found."""
 
-    def __init__(self, kind: str, name: str, namespace: str = "default"):
+    def __init__(self, kind: str, name: str, namespace: str = "default") -> None:
         self.kind = kind
         self.name = name
         self.namespace = namespace
@@ -21,7 +21,7 @@ class ResourceNotFoundError(Exception):
 class ResourceConflictError(Exception):
     """Raised on optimistic locking conflict."""
 
-    def __init__(self, kind: str, name: str, expected: int, actual: int):
+    def __init__(self, kind: str, name: str, expected: int, actual: int) -> None:
         super().__init__(
             f"Version conflict for {kind}/{name}: expected {expected}, actual {actual}"
         )
@@ -30,7 +30,7 @@ class ResourceConflictError(Exception):
 class ResourceValidationError(Exception):
     """Raised when resource validation fails."""
 
-    def __init__(self, errors: list[ValidationError]):
+    def __init__(self, errors: list[ValidationError]) -> None:
         self.errors = errors
         messages = "; ".join(f"{e.field}: {e.message}" for e in errors)
         super().__init__(f"Validation failed: {messages}")

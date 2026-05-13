@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     blackbeard_api_key: SecretStr = SecretStr("change-me-in-production")
 
     # Database
-    database_url: SecretStr = SecretStr("postgresql+asyncpg://blackbeard:blackbeard@localhost:5432/blackbeard")
+    database_url: SecretStr = SecretStr(
+        "postgresql+asyncpg://blackbeard:blackbeard@localhost:5432/blackbeard"
+    )
 
     # Valkey (Redis-compatible cache)
     valkey_url: SecretStr = SecretStr("valkey://default:valkey-dev-secret@localhost:6379/0")

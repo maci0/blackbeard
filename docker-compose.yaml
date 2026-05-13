@@ -24,6 +24,7 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       BLACKBEARD_API_KEY: ${BLACKBEARD_API_KEY:-change-me-in-production}
+      DEBUG: ${DEBUG:-false}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
       CLOUD_ML_REGION: ${CLOUD_ML_REGION:-us-east5}
       GOOGLE_APPLICATION_CREDENTIALS: /app/credentials.json
@@ -35,24 +36,19 @@ services:
       valkey:
         condition: service_healthy
       litellm:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     stop_grace_period: 30s
     logging: *default-logging
     mem_limit: 2g
-    read_only: true
     tmpfs:
       - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 60s
+      retries: 10
+      start_period: 120s
     networks: [frontend, backend]
 
   # ── UI (React/Vite frontend) ───────────────────────────────────────────────
@@ -68,15 +64,6 @@ services:
       - api
     restart: unless-stopped
     logging: *default-logging
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /var/cache/nginx
-      - /var/run
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
       interval: 10s
@@ -86,9 +73,9 @@ services:
     mem_limit: 256m
     networks: [frontend]
 
-  # ── PostgreSQL 17 ──────────────────────────────────────────────────────────
+  # ── PostgreSQL 18 ──────────────────────────────────────────────────────────
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     ports:
       - "127.0.0.1:5432:5432"
     environment:
@@ -96,7 +83,7 @@ services:
       POSTGRES_PASSWORD: blackbeard
       POSTGRES_DB: blackbeard
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
       - ./deploy/docker/initdb:/docker-entrypoint-initdb.d:ro
     shm_size: 256m
     healthcheck:
@@ -121,7 +108,7 @@ services:
 
   # ── Valkey (Redis-compatible cache) ────────────────────────────────────────
   valkey:
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:9-alpine
     ports:
       - "127.0.0.1:6379:6379"
     command: ["valkey-server", "--requirepass", "valkey-dev-secret", "--maxmemory", "256mb"]
@@ -137,6 +124,9 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - SETGID
+      - SETUID
     networks: [backend]
 
   # ── LiteLLM Proxy ─────────────────────────────────────────────────────────
@@ -169,10 +159,10 @@ services:
       - ALL
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
     networks: [backend]
 
   # ── Langfuse v3 (observability) ────────────────────────────────────────────
@@ -321,7 +311,7 @@ services:
     networks: [backend]
 
   langfuse-redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     command: >
       --requirepass langfuse-redis-secret
       --maxmemory 128mb
@@ -341,6 +331,9 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - SETGID
+      - SETUID
     networks: [backend]
 
 volumes:

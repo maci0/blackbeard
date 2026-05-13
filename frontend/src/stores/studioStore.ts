@@ -12,8 +12,6 @@ import {
 
 const MAX_HISTORY = 30
 
-let lastHistoryPush = 0
-
 interface HistorySnapshot {
   nodes: Node[]
   edges: Edge[]
@@ -44,6 +42,8 @@ interface StudioState {
 }
 
 export const useStudioStore = create<StudioState>()((set, get) => {
+  let lastHistoryPush = 0
+
   function pushHistory() {
     const now = Date.now()
     if (now - lastHistoryPush < 100) return
@@ -57,7 +57,7 @@ export const useStudioStore = create<StudioState>()((set, get) => {
     set({
       history: newHistory,
       historyIndex: newIndex,
-      canUndo: newIndex >= 0,
+      canUndo: newIndex >= 1,
       canRedo: false,
     })
   }
@@ -121,9 +121,7 @@ export const useStudioStore = create<StudioState>()((set, get) => {
         lastHistoryPush = now
       }
       set((state) => ({
-        nodes: state.nodes.map((n) =>
-          n.id === id ? { ...n, data: { ...n.data, ...data } } : n,
-        ),
+        nodes: state.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...data } } : n)),
         dirty: true,
       }))
     },
@@ -156,14 +154,14 @@ export const useStudioStore = create<StudioState>()((set, get) => {
           historyIndex: newIndex,
           dirty: true,
           canUndo: newIndex >= 0,
-          canRedo: currentHistory[newIndex + 2] !== undefined,
+          canRedo: currentHistory[newIndex + 1] !== undefined,
         })
       }
     },
 
     redo: () => {
       const { history, historyIndex } = get()
-      const next = history[historyIndex + 2]
+      const next = history[historyIndex + 1]
       if (next) {
         const newIndex = historyIndex + 1
         set({
@@ -172,7 +170,7 @@ export const useStudioStore = create<StudioState>()((set, get) => {
           historyIndex: newIndex,
           dirty: true,
           canUndo: newIndex >= 0,
-          canRedo: history[newIndex + 2] !== undefined,
+          canRedo: history[newIndex + 1] !== undefined,
         })
       }
     },

@@ -41,11 +41,12 @@ def get_langfuse() -> Langfuse | None:
             _client = Langfuse(
                 public_key=settings.langfuse_public_key,
                 secret_key=settings.langfuse_secret_key.get_secret_value(),
-                host=settings.langfuse_host,
+                base_url=settings.langfuse_host,
                 release=f"blackbeard-{settings.app_name}",
             )
             logger.info(
-                "Langfuse client initialized (host=%s)", settings.langfuse_host,
+                "Langfuse client initialized (host=%s)",
+                settings.langfuse_host,
                 extra={"event": "langfuse_initialized", "langfuse_host": settings.langfuse_host},
             )
             return _client
@@ -63,7 +64,8 @@ def shutdown_langfuse() -> None:
             _client.shutdown()
         except Exception as e:
             logger.warning(
-                "Error shutting down Langfuse: %s", e,
+                "Error shutting down Langfuse: %s",
+                e,
                 exc_info=True,
                 extra={"event": "langfuse_shutdown_error", "error_type": type(e).__name__},
             )

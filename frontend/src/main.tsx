@@ -10,7 +10,7 @@ import './index.css'
 // In development, set VITE_API_KEY in .env.local or the browser will send
 // requests without an API key (which the backend rejects with 401).
 if (import.meta.env.VITE_API_KEY) {
-  api.setApiKey(import.meta.env.VITE_API_KEY)
+  api.setApiKey(import.meta.env.VITE_API_KEY as string)
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

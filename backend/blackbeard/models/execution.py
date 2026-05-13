@@ -2,7 +2,7 @@
 
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     CheckConstraint,
@@ -24,7 +24,7 @@ from sqlalchemy.orm import relationship
 from blackbeard.models.database import Base
 
 
-class ExecutionStatus(str, enum.Enum):
+class ExecutionStatus(enum.StrEnum):
     """Execution lifecycle states."""
 
     QUEUED = "queued"
@@ -34,14 +34,16 @@ class ExecutionStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-TERMINAL_STATUSES: frozenset[ExecutionStatus] = frozenset({
-    ExecutionStatus.COMPLETED,
-    ExecutionStatus.FAILED,
-    ExecutionStatus.CANCELLED,
-})
+TERMINAL_STATUSES: frozenset[ExecutionStatus] = frozenset(
+    {
+        ExecutionStatus.COMPLETED,
+        ExecutionStatus.FAILED,
+        ExecutionStatus.CANCELLED,
+    }
+)
 
 
-class TaskStatus(str, enum.Enum):
+class TaskStatus(enum.StrEnum):
     """Individual task execution states."""
 
     PENDING = "pending"
@@ -57,10 +59,17 @@ class Execution(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     crew_name = Column(String(255), nullable=False)
-    crew_namespace = Column(String(255), nullable=False, default="default", server_default=text("'default'"))
+    crew_namespace = Column(
+        String(255),
+        nullable=False,
+        default="default",
+        server_default=text("'default'"),
+    )
     status = Column(
-        Enum(ExecutionStatus), nullable=False,
-        default=ExecutionStatus.QUEUED, server_default=text("'queued'"),
+        Enum(ExecutionStatus, create_type=False, values_callable=lambda e: [x.value for x in e]),
+        nullable=False,
+        default=ExecutionStatus.QUEUED,
+        server_default=text("'queued'"),
     )
     inputs = Column(JSONB, nullable=False, default=dict, server_default=text("'{}'"))
     outputs = Column(JSONB, nullable=True)
@@ -81,15 +90,21 @@ class Execution(Base):
 
     # Timestamps
     created_at = Column(
-        DateTime(timezone=True), nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
         server_default=text("now()"),
     )
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    tasks = relationship("ExecutionTask", back_populates="execution", cascade="all, delete-orphan", order_by="ExecutionTask.order")
+    tasks = relationship(
+        "ExecutionTask",
+        back_populates="execution",
+        cascade="all, delete-orphan",
+        order_by="ExecutionTask.order",
+    )
 
     __table_args__ = (
         Index("ix_execution_crew", "crew_name", "crew_namespace"),
@@ -111,11 +126,20 @@ class ExecutionTask(Base):
     __tablename__ = "execution_tasks"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    execution_id = Column(UUID(as_uuid=True), ForeignKey("executions.id", ondelete="CASCADE"), nullable=False)
+    execution_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("executions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     task_name = Column(String(255), nullable=False)
     agent_name = Column(String(255), nullable=True)
     order = Column(Integer, nullable=False, default=0, server_default=text("0"))
-    status = Column(Enum(TaskStatus), nullable=False, default=TaskStatus.PENDING, server_default=text("'pending'"))
+    status = Column(
+        Enum(TaskStatus, create_type=False, values_callable=lambda e: [x.value for x in e]),
+        nullable=False,
+        default=TaskStatus.PENDING,
+        server_default=text("'pending'"),
+    )
     output = Column(Text, nullable=True)
     error = Column(Text, nullable=True)
 
@@ -124,15 +148,21 @@ class ExecutionTask(Base):
     cost_usd = Column(Numeric(10, 6), nullable=False, default=0.0, server_default=text("0"))
 
     created_at = Column(
-        DateTime(timezone=True), nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
         server_default=text("now()"),
     )
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
     execution = relationship("Execution", back_populates="tasks")
-    tool_calls = relationship("ExecutionToolCall", back_populates="task", cascade="all, delete-orphan", order_by="ExecutionToolCall.called_at")
+    tool_calls = relationship(
+        "ExecutionToolCall",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="ExecutionToolCall.called_at",
+    )
 
     __table_args__ = (
         Index("ix_exec_task_execution", "execution_id"),
@@ -149,15 +179,20 @@ class ExecutionToolCall(Base):
     __tablename__ = "execution_tool_calls"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    task_id = Column(UUID(as_uuid=True), ForeignKey("execution_tasks.id", ondelete="CASCADE"), nullable=False)
+    task_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("execution_tasks.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     tool_name = Column(String(255), nullable=False)
     input_data = Column(JSONB, nullable=True)
     output_data = Column(JSONB, nullable=True)
     error = Column(Text, nullable=True)
     duration_ms = Column(Integer, nullable=True)
     called_at = Column(
-        DateTime(timezone=True), nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
         server_default=text("now()"),
     )
 

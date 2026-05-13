@@ -185,12 +185,14 @@ async def test_list_executions_filter_by_crew(client: AsyncClient):
         headers=API_KEY_HEADER,
     )
 
-    await client.post("/api/v1/crews/crew-alpha/kickoff", json={"inputs": {}}, headers=API_KEY_HEADER)
-    await client.post("/api/v1/crews/crew-beta/kickoff", json={"inputs": {}}, headers=API_KEY_HEADER)
-
-    response = await client.get(
-        "/api/v1/executions?crew_name=crew-alpha", headers=API_KEY_HEADER
+    await client.post(
+        "/api/v1/crews/crew-alpha/kickoff", json={"inputs": {}}, headers=API_KEY_HEADER
     )
+    await client.post(
+        "/api/v1/crews/crew-beta/kickoff", json={"inputs": {}}, headers=API_KEY_HEADER
+    )
+
+    response = await client.get("/api/v1/executions?crew_name=crew-alpha", headers=API_KEY_HEADER)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
@@ -237,9 +239,7 @@ async def test_get_execution_after_kickoff(client: AsyncClient):
 async def test_cancel_execution_not_found(client: AsyncClient):
     """PATCH /executions/{random-uuid}/cancel → 404."""
     random_id = str(uuid.uuid4())
-    response = await client.patch(
-        f"/api/v1/executions/{random_id}/cancel", headers=API_KEY_HEADER
-    )
+    response = await client.patch(f"/api/v1/executions/{random_id}/cancel", headers=API_KEY_HEADER)
     assert response.status_code == 404
     assert "detail" in response.json()
 
@@ -301,17 +301,13 @@ async def test_list_executions_filter_by_status(client: AsyncClient):
         headers=API_KEY_HEADER,
     )
 
-    response = await client.get(
-        "/api/v1/executions?status=queued", headers=API_KEY_HEADER
-    )
+    response = await client.get("/api/v1/executions?status=queued", headers=API_KEY_HEADER)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
     assert all(item["status"] == "queued" for item in data["items"])
 
-    response_none = await client.get(
-        "/api/v1/executions?status=completed", headers=API_KEY_HEADER
-    )
+    response_none = await client.get("/api/v1/executions?status=completed", headers=API_KEY_HEADER)
     assert response_none.status_code == 200
     assert response_none.json()["total"] == 0
 
@@ -341,9 +337,7 @@ async def test_cancel_preserves_status(client: AsyncClient):
     exec_id = response.json()["id"]
 
     # Cancel immediately (execution is still queued / just started)
-    cancel_resp = await client.patch(
-        f"/api/v1/executions/{exec_id}/cancel", headers=API_KEY_HEADER
-    )
+    cancel_resp = await client.patch(f"/api/v1/executions/{exec_id}/cancel", headers=API_KEY_HEADER)
     assert cancel_resp.status_code == 200
     assert cancel_resp.json()["status"] == "cancelled"
 
@@ -404,22 +398,38 @@ def test_sanitize_error_501_chars_truncated():
     assert result.endswith("...")
 
 
-@pytest.mark.parametrize("prefix", [
-    "Crew '", "Agent '", "Task '", "Tool '", "Resource '", "Kind '",
-])
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "Crew '",
+        "Agent '",
+        "Task '",
+        "Tool '",
+        "Resource '",
+        "Kind '",
+    ],
+)
 def test_sanitize_error_all_safe_prefixes(prefix):
     """All documented safe prefixes should pass through."""
     msg = f"{prefix}some-name' failed for reasons"
     assert _sanitize_error(msg) == msg
 
 
-@pytest.mark.parametrize("prefix", [
-    "Crew '", "Agent '", "Task '", "Tool '", "Resource '", "Kind '",
-])
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "Crew '",
+        "Agent '",
+        "Task '",
+        "Tool '",
+        "Resource '",
+        "Kind '",
+    ],
+)
 def test_sanitize_error_all_safe_prefixes_truncate_at_limit(prefix):
     """Long safe errors with any prefix should truncate at 500 chars."""
     msg = prefix + "x" * 600
     result = _sanitize_error(msg)
     assert len(result) == 503
     assert result.endswith("...")
-    assert result[:len(prefix)] == prefix
+    assert result[: len(prefix)] == prefix

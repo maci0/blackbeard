@@ -1,7 +1,8 @@
-import { type ChangeEvent, useMemo } from 'react'
+import { type ChangeEvent } from 'react'
 import { Save, Play, Loader2, FolderOpen, ChevronDown, Undo2, Redo2 } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { toResourceName } from '@/lib/utils'
+import { modKey } from '@/lib/platform'
 import { type RunStatus, RunStatusBadge } from './RunStatusBadge'
 
 /* ------------------------------------------------------------------ */
@@ -45,15 +46,13 @@ export function Toolbar({
   undo: () => void
   redo: () => void
 }) {
-  const mod = useMemo(() => /Mac|iPhone|iPad/.test(navigator.userAgent) ? 'Cmd' : 'Ctrl', [])
-
   return (
-    <header className="h-12 shrink-0 border-b bg-card flex items-center gap-3 px-4">
+    <header className="flex h-12 shrink-0 items-center gap-3 border-b bg-card px-4">
       {/* Crew name + Load button */}
-      <div className="flex items-center gap-2 flex-1 min-w-0">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <label
           htmlFor="crew-name-input"
-          className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest shrink-0 cursor-default"
+          className="shrink-0 cursor-default text-[10px] font-bold uppercase tracking-widest text-muted-foreground"
         >
           Crew
         </label>
@@ -63,7 +62,7 @@ export function Toolbar({
           type="text"
           value={crewName}
           onChange={(e: ChangeEvent<HTMLInputElement>) => onCrewNameChange(e.target.value)}
-          className="min-w-0 w-44 text-sm font-semibold bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none text-foreground placeholder:text-muted-foreground transition-colors"
+          className="w-44 min-w-0 border-b border-transparent bg-transparent text-sm font-semibold text-foreground transition-colors placeholder:text-muted-foreground hover:border-border focus:border-primary focus:outline-none"
           placeholder="crew-name"
           spellCheck={false}
         />
@@ -71,7 +70,7 @@ export function Toolbar({
         {/* Normalized name preview */}
         {crewName && toResourceName(crewName) !== crewName && (
           <span
-            className="text-[10px] text-muted-foreground shrink-0"
+            className="shrink-0 text-[10px] text-muted-foreground"
             title="Resource name will be saved as this slug"
           >
             Saved as: {toResourceName(crewName)}
@@ -79,27 +78,31 @@ export function Toolbar({
         )}
 
         {/* Load crew dropdown */}
-        <DropdownMenu.Root onOpenChange={(open) => { if (open) onFetchCrews() }}>
+        <DropdownMenu.Root
+          onOpenChange={(open) => {
+            if (open) onFetchCrews()
+          }}
+        >
           <DropdownMenu.Trigger asChild>
-            <button className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-muted-foreground border border-border rounded-md hover:bg-muted hover:text-foreground transition-colors shrink-0">
-              <FolderOpen className="w-3 h-3" />
+            <button className="text-2xs flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+              <FolderOpen className="h-3 w-3" />
               Load
-              <ChevronDown className="w-3 h-3" />
+              <ChevronDown className="h-3 w-3" />
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
             <DropdownMenu.Content
               sideOffset={6}
               align="start"
-              className="z-50 min-w-[200px] bg-popover border border-border rounded-lg shadow-xl py-1 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95"
+              className="bg-popover z-50 min-w-[200px] rounded-lg border border-border py-1 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
             >
               {crewsLoading ? (
-                <div className="px-3 py-2.5 text-[11px] text-muted-foreground flex items-center gap-2">
-                  <Loader2 className="w-3 h-3 animate-spin motion-reduce:animate-none" />
+                <div className="text-2xs flex items-center gap-2 px-3 py-2.5 text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" />
                   Loading…
                 </div>
               ) : crews.length === 0 ? (
-                <div className="px-3 py-2.5 text-[11px] text-muted-foreground italic">
+                <div className="text-2xs px-3 py-2.5 italic text-muted-foreground">
                   No saved crews yet — build one on the canvas and hit Save
                 </div>
               ) : (
@@ -107,7 +110,7 @@ export function Toolbar({
                   <DropdownMenu.Item
                     key={crewItem}
                     onSelect={() => onLoadCrew(crewItem)}
-                    className="px-3 py-2 text-[12px] font-medium cursor-pointer text-foreground hover:bg-muted focus:bg-muted focus:outline-none rounded-sm mx-1 transition-colors"
+                    className="mx-1 cursor-pointer rounded-sm px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus:bg-muted focus:outline-none"
                   >
                     {crewItem}
                   </DropdownMenu.Item>
@@ -136,18 +139,18 @@ export function Toolbar({
         <button
           onClick={undo}
           disabled={!canUndo}
-          className="p-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-30 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="rounded-lg border border-border p-1.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
           aria-label="Undo"
-          title={`Undo (${mod}+Z)`}
+          title={`Undo (${modKey}+Z)`}
         >
           <Undo2 className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={redo}
           disabled={!canRedo}
-          className="p-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-30 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="rounded-lg border border-border p-1.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
           aria-label="Redo"
-          title={`Redo (${mod}+Shift+Z)`}
+          title={`Redo (${modKey}+Shift+Z)`}
         >
           <Redo2 className="h-3.5 w-3.5" />
         </button>
@@ -156,17 +159,17 @@ export function Toolbar({
           data-tour="save-button"
           onClick={onSave}
           disabled={status === 'saving' || status === 'loading'}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold border border-border rounded-lg text-foreground bg-background hover:bg-muted disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >
           {status === 'saving' ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
           ) : (
-            <Save className="w-3.5 h-3.5" />
+            <Save className="h-3.5 w-3.5" />
           )}
           Save
           {dirty && (
             <>
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 ml-0.5" aria-hidden="true" />
+              <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden="true" />
               <span className="sr-only">(unsaved changes)</span>
             </>
           )}
@@ -176,12 +179,12 @@ export function Toolbar({
           data-tour="run-button"
           onClick={onRunClick}
           disabled={status === 'running' || status === 'saving' || status === 'loading'}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600"
         >
           {status === 'running' ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
           ) : (
-            <Play className="w-3.5 h-3.5" />
+            <Play className="h-3.5 w-3.5" />
           )}
           Run
         </button>

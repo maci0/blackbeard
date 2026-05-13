@@ -13,8 +13,7 @@ interface TourOverlayProps {
 export function TourOverlay({ targetRect, onBackdropClick }: TourOverlayProps) {
   const padding = 6
   const reducedMotion =
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   return (
     <>

@@ -43,12 +43,9 @@ def select_sandbox(
     """
     effective = tool_tier or system_default
 
-    if policy_minimum:
-        if tier_rank(policy_minimum) > tier_rank(effective):
-            logger.info(
-                "Sandbox tier promoted: %s → %s (policy minimum)", effective, policy_minimum
-            )
-            effective = policy_minimum
+    if policy_minimum and tier_rank(policy_minimum) > tier_rank(effective):
+        logger.info("Sandbox tier promoted: %s → %s (policy minimum)", effective, policy_minimum)
+        effective = policy_minimum
 
     if effective not in ("none", "wasm"):
         logger.warning("Sandbox tier '%s' not yet implemented, falling back to 'wasm'", effective)

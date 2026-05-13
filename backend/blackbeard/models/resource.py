@@ -1,7 +1,7 @@
 """SQLAlchemy models for the resource system."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     CheckConstraint,
@@ -29,22 +29,33 @@ class Resource(Base):
     __tablename__ = "resources"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    kind = Column(Enum(ResourceKind), nullable=False, index=True)
+    kind = Column(
+        Enum(ResourceKind, create_type=False, values_callable=lambda e: [x.value for x in e]),
+        nullable=False,
+        index=True,
+    )
     name = Column(String(255), nullable=False)
-    namespace = Column(String(255), nullable=False, default="default", server_default=text("'default'"))
+    namespace = Column(
+        String(255),
+        nullable=False,
+        default="default",
+        server_default=text("'default'"),
+    )
     labels = Column(JSONB, nullable=False, default=dict, server_default=text("'{}'"))
     spec = Column(JSONB, nullable=False)
     raw_yaml = Column(Text, nullable=True)
     version = Column(Integer, nullable=False, default=1, server_default=text("1"))
     created_at = Column(
-        DateTime(timezone=True), nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
         server_default=text("now()"),
     )
     updated_at = Column(
-        DateTime(timezone=True), nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         server_default=text("now()"),
     )
 
@@ -73,10 +84,22 @@ class ResourceRef(Base):
     __tablename__ = "resource_refs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    source_id = Column(UUID(as_uuid=True), ForeignKey("resources.id", ondelete="CASCADE"), nullable=False)
-    target_kind = Column(Enum(ResourceKind), nullable=False)
+    source_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("resources.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    target_kind = Column(
+        Enum(ResourceKind, create_type=False, values_callable=lambda e: [x.value for x in e]),
+        nullable=False,
+    )
     target_name = Column(String(255), nullable=False)
-    target_namespace = Column(String(255), nullable=False, default="default", server_default=text("'default'"))
+    target_namespace = Column(
+        String(255),
+        nullable=False,
+        default="default",
+        server_default=text("'default'"),
+    )
     ref_field = Column(String(255), nullable=False)  # e.g. "spec.llm", "spec.tools[0]"
 
     source = relationship("Resource", foreign_keys=[source_id], back_populates="outgoing_refs")

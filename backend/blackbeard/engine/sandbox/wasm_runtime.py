@@ -51,9 +51,15 @@ class WasmTimeoutError(WasmExecutionError):
 class WasmToolResult:
     """Result of a WASM tool execution."""
 
-    __slots__ = ("output", "success", "error", "duration_ms")
+    __slots__ = ("duration_ms", "error", "output", "success")
 
-    def __init__(self, output: str, success: bool, error: str | None = None, duration_ms: int = 0):
+    def __init__(
+        self,
+        output: str,
+        success: bool,
+        error: str | None = None,
+        duration_ms: int = 0,
+    ) -> None:
         self.output = output
         self.success = success
         self.error = error
@@ -71,7 +77,7 @@ class WasmToolResult:
 class ModuleCache:
     """Thread-safe LRU cache for compiled WASM modules."""
 
-    def __init__(self, max_size: int = DEFAULT_CACHE_SIZE):
+    def __init__(self, max_size: int = DEFAULT_CACHE_SIZE) -> None:
         self._cache: OrderedDict[str, wasmtime.Module] = OrderedDict()
         self._max_size = max_size
         self._lock = threading.Lock()
@@ -111,7 +117,7 @@ class WasmSandbox:
         fuel_limit: int = DEFAULT_FUEL,
         cache_size: int = DEFAULT_CACHE_SIZE,
         allowed_capabilities: set[str] | None = None,
-    ):
+    ) -> None:
         self._fuel_limit = fuel_limit
         self._cache = ModuleCache(max_size=cache_size)
         self._allowed_capabilities = allowed_capabilities or set()
@@ -136,7 +142,9 @@ class WasmSandbox:
         path = Path(wasm_path)
         resolved = path.resolve()
         if not resolved.is_relative_to(_APP_BASE_DIR):
-            raise WasmExecutionError("Invalid WASM module path: path must be within the application directory")
+            raise WasmExecutionError(
+                "Invalid WASM module path: path must be within the application directory"
+            )
         if not resolved.exists():
             raise WasmExecutionError(f"WASM module not found: {wasm_path}")
 
@@ -201,11 +209,15 @@ class WasmSandbox:
 
         logger.info(
             "WASM invoke: path=%s input_bytes=%d fuel=%d",
-            wasm_path, len(input_json), self._fuel_limit,
+            wasm_path,
+            len(input_json),
+            self._fuel_limit,
             extra=_log_extra(
                 execution_id,
-                event="wasm_invoke", wasm_path=wasm_path,
-                input_bytes=len(input_json), fuel_limit=self._fuel_limit,
+                event="wasm_invoke",
+                wasm_path=wasm_path,
+                input_bytes=len(input_json),
+                fuel_limit=self._fuel_limit,
             ),
         )
         start_time = time.monotonic()
@@ -228,11 +240,15 @@ class WasmSandbox:
 
             logger.info(
                 "WASM completed: path=%s duration_ms=%d fuel_consumed=%d",
-                wasm_path, duration_ms, fuel_consumed,
+                wasm_path,
+                duration_ms,
+                fuel_consumed,
                 extra=_log_extra(
                     execution_id,
-                    event="wasm_completed", wasm_path=wasm_path,
-                    duration_ms=duration_ms, fuel_consumed=fuel_consumed,
+                    event="wasm_completed",
+                    wasm_path=wasm_path,
+                    duration_ms=duration_ms,
+                    fuel_consumed=fuel_consumed,
                     fuel_remaining=fuel_remaining,
                 ),
             )
@@ -265,11 +281,15 @@ class WasmSandbox:
 
             logger.error(
                 "WASM failed: path=%s duration_ms=%d error=%s",
-                wasm_path, duration_ms, error_msg,
+                wasm_path,
+                duration_ms,
+                error_msg,
                 extra=_log_extra(
                     execution_id,
-                    event="wasm_failed", wasm_path=wasm_path,
-                    duration_ms=duration_ms, error_type=type(e).__name__,
+                    event="wasm_failed",
+                    wasm_path=wasm_path,
+                    duration_ms=duration_ms,
+                    error_type=type(e).__name__,
                 ),
             )
 
@@ -287,12 +307,16 @@ class WasmSandbox:
             duration_ms = int((time.monotonic() - start_time) * 1000)
             logger.error(
                 "WASM unexpected error: path=%s duration_ms=%d error=%s",
-                wasm_path, duration_ms, e,
+                wasm_path,
+                duration_ms,
+                e,
                 exc_info=True,
                 extra=_log_extra(
                     execution_id,
-                    event="wasm_unexpected_error", wasm_path=wasm_path,
-                    duration_ms=duration_ms, error_type=type(e).__name__,
+                    event="wasm_unexpected_error",
+                    wasm_path=wasm_path,
+                    duration_ms=duration_ms,
+                    error_type=type(e).__name__,
                 ),
             )
             raise WasmExecutionError(f"Unexpected error during WASM execution: {e}") from e
@@ -313,9 +337,14 @@ class WasmSandbox:
 
         except Exception as e:
             logger.warning(
-                "Failed to get WASM tool description: %s", e,
+                "Failed to get WASM tool description: %s",
+                e,
                 exc_info=True,
-                extra={"event": "wasm_describe_failed", "wasm_path": wasm_path, "error_type": type(e).__name__},
+                extra={
+                    "event": "wasm_describe_failed",
+                    "wasm_path": wasm_path,
+                    "error_type": type(e).__name__,
+                },
             )
             return None
 

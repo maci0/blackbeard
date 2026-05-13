@@ -74,7 +74,8 @@ async def create_execution_key(
             data = response.json()
             return data.get("key")
         logger.warning(
-            "Failed to create LiteLLM key: HTTP %d", response.status_code,
+            "Failed to create LiteLLM key: HTTP %d",
+            response.status_code,
             extra={
                 "event": "litellm_key_create_failed",
                 "execution_id": execution_id,
@@ -85,7 +86,9 @@ async def create_execution_key(
 
     except Exception as e:
         logger.warning(
-            "LiteLLM key creation failed, using master key: %s: %s", type(e).__name__, e,
+            "LiteLLM key creation failed, using master key: %s: %s",
+            type(e).__name__,
+            e,
             exc_info=True,
             extra={
                 "event": "litellm_key_create_error",
@@ -108,7 +111,8 @@ async def delete_execution_key(key: str) -> bool:
         )
         if response.status_code != 200:
             logger.warning(
-                "Failed to delete LiteLLM key: HTTP %d", response.status_code,
+                "Failed to delete LiteLLM key: HTTP %d",
+                response.status_code,
                 extra={
                     "event": "litellm_key_delete_failed",
                     "http_status": response.status_code,
@@ -117,7 +121,9 @@ async def delete_execution_key(key: str) -> bool:
         return response.status_code == 200
     except Exception as e:
         logger.warning(
-            "Failed to delete LiteLLM key: %s: %s", type(e).__name__, e,
+            "Failed to delete LiteLLM key: %s: %s",
+            type(e).__name__,
+            e,
             exc_info=True,
             extra={"event": "litellm_key_delete_error", "error_type": type(e).__name__},
         )
@@ -137,7 +143,8 @@ async def get_key_spend(key: str) -> dict | None:
         if response.status_code == 200:
             return response.json()
         logger.warning(
-            "Failed to get LiteLLM key spend: HTTP %d", response.status_code,
+            "Failed to get LiteLLM key spend: HTTP %d",
+            response.status_code,
             extra={
                 "event": "litellm_key_spend_failed",
                 "http_status": response.status_code,
@@ -146,7 +153,9 @@ async def get_key_spend(key: str) -> dict | None:
         return None
     except Exception as e:
         logger.warning(
-            "Failed to get key spend: %s: %s", type(e).__name__, e,
+            "Failed to get key spend: %s: %s",
+            type(e).__name__,
+            e,
             exc_info=True,
             extra={"event": "litellm_key_spend_error", "error_type": type(e).__name__},
         )

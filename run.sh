@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-if command -v docker compose &>/dev/null; then
+if docker compose version &>/dev/null; then
   COMPOSE="docker compose"
 elif command -v podman-compose &>/dev/null; then
   COMPOSE="podman-compose"
@@ -15,14 +15,16 @@ if [ ! -f .env ]; then
   echo "Created .env from .env.example — edit it before running in production."
 fi
 
-# shellcheck source=.env
-. ./.env 2>/dev/null || true
-creds="${GOOGLE_APPLICATION_CREDENTIALS:-deploy/docker/empty-credentials.json}"
+creds=$(grep -s '^GOOGLE_APPLICATION_CREDENTIALS=' .env | cut -d= -f2- || echo "deploy/docker/empty-credentials.json")
+creds="${creds:-deploy/docker/empty-credentials.json}"
 if [ ! -f "$creds" ]; then
   echo "Warning: GOOGLE_APPLICATION_CREDENTIALS file not found: $creds" >&2
   echo "         Set it in .env or ensure the file exists. Using empty placeholder." >&2
-  export GOOGLE_APPLICATION_CREDENTIALS=deploy/docker/empty-credentials.json
+  creds="deploy/docker/empty-credentials.json"
 fi
+# podman-compose requires absolute paths for bind mounts
+export GOOGLE_APPLICATION_CREDENTIALS
+GOOGLE_APPLICATION_CREDENTIALS="$(cd "$(dirname "$creds")" && pwd)/$(basename "$creds")"
 
 echo "Stopping old containers..."
 $COMPOSE down --remove-orphans 2>/dev/null || true

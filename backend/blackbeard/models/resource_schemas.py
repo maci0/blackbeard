@@ -1,9 +1,15 @@
 """Pydantic schemas for API request/response models."""
 
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
+
+if TYPE_CHECKING:
+    from blackbeard.models.resource import Resource
 
 from blackbeard.kinds import ALL_KINDS, NAME_PATTERN
 
@@ -55,7 +61,7 @@ class ResourceResponse(BaseModel):
     model_config = {"from_attributes": True}
 
     @classmethod
-    def from_db(cls, resource) -> "ResourceResponse":  # type: ignore[no-untyped-def]
+    def from_db(cls, resource: Resource) -> ResourceResponse:
         """Build response from a SQLAlchemy Resource model."""
         return cls.model_construct(
             id=resource.id,
@@ -81,4 +87,3 @@ class ResourceListResponse(BaseModel):
     limit: int = 100
     offset: int = 0
     has_more: bool = False
-

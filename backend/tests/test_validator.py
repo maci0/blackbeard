@@ -3,15 +3,16 @@
 Covers validate_resource() for all five resource kinds plus error paths.
 """
 
-from blackbeard.resources.validator import validate_resource, ValidationError
-
+from blackbeard.resources.validator import ValidationError, validate_resource
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _has_error(errors: list[ValidationError], field_contains: str = "", msg_contains: str = "") -> bool:
+def _has_error(
+    errors: list[ValidationError], field_contains: str = "", msg_contains: str = ""
+) -> bool:
     """Return True if any error matches both optional substrings."""
     for e in errors:
         field_ok = not field_contains or field_contains in e.field

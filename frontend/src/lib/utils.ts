@@ -10,12 +10,13 @@ export function capitalize(s: string): string {
 }
 
 export function toResourceName(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-    .replace(/^-+|-+$/g, '')
-    || 'unnamed'
+  return (
+    s
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '')
+      .replace(/^-+|-+$/g, '') || 'unnamed'
+  )
 }
 
 export function parseRef(ref: string): string {
@@ -27,7 +28,14 @@ export function parseRef(ref: string): string {
 export function getDefaultNodeData(type: string): Record<string, unknown> {
   switch (type) {
     case 'agent':
-      return { role: 'New Agent', goal: '', backstory: '', llm: 'gpt-4o', tools: [], verbose: false }
+      return {
+        role: 'New Agent',
+        goal: '',
+        backstory: '',
+        llm: 'gpt-4o',
+        tools: [],
+        verbose: false,
+      }
     case 'task':
       return { name: 'New Task', description: '', expected_output: '', agent: '' }
     case 'tool':

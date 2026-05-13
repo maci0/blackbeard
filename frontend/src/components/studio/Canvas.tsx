@@ -13,7 +13,6 @@ import {
   type Connection,
   type Edge,
 } from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
 import { User, ListChecks, Wrench, Sparkles } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
 import { getDefaultNodeData } from '@/lib/utils'
@@ -86,10 +85,7 @@ function CanvasInner() {
         e.preventDefault()
         useStudioStore.getState().undo()
       }
-      if (
-        (e.metaKey || e.ctrlKey) &&
-        ((e.key === 'z' && e.shiftKey) || e.key === 'y')
-      ) {
+      if ((e.metaKey || e.ctrlKey) && ((e.key === 'z' && e.shiftKey) || e.key === 'y')) {
         e.preventDefault()
         useStudioStore.getState().redo()
       }
@@ -175,14 +171,19 @@ function CanvasInner() {
       proOptions={{ hideAttribution: true }}
       className="studio-canvas"
     >
-      <Background variant={BackgroundVariant.Dots} gap={20} size={1} color={isDark ? '#334155' : '#e2e8f0'} />
+      <Background
+        variant={BackgroundVariant.Dots}
+        gap={20}
+        size={1}
+        color={isDark ? '#334155' : '#e2e8f0'}
+      />
       <Controls
-        className="!border !border-border !rounded-lg !shadow-md !overflow-hidden"
+        className="!overflow-hidden !rounded-lg !border !border-border !shadow-md"
         showInteractive={false}
       />
       <MiniMap
         nodeColor={minimapNodeColor}
-        className="!border !border-border !rounded-lg !shadow-md"
+        className="!rounded-lg !border !border-border !shadow-md"
         maskColor={isDark ? 'rgba(15, 23, 42, 0.7)' : 'rgba(248, 250, 252, 0.7)'}
         pannable
         zoomable
@@ -197,32 +198,32 @@ function CanvasInner() {
 
 function EmptyCanvasOverlay({ onLoadExample }: { onLoadExample?: () => void }) {
   return (
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-      <div className="text-center pointer-events-auto select-none">
+    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+      <div className="pointer-events-auto select-none text-center">
         {/* Icon cluster */}
-        <div aria-hidden="true" className="flex items-center justify-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
-            <User className="w-5 h-5 text-violet-500" />
+        <div aria-hidden="true" className="mb-5 flex items-center justify-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100">
+            <User className="h-5 w-5 text-violet-500" />
           </div>
-          <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-            <ListChecks className="w-5 h-5 text-blue-500" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100">
+            <ListChecks className="h-5 w-5 text-blue-500" />
           </div>
-          <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-            <Wrench className="w-5 h-5 text-emerald-500" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100">
+            <Wrench className="h-5 w-5 text-emerald-500" />
           </div>
         </div>
 
-        <p className="text-sm font-medium text-foreground mb-1">Canvas is empty</p>
-        <p className="text-[12px] text-muted-foreground mb-5 max-w-[260px] leading-relaxed">
+        <p className="mb-1 text-sm font-medium text-foreground">Canvas is empty</p>
+        <p className="mb-5 max-w-[260px] text-xs leading-relaxed text-muted-foreground">
           Drag agents and tasks from the palette, then connect them
         </p>
 
         {onLoadExample && (
           <button
             onClick={onLoadExample}
-            className="inline-flex items-center gap-2 px-4 py-2 text-[12px] font-semibold bg-card border border-border rounded-lg text-foreground hover:bg-muted shadow-sm transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
             Load example crew
           </button>
         )}
@@ -239,7 +240,10 @@ export default function Canvas({ onLoadExample }: { onLoadExample?: () => void }
   const { nodes } = useStudioStore()
 
   return (
-    <div data-tour="canvas" className="flex-1 relative overflow-hidden bg-slate-50 dark:bg-slate-900">
+    <div
+      data-tour="canvas"
+      className="relative flex-1 overflow-hidden bg-slate-50 dark:bg-slate-900"
+    >
       <CanvasInner />
       {nodes.length === 0 && <EmptyCanvasOverlay onLoadExample={onLoadExample} />}
     </div>

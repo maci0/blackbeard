@@ -1,6 +1,6 @@
 // Use relative paths — Vite dev server proxies /api to the backend.
 // In production builds, set VITE_API_BASE_URL to the backend origin.
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+const API_BASE: string = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
 
 export class ApiError extends Error {
   constructor(
@@ -55,12 +55,14 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }))
-      const detail = error.detail
+      const error = (await response.json().catch(() => ({ detail: response.statusText }))) as {
+        detail?: unknown
+      }
+      const detail: unknown = error.detail
       const message =
         typeof detail === 'string'
           ? detail
-          : detail?.message ?? `HTTP ${response.status}`
+          : ((detail as { message?: string } | null)?.message ?? `HTTP ${response.status}`)
       throw new ApiError(message, response.status, detail)
     }
 
@@ -68,7 +70,7 @@ class ApiClient {
       return undefined as T
     }
 
-    return response.json()
+    return response.json() as Promise<T>
   }
 
   get<T>(path: string) {

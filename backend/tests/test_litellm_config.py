@@ -6,10 +6,9 @@ lightweight Resource stubs and calls the config generator directly.
 
 import yaml
 
-from blackbeard.litellm.config_gen import generate_litellm_config
 from blackbeard.kinds import ResourceKind
+from blackbeard.litellm.config_gen import generate_litellm_config
 from blackbeard.models.resource import Resource
-
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -178,8 +177,7 @@ def test_generate_config_vertex_ai_includes_project_location():
 def test_generate_config_is_valid_yaml():
     """Output should always be parseable YAML."""
     conns = [
-        make_llm_conn(f"conn-{i}", {"provider": "openai", "model": f"model-{i}"})
-        for i in range(5)
+        make_llm_conn(f"conn-{i}", {"provider": "openai", "model": f"model-{i}"}) for i in range(5)
     ]
     config_str = generate_litellm_config(conns)
     parsed = yaml.safe_load(config_str)

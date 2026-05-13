@@ -149,7 +149,10 @@ LLM_CONNECTION_SCHEMA = {
             },
         },
         "api_key_env": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*(_API_KEY|_KEY|_SECRET)$"},
-        "base_url": {"type": "string", "pattern": "^https?://[a-zA-Z0-9][a-zA-Z0-9.\\-]+(:[0-9]+)?(/.*)?$"},
+        "base_url": {
+            "type": "string",
+            "pattern": "^https?://[a-zA-Z0-9][a-zA-Z0-9.\\-]+(:[0-9]+)?(/.*)?$",
+        },
     },
     "additionalProperties": False,
 }

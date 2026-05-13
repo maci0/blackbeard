@@ -2,7 +2,9 @@ import { useEffect, useState, useMemo } from 'react'
 import { useDocumentTitle } from '@/lib/hooks'
 import { Wrench, Search, AlertTriangle, RefreshCw, Code2, Box, Shield, X } from 'lucide-react'
 import { useResourceStore, type Resource } from '@/stores/resourceStore'
-import { Spinner } from '@/components/ui/Spinner'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { TableSkeleton } from '@/components/ui/Skeleton'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
@@ -10,9 +12,11 @@ import { cn } from '@/lib/utils'
 /* ------------------------------------------------------------------ */
 
 const TYPE_CLASSES: Record<string, string> = {
-  python: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-800',
+  python:
+    'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-800',
   wasm: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900 dark:text-violet-300 dark:border-violet-800',
-  builtin: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 dark:border-emerald-800',
+  builtin:
+    'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 dark:border-emerald-800',
 }
 
 const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -33,8 +37,9 @@ function TypeBadge({ type }: { type: string }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border',
-        TYPE_CLASSES[type] ?? 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
+        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium',
+        TYPE_CLASSES[type] ??
+          'border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300',
       )}
     >
       <Icon className="h-3 w-3" />
@@ -80,20 +85,18 @@ function ToolCard({ resource }: { resource: Resource }) {
   }
 
   return (
-    <div className="border rounded-lg bg-card shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden">
+    <div className="flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md">
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b bg-muted/20">
+      <div className="border-b bg-muted/20 px-4 pb-3 pt-4">
         <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="p-1.5 rounded-md bg-emerald-100 border border-emerald-200 shrink-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="shrink-0 rounded-md border border-emerald-200 bg-emerald-100 p-1.5">
               <Wrench className="h-4 w-4 text-emerald-600" />
             </div>
             <div className="min-w-0">
-              <p className="font-semibold text-sm truncate">{resource.metadata.name}</p>
+              <p className="truncate text-sm font-semibold">{resource.metadata.name}</p>
               {resource.metadata.namespace && resource.metadata.namespace !== 'default' && (
-                <p className="text-xs text-muted-foreground">
-                  {resource.metadata.namespace}
-                </p>
+                <p className="text-xs text-muted-foreground">{resource.metadata.namespace}</p>
               )}
             </div>
           </div>
@@ -102,17 +105,17 @@ function ToolCard({ resource }: { resource: Resource }) {
       </div>
 
       {/* Body */}
-      <div className="px-4 py-3 flex-1 flex flex-col gap-2.5">
+      <div className="flex flex-1 flex-col gap-2.5 px-4 py-3">
         {spec.description && (
-          <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">
+          <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
             {spec.description}
           </p>
         )}
 
         {spec.class_path && (
           <div>
-            <p className="text-xs text-muted-foreground/70 mb-0.5">Class path</p>
-            <p className="text-xs font-mono truncate text-foreground/80 bg-muted/50 rounded px-1.5 py-0.5">
+            <p className="mb-0.5 text-xs text-muted-foreground/70">Class path</p>
+            <p className="truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs text-foreground/80">
               {spec.class_path}
             </p>
           </div>
@@ -120,8 +123,8 @@ function ToolCard({ resource }: { resource: Resource }) {
 
         {spec.entrypoint && (
           <div>
-            <p className="text-xs text-muted-foreground/70 mb-0.5">Entrypoint</p>
-            <p className="text-xs font-mono truncate text-foreground/80 bg-muted/50 rounded px-1.5 py-0.5">
+            <p className="mb-0.5 text-xs text-muted-foreground/70">Entrypoint</p>
+            <p className="truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs text-foreground/80">
               {spec.entrypoint}
             </p>
           </div>
@@ -129,7 +132,7 @@ function ToolCard({ resource }: { resource: Resource }) {
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-2.5 border-t bg-muted/10 flex items-center justify-between">
+      <div className="flex items-center justify-between border-t bg-muted/10 px-4 py-2.5">
         {spec.sandbox ? (
           <SandboxLabel tier={spec.sandbox} />
         ) : (
@@ -149,12 +152,12 @@ export default function Tools() {
   const { resources, loading, error, fetchResources } = useResourceStore()
   const [search, setSearch] = useState('')
 
-  const tools = resources['tools'] ?? []
+  const tools = useMemo(() => resources['tools'] ?? [], [resources])
 
   useDocumentTitle('Tools')
 
   useEffect(() => {
-    fetchResources('tools')
+    void fetchResources('tools')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -170,35 +173,46 @@ export default function Tools() {
   }, [tools, search])
 
   return (
-    <div className="flex-1 overflow-auto">
-      <div className="p-6 max-w-7xl mx-auto">
-
+    <div className="page-enter flex-1 overflow-auto">
+      <div className="mx-auto max-w-7xl p-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Tools</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Tool registry — Python, WASM, and built-in tools
-            </p>
-          </div>
-          <button
-            onClick={() => fetchResources('tools')}
-            aria-label="Refresh tools"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md bg-background hover:bg-accent transition-colors"
-          >
-            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin motion-reduce:animate-none')} />
-            Refresh
-          </button>
+        <div className="mb-6">
+          <PageHeader
+            title="Tools"
+            description="Tool library and registry"
+            actions={
+              <button
+                onClick={() => void fetchResources('tools')}
+                aria-label="Refresh tools"
+                className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent"
+              >
+                <RefreshCw
+                  className={cn(
+                    'h-3.5 w-3.5',
+                    loading && 'animate-spin motion-reduce:animate-none',
+                  )}
+                />
+                Refresh
+              </button>
+            }
+          />
         </div>
 
         {/* Error */}
         {error && (
-          <div role="alert" className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-center justify-between">
+          <div
+            role="alert"
+            className="mb-4 flex items-center justify-between rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+          >
             <span className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               {error}
             </span>
-            <button onClick={() => fetchResources('tools')} className="text-xs underline underline-offset-2" aria-label="Retry loading tools">
+            <button
+              onClick={() => void fetchResources('tools')}
+              className="text-xs underline underline-offset-2"
+              aria-label="Retry loading tools"
+            >
               Retry
             </button>
           </div>
@@ -206,17 +220,22 @@ export default function Tools() {
 
         {/* Search */}
         {tools.length > 0 && (
-          <div className="flex items-center gap-3 mb-5 flex-wrap">
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
-              <label htmlFor="tools-search" className="sr-only">Search tools</label>
-              <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <div className="mb-5 flex flex-wrap items-center gap-3">
+            <div className="relative min-w-[200px] max-w-sm flex-1">
+              <label htmlFor="tools-search" className="sr-only">
+                Search tools
+              </label>
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              />
               <input
                 id="tools-search"
                 type="text"
                 placeholder="Search tools…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
             {search && (
@@ -226,7 +245,7 @@ export default function Tools() {
                 </span>
                 <button
                   onClick={() => setSearch('')}
-                  className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <X className="h-3.5 w-3.5" />
                   Clear search
@@ -238,36 +257,16 @@ export default function Tools() {
 
         {/* Content */}
         {loading && tools.length === 0 ? (
-          <div className="flex items-center justify-center py-24">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Spinner size="sm" className="text-muted-foreground" />
-              <span className="text-sm">Loading tools…</span>
-            </div>
-          </div>
+          <TableSkeleton />
         ) : filtered.length === 0 ? (
-          <div className="border-2 border-dashed rounded-xl flex flex-col items-center justify-center py-24 px-6 text-center">
-            <div className="p-4 rounded-full bg-muted mb-4">
-              <Wrench aria-hidden="true" className="h-8 w-8 text-muted-foreground/50" />
-            </div>
-            <p className="font-medium text-muted-foreground mb-1">
-              {search ? 'No tools match your search' : 'No tools registered'}
-            </p>
-            <p className="text-sm text-muted-foreground/70">
-              {search
-                ? 'Try a different search term'
-                : 'Define Tool resources and apply them via the CLI'}
-            </p>
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="mt-3 text-sm text-primary hover:underline underline-offset-2"
-              >
-                Clear search
-              </button>
-            )}
-          </div>
+          <EmptyState
+            icon={<Wrench />}
+            title={search ? 'No tools match your search' : 'No tools found'}
+            description={search ? 'Try a different search term' : 'Create tools in the Studio'}
+            action={!search ? { label: 'Go to Studio', href: '/studio' } : undefined}
+          />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((resource) => (
               <ToolCard key={resource.id} resource={resource} />
             ))}

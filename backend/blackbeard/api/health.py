@@ -16,6 +16,7 @@ from blackbeard.models import get_session
 
 try:
     from redis.asyncio import from_url as _redis_from_url
+
     _HAS_REDIS = True
 except ImportError:
     _redis_from_url = None  # type: ignore[assignment]
@@ -90,7 +91,9 @@ async def _check_valkey() -> dict[str, object]:
         _valkey_client = None
         err = type(e).__name__
         logger.warning(
-            "Health check: valkey is down: %s: %s", err, e,
+            "Health check: valkey is down: %s: %s",
+            err,
+            e,
             exc_info=True,
             extra={"event": "health_check_failed", "component": "valkey", "error_type": err},
         )
@@ -110,7 +113,9 @@ async def _check_litellm() -> dict[str, object]:
     except Exception as e:
         err = type(e).__name__
         logger.warning(
-            "Health check: litellm is down: %s: %s", err, e,
+            "Health check: litellm is down: %s: %s",
+            err,
+            e,
             exc_info=True,
             extra={"event": "health_check_failed", "component": "litellm", "error_type": err},
         )
@@ -128,7 +133,8 @@ async def shutdown_health_clients() -> None:
             await _valkey_client.aclose()  # type: ignore[union-attr]
         except Exception as e:
             logger.warning(
-                "Error closing valkey client: %s", e,
+                "Error closing valkey client: %s",
+                e,
                 extra={"event": "valkey_close_error"},
             )
         _valkey_client = None
@@ -154,7 +160,9 @@ async def readiness(
             return {"status": "up", "latency_ms": latency_ms}
         except Exception as e:
             logger.warning(
-                "Health check: database is down: %s: %s", type(e).__name__, e,
+                "Health check: database is down: %s: %s",
+                type(e).__name__,
+                e,
                 exc_info=True,
                 extra={
                     "event": "health_check_failed",

@@ -3,12 +3,11 @@
 import pytest
 
 from blackbeard.engine.policy import (
+    DEFAULT_POLICY,
     AgentPolicy,
     PolicyDeniedError,
     resolve_policy,
-    DEFAULT_POLICY,
 )
-
 
 # ---------------------------------------------------------------------------
 # DEFAULT_POLICY

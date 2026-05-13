@@ -45,7 +45,32 @@ target-version = "py313"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+select = [
+    "E", "F", "I", "N", "W",   # core
+    "UP",                        # pyupgrade
+    "B",                         # bugbear
+    "SIM",                       # simplify
+    "ANN",                       # annotations
+    "RUF",                       # ruff-specific
+    "PT",                        # pytest style
+    "C4",                        # comprehensions
+    "PIE",                       # misc
+    "T20",                       # no print
+    "TCH",                       # type-checking imports
+]
+ignore = [
+    "ANN401",   # Any in signatures — needed for crewai/langfuse untyped APIs
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN", "E402"]
+"alembic/**" = ["ANN", "UP", "E501", "I", "F401"]
+"blackbeard/api/**" = ["B008", "TCH"]  # FastAPI needs types at runtime
+"blackbeard/models/resource_schemas.py" = ["N815"]  # apiVersion is API contract
+"blackbeard/resources/refs.py" = ["N806"]  # WHITE/GRAY/BLACK graph constants
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 
 [tool.mypy]
 python_version = "3.13"

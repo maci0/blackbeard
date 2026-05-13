@@ -23,9 +23,10 @@ export function getDuration(
   return `${min}m ${rem}s`
 }
 
-export function formatCost(cost: number | null | undefined): string {
-  if (cost == null || cost === 0) return '—'
-  if (cost >= 1) return `$${cost.toFixed(2)}`
-  if (cost >= 0.01) return `$${cost.toFixed(3)}`
-  return `$${cost.toFixed(4)}`
+export function formatCost(cost: number | string | null | undefined): string {
+  const n = typeof cost === 'string' ? parseFloat(cost) : cost
+  if (n == null || n === 0 || isNaN(n)) return '—'
+  if (n >= 1) return `$${n.toFixed(2)}`
+  if (n >= 0.01) return `$${n.toFixed(3)}`
+  return `$${n.toFixed(4)}`
 }

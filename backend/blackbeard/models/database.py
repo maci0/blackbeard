@@ -1,8 +1,13 @@
 """Database engine and session factory."""
 
+from __future__ import annotations
+
 import logging
 import time
-from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -28,13 +33,28 @@ engine = create_async_engine(
     },
 )
 
+
 @event.listens_for(engine.sync_engine, "before_cursor_execute")
-def _before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+def _before_cursor_execute(
+    conn: Any,
+    cursor: Any,
+    statement: Any,
+    parameters: Any,
+    context: Any,
+    executemany: Any,
+) -> None:
     conn.info["query_start_time"] = time.monotonic()
 
 
 @event.listens_for(engine.sync_engine, "after_cursor_execute")
-def _after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+def _after_cursor_execute(
+    conn: Any,
+    cursor: Any,
+    statement: Any,
+    parameters: Any,
+    context: Any,
+    executemany: Any,
+) -> None:
     start = conn.info.pop("query_start_time", None)
     if start is None:
         return
@@ -42,7 +62,8 @@ def _after_cursor_execute(conn, cursor, statement, parameters, context, executem
     if elapsed_s >= _SLOW_QUERY_THRESHOLD_S:
         logger.warning(
             "Slow query: %.1fs %s",
-            elapsed_s, statement[:200],
+            elapsed_s,
+            statement[:200],
             extra={
                 "event": "slow_query",
                 "duration_s": round(elapsed_s, 2),
@@ -52,7 +73,7 @@ def _after_cursor_execute(conn, cursor, statement, parameters, context, executem
 
 
 @event.listens_for(engine.sync_engine, "checkout")
-def _on_checkout(_dbapi_conn, _connection_rec, _connection_proxy):
+def _on_checkout(_dbapi_conn: Any, _connection_rec: Any, _connection_proxy: Any) -> None:
     pool = engine.sync_engine.pool
     checked_out = pool.checkedout()
     pool_size = pool.size()
@@ -61,7 +82,9 @@ def _on_checkout(_dbapi_conn, _connection_rec, _connection_proxy):
     if max_total > 0 and checked_out / max_total >= 0.8:
         logger.warning(
             "DB pool near exhaustion: checked_out=%d/%d overflow=%d",
-            checked_out, max_total, overflow,
+            checked_out,
+            max_total,
+            overflow,
             extra={
                 "event": "db_pool_checkout",
                 "pool_size": pool_size,
@@ -72,7 +95,9 @@ def _on_checkout(_dbapi_conn, _connection_rec, _connection_proxy):
     elif logger.isEnabledFor(logging.DEBUG):
         logger.debug(
             "DB pool checkout: size=%d checked_out=%d overflow=%d",
-            pool_size, checked_out, overflow,
+            pool_size,
+            checked_out,
+            overflow,
             extra={
                 "event": "db_pool_checkout",
                 "pool_size": pool_size,
@@ -81,6 +106,7 @@ def _on_checkout(_dbapi_conn, _connection_rec, _connection_proxy):
             },
         )
 
+
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -88,7 +114,7 @@ class Base(DeclarativeBase):
     pass
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession]:
     """Dependency that yields a database session."""
     async with async_session() as session:
         yield session

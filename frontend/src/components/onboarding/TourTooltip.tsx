@@ -110,49 +110,47 @@ export function TourTooltip({
       {placement === 'below' && targetRect && (
         <div
           aria-hidden="true"
-          className="absolute -top-1.5 w-3 h-3 bg-card border-l border-t border-border rotate-45"
+          className="absolute -top-1.5 h-3 w-3 rotate-45 border-l border-t border-border bg-card"
           style={{ left: 24 }}
         />
       )}
 
-      <div className="bg-card border border-border rounded-xl shadow-2xl overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
         {/* Header */}
-        <div className="flex items-start justify-between gap-2 px-4 pt-4 pb-2">
+        <div className="flex items-start justify-between gap-2 px-4 pb-2 pt-4">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               {step + 1} of {totalSteps}
             </p>
-            <h3 className="text-sm font-bold text-foreground mt-0.5 leading-snug">{title}</h3>
+            <h3 className="mt-0.5 text-sm font-bold leading-snug text-foreground">{title}</h3>
           </div>
           <button
             onClick={onSkip}
             aria-label="Skip tour"
-            className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
 
         {/* Progress bar */}
-        <div className="px-4 mb-3">
-          <div className="h-0.5 w-full bg-muted rounded-full overflow-hidden">
+        <div className="mb-3 px-4">
+          <div className="h-0.5 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
+              className="h-full rounded-full bg-primary transition-all duration-300 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
         </div>
 
         {/* Description */}
-        <p className="px-4 pb-4 text-[13px] text-muted-foreground leading-relaxed">
-          {description}
-        </p>
+        <p className="px-4 pb-4 text-[13px] leading-relaxed text-muted-foreground">{description}</p>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/20">
+        <div className="flex items-center justify-between border-t border-border bg-muted/20 px-4 py-3">
           <button
             onClick={onSkip}
-            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none rounded"
+            className="text-2xs rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Skip tour
           </button>
@@ -161,18 +159,18 @@ export function TourTooltip({
             {!isFirst && (
               <button
                 onClick={onBack}
-                className="flex items-center gap-1 px-3 py-1.5 text-[12px] font-medium border border-border rounded-lg text-foreground bg-background hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="flex items-center gap-1 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <ChevronLeft className="w-3.5 h-3.5" />
+                <ChevronLeft className="h-3.5 w-3.5" />
                 Back
               </button>
             )}
             <button
               onClick={onNext}
-              className="flex items-center gap-1 px-3 py-1.5 text-[12px] font-semibold bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {isLast ? 'Finish' : 'Next'}
-              {!isLast && <ChevronRight className="w-3.5 h-3.5" />}
+              {!isLast && <ChevronRight className="h-3.5 w-3.5" />}
             </button>
           </div>
         </div>
@@ -182,7 +180,7 @@ export function TourTooltip({
       {placement === 'above' && targetRect && (
         <div
           aria-hidden="true"
-          className="absolute -bottom-1.5 w-3 h-3 bg-card border-r border-b border-border rotate-45"
+          className="absolute -bottom-1.5 h-3 w-3 rotate-45 border-b border-r border-border bg-card"
           style={{ left: 24 }}
         />
       )}

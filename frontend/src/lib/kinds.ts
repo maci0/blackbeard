@@ -11,7 +11,7 @@ export const KIND_TO_PLURAL: Record<string, string> = {
 }
 
 export const PLURAL_TO_KIND: Record<string, string> = Object.fromEntries(
-  Object.entries(KIND_TO_PLURAL).map(([k, v]) => [v, k])
+  Object.entries(KIND_TO_PLURAL).map(([k, v]) => [v, k]),
 )
 
 export const ALL_KINDS: string[] = Object.keys(KIND_TO_PLURAL)

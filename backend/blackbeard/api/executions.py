@@ -1,13 +1,19 @@
 """REST API endpoints for crew execution lifecycle management."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
+from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.engine import ExecutionError, executor
 from blackbeard.kinds import NAME_PATTERN
@@ -34,11 +40,16 @@ router = APIRouter(tags=["executions"])
 )
 async def kickoff_crew(
     crew_name: str = Path(
-        ..., pattern=NAME_PATTERN, max_length=255, description="Name of the crew to execute",
+        ...,
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Name of the crew to execute",
     ),
     body: KickoffRequest = Body(...),
     namespace: str = Query(
-        default="default", pattern=NAME_PATTERN, max_length=255,
+        default="default",
+        pattern=NAME_PATTERN,
+        max_length=255,
         description="Namespace containing the crew",
     ),
     session: AsyncSession = Depends(get_session),
@@ -58,15 +69,20 @@ async def kickoff_crew(
 )
 async def list_executions(
     crew_name: str | None = Query(
-        default=None, pattern=NAME_PATTERN, max_length=255,
+        default=None,
+        pattern=NAME_PATTERN,
+        max_length=255,
         description="Filter by crew name",
     ),
     namespace: str | None = Query(
-        default=None, pattern=NAME_PATTERN, max_length=255,
+        default=None,
+        pattern=NAME_PATTERN,
+        max_length=255,
         description="Filter by namespace",
     ),
     status: ExecutionStatus | None = Query(
-        default=None, description="Filter by execution status",
+        default=None,
+        description="Filter by execution status",
     ),
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, description="Results to skip"),
@@ -136,7 +152,9 @@ async def cancel_execution(
         408: {"description": "Stream timeout — execution still running after ~30 minutes"},
     },
 )
-async def stream_execution(execution_id: UUID = Path(..., description="Execution UUID")):
+async def stream_execution(
+    execution_id: UUID = Path(..., description="Execution UUID"),
+) -> EventSourceResponse:
     """SSE stream of execution status events."""
     # Validate execution exists before starting SSE stream (lightweight status-only query)
     async with async_session() as check_session:
@@ -146,11 +164,12 @@ async def stream_execution(execution_id: UUID = Path(..., description="Execution
 
     max_polls = 400  # ~30 min with progressive backoff (1s→3s→5s)
     logger.info(
-        "SSE stream opened: execution_id=%s", execution_id,
+        "SSE stream opened: execution_id=%s",
+        execution_id,
         extra={"event": "sse_stream_opened", "execution_id": str(execution_id)},
     )
 
-    async def event_generator():
+    async def event_generator() -> AsyncGenerator[dict[str, str]]:
         last_status = None
         polls = 0
         try:
@@ -190,7 +209,9 @@ async def stream_execution(execution_id: UUID = Path(..., description="Execution
                 if current_status in TERMINAL_STATUSES:
                     logger.info(
                         "SSE stream closed: execution_id=%s status=%s polls=%d",
-                        execution_id, current_status.value, polls,
+                        execution_id,
+                        current_status.value,
+                        polls,
                         extra={
                             "event": "sse_stream_closed",
                             "execution_id": str(execution_id),
@@ -203,7 +224,9 @@ async def stream_execution(execution_id: UUID = Path(..., description="Execution
                 await asyncio.sleep(1 if polls < 30 else 3 if polls < 60 else 5)
             else:
                 logger.warning(
-                    "SSE stream timeout: execution_id=%s polls=%d", execution_id, polls,
+                    "SSE stream timeout: execution_id=%s polls=%d",
+                    execution_id,
+                    polls,
                     extra={
                         "event": "sse_stream_timeout",
                         "execution_id": str(execution_id),
@@ -215,7 +238,8 @@ async def stream_execution(execution_id: UUID = Path(..., description="Execution
         except asyncio.CancelledError:
             logger.info(
                 "SSE stream client disconnected: execution_id=%s polls=%d",
-                execution_id, polls,
+                execution_id,
+                polls,
                 extra={
                     "event": "sse_stream_disconnected",
                     "execution_id": str(execution_id),
@@ -225,7 +249,9 @@ async def stream_execution(execution_id: UUID = Path(..., description="Execution
         except Exception as e:
             logger.error(
                 "SSE stream error: execution_id=%s polls=%d error=%s",
-                execution_id, polls, e,
+                execution_id,
+                polls,
+                e,
                 exc_info=True,
                 extra={
                     "event": "sse_stream_error",

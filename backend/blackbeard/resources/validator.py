@@ -16,25 +16,51 @@ _VALIDATORS: dict[str, jsonschema.Draft7Validator] = {
 # Environment variable prefixes that must not be referenced via api_key_env
 # to prevent exfiltration of internal secrets through LiteLLM config.
 _BLOCKED_ENV_PREFIXES = (
-    "BLACKBEARD_", "LITELLM_", "LANGFUSE_",
-    "DATABASE_", "VALKEY_", "REDIS_",
-    "GOOGLE_", "AWS_", "AZURE_", "GCP_", "CLOUD_",
-    "NEXTAUTH_", "ENCRYPTION_", "SALT_",
-    "POSTGRES_", "MINIO_", "CLICKHOUSE_", "DOCKER_",
-    "HEROKU_", "VERCEL_", "RAILWAY_",
-    "PRIVATE_", "INTERNAL_", "SECRET_",
+    "BLACKBEARD_",
+    "LITELLM_",
+    "LANGFUSE_",
+    "DATABASE_",
+    "VALKEY_",
+    "REDIS_",
+    "GOOGLE_",
+    "AWS_",
+    "AZURE_",
+    "GCP_",
+    "CLOUD_",
+    "NEXTAUTH_",
+    "ENCRYPTION_",
+    "SALT_",
+    "POSTGRES_",
+    "MINIO_",
+    "CLICKHOUSE_",
+    "DOCKER_",
+    "HEROKU_",
+    "VERCEL_",
+    "RAILWAY_",
+    "PRIVATE_",
+    "INTERNAL_",
+    "SECRET_",
 )
 
-_INTERNAL_HOSTNAMES = frozenset({
-    "localhost", "localhost.localdomain",
-    "host.docker.internal", "gateway.docker.internal",
-    "metadata.google.internal", "metadata.goog",
-    "metadata", "kubernetes.default.svc",
-    "169.254.169.254",
-})
+_INTERNAL_HOSTNAMES = frozenset(
+    {
+        "localhost",
+        "localhost.localdomain",
+        "host.docker.internal",
+        "gateway.docker.internal",
+        "metadata.google.internal",
+        "metadata.goog",
+        "metadata",
+        "kubernetes.default.svc",
+        "169.254.169.254",
+    }
+)
 
 _INTERNAL_DOMAIN_SUFFIXES = (
-    ".internal", ".local", ".svc", ".svc.cluster.local",
+    ".internal",
+    ".local",
+    ".svc",
+    ".svc.cluster.local",
     ".docker.internal",
 )
 
@@ -44,7 +70,7 @@ class ValidationError:
 
     __slots__ = ("field", "message")
 
-    def __init__(self, field: str, message: str):
+    def __init__(self, field: str, message: str) -> None:
         self.field = field
         self.message = message
 
@@ -64,15 +90,21 @@ def _is_internal_host(hostname: str) -> bool:
     try:
         addr = ipaddress.ip_address(hostname_lower)
         if (
-            addr.is_private or addr.is_reserved or addr.is_loopback
-            or addr.is_link_local or addr.is_unspecified
+            addr.is_private
+            or addr.is_reserved
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_unspecified
         ):
             return True
         if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
             m = addr.ipv4_mapped
             if (
-                m.is_private or m.is_reserved or m.is_loopback
-                or m.is_link_local or m.is_unspecified
+                m.is_private
+                or m.is_reserved
+                or m.is_loopback
+                or m.is_link_local
+                or m.is_unspecified
             ):
                 return True
         return False
@@ -84,43 +116,51 @@ def _validate_llm_connection_extra(spec: dict, errors: list[ValidationError]) ->
     """Block SSRF via base_url and env var exfiltration via api_key_env."""
     api_key_env = spec.get("api_key_env")
     if isinstance(api_key_env, str) and api_key_env.startswith(_BLOCKED_ENV_PREFIXES):
-        errors.append(ValidationError(
-            "spec.api_key_env",
-            f"Cannot reference internal environment variable '{api_key_env}'. "
-            "Use a dedicated variable for external API keys.",
-        ))
+        errors.append(
+            ValidationError(
+                "spec.api_key_env",
+                f"Cannot reference internal environment variable '{api_key_env}'. "
+                "Use a dedicated variable for external API keys.",
+            )
+        )
 
     base_url = spec.get("base_url")
     if base_url and isinstance(base_url, str):
         try:
             parsed = urlparse(base_url)
             if parsed.scheme not in ("http", "https"):
-                errors.append(ValidationError(
-                    "spec.base_url",
-                    "base_url must use http or https scheme.",
-                ))
+                errors.append(
+                    ValidationError(
+                        "spec.base_url",
+                        "base_url must use http or https scheme.",
+                    )
+                )
             elif parsed.username or parsed.password:
-                errors.append(ValidationError(
-                    "spec.base_url",
-                    "base_url must not contain embedded credentials.",
-                ))
+                errors.append(
+                    ValidationError(
+                        "spec.base_url",
+                        "base_url must not contain embedded credentials.",
+                    )
+                )
             else:
                 hostname = parsed.hostname or ""
                 if _is_internal_host(hostname):
-                    errors.append(ValidationError(
-                        "spec.base_url",
-                        "base_url must not point to internal or private network addresses.",
-                    ))
+                    errors.append(
+                        ValidationError(
+                            "spec.base_url",
+                            "base_url must not point to internal or private network addresses.",
+                        )
+                    )
         except Exception:
-            errors.append(ValidationError(
-                "spec.base_url",
-                "base_url could not be parsed for SSRF validation.",
-            ))
+            errors.append(
+                ValidationError(
+                    "spec.base_url",
+                    "base_url could not be parsed for SSRF validation.",
+                )
+            )
 
 
-def validate_resource(
-    kind: str, spec: dict
-) -> tuple[list[ValidationError], list[RefInfo] | None]:
+def validate_resource(kind: str, spec: dict) -> tuple[list[ValidationError], list[RefInfo] | None]:
     """Validate a resource spec against its JSON Schema.
 
     Returns (errors, refs) where refs is the list of extracted RefInfo objects

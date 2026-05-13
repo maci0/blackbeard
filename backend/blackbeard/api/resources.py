@@ -50,11 +50,14 @@ def _resolve_kind(kind_plural: str) -> str:
 async def list_resources(
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
     namespace: str | None = Query(
-        default=None, pattern=NAME_PATTERN, max_length=255,
+        default=None,
+        pattern=NAME_PATTERN,
+        max_length=255,
         description="Filter by namespace",
     ),
     label_selector: str | None = Query(
-        default=None, max_length=1024,
+        default=None,
+        max_length=1024,
         description="Comma-separated label filters, e.g. 'env=prod,team=ml'",
     ),
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
@@ -83,7 +86,11 @@ async def list_resources(
             labels[k] = v.strip()
     service = ResourceService(session)
     items, total = await service.list(
-        kind=kind, namespace=namespace, labels=labels, limit=limit, offset=offset,
+        kind=kind,
+        namespace=namespace,
+        labels=labels,
+        limit=limit,
+        offset=offset,
     )
     return ResourceListResponse(
         items=[ResourceResponse.from_db(r) for r in items],
@@ -122,7 +129,8 @@ async def create_resource(
         await session.commit()
     except ResourceValidationError as exc:
         raise HTTPException(
-            status_code=422, detail=[e.to_dict() for e in exc.errors],
+            status_code=422,
+            detail=[e.to_dict() for e in exc.errors],
         ) from exc
     if not created:
         response.status_code = 200
@@ -137,10 +145,15 @@ async def create_resource(
 async def get_resource(
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
     name: str = Path(
-        ..., pattern=NAME_PATTERN, max_length=255, description="Resource name",
+        ...,
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Resource name",
     ),
     namespace: str = Query(
-        default="default", pattern=NAME_PATTERN, max_length=255,
+        default="default",
+        pattern=NAME_PATTERN,
+        max_length=255,
         description="Resource namespace",
     ),
     session: AsyncSession = Depends(get_session),
@@ -168,10 +181,15 @@ async def update_resource(
     data: ResourceUpdate,
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
     name: str = Path(
-        ..., pattern=NAME_PATTERN, max_length=255, description="Resource name",
+        ...,
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Resource name",
     ),
     namespace: str = Query(
-        default="default", pattern=NAME_PATTERN, max_length=255,
+        default="default",
+        pattern=NAME_PATTERN,
+        max_length=255,
         description="Resource namespace",
     ),
     session: AsyncSession = Depends(get_session),
@@ -207,7 +225,8 @@ async def update_resource(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ResourceValidationError as exc:
         raise HTTPException(
-            status_code=422, detail=[e.to_dict() for e in exc.errors],
+            status_code=422,
+            detail=[e.to_dict() for e in exc.errors],
         ) from exc
     return ResourceResponse.from_db(resource)
 
@@ -215,15 +234,24 @@ async def update_resource(
 @router.delete(
     "/{kind_plural}/{name}",
     status_code=204,
-    responses={404: {"description": "Resource not found (silently ignored — delete is idempotent)"}},
+    responses={
+        404: {
+            "description": ("Resource not found (silently ignored — delete is idempotent)"),
+        },
+    },
 )
 async def delete_resource(
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
     name: str = Path(
-        ..., pattern=NAME_PATTERN, max_length=255, description="Resource name",
+        ...,
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Resource name",
     ),
     namespace: str = Query(
-        default="default", pattern=NAME_PATTERN, max_length=255,
+        default="default",
+        pattern=NAME_PATTERN,
+        max_length=255,
         description="Resource namespace",
     ),
     session: AsyncSession = Depends(get_session),

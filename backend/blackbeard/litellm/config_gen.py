@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 import yaml
 
 from blackbeard.litellm.helpers import apply_model_params, apply_vertex_params, build_model_string
-from blackbeard.models.resource import Resource
+
+if TYPE_CHECKING:
+    from blackbeard.models.resource import Resource
 
 logger = logging.getLogger(__name__)
 

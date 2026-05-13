@@ -43,7 +43,6 @@ const ITEMS: PaletteItem[] = [
   },
 ]
 
-
 function PaletteCard({ item }: { item: PaletteItem }) {
   const Icon = item.icon
 
@@ -74,12 +73,12 @@ function PaletteCard({ item }: { item: PaletteItem }) {
       tabIndex={0}
       role="button"
       aria-label={`Add ${item.label} node to canvas`}
-      className={`rounded-lg border bg-card overflow-hidden cursor-grab active:cursor-grabbing select-none shadow-sm hover:shadow-md transition-all duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${item.borderColor}`}
+      className={`cursor-grab select-none overflow-hidden rounded-lg border bg-card shadow-sm transition-all duration-150 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing ${item.borderColor}`}
     >
       {/* Mini header matching the node style */}
       <div className={`flex items-center justify-center gap-1.5 py-2 ${item.headerBg}`}>
-        <div className={`flex items-center justify-center w-5 h-5 rounded-md ${item.iconBg}`}>
-          <Icon className="w-3 h-3 text-white" />
+        <div className={`flex h-5 w-5 items-center justify-center rounded-md ${item.iconBg}`}>
+          <Icon className="h-3 w-3 text-white" />
         </div>
       </div>
       {/* Label */}
@@ -92,9 +91,13 @@ function PaletteCard({ item }: { item: PaletteItem }) {
 
 export default function Palette() {
   return (
-    <aside aria-label="Node palette" data-tour="palette" className="w-[108px] border-r bg-card flex flex-col shrink-0">
-      <div className="px-3 pt-3 pb-2 border-b">
-        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+    <aside
+      aria-label="Node palette"
+      data-tour="palette"
+      className="flex w-[108px] shrink-0 flex-col border-r bg-card"
+    >
+      <div className="border-b px-3 pb-2 pt-3">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
           Palette
         </p>
       </div>
@@ -104,7 +107,7 @@ export default function Palette() {
         ))}
       </div>
       <div className="p-2 pt-0">
-        <p className="text-[10px] text-muted-foreground text-center leading-tight">
+        <p className="text-center text-[10px] leading-tight text-muted-foreground">
           Drag onto canvas or press Enter to add
         </p>
       </div>

@@ -58,7 +58,7 @@ async def test_error_no_secret_leak(client):
     assert response.status_code == 404
     body = response.json()
     detail = str(body.get("detail", ""))
-    for forbidden in ("/Users/", "Traceback", "sqlalchemy", "pydantic", "File \"", "line "):
+    for forbidden in ("/Users/", "Traceback", "sqlalchemy", "pydantic", 'File "', "line "):
         assert forbidden not in detail, f"Error response leaks internal detail: {forbidden!r}"
 
 

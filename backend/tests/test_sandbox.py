@@ -2,14 +2,13 @@
 
 import pytest
 
+from blackbeard.engine.sandbox.selector import select_sandbox, tier_rank
 from blackbeard.engine.sandbox.wasm_runtime import (
     ModuleCache,
+    WasmExecutionError,
     WasmSandbox,
     WasmToolResult,
-    WasmExecutionError,
 )
-from blackbeard.engine.sandbox.selector import select_sandbox, tier_rank
-
 
 # ---------------------------------------------------------------------------
 # ModuleCache

@@ -6,7 +6,7 @@ All kind-to-plural mappings should import from here.
 import enum
 
 
-class ResourceKind(str, enum.Enum):
+class ResourceKind(enum.StrEnum):
     """Supported resource kinds."""
 
     AGENT = "Agent"

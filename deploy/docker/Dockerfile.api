@@ -3,7 +3,7 @@ LABEL org.opencontainers.image.source="https://github.com/blackbeard" \
       org.opencontainers.image.title="blackbeard-api" \
       org.opencontainers.image.description="Blackbeard Agent Management Platform — API"
 WORKDIR /app
-COPY --from=ghcr.io/astral-sh/uv:0.11.13 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.11.14 /uv /usr/local/bin/uv
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -17,9 +17,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-editable --frozen \
     && rm /usr/local/bin/uv \
     && chmod +x entrypoint.sh \
-    && adduser --disabled-password --no-create-home appuser
+    && adduser --disabled-password appuser
 USER appuser
+ENV HOME=/home/appuser
 EXPOSE 8000
-HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=60s \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')" || exit 1
 CMD ["./entrypoint.sh"]

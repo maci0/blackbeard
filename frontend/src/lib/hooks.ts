@@ -3,7 +3,9 @@ import { useState, useEffect, useRef } from 'react'
 export function useDocumentTitle(title: string): void {
   useEffect(() => {
     document.title = `${title} | Blackbeard`
-    return () => { document.title = 'Blackbeard' }
+    return () => {
+      document.title = 'Blackbeard'
+    }
   }, [title])
 }
 
@@ -13,19 +15,29 @@ export function usePolling(
   enabled: boolean,
 ): void {
   const savedCallback = useRef(callback)
-  useEffect(() => { savedCallback.current = callback }, [callback])
+  useEffect(() => {
+    savedCallback.current = callback
+  }, [callback])
 
   useEffect(() => {
     if (!enabled) return
-    const id = setInterval(() => { void savedCallback.current() }, intervalMs)
-    return () => clearInterval(id)
+    const mountedRef = { current: true }
+    const id = setInterval(() => {
+      if (mountedRef.current) {
+        void savedCallback.current()
+      }
+    }, intervalMs)
+    return () => {
+      mountedRef.current = false
+      clearInterval(id)
+    }
   }, [intervalMs, enabled])
 }
 
 export function useDarkMode(): boolean {
-  const [dark, setDark] = useState(() =>
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-color-scheme: dark)').matches,
+  const [dark, setDark] = useState(
+    () =>
+      typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
   )
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)')

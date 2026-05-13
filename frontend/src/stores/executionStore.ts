@@ -102,8 +102,7 @@ export const useExecutionStore = create<ExecutionState>((set) => ({
   pollExecution: async (id: string) => {
     const execution = await api.get<Execution>(`/api/v1/executions/${id}`)
     set((state) => ({
-      currentExecution:
-        state.currentExecution?.id === id ? execution : state.currentExecution,
+      currentExecution: state.currentExecution?.id === id ? execution : state.currentExecution,
       executions: state.executions.map((e) => (e.id === id ? execution : e)),
     }))
   },

@@ -19,6 +19,7 @@ export interface Resource {
 
 interface ResourceState {
   resources: Record<string, Resource[]>
+  loadingKinds: Set<string>
   loading: boolean
   error: string | null
 
@@ -42,29 +43,43 @@ interface ResourceState {
   deleteResource: (kindPlural: string, name: string) => Promise<void>
 }
 
-
 export const useResourceStore = create<ResourceState>((set) => ({
   resources: {},
+  loadingKinds: new Set<string>(),
   loading: false,
   error: null,
 
   fetchResources: async (kindPlural: string) => {
-    set({ loading: true, error: null })
+    set((state) => {
+      const next = new Set(state.loadingKinds).add(kindPlural)
+      return { loadingKinds: next, loading: next.size > 0, error: null }
+    })
     try {
-      const result = await api.get<{ items: Resource[]; total: number }>(
-        `/api/v1/${kindPlural}`,
-      )
-      set((state) => ({
-        resources: { ...state.resources, [kindPlural]: result.items },
-        loading: false,
-      }))
+      const result = await api.get<{ items: Resource[]; total: number }>(`/api/v1/${kindPlural}`)
+      set((state) => {
+        const next = new Set(state.loadingKinds)
+        next.delete(kindPlural)
+        return {
+          resources: { ...state.resources, [kindPlural]: result.items },
+          loadingKinds: next,
+          loading: next.size > 0,
+        }
+      })
     } catch (err) {
-      set({ error: (err as Error).message, loading: false })
+      set((state) => {
+        const next = new Set(state.loadingKinds)
+        next.delete(kindPlural)
+        return { error: (err as Error).message, loadingKinds: next, loading: next.size > 0 }
+      })
     }
   },
 
   fetchAllResources: async () => {
-    set({ loading: true, error: null })
+    const kinds = new Set<string>(ALL_PLURALS)
+    set((state) => {
+      const next = new Set([...state.loadingKinds, ...kinds])
+      return { loadingKinds: next, loading: next.size > 0, error: null }
+    })
     try {
       const results = await Promise.allSettled(
         ALL_PLURALS.map((kind) =>
@@ -79,12 +94,21 @@ export const useResourceStore = create<ResourceState>((set) => ({
           updated[result.value.kind] = result.value.items
         }
       }
-      set((state) => ({
-        resources: { ...state.resources, ...updated },
-        loading: false,
-      }))
+      set((state) => {
+        const next = new Set(state.loadingKinds)
+        for (const k of kinds) next.delete(k)
+        return {
+          resources: { ...state.resources, ...updated },
+          loadingKinds: next,
+          loading: next.size > 0,
+        }
+      })
     } catch (err) {
-      set({ error: (err as Error).message, loading: false })
+      set((state) => {
+        const next = new Set(state.loadingKinds)
+        for (const k of kinds) next.delete(k)
+        return { error: (err as Error).message, loadingKinds: next, loading: next.size > 0 }
+      })
     }
   },
 
@@ -96,9 +120,7 @@ export const useResourceStore = create<ResourceState>((set) => ({
       const existing = state.resources[kindPlural] || []
       const idx = existing.findIndex((r) => r.id === created.id)
       const updated =
-        idx >= 0
-          ? existing.map((r, i) => (i === idx ? created : r))
-          : [...existing, created]
+        idx >= 0 ? existing.map((r, i) => (i === idx ? created : r)) : [...existing, created]
       return { resources: { ...state.resources, [kindPlural]: updated } }
     })
     return created
@@ -122,9 +144,7 @@ export const useResourceStore = create<ResourceState>((set) => ({
     set((state) => ({
       resources: {
         ...state.resources,
-        [kindPlural]: (state.resources[kindPlural] || []).filter(
-          (r) => r.metadata.name !== name,
-        ),
+        [kindPlural]: (state.resources[kindPlural] || []).filter((r) => r.metadata.name !== name),
       },
     }))
   },

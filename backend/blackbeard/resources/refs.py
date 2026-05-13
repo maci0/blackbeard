@@ -19,7 +19,7 @@ class RefParseError(Exception):
 class CycleError(Exception):
     """Raised when a dependency cycle is detected."""
 
-    def __init__(self, cycle: list[str]):
+    def __init__(self, cycle: list[str]) -> None:
         self.cycle = cycle
         path = " -> ".join(cycle)
         super().__init__(f"Dependency cycle detected: {path}")
@@ -28,9 +28,9 @@ class CycleError(Exception):
 class RefInfo:
     """Parsed reference information."""
 
-    __slots__ = ("kind", "name", "raw", "field")
+    __slots__ = ("field", "kind", "name", "raw")
 
-    def __init__(self, kind: ResourceKind, name: str, raw: str, field: str):
+    def __init__(self, kind: ResourceKind, name: str, raw: str, field: str) -> None:
         self.kind = kind
         self.name = name
         self.raw = raw
@@ -52,13 +52,17 @@ def parse_ref(value: str, field: str = "") -> RefInfo | None:
 
     match = REF_PATTERN.match(value)
     if not match:
-        raise RefParseError(f"Malformed ref '{value}' in field '{field}'. Expected format: ref:<kind>/<name>")
+        raise RefParseError(
+            f"Malformed ref '{value}' in field '{field}'. Expected format: ref:<kind>/<name>"
+        )
 
     plural, name = match.groups()
     kind = PLURAL_TO_KIND_ENUM.get(plural)
     if kind is None:
         valid = ", ".join(sorted(PLURAL_TO_KIND_ENUM.keys()))
-        raise RefParseError(f"Unknown resource kind '{plural}' in ref '{value}'. Valid kinds: {valid}")
+        raise RefParseError(
+            f"Unknown resource kind '{plural}' in ref '{value}'. Valid kinds: {valid}"
+        )
 
     return RefInfo(kind=kind, name=name, raw=value, field=field)
 

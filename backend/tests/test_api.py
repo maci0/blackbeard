@@ -77,12 +77,16 @@ async def test_invalid_kind_plural(client: AsyncClient):
 
 async def test_create_resource_kind_mismatch(client: AsyncClient):
     """POST Agent to /api/v1/tools should fail with 422."""
-    response = await client.post("/api/v1/tools", json={
-        "apiVersion": "blackbeard/v1",
-        "kind": "Agent",
-        "metadata": {"name": "mismatched"},
-        "spec": {"role": "Test", "goal": "Test", "backstory": "Test"}
-    }, headers=API_KEY_HEADER)
+    response = await client.post(
+        "/api/v1/tools",
+        json={
+            "apiVersion": "blackbeard/v1",
+            "kind": "Agent",
+            "metadata": {"name": "mismatched"},
+            "spec": {"role": "Test", "goal": "Test", "backstory": "Test"},
+        },
+        headers=API_KEY_HEADER,
+    )
     assert response.status_code == 422
     assert "mismatch" in response.json()["detail"].lower()
 
@@ -103,9 +107,7 @@ async def test_list_agents_empty(client: AsyncClient):
 
 async def test_create_agent(client: AsyncClient):
     """POST /agents with a valid body should return 201 with a resource id."""
-    response = await client.post(
-        "/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER
-    )
+    response = await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
     assert response.status_code == 201
     data = response.json()
     assert "id" in data
@@ -125,8 +127,9 @@ async def test_create_agent_invalid_spec(client: AsyncClient):
     }
     response = await client.post("/api/v1/agents", json=bad_payload, headers=API_KEY_HEADER)
     assert response.status_code == 422
-    detail = response.json()["detail"].lower()
-    assert "role" in detail
+    detail = response.json()["detail"]
+    detail_str = str(detail).lower()
+    assert "role" in detail_str
 
 
 async def test_list_agents_after_create(client: AsyncClient):
@@ -164,9 +167,7 @@ async def test_get_agent_not_found(client: AsyncClient):
 
 async def test_update_agent(client: AsyncClient):
     """PUT /agents/{name} with correct version should succeed and bump version to 2."""
-    create_resp = await client.post(
-        "/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER
-    )
+    create_resp = await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
     assert create_resp.status_code == 201
 
     update_payload = {
@@ -229,9 +230,7 @@ async def test_create_task_with_refs(client: AsyncClient):
     assert r.status_code == 201
 
     # Create task with a ref to the agent
-    response = await client.post(
-        "/api/v1/tasks", json=_task_payload(), headers=API_KEY_HEADER
-    )
+    response = await client.post("/api/v1/tasks", json=_task_payload(), headers=API_KEY_HEADER)
     assert response.status_code == 201
     data = response.json()
     assert data["kind"] == "Task"
@@ -260,12 +259,15 @@ async def test_create_agent_upsert(client: AsyncClient):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("endpoint", [
-    "/api/v1/tasks",
-    "/api/v1/crews",
-    "/api/v1/tools",
-    "/api/v1/llm-connections",
-])
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "/api/v1/tasks",
+        "/api/v1/crews",
+        "/api/v1/tools",
+        "/api/v1/llm-connections",
+    ],
+)
 async def test_list_resources_empty(client: AsyncClient, endpoint: str):
     """GET on any resource list endpoint with empty DB returns consistent shape."""
     response = await client.get(endpoint, headers=API_KEY_HEADER)

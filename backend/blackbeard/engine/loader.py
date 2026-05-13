@@ -8,15 +8,17 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from crewai import LLM, Agent, Crew, Process, Task
 
 from blackbeard.config import settings
 from blackbeard.kinds import ResourceKind
 from blackbeard.litellm import apply_model_params, apply_vertex_params, build_model_string
-from blackbeard.models import Resource
 from blackbeard.resources.refs import parse_ref
+
+if TYPE_CHECKING:
+    from blackbeard.models import Resource
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,7 @@ class LoaderError(Exception):
 class ResourceLoader:
     """Converts pre-loaded resources into CrewAI objects."""
 
-    def __init__(self, resources: dict[str, Resource]):
+    def __init__(self, resources: dict[str, Resource]) -> None:
         """Initialize with a dict of resources keyed by 'Kind/name'.
 
         Example: {"Agent/researcher": <Resource>, "Task/research-topic": <Resource>}
@@ -50,7 +52,9 @@ class ResourceLoader:
         if resource is None:
             available = sorted(self._resources.keys())
             logger.error(
-                "Ref '%s' not found. Available: %s", key, available,
+                "Ref '%s' not found. Available: %s",
+                key,
+                available,
                 extra={
                     "event": "ref_not_found",
                     "ref": key,
@@ -120,7 +124,8 @@ class ResourceLoader:
                 "Agent '%s' declares tool refs %s — "
                 "tool loading is not supported. "
                 "Refs are preserved in the resource spec but not instantiated at runtime.",
-                resource.name, tool_refs,
+                resource.name,
+                tool_refs,
             )
 
         for key in ("max_iter", "max_rpm", "memory", "cache"):
@@ -208,13 +213,16 @@ class ResourceLoader:
         crew = Crew(**crew_kwargs)
         logger.info(
             "Crew built: %s agents=%d tasks=%d process=%s",
-            crew_name, len(agents), len(tasks), process_str,
+            crew_name,
+            len(agents),
+            len(tasks),
+            process_str,
             extra={
                 "event": "crew_built",
                 "crew_name": crew_name,
                 "agent_count": len(agents),
                 "task_count": len(tasks),
-                "process": process_str,
+                "crew_process": process_str,
             },
         )
         return crew

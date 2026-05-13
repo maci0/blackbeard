@@ -1,12 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import {
-  LayoutDashboard,
-  Database,
-  Play,
-  Cpu,
-  Wrench,
-} from 'lucide-react'
+import { LayoutDashboard, Database, Play, Cpu, Wrench } from 'lucide-react'
 import { useDarkMode } from '@/lib/hooks'
 import WelcomeDialog from './onboarding/WelcomeDialog'
 import GuidedTour from './onboarding/GuidedTour'
@@ -49,7 +43,7 @@ export default function Layout() {
   const handleStartTour = () => {
     setShowWelcome(false)
     // Navigate to Studio so tour targets are in the DOM
-    navigate('/studio')
+    void navigate('/studio')
     // Small delay to let the page render before spotlighting elements
     setTimeout(() => {
       setTourKey((k) => k + 1)
@@ -59,7 +53,7 @@ export default function Layout() {
 
   const handleSkipWelcome = () => {
     setShowWelcome(false)
-    navigate('/studio')
+    void navigate('/studio')
   }
 
   /* ── Tour handlers ── */
@@ -70,7 +64,7 @@ export default function Layout() {
 
   const handleRestartTour = () => {
     localStorage.removeItem('blackbeard_tour_completed')
-    navigate('/studio')
+    void navigate('/studio')
     // Delay slightly so navigation settles before spotlighting
     setTimeout(() => {
       setTourKey((k) => k + 1)
@@ -82,60 +76,56 @@ export default function Layout() {
     <div className="flex h-screen">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-lg"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
       >
         Skip to main content
       </a>
 
       {/* ── Sidebar ── */}
-      <aside aria-label="Main navigation" className="w-60 border-r bg-card flex flex-col">
-        <div className="p-4 border-b">
+      <aside aria-label="Main navigation" className="flex w-60 flex-col border-r bg-card">
+        <div className="border-b p-4">
           <span className="text-xl font-bold tracking-tight">Blackbeard</span>
           <p className="text-xs text-muted-foreground">Agent Management Platform</p>
         </div>
 
-        <nav aria-label="Primary" data-tour="sidebar-nav" className="flex-1 p-2 space-y-1">
+        <nav aria-label="Primary" data-tour="sidebar-nav" className="flex-1 space-y-1 p-2">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 ${
                   isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    ? 'border-l-2 border-indigo-500 bg-accent text-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`
               }
             >
-              <Icon className="h-4 w-4" />
-              {label}
+              {({ isActive }) => (
+                <>
+                  <Icon className={`h-4 w-4 ${isActive ? 'text-indigo-500' : ''}`} />
+                  {label}
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
 
         {/* Sidebar footer: Help menu + version */}
-        <div className="p-4 border-t flex items-center justify-between">
+        <div className="flex items-center justify-between border-t p-4">
           <HelpMenu onRestartTour={handleRestartTour} />
           <span className="text-xs text-muted-foreground">v0.1.0</span>
         </div>
       </aside>
 
       {/* ── Main content ── */}
-      <main id="main-content" className="flex-1 overflow-hidden flex flex-col">
+      <main id="main-content" className="flex flex-1 flex-col overflow-hidden">
         <Outlet />
       </main>
 
       {/* ── Onboarding ── */}
-      <WelcomeDialog
-        open={showWelcome}
-        onStartTour={handleStartTour}
-        onSkip={handleSkipWelcome}
-      />
-      <GuidedTour
-        key={tourKey}
-        active={showTour}
-        onComplete={handleTourComplete}
-      />
+      <WelcomeDialog open={showWelcome} onStartTour={handleStartTour} onSkip={handleSkipWelcome} />
+      <GuidedTour key={tourKey} active={showTour} onComplete={handleTourComplete} />
     </div>
   )
 }

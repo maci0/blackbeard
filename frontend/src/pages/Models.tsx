@@ -12,9 +12,13 @@ import {
   Thermometer,
   Hash,
   Check,
+  Settings,
 } from 'lucide-react'
 import { useResourceStore, type Resource } from '@/stores/resourceStore'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { cn } from '@/lib/utils'
 
@@ -23,11 +27,16 @@ import { cn } from '@/lib/utils'
 /* ------------------------------------------------------------------ */
 
 const PROVIDER_CLASSES: Record<string, string> = {
-  openai: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 dark:border-emerald-800',
-  anthropic: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900 dark:text-violet-300 dark:border-violet-800',
-  vertex_ai: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-800',
-  azure: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900 dark:text-sky-300 dark:border-sky-800',
-  ollama: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900 dark:text-orange-300 dark:border-orange-800',
+  openai:
+    'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 dark:border-emerald-800',
+  anthropic:
+    'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900 dark:text-violet-300 dark:border-violet-800',
+  vertex_ai:
+    'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-800',
+  azure:
+    'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900 dark:text-sky-300 dark:border-sky-800',
+  ollama:
+    'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900 dark:text-orange-300 dark:border-orange-800',
 }
 
 const PROVIDER_DISPLAY: Record<string, string> = {
@@ -44,8 +53,9 @@ function ProviderBadge({ provider }: { provider: string }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border',
-        PROVIDER_CLASSES[provider] ?? 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
+        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
+        PROVIDER_CLASSES[provider] ??
+          'border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300',
       )}
     >
       {label}
@@ -57,13 +67,7 @@ function ProviderBadge({ provider }: { provider: string }) {
 /* Model card                                                          */
 /* ------------------------------------------------------------------ */
 
-function ModelCard({
-  resource,
-  onDelete,
-}: {
-  resource: Resource
-  onDelete: () => void
-}) {
+function ModelCard({ resource, onDelete }: { resource: Resource; onDelete: () => void }) {
   const spec = resource.spec as {
     provider?: string
     model?: string
@@ -72,20 +76,18 @@ function ModelCard({
   }
 
   return (
-    <div className="border rounded-lg bg-card shadow-sm hover:shadow-md transition-shadow group overflow-hidden flex flex-col">
+    <div className="group flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md">
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b bg-muted/20">
+      <div className="border-b bg-muted/20 px-4 pb-3 pt-4">
         <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="p-1.5 rounded-md bg-amber-100 border border-amber-200 shrink-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="shrink-0 rounded-md border border-amber-200 bg-amber-100 p-1.5">
               <Cpu className="h-4 w-4 text-amber-600" />
             </div>
             <div className="min-w-0">
-              <p className="font-semibold text-sm truncate">{resource.metadata.name}</p>
+              <p className="truncate text-sm font-semibold">{resource.metadata.name}</p>
               {resource.metadata.namespace && resource.metadata.namespace !== 'default' && (
-                <p className="text-xs text-muted-foreground">
-                  {resource.metadata.namespace}
-                </p>
+                <p className="text-xs text-muted-foreground">{resource.metadata.namespace}</p>
               )}
             </div>
           </div>
@@ -94,7 +96,7 @@ function ModelCard({
               e.stopPropagation()
               onDelete()
             }}
-            className="opacity-40 group-hover:opacity-100 focus:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0"
+            className="shrink-0 rounded p-1.5 text-muted-foreground opacity-40 transition-all hover:bg-destructive/10 hover:text-destructive focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
             title="Delete connection"
             aria-label="Delete connection"
           >
@@ -104,10 +106,10 @@ function ModelCard({
       </div>
 
       {/* Body */}
-      <div className="px-4 py-3 flex-1 space-y-3">
+      <div className="flex-1 space-y-3 px-4 py-3">
         {spec.provider && (
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Server className="h-3 w-3" />
               Provider
             </span>
@@ -118,30 +120,33 @@ function ModelCard({
         {spec.model && (
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Model</span>
-            <span className="text-xs font-mono font-medium truncate max-w-[160px]" title={spec.model}>
+            <span
+              className="max-w-[160px] truncate font-mono text-xs font-medium"
+              title={spec.model}
+            >
               {spec.model}
             </span>
           </div>
         )}
 
         {spec.parameters && (
-          <div className="space-y-1.5 pt-1 border-t">
+          <div className="space-y-1.5 border-t pt-1">
             {spec.parameters.temperature !== undefined && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Thermometer className="h-3 w-3" />
                   Temperature
                 </span>
-                <span className="text-xs font-mono">{spec.parameters.temperature}</span>
+                <span className="font-mono text-xs">{spec.parameters.temperature}</span>
               </div>
             )}
             {spec.parameters.max_tokens !== undefined && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Hash className="h-3 w-3" />
                   Max tokens
                 </span>
-                <span className="text-xs font-mono">
+                <span className="font-mono text-xs">
                   {spec.parameters.max_tokens.toLocaleString()}
                 </span>
               </div>
@@ -150,17 +155,15 @@ function ModelCard({
         )}
 
         {spec.vertex?.project && (
-          <div className="flex items-center justify-between pt-1 border-t">
+          <div className="flex items-center justify-between border-t pt-1">
             <span className="text-xs text-muted-foreground">GCP Project</span>
-            <span className="text-xs font-mono truncate max-w-[160px]">
-              {spec.vertex.project}
-            </span>
+            <span className="max-w-[160px] truncate font-mono text-xs">{spec.vertex.project}</span>
           </div>
         )}
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-2 border-t bg-muted/10">
+      <div className="border-t bg-muted/10 px-4 py-2">
         <span className="text-xs text-muted-foreground">v{resource.version}</span>
       </div>
     </div>
@@ -211,8 +214,9 @@ function AddModelDialog({
 }) {
   const [form, setForm] = useState<AddModelForm>(INITIAL_FORM)
 
-  const set = (field: keyof AddModelForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((f) => ({ ...f, [field]: e.target.value }))
+  const set =
+    (field: keyof AddModelForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((f) => ({ ...f, [field]: e.target.value }))
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -228,26 +232,29 @@ function AddModelDialog({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[480px] max-w-[90vw] bg-card border rounded-xl shadow-2xl overflow-hidden">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[480px] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border bg-card shadow-2xl">
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b">
+          <div className="flex items-center justify-between border-b px-5 py-4">
             <div>
               <Dialog.Title className="text-base font-semibold">Add LLM Connection</Dialog.Title>
-              <Dialog.Description className="text-xs text-muted-foreground mt-0.5">
+              <Dialog.Description className="mt-0.5 text-xs text-muted-foreground">
                 Configure a new language model connection
               </Dialog.Description>
             </div>
-            <Dialog.Close className="p-1.5 rounded hover:bg-accent transition-colors text-muted-foreground" aria-label="Close">
+            <Dialog.Close
+              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-accent"
+              aria-label="Close"
+            >
               <X className="h-4 w-4" />
             </Dialog.Close>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 p-5">
             <fieldset disabled={submitting} className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label htmlFor="model-name" className="block text-xs font-medium mb-1.5">
+                <label htmlFor="model-name" className="mb-1.5 block text-xs font-medium">
                   Name <span className="text-destructive">*</span>
                 </label>
                 <input
@@ -257,17 +264,19 @@ function AddModelDialog({
                   value={form.name}
                   onChange={set('name')}
                   placeholder="my-gpt4-connection"
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono disabled:opacity-50"
+                  className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                 />
               </div>
 
               <div>
-                <label htmlFor="model-provider" className="block text-xs font-medium mb-1.5">Provider</label>
+                <label htmlFor="model-provider" className="mb-1.5 block text-xs font-medium">
+                  Provider
+                </label>
                 <select
                   id="model-provider"
                   value={form.provider}
                   onChange={set('provider')}
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                 >
                   {PROVIDER_OPTIONS.map((p) => (
                     <option key={p.value} value={p.value}>
@@ -278,7 +287,7 @@ function AddModelDialog({
               </div>
 
               <div>
-                <label htmlFor="model-model" className="block text-xs font-medium mb-1.5">
+                <label htmlFor="model-model" className="mb-1.5 block text-xs font-medium">
                   Model <span className="text-destructive">*</span>
                 </label>
                 <input
@@ -288,12 +297,14 @@ function AddModelDialog({
                   value={form.model}
                   onChange={set('model')}
                   placeholder="gpt-4o"
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono disabled:opacity-50"
+                  className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                 />
               </div>
 
               <div>
-                <label htmlFor="model-temperature" className="block text-xs font-medium mb-1.5">Temperature</label>
+                <label htmlFor="model-temperature" className="mb-1.5 block text-xs font-medium">
+                  Temperature
+                </label>
                 <input
                   id="model-temperature"
                   type="number"
@@ -302,27 +313,32 @@ function AddModelDialog({
                   step="0.1"
                   value={form.temperature}
                   onChange={set('temperature')}
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                 />
-                <p className="text-xs text-muted-foreground/70 mt-1">Range: 0.0 – 2.0</p>
+                <p className="mt-1 text-xs text-muted-foreground/70">Range: 0.0 – 2.0</p>
               </div>
 
               <div>
-                <label htmlFor="model-max-tokens" className="block text-xs font-medium mb-1.5">Max tokens</label>
+                <label htmlFor="model-max-tokens" className="mb-1.5 block text-xs font-medium">
+                  Max tokens
+                </label>
                 <input
                   id="model-max-tokens"
                   type="number"
                   min="1"
                   value={form.max_tokens}
                   onChange={set('max_tokens')}
-                  className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                 />
-                <p className="text-xs text-muted-foreground/70 mt-1">Minimum 1</p>
+                <p className="mt-1 text-xs text-muted-foreground/70">Minimum 1</p>
               </div>
             </fieldset>
 
             {submitError && (
-              <div role="alert" className="p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-center gap-2">
+              <div
+                role="alert"
+                className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+              >
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 {submitError}
               </div>
@@ -332,7 +348,7 @@ function AddModelDialog({
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="px-4 py-2 text-sm border rounded-md hover:bg-accent transition-colors"
+                  className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent"
                 >
                   Cancel
                 </button>
@@ -340,7 +356,7 @@ function AddModelDialog({
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {submitting && <Spinner size="sm" className="text-white" />}
                 Add connection
@@ -370,7 +386,9 @@ export default function Models() {
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    return () => { if (successTimerRef.current) clearTimeout(successTimerRef.current) }
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current)
+    }
   }, [])
 
   const models = resources['llm-connections'] ?? []
@@ -378,7 +396,7 @@ export default function Models() {
   useDocumentTitle('LLM Connections')
 
   useEffect(() => {
-    fetchResources('llm-connections')
+    void fetchResources('llm-connections')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -401,6 +419,7 @@ export default function Models() {
       })
       setAddOpen(false)
       setSuccessMessage(`Connection "${form.name}" created`)
+      if (successTimerRef.current) clearTimeout(successTimerRef.current)
       successTimerRef.current = setTimeout(() => setSuccessMessage(null), 5000)
     } catch (err) {
       setSubmitError((err as Error).message)
@@ -417,6 +436,7 @@ export default function Models() {
       await deleteResource('llm-connections', name)
       setDeleteTarget(null)
       setSuccessMessage(`Connection "${name}" deleted`)
+      if (successTimerRef.current) clearTimeout(successTimerRef.current)
       successTimerRef.current = setTimeout(() => setSuccessMessage(null), 5000)
     } catch {
       // error already in store
@@ -426,42 +446,56 @@ export default function Models() {
   }
 
   return (
-    <div className="flex-1 overflow-auto">
-      <div className="p-6 max-w-7xl mx-auto">
-
+    <div className="page-enter flex-1 overflow-auto">
+      <div className="mx-auto max-w-7xl p-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">LLM Connections</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Manage LLM connection configurations
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => fetchResources('llm-connections')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md bg-background hover:bg-accent transition-colors"
-              aria-label="Refresh models"
-            >
-              <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin motion-reduce:animate-none')} />
-              Refresh
-            </button>
-            <button
-              onClick={() => { setSubmitError(null); setAddOpen(true) }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90 transition-opacity"
-            >
-              <Plus className="h-4 w-4" />
-              Add Connection
-            </button>
-          </div>
+        <div className="mb-6">
+          <PageHeader
+            title="Models"
+            description="LLM connections and providers"
+            actions={
+              <>
+                <button
+                  onClick={() => void fetchResources('llm-connections')}
+                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent"
+                  aria-label="Refresh models"
+                >
+                  <RefreshCw
+                    className={cn(
+                      'h-3.5 w-3.5',
+                      loading && 'animate-spin motion-reduce:animate-none',
+                    )}
+                  />
+                  Refresh
+                </button>
+                <button
+                  onClick={() => {
+                    setSubmitError(null)
+                    setAddOpen(true)
+                  }}
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Connection
+                </button>
+              </>
+            }
+          />
         </div>
 
         {/* Success */}
         {successMessage && (
-          <div role="status" className="mb-4 flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+          <div
+            role="status"
+            className="mb-4 flex items-center gap-2 text-sm text-green-600 dark:text-green-400"
+          >
             <Check className="h-4 w-4" />
             {successMessage}
-            <button onClick={() => setSuccessMessage(null)} className="ml-auto p-0.5 rounded hover:bg-green-100 dark:hover:bg-green-900 transition-colors" aria-label="Dismiss">
+            <button
+              onClick={() => setSuccessMessage(null)}
+              className="ml-auto rounded p-0.5 transition-colors hover:bg-green-100 dark:hover:bg-green-900"
+              aria-label="Dismiss"
+            >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -469,44 +503,35 @@ export default function Models() {
 
         {/* Error */}
         {error && (
-          <div role="alert" className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive flex items-center justify-between">
+          <div
+            role="alert"
+            className="mb-4 flex items-center justify-between rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+          >
             <span className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               {error}
             </span>
-            <button onClick={() => fetchResources('llm-connections')} className="text-xs underline underline-offset-2" aria-label="Retry loading connections">
+            <button
+              onClick={() => void fetchResources('llm-connections')}
+              className="text-xs underline underline-offset-2"
+              aria-label="Retry loading connections"
+            >
               Retry
             </button>
           </div>
         )}
 
-        {/* Loading */}
+        {/* Content */}
         {loading && models.length === 0 ? (
-          <div className="flex items-center justify-center py-24">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Spinner size="sm" className="text-muted-foreground" />
-              <span className="text-sm">Loading connections…</span>
-            </div>
-          </div>
+          <TableSkeleton />
         ) : models.length === 0 ? (
-          <div className="border-2 border-dashed rounded-xl flex flex-col items-center justify-center py-24 px-6 text-center">
-            <div className="p-4 rounded-full bg-muted mb-4">
-              <Cpu aria-hidden="true" className="h-8 w-8 text-muted-foreground/50" />
-            </div>
-            <p className="font-medium text-muted-foreground mb-1">No LLM connections</p>
-            <p className="text-sm text-muted-foreground/70 mb-4">
-              Add your first model connection to get started
-            </p>
-            <button
-              onClick={() => setAddOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90 transition-opacity"
-            >
-              <Plus className="h-4 w-4" />
-              Add Connection
-            </button>
-          </div>
+          <EmptyState
+            icon={<Settings />}
+            title="No LLM connections"
+            description="Add an LLM connection to get started"
+          />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {models.map((resource) => (
               <ModelCard
                 key={resource.id}
@@ -522,18 +547,20 @@ export default function Models() {
       <AddModelDialog
         open={addOpen}
         onOpenChange={setAddOpen}
-        onSubmit={handleAdd}
+        onSubmit={(form) => void handleAdd(form)}
         submitting={submitting}
         submitError={submitError}
       />
       <ConfirmDialog
         open={!!deleteTarget}
-        onOpenChange={(v) => { if (!v) setDeleteTarget(null) }}
+        onOpenChange={(v) => {
+          if (!v) setDeleteTarget(null)
+        }}
         title="Delete connection"
         description={`Delete "${deleteTarget}"? This cannot be undone.`}
         confirmLabel="Delete"
         confirmVariant="destructive"
-        onConfirm={handleDelete}
+        onConfirm={() => void handleDelete()}
         loading={deleting}
       />
     </div>

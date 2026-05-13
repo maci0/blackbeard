@@ -14,40 +14,41 @@ export default memo(function ToolNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'w-[160px] rounded-xl border bg-card shadow-sm overflow-hidden transition-all duration-150',
+        'w-[160px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
         selected
-          ? 'border-emerald-400 ring-2 ring-emerald-300 ring-offset-1 shadow-emerald-100 shadow-md'
-          : 'border-slate-200 dark:border-slate-700 hover:border-emerald-200 hover:shadow-md',
+          ? 'border-emerald-400 shadow-md shadow-emerald-100 ring-2 ring-emerald-300 ring-offset-1'
+          : 'border-slate-200 hover:border-emerald-200 hover:shadow-md dark:border-slate-700',
       )}
     >
       {/* Header strip */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500">
-        <div className="flex items-center justify-center w-5 h-5 rounded-md bg-white/20 text-white">
-          <Wrench className="w-3 h-3" />
+      <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-emerald-500 px-3 py-2">
+        <div className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 text-white">
+          <Wrench className="h-3 w-3" />
         </div>
-        <span className="text-[11px] font-bold text-white/90 uppercase tracking-widest">
-          Tool
-        </span>
+        <span className="text-2xs font-bold uppercase tracking-widest text-white/90">Tool</span>
       </div>
 
       {/* Body */}
-      <div className="px-3 py-2.5 space-y-1.5">
-        <p className="font-semibold text-sm text-foreground truncate leading-tight" title={name ?? 'Unnamed Tool'}>
+      <div className="space-y-1.5 px-3 py-2.5">
+        <p
+          className="truncate text-sm font-semibold leading-tight text-foreground"
+          title={name ?? 'Unnamed Tool'}
+        >
           {name ?? 'Unnamed Tool'}
         </p>
         {description && (
-          <p className="text-[11px] text-muted-foreground line-clamp-1 leading-snug">{description}</p>
+          <p className="text-2xs line-clamp-1 leading-snug text-muted-foreground">{description}</p>
         )}
 
         {/* Badges */}
         <div className="flex flex-wrap gap-1 pt-0.5">
           {toolType && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+            <span className="text-2xs inline-flex items-center rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
               {toolType}
             </span>
           )}
           {sandboxLabel && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-100 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
+            <span className="text-2xs inline-flex items-center rounded-md border border-amber-100 bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
               {sandboxLabel}
             </span>
           )}
@@ -58,7 +59,7 @@ export default memo(function ToolNode({ data, selected }: NodeProps) {
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-2.5 !h-2.5 !border-2 !border-emerald-400 !bg-white"
+        className="!h-2.5 !w-2.5 !border-2 !border-emerald-400 !bg-white"
       />
     </div>
   )

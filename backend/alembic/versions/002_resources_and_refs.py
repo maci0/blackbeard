@@ -21,12 +21,17 @@ depends_on: Union[str, Sequence[str], None] = None
 resource_kind_enum = sa.Enum(
     "AGENT", "TASK", "CREW", "TOOL", "LLM_CONNECTION",
     name="resourcekind",
+    create_type=False,
 )
 
 
 def upgrade() -> None:
-    # Create the enum type
-    resource_kind_enum.create(op.get_bind(), checkfirst=True)
+    op.execute(
+        "DO $$ BEGIN"
+        "  CREATE TYPE resourcekind AS ENUM ('AGENT','TASK','CREW','TOOL','LLM_CONNECTION');"
+        "  EXCEPTION WHEN duplicate_object THEN NULL;"
+        " END $$"
+    )
 
     # Resources table
     op.create_table(
