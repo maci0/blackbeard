@@ -85,7 +85,7 @@ services:
       POSTGRES_PASSWORD: blackbeard
       POSTGRES_DB: blackbeard
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
       - ./deploy/docker/initdb:/docker-entrypoint-initdb.d:ro
     shm_size: 256m
     healthcheck:
@@ -133,7 +133,7 @@ services:
 
   # ── LiteLLM Proxy ─────────────────────────────────────────────────────────
   litellm:
-    image: ghcr.io/berriai/litellm:v1.83.14-stable
+    image: litellm/litellm:main-v1.83.3-stable.patch.3
     ports:
       - "127.0.0.1:4000:4000"
     environment:
@@ -160,7 +160,7 @@ services:
     cap_drop:
       - ALL
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request,os; r=urllib.request.Request('http://localhost:4000/health/liveliness'); urllib.request.urlopen(r)"]
       interval: 15s
       timeout: 10s
       retries: 20
