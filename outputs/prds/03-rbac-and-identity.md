@@ -312,7 +312,17 @@ spec:
 | `hardened` | `docker` | All tools run in Docker (gVisor). Strict network allowlist, restricted filesystem, no delegation. |
 | `air-gapped` | `docker` | No outbound network, no code execution, read-only filesystem — LLM-only reasoning. |
 
-### 3.3 Policy Enforcement Points
+### 3.3 Tool Visibility via RBAC
+
+When using JIT tool discovery (PRD 04 §10), the agent's `search_tools` meta-tool filters results against its AgentPolicy. Denied tools are invisible — the agent cannot discover, inspect, or call them. This is enforced at the API level, not client-side.
+
+| Policy Mode | `search_tools` returns | `get_tool` allows |
+|-------------|----------------------|-------------------|
+| `tools.mode: all` | All tools in namespace | Any tool |
+| `tools.mode: allowlist` | Only `tools.allow[]` entries | Only allowed tools |
+| `tools.mode: denylist` | All except `tools.deny[]` | All except denied tools |
+
+### 3.4 Policy Enforcement Points
 
 The Execution Engine (PRD 05) enforces policies at these points:
 

@@ -348,7 +348,75 @@ spec:
 | `mcp.server.registered` | `{name, transport, tools_discovered}` |
 | `mcp.server.health_failed` | `{name, error}` |
 
-## 10. Acceptance Criteria
+## 10. JIT Tool Discovery (Lazy Loading)
+
+### Problem
+
+The standard approach — passing all tool schemas into every LLM prompt — wastes context window and degrades model performance. An agent with access to 20 tools pays ~2,000 tokens of tool schema overhead on every call, even when it only needs 1-2 tools for the current step.
+
+### Solution: Registry-as-a-Tool
+
+Instead of injecting all tool schemas into the prompt, give the agent a single meta-tool: `search_tools`. The agent explores the registry on demand and selects tools JIT (just-in-time).
+
+**Two built-in meta-tools provided to every agent:**
+
+| Meta-Tool | Description | Returns |
+|-----------|-------------|---------|
+| `search_tools(query)` | Search the tool registry by keyword/capability | List of `{name, description, tags}` (no full schema) |
+| `get_tool(name)` | Retrieve full schema + usage instructions for one tool | `{name, description, parameters, examples, constraints}` |
+
+**Flow:**
+1. Agent receives task: "Find the latest stock price for AAPL"
+2. Agent calls `search_tools("stock price lookup")` → returns `[{name: "finance-api", description: "Query stock prices..."}]`
+3. Agent calls `get_tool("finance-api")` → returns full parameter schema + examples
+4. Agent calls `finance-api(symbol="AAPL")` → gets result
+5. Next task: agent may use a completely different tool, discovered the same way
+
+**RBAC filtering:** `search_tools` and `get_tool` only return tools the agent's policy allows. If an AgentPolicy restricts tools via `tools.mode: allowlist`, only allowed tools appear in search results. Denied tools are invisible — the agent doesn't know they exist.
+
+### Context Window Impact
+
+| Approach | Tokens per call | With 20 tools |
+|----------|----------------|---------------|
+| **All tools in prompt** | ~100 tokens/tool | ~2,000 tokens overhead on every call |
+| **JIT discovery** | ~50 tokens (meta-tool schema) | ~50 tokens + ~150 when agent looks up a specific tool |
+
+### Configuration
+
+```yaml
+kind: Crew
+spec:
+  tool_loading: jit          # jit | eager | hybrid
+  # jit: only search_tools + get_tool in prompt (default)
+  # eager: all agent tools in prompt (legacy behavior)
+  # hybrid: core tools in prompt + search_tools for the rest
+```
+
+Per-agent override:
+```yaml
+kind: Agent
+spec:
+  tools:
+    - ref:tools/web-search      # always in prompt (eager)
+  tool_discovery: true          # also gets search_tools for additional tools
+```
+
+### Hybrid Mode
+
+For agents that have a few "core" tools they always need (e.g., web search) plus access to a larger registry:
+- Core tools: loaded eagerly into prompt
+- Additional tools: discoverable via `search_tools`
+- Best of both: fast access to common tools + lazy access to long tail
+
+### Implementation Notes
+
+- `search_tools` queries the Blackbeard resource API (`GET /api/v1/tools?search=...&namespace=...`) filtered by the agent's policy
+- `get_tool` fetches the full tool spec (`GET /api/v1/tools/{name}`) and formats it as a tool schema
+- Both meta-tools are registered as CrewAI tools that call back into the Blackbeard API
+- Search is lightweight (~5ms) — no performance concern from repeated calls
+- Tool schemas are cached per-execution to avoid redundant API calls within the same crew run
+
+## 11. Acceptance Criteria
 
 1. Python tools can be registered via YAML and invoked by agents.
 2. MCP servers (stdio and SSE) can be registered; their tools are auto-discovered and appear in the registry.

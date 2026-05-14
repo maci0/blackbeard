@@ -810,6 +810,30 @@ Blackbeard delegates to CrewAI's built-in features rather than reimplementing th
 
 ---
 
+## 11.3 JIT Tool Loading
+
+The ResourceLoader supports three tool loading strategies (see PRD 04 §10 for full spec):
+
+| Mode | Behavior |
+|------|----------|
+| **jit** (default) | Agents get `search_tools` + `get_tool` meta-tools only. Tools discovered on demand. |
+| **eager** | All agent tools loaded into prompt at build time (legacy). |
+| **hybrid** | Core tools in prompt + `search_tools` for the rest. |
+
+**ResourceLoader changes for JIT mode:**
+
+1. `build_agent()` checks `crew.spec.tool_loading` (default: `jit`)
+2. In JIT mode: instead of resolving tool refs and building CrewAI tool objects, inject two meta-tools:
+   - `SearchToolsTool(api_url, api_key, namespace, agent_policy)` — queries the tool registry API
+   - `GetToolTool(api_url, api_key, namespace)` — fetches full tool spec and returns a dynamically constructed CrewAI tool
+3. RBAC is enforced at the API level — `search_tools` only returns tools the agent's policy allows
+4. Tool schemas are cached in-memory per execution to avoid redundant lookups
+
+**Agent policy integration:** The `search_tools` meta-tool filters results against the agent's `AgentPolicy.spec.tools` configuration:
+- `mode: all` → all tools visible
+- `mode: allowlist` → only listed tools visible
+- `mode: denylist` → all except listed tools visible
+
 ## 12. Async Execution Backends
 
 | Backend | When to Use |
