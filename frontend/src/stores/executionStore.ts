@@ -89,7 +89,14 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
   },
 
   fetchExecution: async (id: string) => {
-    set({ loading: true, error: null, currentExecution: null, spendData: null })
+    // Only clear currentExecution when loading a *different* execution
+    // to avoid flickering the spinner on refetch of the same execution.
+    set((state) => ({
+      loading: true,
+      error: null,
+      currentExecution: state.currentExecution?.id === id ? state.currentExecution : null,
+      spendData: state.currentExecution?.id === id ? state.spendData : null,
+    }))
     try {
       const execution = await api.get<Execution>(`/api/v1/executions/${id}`)
       set({ currentExecution: execution, loading: false })

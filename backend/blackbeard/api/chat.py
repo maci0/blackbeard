@@ -142,42 +142,42 @@ async def test_model(
                 headers={"Authorization": f"Bearer {_LITELLM_KEY}"},
             )
 
-        latency_ms = int((time.monotonic() - t0) * 1000)
+            latency_ms = int((time.monotonic() - t0) * 1000)
 
-        if resp.status_code != 200:
-            error_text = resp.text[:300]
-            return ModelTestResult(
-                model=model,
-                status="error",
-                latency_ms=latency_ms,
-                error=f"HTTP {resp.status_code}: {error_text}",
-            )
+            if resp.status_code != 200:
+                error_text = resp.text[:300]
+                return ModelTestResult(
+                    model=model,
+                    status="error",
+                    latency_ms=latency_ms,
+                    error=f"HTTP {resp.status_code}: {error_text}",
+                )
 
-        data = resp.json()
-        choice = data.get("choices", [{}])[0]
-        msg = choice.get("message", {})
-        content = msg.get("content") or msg.get("reasoning_content") or ""
-        usage = data.get("usage", {})
+            data = resp.json()
+            choice = data.get("choices", [{}])[0]
+            msg = choice.get("message", {})
+            content = msg.get("content") or msg.get("reasoning_content") or ""
+            usage = data.get("usage", {})
 
-        # Try to get model info (context length, parameter size) from Ollama
-        ctx_len = None
-        param_size = None
-        try:
-            info_resp = await client.post(
-                "http://host.docker.internal:11434/api/show",
-                json={"model": model},
-                timeout=5,
-            )
-            if info_resp.status_code == 200:
-                info = info_resp.json()
-                model_info = info.get("model_info", {})
-                for k, v in model_info.items():
-                    if k.endswith(".context_length"):
-                        ctx_len = int(v)
-                        break
-                param_size = info.get("details", {}).get("parameter_size")
-        except Exception:
-            pass
+            # Try to get model info (context length, parameter size) from Ollama
+            ctx_len = None
+            param_size = None
+            try:
+                info_resp = await client.post(
+                    "http://host.docker.internal:11434/api/show",
+                    json={"model": model},
+                    timeout=5,
+                )
+                if info_resp.status_code == 200:
+                    info = info_resp.json()
+                    model_info = info.get("model_info", {})
+                    for k, v in model_info.items():
+                        if k.endswith(".context_length"):
+                            ctx_len = int(v)
+                            break
+                    param_size = info.get("details", {}).get("parameter_size")
+            except Exception:
+                pass
 
         return ModelTestResult(
             model=model,

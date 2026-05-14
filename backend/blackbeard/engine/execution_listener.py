@@ -8,6 +8,7 @@ since CrewAI callbacks run on a separate thread.
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -39,18 +40,24 @@ class BlackbeardExecutionListener(BaseEventListener):
         self._execution_id = execution_id
         self._seq = 0
         self._task_order = 0  # tracks which task (by order) is currently running
+        self._lock = threading.Lock()  # guards _seq and _task_order
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session, sessionmaker
 
-        sync_url = db_url.replace("postgresql+asyncpg", "postgresql+psycopg")
+        # Convert async driver URL to sync driver.  Handle both asyncpg
+        # (default) and other async drivers that follow the same naming pattern.
+        sync_url = db_url.replace("postgresql+asyncpg", "postgresql+psycopg").replace(
+            "postgresql+aiopg", "postgresql+psycopg"
+        )
         self._sync_engine = create_engine(sync_url, pool_size=2, max_overflow=3)
         self._sync_session_factory = sessionmaker(self._sync_engine, class_=Session)
         super().__init__()
 
     def _next_seq(self) -> int:
-        seq = self._seq
-        self._seq += 1
-        return seq
+        with self._lock:
+            seq = self._seq
+            self._seq += 1
+            return seq
 
     def _write_event(self, event_type: str, data: dict[str, Any]) -> None:
         try:
@@ -119,8 +126,10 @@ class BlackbeardExecutionListener(BaseEventListener):
                 "agent_role": event.agent_role,
             }
             self._write_event("task_started", data)
+            with self._lock:
+                order = self._task_order
             self._update_task_by_order(
-                order=self._task_order,
+                order=order,
                 status=TaskStatus.RUNNING,
                 started_at=datetime.now(UTC),
             )
@@ -134,13 +143,15 @@ class BlackbeardExecutionListener(BaseEventListener):
                 "output_preview": (output[:500] if output else None),
             }
             self._write_event("task_completed", data)
+            with self._lock:
+                order = self._task_order
+                self._task_order += 1
             self._update_task_by_order(
-                order=self._task_order,
+                order=order,
                 status=TaskStatus.COMPLETED,
                 output=output,
                 completed_at=datetime.now(UTC),
             )
-            self._task_order += 1
 
         @crewai_event_bus.on(ToolUsageStartedEvent)
         def on_tool_started(source: Any, event: ToolUsageStartedEvent) -> None:

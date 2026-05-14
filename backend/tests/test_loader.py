@@ -583,15 +583,28 @@ def test_build_tool_unsupported_type():
     assert result is None
 
 
-def test_build_tool_mcp_unsupported():
-    """Tool with type=mcp should return None (not yet supported)."""
+def test_build_tool_mcp_stdio_unsupported():
+    """Tool with type=mcp-stdio should return None (not yet supported)."""
     tool_res = make_resource(
         ResourceKind.TOOL,
         "mcp-tool",
-        {"type": "mcp", "endpoint": "http://example.com"},
+        {"type": "mcp-stdio", "command": "npx", "args": ["-y", "some-server"]},
     )
     loader = ResourceLoader(_resource_map(tool_res))
     result = loader.build_tool("ref:tools/mcp-tool")
+
+    assert result is None
+
+
+def test_build_tool_mcp_http_unsupported():
+    """Tool with type=mcp-http should return None (not yet supported)."""
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "mcp-http-tool",
+        {"type": "mcp-http", "url": "http://example.com/mcp"},
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+    result = loader.build_tool("ref:tools/mcp-http-tool")
 
     assert result is None
 
@@ -672,3 +685,119 @@ def test_build_agent_with_unsupported_tool_skips(mock_agent_cls, mock_llm_cls):
 
     _, kwargs = mock_agent_cls.call_args
     assert "tools" not in kwargs
+
+
+# ---------------------------------------------------------------------------
+# Knowledge source loading tests
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+def test_build_agent_with_knowledge_sources(mock_agent_cls, mock_llm_cls):
+    """Agent with knowledge_sources refs should resolve and pass them to Agent."""
+    ks_res = make_resource(
+        ResourceKind.KNOWLEDGE_SOURCE,
+        "my-docs",
+        {"type": "string", "content": "Important knowledge here."},
+    )
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "smart-agent",
+        {
+            "role": "Expert",
+            "goal": "Be knowledgeable",
+            "backstory": "Well-read",
+            "knowledge_sources": ["ref:knowledge-sources/my-docs"],
+        },
+    )
+    loader = ResourceLoader(_resource_map(ks_res, agent_res))
+
+    with patch(
+        "blackbeard.engine.loader.ResourceLoader._build_knowledge_source"
+    ) as mock_build_ks:
+        mock_ks = MagicMock()
+        mock_build_ks.return_value = mock_ks
+        loader.build_agent("ref:agents/smart-agent")
+
+        mock_build_ks.assert_called_once_with("ref:knowledge-sources/my-docs")
+        _, kwargs = mock_agent_cls.call_args
+        assert "knowledge_sources" in kwargs
+        assert kwargs["knowledge_sources"] == [mock_ks]
+
+
+def test_build_knowledge_source_wrong_kind():
+    """_build_knowledge_source with a non-KnowledgeSource resource returns None."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "not-ks",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    loader = ResourceLoader({"KnowledgeSource/not-ks": agent_res})
+    result = loader._build_knowledge_source("ref:knowledge-sources/not-ks")
+    assert result is None
+
+
+def test_build_knowledge_source_unsupported_type():
+    """_build_knowledge_source with an unsupported type returns None."""
+    ks_res = make_resource(
+        ResourceKind.KNOWLEDGE_SOURCE,
+        "unknown-ks",
+        {"type": "unknown_type"},
+    )
+    loader = ResourceLoader(_resource_map(ks_res))
+    result = loader._build_knowledge_source("ref:knowledge-sources/unknown-ks")
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Memory config tests
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+def test_build_agent_memory_bool_true(mock_agent_cls, mock_llm_cls):
+    """Agent with memory=True should pass memory=True to Agent."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "mem-agent",
+        {"role": "R", "goal": "G", "backstory": "B", "memory": True},
+    )
+    loader = ResourceLoader(_resource_map(agent_res))
+    loader.build_agent("ref:agents/mem-agent")
+
+    _, kwargs = mock_agent_cls.call_args
+    assert kwargs["memory"] is True
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+def test_build_agent_memory_bool_false(mock_agent_cls, mock_llm_cls):
+    """Agent with memory=False should pass memory=False to Agent."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "nomem-agent",
+        {"role": "R", "goal": "G", "backstory": "B", "memory": False},
+    )
+    loader = ResourceLoader(_resource_map(agent_res))
+    loader.build_agent("ref:agents/nomem-agent")
+
+    _, kwargs = mock_agent_cls.call_args
+    assert kwargs["memory"] is False
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+def test_build_agent_memory_dict_disabled(mock_agent_cls, mock_llm_cls):
+    """Agent with memory dict and enabled=False should pass memory=False."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "disabled-mem-agent",
+        {"role": "R", "goal": "G", "backstory": "B", "memory": {"enabled": False}},
+    )
+    loader = ResourceLoader(_resource_map(agent_res))
+    loader.build_agent("ref:agents/disabled-mem-agent")
+
+    _, kwargs = mock_agent_cls.call_args
+    assert kwargs["memory"] is False

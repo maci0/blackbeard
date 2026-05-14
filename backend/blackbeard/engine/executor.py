@@ -45,6 +45,7 @@ _CREW_RELEVANT_KINDS = (
     ResourceKind.TASK,
     ResourceKind.LLM_CONNECTION,
     ResourceKind.TOOL,
+    ResourceKind.KNOWLEDGE_SOURCE,
 )
 
 _NAMESPACE_RESOURCE_LIMIT = 500
@@ -211,26 +212,6 @@ async def kickoff(
     return loaded
 
 
-def _mark_failed_sync(execution_id: UUID, error: str) -> None:
-    """Mark an execution as failed from a synchronous callback."""
-    try:
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(_mark_failed_async(execution_id, error))
-        loop.close()
-    except Exception as e:
-        logger.error(
-            "Failed to mark execution %s as failed: %s",
-            execution_id,
-            e,
-            exc_info=True,
-            extra={
-                "event": "execution_mark_failed_error",
-                "execution_id": str(execution_id),
-                "error_type": type(e).__name__,
-            },
-        )
-
-
 async def _mark_failed_async(execution_id: UUID, error: str) -> None:
     """Mark an execution as failed."""
     async with async_session() as session:
@@ -384,8 +365,11 @@ async def _run_crew_async(
             loader = ResourceLoader(mock_resources)
             crew = loader.build_crew(crew_name)
 
-            # Wire up execution event listener for real-time streaming
-            BlackbeardExecutionListener(
+            # Wire up execution event listener for real-time streaming.
+            # Keep a reference so the listener is not garbage-collected
+            # while the crew is running (BaseEventListener registers via
+            # weak references internally).
+            _listener = BlackbeardExecutionListener(
                 execution_id=execution_id,
                 db_url=settings.database_url.get_secret_value(),
             )

@@ -82,7 +82,7 @@ services:
       POSTGRES_PASSWORD: blackbeard
       POSTGRES_DB: blackbeard
     volumes:
-      - pgdata:/var/lib/postgresql
+      - pgdata:/var/lib/postgresql/data
       - ./deploy/docker/initdb:/docker-entrypoint-initdb.d:ro
     shm_size: 256m
     healthcheck:

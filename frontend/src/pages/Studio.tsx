@@ -320,7 +320,8 @@ function StudioInner() {
         position: { x: 360, y: 260 },
         data: {
           name: 'write-report',
-          description: 'Using the research facts provided, write a 2-3 sentence summary about {topic}.',
+          description:
+            'Using the research facts provided, write a 2-3 sentence summary about {topic}.',
           expected_output: 'A short summary about {topic} in 2-3 sentences.',
           agent: 'ref:agents/writer',
           context: ['ref:tasks/research-topic'],

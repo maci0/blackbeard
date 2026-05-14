@@ -64,7 +64,7 @@ bash deploy/seed.sh              # seed DB with example crew using Ollama (requi
 
 **docker-compose.yaml**: 5 services — api, ui, postgres (18), valkey (9), litellm. API and UI containers run with `no-new-privileges`. Infrastructure containers (postgres, valkey, litellm) additionally use `cap_drop: ALL`.
 
-DB schema is managed via `Base.metadata.create_all()` in entrypoint.sh (not Alembic). This only creates new tables — it cannot alter existing tables. Schema changes require dropping and recreating the database.
+DB schema is managed in `entrypoint.sh`: first creates PostgreSQL enum types and runs `Base.metadata.create_all()` (for initial table creation), then stamps and runs Alembic migrations. `create_all` only creates new tables — it cannot alter existing ones — so Alembic handles schema evolution. If no Alembic env is configured yet, the Alembic commands are no-ops (`|| true`).
 
 **CI**: GitHub Actions — backend (ruff + mypy + pytest with Postgres service) → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (parallel, cached).
 

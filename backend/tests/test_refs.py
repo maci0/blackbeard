@@ -267,3 +267,17 @@ def test_detect_cycles_self_loop():
     adjacency = {"Agent/a": ["Agent/a"]}
     result = detect_cycles(adjacency)
     assert len(result) == 1
+
+
+def test_parse_ref_flow():
+    ref = parse_ref("ref:flows/my-flow")
+    assert ref is not None
+    assert ref.kind == ResourceKind.FLOW
+    assert ref.name == "my-flow"
+
+
+def test_parse_ref_knowledge_source():
+    ref = parse_ref("ref:knowledge-sources/my-docs")
+    assert ref is not None
+    assert ref.kind == ResourceKind.KNOWLEDGE_SOURCE
+    assert ref.name == "my-docs"
