@@ -2,7 +2,7 @@
 
 ## MVP Definition
 
-The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wire them together visually, execute them through LiteLLM with sandbox isolation and basic agent policies, and see what happened in Langfuse** — all from `docker compose up`.
+The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wire them together visually, execute them through LiteLLM with sandbox isolation and basic agent policies, and see what happened via live event streaming and LiteLLM's dashboard** -- all from `docker compose up`.
 
 ### In scope
 
@@ -16,7 +16,7 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 | Tools | Python tools (`BaseTool`) and WASM tools. No MCP, no OAuth integrations |
 | Agent policy | Tool allowlists and LLM budget limits only. No network/FS/delegation policies |
 | Guardrails | Task-level guardrails (function-based and LLM-based) — wired through CrewAI's built-in guardrail system. No namespace or crew-level guardrails |
-| Observability | Langfuse integration — traces with LLM calls, tool calls, costs |
+| Observability | Execution event log + SSE streaming + LiteLLM dashboard for LLM request inspection |
 | API | REST CRUD for resources + kickoff/status endpoints. No gRPC, no webhooks |
 | Auth | Single API key configured via `BLACKBEARD_API_KEY` env var. No users, no SSO, no RBAC. All API requests require this key in `X-API-Key` header. |
 | CLI | `blackbeard apply`, `blackbeard validate`, `blackbeard kickoff`, `blackbeard status` |
@@ -30,7 +30,7 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 | SpiceDB (entity permissions) | No multi-user yet |
 | OPA (policy engine) | MVP policies are simple allowlists — in-process Python check is fine |
 | Temporal (workflow orchestration) | Sequential crews don't need durable execution; in-process is fine |
-| Presidio (PII redaction) | Not critical for MVP; traces go to self-hosted Langfuse |
+| Presidio (PII redaction) | Not critical for MVP; execution events are stored in own DB |
 | Infisical (secrets) | `.env` files are fine for MVP |
 | MinIO (object storage) | Local filesystem for MVP |
 | Flows (event-driven workflows) | Crews are enough to prove the concept |
@@ -56,7 +56,7 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 | **Database** | PostgreSQL 18 (17+ supported) |
 | **Cache** | Valkey 8 (Redis-compatible) |
 | **LLM gateway** | LiteLLM Proxy |
-| **Observability** | Langfuse (self-hosted) |
+| **Observability** | LiteLLM dashboard (`:4000/ui`) + execution_events table + SSE |
 | **WASM runtime** | wasmtime-py (Python bindings for Wasmtime) |
 | **Frontend** | React 19, TypeScript, Vite |
 | **Graph editor** | React Flow (xyflow v12) |
@@ -109,9 +109,10 @@ blackbeard/
 │   │   │   ├── key_manager.py         # Virtual key lifecycle
 │   │   │   └── spend.py               # Spend data sync
 │   │   │
-│   │   ├── langfuse/                  # Langfuse integration
-│   │   │   ├── listener.py            # CrewAI events → Langfuse traces
-│   │   │   └── client.py              # Langfuse SDK wrapper
+│   │   ├── events/                    # Execution event system
+│   │   │   ├── listener.py            # CrewAI events → execution_events table
+│   │   │   ├── models.py              # ExecutionEvent SQLAlchemy model
+│   │   │   └── sse.py                 # SSE streaming endpoint logic
 │   │   │
 │   │   ├── api/                       # API routes
 │   │   │   ├── resources.py           # Generic CRUD endpoints
@@ -206,15 +207,15 @@ blackbeard/
 | 0.1b | Initialize Alembic with PostgreSQL connection, create initial (empty) migration | `alembic upgrade head` works against fresh DB | 0.5 |
 | 0.1c | Implement API key middleware: validate `X-API-Key` header against `BLACKBEARD_API_KEY` env var, return 401 on mismatch | Unauthenticated requests rejected | 0.5 |
 | 0.2 | Scaffold frontend (Vite + React + React Flow + Tailwind + shadcn/ui + React Router + layout shell with sidebar nav placeholder) | Blank canvas loads at `:3000` with navigation shell | 0.5 |
-| 0.3 | Write `docker-compose.yaml` with all services | `docker compose up` boots: API, UI, PostgreSQL, Valkey, LiteLLM, Langfuse | 1 |
-| 0.4 | Create `.env.example` with all required vars | Documented with comments explaining each var. Must include: `OPENAI_API_KEY`, `BLACKBEARD_API_KEY`, `LITELLM_MASTER_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY`, `DATABASE_URL`, `VALKEY_URL` | 0.5 |
+| 0.3 | Write `docker-compose.yaml` with all services | `docker compose up` boots: API, UI, PostgreSQL, Valkey, LiteLLM (5 containers) | 1 |
+| 0.4 | Create `.env.example` with all required vars | Documented with comments explaining each var. Must include: `OPENAI_API_KEY`, `BLACKBEARD_API_KEY`, `LITELLM_MASTER_KEY`, `DATABASE_URL`, `VALKEY_URL` | 0.5 |
 | 0.5 | Set up CI (GitHub Actions): lint, type-check, test | Green pipeline on empty tests | 0.5 |
 | 0.6 | Write the example `research-crew/` YAML files by hand | Valid YAML resources to test against | 0.5 |
 | 0.7 | WASM proof-of-concept spike: compile a simple Python tool to WASM via componentize-py, load in wasmtime-py with Component Model, invoke, measure startup | Spike report: works / doesn't work / needs fallback. If fail → switch Phase 4 to subprocess-based Wasmtime CLI | 2 |
 
 > **Gate:** The spike result gates Phase 4's approach. If the spike fails, Phase 4 switches to subprocess-based Wasmtime CLI immediately — do not wait until Phase 4 to discover this.
 
-**Deliverable**: Run `docker compose up`, hit `localhost:3000` and see the UI shell, hit `localhost:8000/api/v1/health` and get 200, LiteLLM responds on `:4000`, Langfuse on `:3001`.
+**Deliverable**: Run `docker compose up`, hit `localhost:3000` and see the UI shell, hit `localhost:8000/api/v1/health` and get 200, LiteLLM responds on `:4000` (dashboard at `:4000/ui`).
 
 ---
 
@@ -294,19 +295,20 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 
 ---
 
-### Phase 3 — Langfuse Tracing (Week 5)
+### Phase 3 — Execution Event System (Week 5)
 
-**Goal**: Every execution produces full traces visible in Langfuse UI.
+**Goal**: Every execution produces a complete event log, streamed live to the frontend via SSE.
 
 | # | Task | Output | Days |
 |---|------|--------|------|
-| 3.1 | Register CrewAI `BaseEventListener` that maps events to Langfuse SDK calls | `BlackbeardLangfuseListener` class | 2 |
-| 3.2 | Map events: `CrewKickoff*` → trace, `TaskStarted/Completed` → span, `ToolUsage*` → span, `LLMCall*` → generation | Correct span hierarchy | 1 |
-| 3.3 | Enable LiteLLM → Langfuse native callback (`success_callback: ["langfuse"]` in LiteLLM config) | LLM calls appear in Langfuse automatically | 0.5 |
-| 3.4 | Add Blackbeard metadata to Langfuse traces: execution_id, agent name, sandbox tier | Rich trace annotations | 0.5 |
-| 3.5 | Link from Blackbeard execution detail UI → Langfuse trace URL | One-click navigation | 0.5 |
+| 3.0 | Create alembic migration for `execution_events` table (id, execution_id, sequence, event_type, timestamp, data JSONB) | Alembic migration | 0.5 |
+| 3.1 | Register CrewAI `BaseEventListener` that captures events to `execution_events` table | `BlackbeardEventListener` class | 2 |
+| 3.2 | Map CrewAI events: `CrewKickoff*` -> crew_started/completed, `TaskStarted/Completed` -> task_started/completed, `ToolUsage*` -> tool_started/finished, `LLMCall*` -> llm_started/completed | Correct event sequence | 1 |
+| 3.3 | Implement SSE streaming endpoint: `GET /api/v1/executions/{id}/events/stream` with `?after_sequence=N` reconnection support | Live event streaming to frontend | 1.5 |
+| 3.4 | Implement REST endpoint: `GET /api/v1/executions/{id}/events` with optional `event_type` filter | Historical event replay | 0.5 |
+| 3.5 | Update `execution_tasks` status live as task events occur (running/completed/failed) | Real-time task progress | 0.5 |
 
-**Deliverable**: After a crew runs, open Langfuse at `:3001` → see the full trace tree with agent reasoning, LLM calls (tokens, cost), and tool calls.
+**Deliverable**: After a crew runs, the execution detail page shows a complete event timeline. During execution, the SSE endpoint streams events in real-time. LLM request details are available in the LiteLLM dashboard at `:4000/ui`.
 
 ---
 
@@ -341,7 +343,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 | 5.3 | Implement tool allowlist enforcement: before each tool call, check policy | Denied → system message back to agent | 1 |
 | 5.4 | Implement LLM budget enforcement via LiteLLM virtual key `max_budget` | Budget exceeded → execution fails with clear error | 1 |
 | 5.5 | Implement sandbox minimum tier enforcement: tool wants `none`, policy floor is `wasm` → promote | `max(tool_tier, policy_minimum)` logic | 0.5 |
-| 5.6 | Log all policy denials to execution record + Langfuse trace | Audit trail | 0.5 |
+| 5.6 | Log all policy denials to execution record + execution_events table | Audit trail | 0.5 |
 | 5.7 | Write tests: tool denied, budget exceeded, tier promotion | Edge case coverage | 1 |
 | 5.8 | Wire guardrails during resource loading: resolve `guardrails: [ref:guardrails/foo]` to CrewAI guardrail objects | Task guardrails execute on task completion | 1 |
 | 5.9 | Implement `Guardrail` resource kind (function-based and LLM string types) | YAML resource, stored in DB, validated | 0.5 |
@@ -386,7 +388,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 | 7.1 | Resources list page: filterable table by kind, sortable by name/updated | `/resources` route | 1 |
 | 7.2 | Resource detail page: rendered spec, YAML view, edit-in-place | `/resources/{kind}/{name}` route | 1.5 |
 | 7.3 | Executions list page: table with status, duration, cost, timestamps | `/executions` route | 1 |
-| 7.4 | Execution detail page: summary cards (tokens, cost, duration), task list, link to Langfuse | `/executions/{id}` route | 1.5 |
+| 7.4 | Execution detail page: summary cards (tokens, cost, duration), task list, live event log (SSE), link to LiteLLM dashboard | `/executions/{id}` route | 1.5 |
 | 7.5 | Models page: LLMConnection management, health status from LiteLLM, spend summary | `/models` route | 1.5 |
 | 7.6 | Tools page: tool registry browser, search, detail view | `/tools` route | 1 |
 | 7.7 | Navigation: sidebar with Studio, Resources, Executions, Models, Tools | Layout component | 0.5 |
@@ -414,7 +416,7 @@ Week  1  ████████ Phase 0: Skeleton
 Week  2  ████████ Phase 1: Resource Model + API
 Week  3  ████████ Phase 1 (cont) + Phase 2 starts
 Week  4  ████████ Phase 2: Execution Engine
-Week  5  ████████ Phase 2 (finish) + Phase 3: Langfuse + Phase 4 starts
+Week  5  ████████ Phase 2 (finish) + Phase 3: Event System + Phase 4 starts
 Week  6  ████████ Phase 4: WASM Sandbox
 Week  7  ████████ Phase 5: Agent Policies + Phase 6 starts
 Week  8  ████████ Phase 6: Studio (Visual Editor)
@@ -444,7 +446,7 @@ Phase 2            Phase 4               Phase 6.1–6.11
     │                  │                  panel, layout)
     ├──────────────────┘                     │
     ▼                  │                     │
-Phase 3 (langfuse)     │               Phase 6.12–6.13
+Phase 3 (event system) │               Phase 6.12–6.13
     │                  │               (Run button +
     ├──────────────────┘                Execution View
     ▼                                   — needs Phase 2)
@@ -474,8 +476,7 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 | **Wasmtime Python bindings maturity** | `wasmtime-py` is well-maintained but Component Model support is newer. Fallback: use subprocess-based Wasmtime CLI if Python bindings have issues. Budget 2x time for Phase 4 if Component Model or componentize-py integration proves difficult. |
 | **React Flow performance at scale** | Test with 100 nodes. If laggy, implement viewport culling (React Flow supports this). MVP likely <50 nodes. |
 | **YAML ↔ Canvas sync complexity** | Build unidirectional first (YAML → Canvas). Add Canvas → YAML second. Bidirectional sync with conflict resolution is Phase 6.7 — if it's too complex for MVP, ship one-way. |
-| **Langfuse self-hosted stability** | Langfuse Docker is production-tested. Pin version. If Langfuse is down, traces are lost but execution continues (async, fire-and-forget). |
-| **LiteLLM/Langfuse unavailability during execution** | Langfuse writes are fire-and-forget — if Langfuse is down, execution continues without traces. LiteLLM is critical — if down, kickoffs are rejected with 503. Health checks every 30s detect outages. |
+| **LiteLLM unavailability during execution** | LiteLLM is critical -- if down, kickoffs are rejected with 503. Health checks every 30s detect outages. Execution events are stored in the same PostgreSQL instance, so they are available as long as the DB is up. |
 
 ### Most Likely Failure Modes Per Phase
 
@@ -484,7 +485,7 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 | 0 | Docker compose networking issues between services | Test service discovery early; use explicit network aliases |
 | 1 | Schema validation edge cases (valid YAML that produces invalid CrewAI objects) | Property-based testing with Hypothesis |
 | 2 | Resource Loader ↔ CrewAI constructor mismatch (field name differences, type coercion) | Build comprehensive field mapping table; test with real CrewAI |
-| 3 | Langfuse SDK version incompatibility or trace hierarchy mapping | Pin Langfuse version; verify span parenting with sample traces |
+| 3 | CrewAI event listener missing events or incorrect event ordering | Test with sample crew; verify event sequence completeness |
 | 4 | Component Model / componentize-py failure | Run spike in Phase 0; decide fallback before Phase 4 starts |
 | 5 | Policy enforcement gaps (valid tool calls denied or denied calls allowed) | Exhaustive test matrix: (tool_type × policy_mode × sandbox_tier) |
 | 6 | Bidirectional YAML sync bugs; form ↔ canvas state inconsistency | Start unidirectional (YAML → canvas); add canvas → YAML incrementally |
@@ -499,7 +500,7 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 |-------|------|------|
 | **Unit** | pytest | Resource validation, ref resolution, policy logic, sandbox selection |
 | **Integration** | pytest + testcontainers | API endpoints, DB operations, LiteLLM key lifecycle |
-| **E2E** | pytest + docker compose | Full crew execution from `kickoff` to trace in Langfuse |
+| **E2E** | pytest + docker compose | Full crew execution from `kickoff` to event log verification |
 | **Frontend** | Vitest + React Testing Library | Component rendering, store logic, canvas operations |
 
 **LLM mocking**: Integration tests use a mock LLM server (simple FastAPI app returning canned responses) registered as a LiteLLM model. No real LLM calls in CI. E2E tests optionally use real LLMs gated behind `RUN_E2E_WITH_LLM=true`.
@@ -520,14 +521,15 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 - [ ] `blackbeard apply -f examples/research-crew/` creates all resources
 - [ ] `blackbeard kickoff crews/research-crew --input topic="AI"` runs and completes
 - [ ] All LLM calls route through LiteLLM (verified in LiteLLM logs)
-- [ ] Execution trace visible in Langfuse with correct span hierarchy
+- [ ] Execution event log complete with correct event sequence; live SSE streaming works
 - [ ] Studio: can drag agents/tasks/tools, connect with arrows, edit properties, click Run
 - [ ] WASM sandbox: a tool compiled to `.wasm` runs with fuel limits and capability restrictions
 - [ ] Agent policy: tool allowlist blocks unauthorized tool use; LLM budget stops execution
 - [ ] API: full CRUD on all resource kinds + kickoff/status endpoints
 - [ ] CLI: `apply`, `validate`, `kickoff`, `status` commands work
 - [ ] Zero custom LLM provider code (all handled by LiteLLM)
-- [ ] Zero custom trace storage code (all handled by Langfuse)
+- [ ] Execution events stored in PostgreSQL; LLM request details available in LiteLLM dashboard
+- [ ] No Langfuse dependency -- observability via execution_events + LiteLLM
 - [ ] CI pipeline green: lint, type-check, unit tests, integration tests all pass
 - [ ] No secrets in Docker images, logs, or API responses (verified in security review)
 - [ ] README gets a developer from clone to running crew in < 5 minutes

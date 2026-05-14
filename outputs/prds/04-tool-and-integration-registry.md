@@ -79,6 +79,31 @@ blackbeard tool compile --lang python --input tools/my_tool.py --output tools/my
 - ~5ms startup vs ~500ms for Docker.
 - Cacheable: compiled module is cached; instantiation is cheap.
 
+### 2.1 CrewAI Built-in Tools
+
+CrewAI ships with **50+ built-in tools** covering common agent tasks. Blackbeard's tool registry should integrate with these, not reimplement them:
+
+| Category | CrewAI Built-in Examples | Blackbeard Approach |
+|----------|------------------------|---------------------|
+| **Search** | SerperDevTool, ScrapeWebsiteTool, WebsiteSearchTool | Use CrewAI's tools directly; register in Blackbeard's registry for discoverability |
+| **File I/O** | FileReadTool, FileWriteTool, DirectoryReadTool, DirectorySearchTool | Use CrewAI's tools; sandbox via AgentPolicy |
+| **Code** | CodeInterpreterTool, CodeDocsSearchTool | Use CrewAI's tools; apply Blackbeard's sandbox tier |
+| **RAG** | PDFSearchTool, DOCXSearchTool, TXTSearchTool, JSONSearchTool, CSVSearchTool | Use CrewAI's tools with knowledge sources |
+| **Browser** | BrowserbaseLoadTool, SeleniumScrapingTool | Use CrewAI's tools |
+| **Database** | PGSearchTool, MySQLSearchTool | Use CrewAI's tools; control access via AgentPolicy |
+| **AI/ML** | DallETool, VisionTool | Use CrewAI's tools |
+| **Communication** | SlackTool, GmailTool | Use CrewAI's tools; Blackbeard adds OAuth management |
+
+**Principle:** Blackbeard's tool registry is a management and governance layer over CrewAI's tool ecosystem. Our registry adds:
+- **Discoverability**: Browse, search, and filter all available tools (CrewAI built-in + custom)
+- **Governance**: RBAC, rate limiting, audit logging, sandbox enforcement
+- **WASM tools**: Our extension -- tools compiled to WASM for capability-based isolation (unique to Blackbeard)
+- **MCP integration**: Register and manage MCP servers as tool sources
+
+Do not reimplement search, scrape, file I/O, or other capabilities that CrewAI already provides as built-in tools.
+
+---
+
 ## 3. Tool Resource Schema
 
 ```yaml

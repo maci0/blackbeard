@@ -90,8 +90,6 @@ class ExecutionResponse(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_usd: Decimal = Decimal("0")
-    langfuse_trace_id: str | None = None
-    langfuse_trace_url: str | None = None
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -131,8 +129,6 @@ class ExecutionResponse(BaseModel):
             prompt_tokens=execution.prompt_tokens,
             completion_tokens=execution.completion_tokens,
             cost_usd=execution.cost_usd,
-            langfuse_trace_id=execution.langfuse_trace_id,
-            langfuse_trace_url=execution.langfuse_trace_url,
             created_at=execution.created_at,
             started_at=execution.started_at,
             completed_at=execution.completed_at,

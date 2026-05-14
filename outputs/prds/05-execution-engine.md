@@ -706,6 +706,110 @@ data: {"execution_id":"exec-abc","task_name":"research-ai","agent_name":"researc
 
 ---
 
+## 11.1 Real-time Event Streaming
+
+All execution activity is captured as an append-only log of **ExecutionEvents**, stored in the `execution_events` table (section 15) and streamed to the frontend via SSE.
+
+### ExecutionEvent Model
+
+Each event is an immutable record with a monotonically increasing sequence number per execution:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Primary key |
+| `execution_id` | UUID | FK to executions |
+| `sequence` | INTEGER | Monotonically increasing per execution, used for ordering and replay |
+| `event_type` | VARCHAR(64) | Event type (see table below) |
+| `timestamp` | TIMESTAMPTZ | When the event occurred |
+| `data` | JSONB | Event-specific payload |
+
+### CrewAI Events Captured
+
+The Blackbeard event listener registers on CrewAI's event bus and captures the following events into the `execution_events` table:
+
+| Event Type | CrewAI Source | Data Payload |
+|------------|--------------|--------------|
+| `crew_started` | `CrewKickoffStartedEvent` | `{crew_name, inputs, total_tasks}` |
+| `crew_completed` | `CrewKickoffCompletedEvent` | `{crew_name, output_preview, total_tokens, total_cost_usd, duration_ms}` |
+| `task_started` | `TaskStartedEvent` | `{task_name, agent_name, task_description}` |
+| `task_completed` | `TaskCompletedEvent` | `{task_name, agent_name, output_preview, tokens, duration_ms}` |
+| `tool_started` | `ToolUsageStartedEvent` | `{tool_name, agent_name, sandbox_tier, input_preview}` |
+| `tool_finished` | `ToolUsageFinishedEvent` | `{tool_name, agent_name, sandbox_tier, duration_ms, success, output_preview}` |
+| `llm_started` | `LLMCallStartedEvent` | `{agent_name, model, prompt_tokens_estimate}` |
+| `llm_completed` | `LLMCallCompletedEvent` | `{agent_name, model, prompt_tokens, completion_tokens, cost_usd, duration_ms}` |
+| `policy_denied` | Blackbeard policy enforcer | `{agent_name, action, resource, reason}` |
+| `error` | Various | `{source, error_type, message, task_name, agent_name}` |
+
+### SSE Endpoint (Live Streaming)
+
+The SSE endpoint streams events to the frontend as they occur:
+
+```
+GET /api/v1/executions/{execution_id}/events/stream
+Accept: text/event-stream
+
+event: task_started
+data: {"sequence":3,"event_type":"task_started","timestamp":"2026-05-10T12:00:05Z","data":{"task_name":"research-ai","agent_name":"researcher"}}
+
+event: tool_started
+data: {"sequence":4,"event_type":"tool_started","timestamp":"2026-05-10T12:00:06Z","data":{"tool_name":"serper-search","agent_name":"researcher","sandbox_tier":"wasm"}}
+
+event: tool_finished
+data: {"sequence":5,"event_type":"tool_finished","timestamp":"2026-05-10T12:00:06Z","data":{"tool_name":"serper-search","duration_ms":340,"success":true}}
+```
+
+The client can optionally pass `?after_sequence=N` to resume from a specific point (e.g., after a reconnection). The server replays all events with `sequence > N` from the database, then switches to live streaming.
+
+### REST Endpoint (Historical Replay)
+
+For historical event access and debugging:
+
+```
+GET /api/v1/executions/{execution_id}/events
+    ?event_type=tool_finished           # optional filter
+    &after_sequence=0                   # optional: events after this sequence
+    &limit=100                          # optional: max events to return
+
+200 OK
+{
+  "events": [
+    {"sequence": 1, "event_type": "crew_started", "timestamp": "...", "data": {...}},
+    {"sequence": 2, "event_type": "task_started", "timestamp": "...", "data": {...}},
+    ...
+  ],
+  "total": 42,
+  "has_more": false
+}
+```
+
+### ExecutionTask Live Status
+
+During execution, the `execution_tasks` table is updated in real-time as events occur:
+
+- When `task_started` is emitted: `execution_tasks.status` set to `running`, `started_at` set
+- When `task_completed` is emitted: `execution_tasks.status` set to `completed`, `completed_at` set, `output` and `token_usage` populated
+- When a task fails: `execution_tasks.status` set to `failed`
+
+The execution detail API returns the current state of all tasks, enabling the frontend to show live progress without polling for individual task status.
+
+---
+
+## 11.2 CrewAI Built-in Feature Delegation
+
+Blackbeard delegates to CrewAI's built-in features rather than reimplementing them. These features are exposed via the resource spec and passed through to CrewAI at execution time:
+
+| Feature | CrewAI Mechanism | Blackbeard Resource Config | Description |
+|---------|-----------------|---------------------------|-------------|
+| **Memory** | `Crew(memory=True)` | `spec.memory: true` on Crew resource | Enables short-term, long-term, and entity memory across tasks within a crew execution |
+| **Planning** | `Agent(planning=True)` | `spec.planning: true` on Agent resource | Agent creates a step-by-step plan before executing tasks |
+| **Checkpointing** | CrewAI native checkpointing | Enabled via execution config | Allows pausing and resuming executions from the last completed task |
+| **Human-in-the-loop** | `Task(human_input=True)` | `spec.human_input: true` on Task resource | Pauses execution after task completion and waits for human feedback before proceeding |
+| **Guardrails** | `Task(guardrail=callback)` | `spec.guardrails` on Task resource (see PRD 08) | Validates task output using CrewAI's built-in guardrail callback mechanism |
+
+**Principle:** Blackbeard is a management layer over CrewAI, not a reimplementation. When CrewAI provides a feature natively, Blackbeard exposes it through YAML configuration and passes it through. Blackbeard only builds features that CrewAI does not provide: RBAC, sandbox isolation, visual editing, deployment lifecycle, and the execution event log.
+
+---
+
 ## 12. Async Execution Backends
 
 | Backend | When to Use |
@@ -825,6 +929,16 @@ execution_tool_calls
   network_calls   INTEGER         -- outbound HTTP calls made inside sandbox
   created_at      TIMESTAMPTZ
 
+execution_events
+  id              UUID PK DEFAULT gen_random_uuid()
+  execution_id    UUID FK → executions NOT NULL
+  sequence        INTEGER NOT NULL       -- monotonically increasing per execution
+  event_type      VARCHAR(64) NOT NULL   -- e.g. crew_started, task_completed, tool_started
+  timestamp       TIMESTAMPTZ NOT NULL DEFAULT now()
+  data            JSONB                  -- event-specific payload
+  
+  UNIQUE(execution_id, sequence)
+
 execution_checkpoints
   id              UUID PK
   execution_id    UUID FK → executions
@@ -843,6 +957,8 @@ Indexes:
   idx_exec_tasks_exec     ON execution_tasks(execution_id)
   idx_exec_tools_exec     ON execution_tool_calls(execution_id)
   idx_exec_tools_task     ON execution_tool_calls(task_id)
+  idx_exec_events_exec    ON execution_events(execution_id, sequence)
+  idx_exec_events_type    ON execution_events(execution_id, event_type)
 
 ---
 
@@ -870,7 +986,7 @@ Indexes:
 | `execution.cancelled` | `{execution_id, cancelled_by, reason}` |
 | `execution.checkpointed` | `{execution_id, checkpoint_id}` |
 
-**Event naming convention:** All events use dotted namespace format. The SSE event type names (section 11 of this PRD) are the canonical names used across all subsystems (internal event bus, Langfuse listener, webhook payloads). Event producers MUST use these exact names.
+**Event naming convention:** All events use dotted namespace format. The SSE event type names (section 11 of this PRD) are the canonical names used across all subsystems (internal event bus, execution_events table, webhook payloads). Event producers MUST use these exact names.
 
 ---
 
@@ -901,8 +1017,15 @@ Indexes:
 20. **Warm pool**: WASM module cache reduces cold-start from ~50ms to ~5ms. Docker warm pool reduces cold-start from ~500ms to ~50ms.
 21. **Sandbox selection**: The engine correctly picks the effective tier based on tool.sandbox > inferred default, then applies `max(requested, policy_minimum)`.
 
+### Event Streaming
+22. Every execution produces an append-only log in `execution_events` with correct sequence ordering.
+23. SSE endpoint streams events in real-time; a client connecting mid-execution receives all prior events via `?after_sequence=N`.
+24. REST endpoint returns historical events with optional filtering by `event_type`.
+25. `execution_tasks.status` is updated live as `task_started` and `task_completed` events occur.
+26. CrewAI built-in features (memory, planning, checkpointing, human-in-the-loop) are passed through via resource spec config, not reimplemented.
+
 ### Policy Enforcement
-22. An agent with `tools.mode: allowlist` cannot invoke unlisted tools; denial is logged and fed back to agent.
-23. An agent exceeding `llm.max_tokens_per_execution` is stopped with a budget error.
-24. An agent exceeding `llm.max_cost_per_execution_usd` is stopped with a cost ceiling error.
-25. Every tool call, LLM call, and delegation attempt is audit-logged with sandbox tier and policy evaluation result.
+27. An agent with `tools.mode: allowlist` cannot invoke unlisted tools; denial is logged and fed back to agent.
+28. An agent exceeding `llm.max_tokens_per_execution` is stopped with a budget error.
+29. An agent exceeding `llm.max_cost_per_execution_usd` is stopped with a cost ceiling error.
+30. Every tool call, LLM call, and delegation attempt is audit-logged with sandbox tier and policy evaluation result.

@@ -39,7 +39,7 @@ Build the **orchestration and UX layer**. Delegate infrastructure to battle-test
 | **Identity & auth** | **Ory Kratos** (identity) + **Ory Hydra** (OAuth2/OIDC) | User registration, login, password/passwordless, MFA, SSO, OIDC provider, session management, account recovery | PRD 03: Blackbeard delegates all human authentication to Ory. No custom auth code. Users/sessions/SSO managed by Kratos. OAuth2 flows by Hydra. |
 | **Fine-grained authorization** | **SpiceDB** (Google Zanzibar) | Relationship-based access control. Schema + relationships → permission checks. Handles entity-level visibility, inheritance, and cross-cutting. Horizontally scalable. | PRD 03: Entity-level permissions (PRD 03, section 6) use SpiceDB instead of custom DB queries. "Can user X run crew Y?" and "Can agent A access tool B?" are SpiceDB checks. Namespace/org hierarchy modeled as SpiceDB relationships. |
 | **PII detection & redaction** | **Microsoft Presidio** | NLP + regex-based PII detection for 20+ entity types, customizable recognizers, anonymizer/deanonymizer. MIT licensed. 8k GitHub stars. | PRD 08: Presidio is the PII engine. `PIIConfig` YAML maps to Presidio recognizer config. Custom recognizers (regex/deny-list) added via Presidio's extension API. Presidio runs as a library, not a service. |
-| **Observability & traces** | **Langfuse** (self-hosted) | LLM-native tracing with spans, token/cost tracking, prompt management, evaluations, OpenTelemetry backend. Fully open-source (MIT). | PRD 07: Langfuse is the trace backend and UI. CrewAI events → Langfuse traces via Langfuse SDK. LiteLLM natively supports Langfuse callbacks. Blackbeard embeds Langfuse UI or links to it. Saves building an entire trace storage + visualization layer. |
+| **Observability & traces** | **LiteLLM** (LLM-level) + **execution_events** (crew-level) | LiteLLM provides LLM request tracking, cost/token accounting, and a built-in dashboard at `:4000/ui`. Blackbeard's `execution_events` table provides crew/task/agent/tool event timeline with SSE streaming. | PRD 07: Two-layer observability. LLM-level: LiteLLM handles all LLM request logging and spend tracking. Crew-level: Blackbeard's append-only event log captures all CrewAI events. No external trace backend needed. |
 | **Secrets management** | **Infisical** | Secret storage, rotation, dynamic secrets, RBAC, audit logs, K8s operator, CLI, SDK. 26k GitHub stars. | All PRDs: `EnvironmentVariable` resources with `value_from: secret` resolve through Infisical's API. API keys, OAuth tokens, LLM keys stored in Infisical, never in Blackbeard's DB. |
 | **Workflow orchestration** | **Temporal** | Durable execution — workflows survive crashes, restarts, deployments. Built-in retries, timeouts, cron, visibility. Used by Netflix, Snap, Stripe. | PRD 05: Crew/Flow executions are Temporal workflows. Each `kickoff()` → Temporal workflow start. Task execution → Temporal activities. Checkpointing, HITL pauses, and resume are Temporal primitives. Replaces custom Celery/Hatchet layer. |
 | **Object storage** | **MinIO** | S3-compatible object storage. Single binary, self-hosted. | All PRDs: Artifact storage (WASM binaries, ZIP deployments, exported files, trace attachments). `s3://` URIs resolve to MinIO. |
@@ -89,12 +89,12 @@ Build the **orchestration and UX layer**. Delegate infrastructure to battle-test
 │   │                                └────────────┘ │                  │
 │   └────────────────────────────────────────────────┘                  │
 │                                                                       │
-│   ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
-│   │ Ory      │  │ Langfuse │  │ Presidio │  │ Infisical│            │
-│   │ (identity│  │ (traces, │  │ (PII     │  │ (secrets)│            │
-│   │  SSO,    │  │  observ.)│  │  redact) │  │          │            │
-│   │  OAuth2) │  │          │  │          │  │          │            │
-│   └──────────┘  └──────────┘  └──────────┘  └──────────┘            │
+│   ┌──────────┐  ┌──────────┐  ┌──────────┐                           │
+│   │ Ory      │  │ Presidio │  │ Infisical│                           │
+│   │ (identity│  │ (PII     │  │ (secrets)│                           │
+│   │  SSO,    │  │  redact) │  │          │                           │
+│   │  OAuth2) │  │          │  │          │                           │
+│   └──────────┘  └──────────┘  └──────────┘                           │
 │                                                                       │
 │   ┌──────────┐  ┌──────────┐                                         │
 │   │PostgreSQL│  │ Valkey   │  ┌──────────┐                           │
@@ -120,7 +120,7 @@ After delegating to the above, Blackbeard's custom code is focused on:
 | **Deployment lifecycle** | Build pipeline, Git/ZIP/Studio deploy, versioning, rollback, triggers |
 | **Asset repository** | Publish/discover/version/fork agents/tools/crews |
 | **Platform API** | REST/gRPC endpoints, webhook streaming, React export, CLI |
-| **Observability bridge** | CrewAI events → Langfuse traces, sandbox/policy annotations, Blackbeard-specific dashboards |
+| **Observability bridge** | CrewAI events → execution_events table, SSE streaming, sandbox/policy annotations, Blackbeard-specific dashboards |
 | **Glue & UX** | Config generation for all integrated services, unified management UI, setup wizards |
 
 Everything else is delegated to proven infrastructure.
@@ -129,14 +129,14 @@ Everything else is delegated to proven infrastructure.
 
 ## Deployment: One `docker-compose up`
 
-The YAML below is a **reference full-profile** stack (API, worker, LiteLLM, Temporal, OPA, SpiceDB, Ory, etc.). The **repository's** default [`docker-compose.yaml`](../../docker-compose.yaml) follows the MVP: it starts the services needed for local development (for example API, UI, Postgres, Valkey, LiteLLM, Langfuse, Clickhouse/MinIO as required by those images) and **does not** require Temporal, OPA, SpiceDB, or Ory until those milestones ship. See [`MVP-IMPLEMENTATION-PLAN.md`](./MVP-IMPLEMENTATION-PLAN.md).
+The YAML below is a **reference full-profile** stack (API, worker, LiteLLM, Temporal, OPA, SpiceDB, Ory, etc.). The **repository's** default [`docker-compose.yaml`](../../docker-compose.yaml) follows the MVP: it starts the services needed for local development (API, UI, Postgres, Valkey, LiteLLM -- 5 containers) and **does not** require Temporal, OPA, SpiceDB, or Ory until those milestones ship. See [`MVP-IMPLEMENTATION-PLAN.md`](./MVP-IMPLEMENTATION-PLAN.md).
 
 ```yaml
 # docker-compose.yaml (simplified, full-profile reference)
 services:
   blackbeard-api:
     image: ghcr.io/blackbeard/api:latest
-    depends_on: [postgres, valkey, litellm, temporal, opa, spicedb, langfuse]
+    depends_on: [postgres, valkey, litellm, temporal, opa, spicedb]
 
   blackbeard-worker:
     image: ghcr.io/blackbeard/worker:latest
@@ -170,9 +170,8 @@ services:
     image: oryd/kratos:latest
     ports: ["4433:4433", "4434:4434"]
 
-  langfuse:
-    image: langfuse/langfuse:latest
-    ports: ["3001:3000"]
+  # Langfuse removed — LiteLLM provides LLM-level observability;
+  # Blackbeard's execution_events table provides crew-level observability.
 
   # Presidio runs as a Python library inside the worker process
   # (`pip install presidio-analyzer presidio-anonymizer`), not as a separate service.
@@ -207,7 +206,7 @@ Every integration has a simpler fallback for smaller deployments:
 |-----------------|---------------------|-----------|
 | SpiceDB | PostgreSQL RBAC tables | Loses relationship-based traversal, fine at <100 users |
 | Temporal | Celery + Valkey | Loses durable execution guarantees, fine for simple crews |
-| Langfuse | Built-in trace tables + basic UI | Loses prompt management, evaluations, advanced analytics |
+| ~~Langfuse~~ | **Removed** — LiteLLM + execution_events table | N/A — this is now the default architecture, not a fallback |
 | Infisical | Environment variables + `.env` files | Loses rotation, audit, RBAC on secrets |
 | Ory Kratos/Hydra | Built-in JWT auth + OIDC library | Loses MFA, account recovery, passwordless |
 | OPA | In-process Python policy evaluator | Loses Rego ecosystem, harder to audit |

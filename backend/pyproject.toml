@@ -17,7 +17,6 @@ dependencies = [
     "pydantic-settings>=2.9,<3",
     # valkey health checks use redis.asyncio (wire-compatible); no valkey package needed
     "crewai>=1.14,<2",
-    "langfuse>=4.6,<5",
     "wasmtime>=42,<43",
     "click>=8.1,<9",
     "rich>=14.0,<15",
@@ -60,7 +59,7 @@ select = [
     "TCH",                       # type-checking imports
 ]
 ignore = [
-    "ANN401",   # Any in signatures — needed for crewai/langfuse untyped APIs
+    "ANN401",   # Any in signatures — needed for crewai untyped APIs
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -77,10 +76,6 @@ runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 python_version = "3.13"
 strict = true
 plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
-
-[[tool.mypy.overrides]]
-module = "blackbeard.langfuse.listener"
-disable_error_code = ["untyped-decorator"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

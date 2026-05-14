@@ -13,6 +13,7 @@ from blackbeard.models.database import Base, async_session, get_session
 from blackbeard.models.execution import (
     TERMINAL_STATUSES,
     Execution,
+    ExecutionEvent,
     ExecutionStatus,
     ExecutionTask,
     ExecutionToolCall,
@@ -24,6 +25,7 @@ __all__ = [
     "TERMINAL_STATUSES",
     "Base",
     "Execution",
+    "ExecutionEvent",
     "ExecutionStatus",
     "ExecutionTask",
     "ExecutionToolCall",

@@ -25,19 +25,12 @@ from blackbeard.api.middleware import (
 from blackbeard.api.resources import router as resources_router
 from blackbeard.config import settings
 from blackbeard.engine import shutdown_executor
-from blackbeard.langfuse import shutdown_langfuse
 from blackbeard.litellm import shutdown_key_manager
 from blackbeard.logging_config import configure_logging
 from blackbeard.models.database import engine
 
 configure_logging(debug=settings.debug)
 logger = logging.getLogger(__name__)
-
-_LANGFUSE_INSECURE_DEFAULTS = {
-    "LANGFUSE_NEXTAUTH_SECRET": "blackbeard-langfuse-secret",
-    "LANGFUSE_SALT": "blackbeard-salt",
-    "LANGFUSE_ENCRYPTION_KEY": "0" * 64,
-}
 
 
 def _validate_startup_config() -> None:
@@ -70,23 +63,10 @@ def _validate_startup_config() -> None:
             "Refusing to start: CORS_ORIGINS contains wildcard '*'. "
             "Set explicit origins for production, or set DEBUG=true for local development."
         )
-    for env_name, insecure_val in _LANGFUSE_INSECURE_DEFAULTS.items():
-        if os.environ.get(env_name) == insecure_val and not settings.debug:
-            logger.warning(
-                "SECURITY: %s is set to an insecure default — "
-                "generate a strong value with: openssl rand -hex 32",
-                env_name,
-            )
     if not settings.litellm_proxy_url.startswith(("http://", "https://")):
         url = settings.litellm_proxy_url
         raise RuntimeError(
             f"Refusing to start: LITELLM_PROXY_URL has unexpected scheme: {url!r}. "
-            "Must start with http:// or https://."
-        )
-    if settings.langfuse_host and not settings.langfuse_host.startswith(("http://", "https://")):
-        host = settings.langfuse_host
-        raise RuntimeError(
-            f"Refusing to start: LANGFUSE_HOST has unexpected scheme: {host!r}. "
             "Must start with http:// or https://."
         )
 
@@ -97,12 +77,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     _validate_startup_config()
     pool = cast("Any", engine.pool)
     logger.info(
-        "Blackbeard %s starting: debug=%s, max_concurrent_executions=%d, litellm=%s, langfuse=%s",
+        "Blackbeard %s starting: debug=%s, max_concurrent_executions=%d, litellm=%s",
         app.version,
         settings.debug,
         settings.max_concurrent_executions,
         settings.litellm_proxy_url,
-        "enabled" if settings.langfuse_public_key else "disabled",
         extra={
             "event": "app_startup",
             "version": app.version,
@@ -111,42 +90,36 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             "debug": settings.debug,
             "max_concurrent_executions": settings.max_concurrent_executions,
             "litellm_url": settings.litellm_proxy_url,
-            "langfuse_enabled": bool(settings.langfuse_public_key),
             "db_pool_size": pool.size(),
             "db_pool_max_overflow": pool.overflow(),
             "db_pool_timeout": pool.timeout(),
         },
     )
     yield
-    # Order matters: executor first (may emit Langfuse events), then Langfuse, then connections
     logger.info("Shutdown starting", extra={"event": "app_shutdown_start"})
     try:
         shutdown_executor()
         logger.info("Executor shut down", extra={"event": "executor_shutdown_complete"})
     finally:
         try:
-            shutdown_langfuse()
-            logger.info("Langfuse shut down", extra={"event": "langfuse_shutdown_complete"})
+            await shutdown_key_manager()
+            logger.info(
+                "Key manager shut down",
+                extra={"event": "key_manager_shutdown_complete"},
+            )
         finally:
             try:
-                await shutdown_key_manager()
+                await shutdown_health_clients()
                 logger.info(
-                    "Key manager shut down",
-                    extra={"event": "key_manager_shutdown_complete"},
+                    "Health clients closed",
+                    extra={"event": "health_clients_shutdown_complete"},
                 )
             finally:
-                try:
-                    await shutdown_health_clients()
-                    logger.info(
-                        "Health clients closed",
-                        extra={"event": "health_clients_shutdown_complete"},
-                    )
-                finally:
-                    await engine.dispose()
-                    logger.info(
-                        "Database connections closed",
-                        extra={"event": "database_shutdown_complete"},
-                    )
+                await engine.dispose()
+                logger.info(
+                    "Database connections closed",
+                    extra={"event": "database_shutdown_complete"},
+                )
 
 
 app = FastAPI(

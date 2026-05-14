@@ -21,7 +21,7 @@ cd blackbeard
 cp .env.example .env
 # Edit .env: set GOOGLE_CLOUD_PROJECT, CLOUD_ML_REGION, GOOGLE_APPLICATION_CREDENTIALS, etc.
 
-# Start all services (API, UI, PostgreSQL, Valkey, LiteLLM, Langfuse)
+# Start all services (API, UI, PostgreSQL, Valkey, LiteLLM)
 ./run.sh
 ```
 
@@ -32,7 +32,6 @@ Services started by `run.sh`:
 | Blackbeard API | http://localhost:8000 |
 | Blackbeard UI | http://localhost:3000 |
 | LiteLLM Proxy | http://localhost:4000 |
-| Langfuse | http://localhost:3001 |
 
 Wait ~30 seconds for all containers to become healthy before proceeding.
 
@@ -103,13 +102,7 @@ blackbeard status <execution-id> --watch  # poll until execution reaches a termi
 
 ### Kick off via UI
 
-Open a crew in the Studio or navigate to the Crew resource detail page and click **Run**. Fill in any required inputs as JSON and click **Run Crew**. The Executions list auto-refreshes; click a row to see per-task status, outputs, and Langfuse trace links.
-
-### View traces in Langfuse
-
-Every execution automatically creates a trace in Langfuse. The execution detail page shows a **View in Langfuse** link that opens the full trace with token counts, latency breakdown, and LLM generations.
-
-Navigate directly to Langfuse at **http://localhost:3001**.
+Open a crew in the Studio or navigate to the Crew resource detail page and click **Run**. Fill in any required inputs as JSON and click **Run Crew**. The Executions list auto-refreshes; click a row to see per-task status, outputs, and token/cost details. LiteLLM tracks all spend, token usage, and latency automatically.
 
 ---
 

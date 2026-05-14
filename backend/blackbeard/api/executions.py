@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
+from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
 if TYPE_CHECKING:
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
 from blackbeard.engine import ExecutionError, executor
 from blackbeard.kinds import NAME_PATTERN
 from blackbeard.models import TERMINAL_STATUSES, ExecutionStatus, async_session, get_session
+from blackbeard.models.execution import ExecutionEvent
 from blackbeard.models.execution_schemas import (
     ExecutionListResponse,
     ExecutionResponse,
@@ -122,6 +124,46 @@ async def get_execution(
     return ExecutionResponse.from_db(execution)
 
 
+@router.get(
+    "/executions/{execution_id}/events",
+    responses={
+        200: {"description": "List of execution events for streaming/replay"},
+        404: {"description": "Execution not found"},
+    },
+)
+async def list_execution_events(
+    execution_id: UUID = Path(..., description="Execution UUID"),
+    after: int = Query(default=-1, ge=-1, description="Return events with sequence > after"),
+    limit: int = Query(default=200, ge=1, le=1000, description="Max events to return"),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """List execution events, optionally after a given sequence number."""
+    # Verify execution exists
+    exec_check = await executor.get_execution_status(session, execution_id)
+    if exec_check is None:
+        raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
+
+    result = await session.execute(
+        select(ExecutionEvent)
+        .where(ExecutionEvent.execution_id == execution_id, ExecutionEvent.sequence > after)
+        .order_by(ExecutionEvent.sequence)
+        .limit(limit)
+    )
+    items = list(result.scalars())
+    return {
+        "events": [
+            {
+                "sequence": e.sequence,
+                "event_type": e.event_type,
+                "timestamp": e.timestamp.isoformat(),
+                "data": e.data,
+            }
+            for e in items
+        ],
+        "next_sequence": items[-1].sequence if items else after,
+    }
+
+
 @router.patch(
     "/executions/{execution_id}/cancel",
     response_model=ExecutionResponse,
@@ -172,6 +214,7 @@ async def stream_execution(
     async def event_generator() -> AsyncGenerator[dict[str, str]]:
         last_status: ExecutionStatus | None = None
         current_status: ExecutionStatus | None = None
+        last_event_seq = -1
         polls = 0
         try:
             while polls < max_polls:
@@ -206,6 +249,30 @@ async def stream_execution(
                         else:
                             heartbeat = {"status": current_status.value}
                             yield {"event": "heartbeat", "data": json.dumps(heartbeat)}
+
+                    # Stream new execution events
+                    event_result = await session.execute(
+                        select(ExecutionEvent)
+                        .where(
+                            ExecutionEvent.execution_id == execution_id,
+                            ExecutionEvent.sequence > last_event_seq,
+                        )
+                        .order_by(ExecutionEvent.sequence)
+                        .limit(50)
+                    )
+                    new_events = list(event_result.scalars())
+                    for ev in new_events:
+                        yield {
+                            "event": ev.event_type,
+                            "data": json.dumps(
+                                {
+                                    "sequence": ev.sequence,
+                                    "timestamp": ev.timestamp.isoformat(),
+                                    **ev.data,
+                                }
+                            ),
+                        }
+                        last_event_seq = ev.sequence
 
                 if current_status is not None and current_status in TERMINAL_STATUSES:
                     logger.info(

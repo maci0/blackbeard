@@ -282,9 +282,9 @@ spec:
     priority: high                     # LiteLLM request prioritisation
 ```
 
-## 6. Spend Tracking & Cost Attribution
+## 6. Spend Tracking, Cost Attribution & LLM Observability
 
-LiteLLM tracks spend per virtual key automatically. Blackbeard queries this data for dashboards:
+LiteLLM is the **sole observability layer for all LLM traffic**. There is no separate trace backend (e.g., Langfuse) -- LiteLLM provides everything needed for LLM request inspection, cost tracking, and usage analytics.
 
 ### 6.1 Data Flow
 
@@ -292,29 +292,53 @@ LiteLLM tracks spend per virtual key automatically. Blackbeard queries this data
 LiteLLM Proxy
     │
     │  Every LLM call tracked:
-    │    - model, tokens, cost
+    │    - model, tokens, cost, latency, success/failure
     │    - virtual key → agent/execution/user
+    │    - full request/response logged
     │
     ▼
 ┌────────────────────────────────────────┐
-│  Blackbeard Spend Sync                 │
+│  Two data consumers:                   │
 │                                        │
-│  Periodic poll (or webhook callback):  │
-│    GET /key/info?key=sk-agent-xxx      │
-│    GET /user/info?user_id=alice        │
-│    GET /team/info?team_id=prod         │
+│  1. LiteLLM Dashboard (:4000/ui)       │
+│     Real-time request inspection,      │
+│     model analytics, spend tracking    │
 │                                        │
-│  Maps LiteLLM spend data to:           │
-│    - Execution traces (PRD 07)         │
-│    - Per-agent cost dashboards         │
-│    - Per-user cost attribution         │
-│    - Budget warning events             │
+│  2. Blackbeard Spend Sync              │
+│     Periodic poll:                     │
+│       GET /spend/logs                  │
+│       GET /key/info?key=sk-agent-xxx   │
+│       GET /user/info?user_id=alice     │
+│       GET /team/info?team_id=prod      │
+│                                        │
+│     Maps LiteLLM spend data to:        │
+│       - Execution records (PRD 07)     │
+│       - Per-agent cost dashboards      │
+│       - Per-user cost attribution      │
+│       - Budget warning events          │
 └────────────────────────────────────────┘
 ```
 
-**Latency note:** The 60-second polling interval means dashboard cost data lags real-time by up to 60 seconds. Budget *enforcement* is real-time (via LiteLLM virtual key `max_budget`), but dashboard *visibility* is near-real-time. This is an acceptable trade-off — enforcement prevents overspend regardless of dashboard lag.
+**Latency note:** The 60-second polling interval means dashboard cost data lags real-time by up to 60 seconds. Budget *enforcement* is real-time (via LiteLLM virtual key `max_budget`), but dashboard *visibility* is near-real-time. This is an acceptable trade-off -- enforcement prevents overspend regardless of dashboard lag.
 
-### 6.2 Cost Dashboard Data
+### 6.2 LiteLLM as Sole LLM Observability Layer
+
+LiteLLM provides all LLM-level observability out of the box. No additional trace backend is needed:
+
+| Capability | LiteLLM Feature | Endpoint / Mechanism |
+|------------|-----------------|---------------------|
+| **Cost tracking** | Per-key, per-user, per-team spend logs | `GET /spend/logs`, `GET /global/spend/logs` |
+| **Rate limiting** | Per-key RPM/TPM configuration | Virtual key `rpm_limit`, `tpm_limit` |
+| **Budgets** | Per-key, per-user, per-team budget enforcement | Virtual key `max_budget`, `budget_duration` |
+| **Request inspection** | Full request/response logging | LiteLLM Dashboard at `:4000/ui` |
+| **Model analytics** | Token usage, latency, error rates per model | Dashboard and `/model/metrics` |
+| **Provider health** | Health checks, failure tracking | `/health`, `/model/info` |
+
+**LiteLLM Dashboard** (`http://litellm:4000/ui`): Provides a built-in UI for operators to inspect individual LLM requests, view model performance metrics, manage virtual keys, and monitor spend in real-time. Blackbeard links to this dashboard from its LLM management pages.
+
+**No Langfuse dependency.** Previous architecture used Langfuse as a trace backend. This has been removed. LiteLLM handles all LLM-level observability. Crew/task/tool-level observability is handled by Blackbeard's `execution_events` table (see PRD 05, section 11.1 and PRD 07).
+
+### 6.3 Cost Dashboard Data
 
 | Dimension | Source |
 |-----------|--------|
@@ -324,7 +348,7 @@ LiteLLM Proxy
 | Cost per user | LiteLLM user-level spend tracking |
 | Cost per model | LiteLLM model-level spend tracking |
 | Cost per provider | Aggregated from model-level data |
-| Daily/weekly/monthly trends | Time-series from LiteLLM spend logs |
+| Daily/weekly/monthly trends | Time-series from LiteLLM spend logs (`GET /spend/logs`) |
 
 ## 7. LLM Management UI
 
@@ -354,6 +378,12 @@ LiteLLM Proxy
 - **Virtual keys**: List of active LiteLLM keys with their agent/execution mapping.
 - **Audit**: Which key was used for which execution.
 - **Manual key creation**: For advanced use cases (external consumers, testing).
+
+### 7.5 LiteLLM Dashboard Link
+
+- **Direct link** to the LiteLLM Dashboard at `:4000/ui` for advanced request inspection.
+- Operators can drill into individual LLM requests, view full prompts/completions, latency breakdowns, and error details.
+- This replaces any need for a separate trace backend like Langfuse for LLM-level observability.
 
 ## 8. CrewAI Integration Point
 
@@ -480,7 +510,9 @@ This prevents a malformed LLMConnection resource from breaking the LLM routing l
 5. Fallback works: if `openai-gpt4o` returns a 500, LiteLLM automatically retries with `anthropic-claude-sonnet`.
 6. Context window fallback works: if a prompt exceeds `gpt-4o`'s context, LiteLLM routes to the configured fallback model.
 7. Load balancing distributes requests across multiple deployments of the same model.
-8. Spend data is accurate: per-execution cost in the trace matches LiteLLM's key spend.
+8. Spend data is accurate: per-execution cost in the execution record matches LiteLLM's key spend.
 9. Spend dashboard shows cost breakdowns by agent, user, model, and time period.
-10. LiteLLM Proxy can be deployed as sidecar, standalone, or external — all three modes work.
-11. Routing strategy changes (e.g., `least-busy` → `latency-based-routing`) take effect without restart.
+10. LiteLLM Proxy can be deployed as sidecar, standalone, or external -- all three modes work.
+11. Routing strategy changes (e.g., `least-busy` to `latency-based-routing`) take effect without restart.
+12. LiteLLM Dashboard at `:4000/ui` is accessible and shows individual LLM request details.
+13. No Langfuse dependency -- LiteLLM provides all LLM-level observability (cost, tokens, latency, request/response inspection).

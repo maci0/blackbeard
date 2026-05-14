@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState, useMemo } from 'react'
+import { useEffect, useCallback, useState, useMemo, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   ExternalLink,
@@ -9,9 +9,16 @@ import {
   Coins,
   DollarSign,
   Activity,
+  Terminal,
 } from 'lucide-react'
 import { useDocumentTitle, usePolling } from '@/lib/hooks'
-import { useExecutionStore, TERMINAL_STATUSES, type ExecutionTask } from '@/stores/executionStore'
+import {
+  useExecutionStore,
+  TERMINAL_STATUSES,
+  type Execution,
+  type ExecutionTask,
+  type ExecutionEvent,
+} from '@/stores/executionStore'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { statusLabel } from '@/lib/status'
 import { Spinner } from '@/components/ui/Spinner'
@@ -116,13 +123,122 @@ function TaskRow({ task, index }: { task: ExecutionTask; index: number }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Event log                                                           */
+/* ------------------------------------------------------------------ */
+
+const EVENT_COLORS: Record<string, string> = {
+  crew_started: 'text-white',
+  crew_completed: 'text-white',
+  task_started: 'text-blue-400',
+  task_completed: 'text-blue-400',
+  tool_started: 'text-emerald-400',
+  tool_finished: 'text-emerald-400',
+  llm_started: 'text-violet-400',
+  llm_completed: 'text-violet-400',
+}
+
+function formatEventTime(timestamp: string): string {
+  const d = new Date(timestamp)
+  return d.toLocaleTimeString('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+function str(v: unknown, fallback = 'unknown'): string {
+  return typeof v === 'string' ? v : typeof v === 'number' ? String(v) : fallback
+}
+
+function formatEventMessage(event: ExecutionEvent): string {
+  const d = event.data
+  switch (event.event_type) {
+    case 'crew_started':
+      return `Crew "${str(d.crew_name)}" started`
+    case 'crew_completed':
+      return `Crew completed (tokens: ${str(d.total_tokens, '0')})`
+    case 'task_started':
+      return `Task "${str(d.task_name)}" started${d.agent_role ? ` (agent: ${str(d.agent_role)})` : ''}`
+    case 'task_completed':
+      return `Task "${str(d.task_name)}" completed`
+    case 'tool_started':
+      return `Tool "${str(d.tool_name)}" called${d.agent_role ? ` by ${str(d.agent_role)}` : ''}`
+    case 'tool_finished':
+      return `Tool "${str(d.tool_name)}" finished${d.duration_ms != null ? ` (${str(d.duration_ms)}ms)` : ''}${d.from_cache ? ' [cached]' : ''}`
+    case 'llm_started':
+      return `LLM call started (${str(d.model)})${d.agent_role ? ` for ${str(d.agent_role)}` : ''}`
+    case 'llm_completed':
+      return `LLM call completed (${str(d.model)})`
+    default:
+      return `${event.event_type}: ${JSON.stringify(d)}`
+  }
+}
+
+function EventLog({ events }: { events: ExecutionEvent[] }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [autoScroll, setAutoScroll] = useState(true)
+
+  useEffect(() => {
+    if (autoScroll && containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight
+    }
+  }, [events.length, autoScroll])
+
+  const handleScroll = () => {
+    if (!containerRef.current) return
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current
+    // If user scrolled up more than 40px from bottom, disable auto-scroll
+    setAutoScroll(scrollHeight - scrollTop - clientHeight < 40)
+  }
+
+  if (events.length === 0) return null
+
+  return (
+    <div className="mt-6">
+      <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
+        <Terminal className="h-4 w-4 text-muted-foreground" />
+        Event Log
+        <span className="text-xs font-normal text-muted-foreground">({events.length})</span>
+      </h2>
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="max-h-[400px] overflow-y-auto rounded-lg border bg-[#0d1117] p-4"
+      >
+        <div className="space-y-0.5 font-mono text-xs leading-relaxed">
+          {events.map((event) => (
+            <div key={event.sequence} className="flex gap-2">
+              <span className="shrink-0 text-gray-500">[{formatEventTime(event.timestamp)}]</span>
+              <span className={cn('break-all', EVENT_COLORS[event.event_type] ?? 'text-gray-400')}>
+                {formatEventMessage(event)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
 export default function ExecutionDetail() {
   const { id = '' } = useParams<{ id: string }>()
-  const { currentExecution, loading, error, fetchExecution, cancelExecution, pollExecution } =
-    useExecutionStore()
+  const {
+    currentExecution,
+    loading,
+    error,
+    events,
+    fetchExecution,
+    cancelExecution,
+    pollExecution,
+    addEvents,
+    clearEvents,
+    fetchEvents,
+  } = useExecutionStore()
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
@@ -131,7 +247,9 @@ export default function ExecutionDetail() {
     await fetchExecution(id)
   }, [id, fetchExecution])
 
+  // Initial load + clear events
   useEffect(() => {
+    clearEvents()
     let cancelled = false
     void fetchExecution(id).then(() => {
       if (cancelled) return
@@ -139,11 +257,74 @@ export default function ExecutionDetail() {
     return () => {
       cancelled = true
     }
-  }, [id, fetchExecution])
+  }, [id, fetchExecution, clearEvents])
 
   const isActive = currentExecution ? !TERMINAL_STATUSES.has(currentExecution.status) : false
+  const isTerminal = currentExecution ? TERMINAL_STATUSES.has(currentExecution.status) : false
+
+  // SSE connection for live events when execution is active
+  useEffect(() => {
+    if (!id || !isActive) return
+    const es = new EventSource(`/api/v1/executions/${id}/stream`)
+
+    const eventTypes = [
+      'crew_started',
+      'task_started',
+      'task_completed',
+      'tool_started',
+      'tool_finished',
+      'llm_started',
+      'llm_completed',
+      'crew_completed',
+    ]
+
+    const handleEvent = (e: MessageEvent<string>) => {
+      try {
+        const raw = String(e.data)
+        const data = JSON.parse(raw) as Record<string, unknown>
+        addEvents([
+          {
+            sequence: data.sequence as number,
+            event_type: e.type,
+            timestamp: data.timestamp as string,
+            data,
+          },
+        ])
+      } catch {
+        // Ignore malformed events
+      }
+    }
+
+    for (const type of eventTypes) {
+      es.addEventListener(type, handleEvent)
+    }
+
+    es.addEventListener('status', (e: MessageEvent<string>) => {
+      try {
+        const raw = String(e.data)
+        const exec = JSON.parse(raw) as Execution
+        useExecutionStore.setState({ currentExecution: exec })
+      } catch {
+        // Ignore malformed status
+      }
+    })
+
+    es.onerror = () => {
+      // EventSource auto-reconnects; no action needed
+    }
+
+    return () => es.close()
+  }, [id, isActive, addEvents])
+
+  // Fetch historical events for completed executions
+  useEffect(() => {
+    if (!id || !isTerminal) return
+    void fetchEvents(id)
+  }, [id, isTerminal, fetchEvents])
+
+  // Fallback polling when not using SSE
   const doPoll = useCallback(() => pollExecution(id), [pollExecution, id])
-  usePolling(doPoll, 2000, isActive)
+  usePolling(doPoll, 2000, isActive && false) // Disabled — SSE handles updates
 
   useDocumentTitle(currentExecution ? `${currentExecution.crew_name} run` : 'Execution')
 
@@ -353,6 +534,9 @@ export default function ExecutionDetail() {
             </div>
           )}
         </div>
+
+        {/* Event log */}
+        <EventLog events={events} />
 
         {/* Outputs */}
         {execution.outputs && Object.keys(execution.outputs).length > 0 && (

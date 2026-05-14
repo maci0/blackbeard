@@ -1,6 +1,6 @@
 # Blackbeard
 
-Open, self-hosted **Agent Management Platform** wrapping [CrewAI](https://crewai.com) with enterprise features: visual crew editor, LLM routing via LiteLLM, execution tracing via Langfuse, WASM tool sandboxing, and agent policies.
+Open, self-hosted **Agent Management Platform** wrapping [CrewAI](https://crewai.com) with enterprise features: visual crew editor, LLM routing via LiteLLM (with built-in spend/token/latency tracking), WASM tool sandboxing, and agent policies.
 
 ## Quickstart
 
@@ -30,7 +30,6 @@ open http://localhost:3000
 | API | http://localhost:8000 | FastAPI REST API |
 | API Docs (Swagger) | http://localhost:8000/docs | Interactive API documentation (debug mode only; no API key required) |
 | LiteLLM | http://localhost:4000 | LLM routing proxy (multi-provider) |
-| Langfuse | http://localhost:3001 | Execution traces |
 
 ## Apply Example Crew
 
@@ -59,18 +58,16 @@ blackbeard status <execution-id> --watch               # poll until complete
 │  (Studio)   │     │  (Blackbeard) │     │              │
 └─────────────┘     └──────┬───────┘     └──────────────┘
                            │
-                    ┌──────┴───────┐
-                    │              │
-              ┌─────▼─────┐ ┌─────▼─────┐
-              │  LiteLLM  │ │  Langfuse  │
-              │  (Proxy)  │ │  (Traces)  │
-              └─────┬─────┘ └───────────┘
-                    │
-              ┌─────▼─────┐
-              │ Vertex AI  │
-              │ Claude/    │
-              │ Gemini     │
-              └───────────┘
+                    ┌──────▼───────┐
+                    │   LiteLLM    │
+                    │   (Proxy)    │
+                    └──────┬───────┘
+                           │
+                    ┌──────▼───────┐
+                    │  Vertex AI   │
+                    │  Claude/     │
+                    │  Gemini      │
+                    └──────────────┘
 ```
 
 ## Project Structure
@@ -81,7 +78,6 @@ blackbeard/
 │   ├── blackbeard/
 │   │   ├── api/                # REST endpoints
 │   │   ├── engine/             # Execution engine + WASM sandbox
-│   │   ├── langfuse/           # Langfuse tracing
 │   │   ├── litellm/            # LiteLLM config + key management
 │   │   ├── models/             # SQLAlchemy + Pydantic models
 │   │   ├── resources/          # Resource CRUD + validation
@@ -94,7 +90,7 @@ blackbeard/
 │       └── stores/             # Zustand state management
 ├── examples/                   # Example YAML crews
 ├── deploy/                     # Dockerfiles + LiteLLM config
-└── docker-compose.yaml         # 10 services
+└── docker-compose.yaml         # 5 services
 ```
 
 ## Resource Kinds
@@ -191,7 +187,6 @@ npm run build                   # production build
 | Database | PostgreSQL 18 |
 | Cache | Valkey 9 |
 | LLM Gateway | LiteLLM Proxy |
-| Observability | Langfuse (self-hosted) |
 | WASM Runtime | wasmtime-py |
 | Orchestration | CrewAI |
 

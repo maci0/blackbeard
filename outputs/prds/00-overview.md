@@ -142,7 +142,7 @@ Blackbeard targets **teams of 3–20** building production agent workflows. Solo
 | 04 | **Tool & Integration Registry** | Wasmtime | Tool catalogue with WASM support, MCP servers, OAuth connectors |
 | 05 | **Execution Engine & Sandboxing** | Temporal, Wasmtime, Docker/gVisor | Loads YAML → CrewAI objects, enforces policies via OPA, runs tools in sandboxes |
 | 06 | **LiteLLM Integration** | LiteLLM Proxy | Model routing, load balancing, fallbacks, spend tracking, per-agent virtual keys |
-| 07 | **Observability & Traces** | Langfuse | Execution traces, token metrics, cost tracking, OpenTelemetry |
+| 07 | **Observability & Traces** | LiteLLM + execution_events | Execution event log, LLM request tracking, cost tracking, OpenTelemetry |
 | 08 | **Guardrails & Safety** | Microsoft Presidio | Hallucination detection, PII redaction, custom validators |
 | 09 | **Deployment & Automation** | — | Build, deploy, version, rollback, triggers, webhooks, A2A |
 | 10 | **Agent & Asset Repository** | MinIO | Shared library of reusable agents, tasks, tools, and templates |
@@ -157,7 +157,7 @@ Blackbeard targets **teams of 3–20** building production agent workflows. Solo
 - **Auth & identity**: Ory Kratos (identity) + Ory Hydra (OAuth2/OIDC).
 - **Authorization**: OPA (policy evaluation) + SpiceDB (relationship-based permissions).
 - **LLM gateway**: LiteLLM Proxy co-deployed as a sidecar or standalone service.
-- **Observability**: Langfuse (self-hosted) for trace storage and visualization.
+- **Observability**: LiteLLM for LLM-level request tracking; Blackbeard's `execution_events` table for crew/task/tool event timeline. No external trace backend.
 - **PII**: Microsoft Presidio embedded as a library.
 - **Secrets**: Infisical for secret storage and rotation.
 - **Config format**: YAML as canonical format; JSON accepted everywhere.
@@ -194,14 +194,14 @@ Event payload schemas for each module are defined in their respective PRDs (see 
 
 | Component | Purpose | Default deployment |
 |-----------|---------|-------------------|
-| **Blackbeard API** | Platform API server | Docker container |
-| **Blackbeard Worker** | Execution worker pool | Docker container(s), horizontally scalable |
+| **Blackbeard API** | Platform API server (includes worker in MVP) | Docker container |
 | **Blackbeard UI** | React SPA | Static files / Nginx |
-| **LiteLLM Proxy** | LLM gateway | Docker sidecar or standalone |
-| **PostgreSQL** | Relational storage | Docker or managed (RDS, Cloud SQL) |
+| **LiteLLM Proxy** | LLM gateway + LLM-level observability | Docker sidecar or standalone |
+| **PostgreSQL** | Relational storage (resources, executions, execution_events) | Docker or managed (RDS, Cloud SQL) |
 | **Valkey** | Cache, pub/sub, LiteLLM state backend | Docker or managed |
-| **Langfuse** | Trace storage and LLM observability | Docker container |
-| **WASM Runtime** | Wasmtime library | Embedded in workers |
+| **WASM Runtime** | Wasmtime library | Embedded in API/worker process |
+
+**Container count:** 5 containers for `docker compose up`: api, ui, litellm, postgres, valkey. Post-MVP, the worker separates from the API as a 6th container.
 
 ---
 

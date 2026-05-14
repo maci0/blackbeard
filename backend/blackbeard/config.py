@@ -30,11 +30,6 @@ class Settings(BaseSettings):
     litellm_proxy_url: str = "http://localhost:4000"
     litellm_master_key: SecretStr = SecretStr("sk-litellm-master-key")
 
-    # Langfuse
-    langfuse_host: str = "http://localhost:3001"
-    langfuse_public_key: str = ""
-    langfuse_secret_key: SecretStr = SecretStr("")
-
     # GCP / Vertex AI
     google_cloud_project: str = ""
     cloud_ml_region: str = "us-east5"

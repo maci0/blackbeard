@@ -202,7 +202,7 @@ PII redaction is powered by **Microsoft Presidio** (MIT license, 8k+ GitHub star
 
 **What Blackbeard adds**:
 - `PIIConfig` YAML resource that compiles to Presidio recognizer/anonymizer configuration
-- Integration with Langfuse: redact traces before sending to Langfuse
+- Integration with execution event log: redact PII from event data before storage
 - GUI for managing PII rules (entity toggles, custom recognizer builder)
 - Per-namespace PII policies
 
@@ -319,7 +319,25 @@ When tools execute in sandboxed environments:
 
 **Why not redact inputs**: Tools need real data to function (e.g., a CRM lookup tool needs the actual customer email, not `<EMAIL_ADDRESS>`). PII protection for tool inputs is handled by AgentPolicy constraints -- restricting which tools can access which data -- not by redaction. See PRD 03 section 3 `data.environment_variables` and `data.knowledge_sources`.
 
-## 5. Safety Layers Summary
+## 5. Feature Ownership
+
+Safety and guardrail functionality is distributed across three systems. Blackbeard orchestrates but does not reimplement features that already exist in CrewAI or LiteLLM:
+
+| Capability | Owner | Mechanism | Blackbeard's Role |
+|------------|-------|-----------|-------------------|
+| **Agent output guardrails** | **CrewAI** | `Task(guardrail=callback)` -- built-in guardrail callback on Agent/Task | Expose via YAML `spec.guardrails`, compile to CrewAI guardrail callbacks at execution time |
+| **Hallucination detection** | **Blackbeard** | Custom guardrail type using evaluator LLM (section 3) | Build and maintain -- CrewAI does not provide this |
+| **Request/response content filtering** | **LiteLLM** | LiteLLM's guardrails feature: PII masking, content filtering, prompt injection detection | Configure via LiteLLM config; Blackbeard generates the config from `PIIConfig` resources |
+| **PII redaction (traces/logs)** | **Blackbeard + Presidio** | Microsoft Presidio library embedded in workers (section 4) | Build and maintain -- redacts PII from execution event data before storage |
+| **WASM sandbox isolation** | **Blackbeard** | WASM runtime with capability-based isolation (PRD 05, section 6) | Build and maintain -- unique to Blackbeard, not provided by CrewAI or LiteLLM |
+| **Budget enforcement** | **LiteLLM** | Virtual key `max_budget` with real-time enforcement | Configure via AgentPolicy-to-virtual-key mapping (PRD 06) |
+| **Tool access control** | **Blackbeard** | AgentPolicy allowlists/denylists (PRD 03) | Build and maintain -- enforced by Blackbeard's policy layer before tool dispatch |
+
+**Principle:** Use the right tool for the right job. CrewAI's guardrail system handles output validation at the agent level. LiteLLM's guardrails handle request/response filtering at the LLM proxy level. Blackbeard's unique contribution is the WASM sandbox, policy enforcement, and the orchestration layer that ties everything together.
+
+---
+
+## 6. Safety Layers Summary
 
 ```
 Agent produces output
@@ -348,7 +366,7 @@ Agent produces output
 
 **Pipeline ordering is mandatory:** Guardrails → Hallucination Detection → PII Redaction. PII redaction is always the LAST safety layer before trace storage. Guardrails and hallucination detection operate on unredacted output. Reordering the pipeline causes incorrect guardrail failures (e.g., a guardrail checking for specific content would see redacted placeholders like `<EMAIL_ADDRESS>` instead of actual values).
 
-## 6. Events Emitted
+## 7. Events Emitted
 
 | Event | Payload |
 |-------|---------|
@@ -358,7 +376,7 @@ Agent produces output
 | `hallucination.detected` | `{task, score, verdict, reasons}` |
 | `pii.redacted` | `{trace_id, entity_type, count}` |
 
-## 7. Acceptance Criteria
+## 8. Acceptance Criteria
 
 1. Function-based guardrail rejects invalid output and agent retries successfully.
 2. LLM-based guardrail evaluates subjective criteria and provides actionable feedback.

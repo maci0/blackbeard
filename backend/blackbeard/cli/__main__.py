@@ -806,10 +806,6 @@ def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) ->
             if completed:
                 table.add_row("Completed", str(completed))
 
-            trace = data.get("langfuse_trace_url")
-            if trace:
-                table.add_row("Trace", f"[link={trace}]{trace}[/link]")
-
             out.print(
                 Panel(
                     table,

@@ -27,8 +27,6 @@ litellm_settings:
   set_verbose: false
   num_retries: 3
   request_timeout: 120
-  success_callback: ["langfuse"]
-  failure_callback: ["langfuse"]
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

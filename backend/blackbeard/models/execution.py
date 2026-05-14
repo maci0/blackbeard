@@ -95,9 +95,6 @@ class Execution(Base):
 
     litellm_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    langfuse_trace_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    langfuse_trace_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -217,3 +214,22 @@ class ExecutionToolCall(Base):
             name="ck_tool_call_duration_nonneg",
         ),
     )
+
+
+class ExecutionEvent(Base):
+    """Append-only log of execution events for real-time streaming."""
+
+    __tablename__ = "execution_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    execution_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("executions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+    __table_args__ = (Index("ix_exec_event_execution_seq", "execution_id", "sequence"),)

@@ -20,9 +20,6 @@ services:
       VALKEY_URL: ${VALKEY_URL:-valkey://default:valkey-dev-secret@valkey:6379/0}
       LITELLM_PROXY_URL: ${LITELLM_PROXY_URL:-http://litellm:4000}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master-key}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse-web:3000}
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       BLACKBEARD_API_KEY: ${BLACKBEARD_API_KEY:-change-me-in-production}
       DEBUG: ${DEBUG:-false}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
@@ -142,9 +139,6 @@ services:
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
       CLOUD_ML_REGION: ${CLOUD_ML_REGION:-us-east5}
       GOOGLE_APPLICATION_CREDENTIALS: /app/credentials.json
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: http://langfuse-web:3000
     volumes:
       - ./deploy/litellm/config.yaml:/app/config.yaml
       - ${GOOGLE_APPLICATION_CREDENTIALS:-deploy/docker/empty-credentials.json}:/app/credentials.json:ro
@@ -167,183 +161,8 @@ services:
       start_period: 120s
     networks: [backend]
 
-  # ── Langfuse v3 (observability) ────────────────────────────────────────────
-  # Langfuse v3 requires ClickHouse, MinIO (S3-compatible), and Redis.
-  langfuse-web:
-    image: langfuse/langfuse:3.173.0
-    ports:
-      - "127.0.0.1:3001:3000"
-    # SECURITY: Replace NEXTAUTH_SECRET, SALT, and ENCRYPTION_KEY with
-    # cryptographically random values before any non-local deployment.
-    # Generate with: openssl rand -hex 32
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    environment: &langfuse-env
-      DATABASE_URL: postgresql://blackbeard:blackbeard@postgres:5432/langfuse
-      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-blackbeard-langfuse-secret}
-      NEXTAUTH_URL: http://localhost:3001
-      SALT: ${LANGFUSE_SALT:-blackbeard-salt}
-      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
-      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
-      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
-      CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: clickhouse
-      CLICKHOUSE_CLUSTER_ENABLED: "false"
-      REDIS_HOST: langfuse-redis
-      REDIS_PORT: "6379"
-      REDIS_AUTH: langfuse-redis-secret
-      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
-      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
-      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: miniosecret
-      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
-      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
-      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
-      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
-      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: miniosecret
-      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
-      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      langfuse-clickhouse:
-        condition: service_healthy
-      langfuse-minio:
-        condition: service_healthy
-      langfuse-redis:
-        condition: service_healthy
-    restart: unless-stopped
-    logging: *default-logging
-    mem_limit: 1g
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/public/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks: [backend]
-
-  langfuse-worker:
-    image: langfuse/langfuse-worker:3.173.0
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    environment:
-      <<: *langfuse-env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      langfuse-clickhouse:
-        condition: service_healthy
-      langfuse-minio:
-        condition: service_healthy
-      langfuse-redis:
-        condition: service_healthy
-    restart: unless-stopped
-    logging: *default-logging
-    mem_limit: 1g
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/public/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks: [backend]
-
-  langfuse-clickhouse:
-    image: clickhouse/clickhouse-server:24.8-alpine
-    user: "101:101"
-    environment:
-      CLICKHOUSE_DB: default
-      CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: clickhouse
-    volumes:
-      - langfuse_clickhouse_data:/var/lib/clickhouse
-      - langfuse_clickhouse_logs:/var/log/clickhouse-server
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 1s
-    restart: unless-stopped
-    logging: *default-logging
-    mem_limit: 2g
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETGID
-      - SETUID
-      - SYS_NICE
-    networks: [backend]
-
-  langfuse-minio:
-    image: quay.io/minio/minio:RELEASE.2024-12-18T13-15-44Z
-    entrypoint: sh
-    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
-    environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: miniosecret
-    ports:
-      - "127.0.0.1:9090:9000"
-    volumes:
-      - langfuse_minio_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 1s
-    restart: unless-stopped
-    logging: *default-logging
-    mem_limit: 512m
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    networks: [backend]
-
-  langfuse-redis:
-    image: redis:8-alpine
-    command: >
-      --requirepass langfuse-redis-secret
-      --maxmemory 128mb
-      --maxmemory-policy noeviction
-      --appendonly yes
-    volumes:
-      - langfuse_redis_data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "REDISCLI_AUTH=langfuse-redis-secret redis-cli ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-    logging: *default-logging
-    mem_limit: 256m
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - SETGID
-      - SETUID
-    networks: [backend]
-
 volumes:
   pgdata:
-  langfuse_clickhouse_data:
-  langfuse_clickhouse_logs:
-  langfuse_minio_data:
-  langfuse_redis_data:
 
 networks:
   frontend:

@@ -20,7 +20,6 @@ _VALIDATORS: dict[str, jsonschema.Draft7Validator] = {
 _BLOCKED_ENV_PREFIXES = (
     "BLACKBEARD_",
     "LITELLM_",
-    "LANGFUSE_",
     "DATABASE_",
     "VALKEY_",
     "REDIS_",

@@ -17,6 +17,13 @@ export interface ExecutionTask {
   completed_at: string | null
 }
 
+export interface ExecutionEvent {
+  sequence: number
+  event_type: string
+  timestamp: string
+  data: Record<string, unknown>
+}
+
 export interface Execution {
   id: string
   crew_name: string
@@ -40,6 +47,7 @@ export interface Execution {
 interface ExecutionState {
   executions: Execution[]
   currentExecution: Execution | null
+  events: ExecutionEvent[]
   loading: boolean
   error: string | null
 
@@ -49,6 +57,9 @@ interface ExecutionState {
   cancelExecution: (id: string) => Promise<void>
   pollExecution: (id: string) => Promise<void>
   pollExecutions: (crewName?: string) => Promise<void>
+  addEvents: (newEvents: ExecutionEvent[]) => void
+  clearEvents: () => void
+  fetchEvents: (id: string, after?: number) => Promise<void>
 }
 
 function executionsPath(crewName?: string): string {
@@ -57,9 +68,10 @@ function executionsPath(crewName?: string): string {
     : '/api/v1/executions'
 }
 
-export const useExecutionStore = create<ExecutionState>((set) => ({
+export const useExecutionStore = create<ExecutionState>((set, get) => ({
   executions: [],
   currentExecution: null,
+  events: [],
   loading: false,
   error: null,
 
@@ -113,6 +125,31 @@ export const useExecutionStore = create<ExecutionState>((set) => ({
       set({ executions: result.items })
     } catch {
       // Silently ignore poll failures to avoid flashing errors
+    }
+  },
+
+  addEvents: (newEvents: ExecutionEvent[]) => {
+    set((state) => {
+      // Deduplicate by sequence number
+      const existing = new Set(state.events.map((e) => e.sequence))
+      const unique = newEvents.filter((e) => !existing.has(e.sequence))
+      if (unique.length === 0) return state
+      return { events: [...state.events, ...unique].sort((a, b) => a.sequence - b.sequence) }
+    })
+  },
+
+  clearEvents: () => {
+    set({ events: [] })
+  },
+
+  fetchEvents: async (id: string, after = -1) => {
+    try {
+      const result = await api.get<{ events: ExecutionEvent[]; next_sequence: number }>(
+        `/api/v1/executions/${id}/events?after=${after}&limit=1000`,
+      )
+      get().addEvents(result.events)
+    } catch {
+      // Silently ignore — events are supplementary
     }
   },
 }))

@@ -16,9 +16,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import defer, selectinload
 
 from blackbeard.config import settings
+from blackbeard.engine.execution_listener import BlackbeardExecutionListener
 from blackbeard.engine.loader import ResourceLoader
 from blackbeard.kinds import ResourceKind
-from blackbeard.langfuse import BlackbeardLangfuseListener, get_langfuse
 from blackbeard.models import (
     TERMINAL_STATUSES,
     Execution,
@@ -381,15 +381,14 @@ async def _run_crew_async(
                 for key, snap in resource_snapshot.items()
             }
 
-            langfuse_listener = None
-            if get_langfuse() is not None:
-                langfuse_listener = BlackbeardLangfuseListener(
-                    execution_id=str(execution_id),
-                    metadata={"crew_name": crew_name},
-                )
-
             loader = ResourceLoader(mock_resources)
             crew = loader.build_crew(crew_name)
+
+            # Wire up execution event listener for real-time streaming
+            BlackbeardExecutionListener(
+                execution_id=execution_id,
+                session_factory=thread_session,
+            )
 
             result = crew.kickoff(inputs=inputs)
 
@@ -420,10 +419,6 @@ async def _run_crew_async(
                 execution.completion_tokens = usage.completion_tokens
             else:
                 execution.outputs = {"raw": repr(result), "result_type": type(result).__name__}
-
-            if langfuse_listener and langfuse_listener.trace_id:
-                execution.langfuse_trace_id = langfuse_listener.trace_id
-                execution.langfuse_trace_url = langfuse_listener.trace_url
 
             await session.commit()
             duration_s = (

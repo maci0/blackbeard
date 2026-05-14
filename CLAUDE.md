@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Blackbeard
 
-Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail) with a visual graph editor, async execution engine, LiteLLM proxy for model routing, and Langfuse for tracing.
+Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail) with a visual graph editor, async execution engine, and LiteLLM proxy for model routing (with built-in spend/token/latency tracking).
 
 ## Commands
 
@@ -22,14 +22,14 @@ uv run mypy blackbeard/ --ignore-missing-imports  # type check
 ### Frontend (from `frontend/`)
 
 ```bash
-npm ci                           # install deps
-npm run dev                      # dev server at :3000 (proxies /api to :8000)
-npm run build                    # typecheck + production build
-npm run lint                     # eslint (type-aware)
-npm run format:check             # prettier check
-npm run format                   # prettier fix
-npm run check                    # typecheck + lint + format:check (all-in-one)
-npm run test -- --run            # vitest (single run)
+bun install                      # install deps
+bun run dev                      # dev server at :3000 (proxies /api to :8000)
+bun run build                    # typecheck + production build
+bun run lint                     # eslint (type-aware)
+bun run format:check             # prettier check
+bun run format                   # prettier fix
+bun run check                    # typecheck + lint + format:check (all-in-one)
+bun run test -- --run            # vitest (single run)
 ```
 
 ### Full Stack
@@ -50,7 +50,7 @@ bash deploy/seed.sh              # seed DB with example crew using Ollama (requi
 
 **Middleware stack** (LIFO): security headers → API key auth (hmac.compare_digest) + request ID → body size limiter (10MB).
 
-**External services**: PostgreSQL (resources + executions), Valkey (cache), LiteLLM proxy (model routing to Vertex AI / OpenAI), Langfuse (tracing via CrewAI event listener → `start_observation()` API).
+**External services**: PostgreSQL (resources + executions), Valkey (cache), LiteLLM proxy (model routing to Vertex AI / OpenAI, with built-in spend/token/latency tracking).
 
 ### Frontend (React + React Flow)
 
@@ -62,7 +62,7 @@ bash deploy/seed.sh              # seed DB with example crew using Ollama (requi
 
 ### Infrastructure
 
-**docker-compose.yaml**: 10 services — api, ui, postgres (18), valkey (9), litellm, langfuse-web, langfuse-worker, clickhouse, minio, redis. API and UI containers run with `no-new-privileges`. Infrastructure containers (postgres, valkey, litellm, langfuse) additionally use `cap_drop: ALL`.
+**docker-compose.yaml**: 5 services — api, ui, postgres (18), valkey (9), litellm. API and UI containers run with `no-new-privileges`. Infrastructure containers (postgres, valkey, litellm) additionally use `cap_drop: ALL`.
 
 DB schema is managed via `Base.metadata.create_all()` in entrypoint.sh (not Alembic). This only creates new tables — it cannot alter existing tables. Schema changes require dropping and recreating the database.
 

@@ -471,7 +471,7 @@ This means `blackbeard --json status <id> 2>/dev/null | jq .status` works correc
 │  Cost          $0.0234                       │
 │  Started       2026-05-12T10:30:00Z          │
 │  Completed     2026-05-12T10:31:42Z          │
-│  Trace         https://langfuse.local/trace/… │
+│  Events        42 events (GET /executions/…/events) │
 ╰──────────────────────────────────────────────╯
 ╭─ Outputs ────────────────────────────────────╮
 │ {                                            │
