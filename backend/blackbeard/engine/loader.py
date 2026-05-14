@@ -368,9 +368,20 @@ class ResourceLoader:
             "verbose": spec.get("verbose", True),
         }
 
-        for key in ("memory", "cache", "max_rpm"):
+        for key in ("cache", "max_rpm"):
             if key in spec:
                 crew_kwargs[key] = spec[key]
+
+        # Memory + RAG provider config
+        memory_spec = spec.get("memory")
+        if isinstance(memory_spec, bool):
+            crew_kwargs["memory"] = memory_spec
+        elif isinstance(memory_spec, dict):
+            crew_kwargs["memory"] = memory_spec.get("enabled", True)
+
+        embedder_spec = spec.get("embedder")
+        if embedder_spec:
+            crew_kwargs["embedder"] = embedder_spec
 
         # Manager LLM for hierarchical process
         manager_llm_ref = spec.get("manager_llm")

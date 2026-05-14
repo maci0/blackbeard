@@ -114,7 +114,32 @@ CREW_SCHEMA = {
             "maxItems": 100,
         },
         "verbose": {"type": "boolean", "default": True},
-        "memory": {"type": "boolean"},
+        "memory": {
+            "oneOf": [
+                {"type": "boolean"},
+                {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean", "default": True},
+                        "provider": {
+                            "type": "string",
+                            "enum": ["lancedb", "chromadb", "qdrant"],
+                            "default": "lancedb",
+                        },
+                        "config": {"type": "object"},
+                    },
+                    "additionalProperties": False,
+                },
+            ],
+        },
+        "embedder": {
+            "type": "object",
+            "properties": {
+                "provider": {"type": "string", "maxLength": 100},
+                "config": {"type": "object"},
+            },
+            "additionalProperties": False,
+        },
         "cache": {"type": "boolean"},
         "max_rpm": {"type": "integer", "minimum": 1},
         "manager_llm": {"type": "string", "maxLength": 500},
