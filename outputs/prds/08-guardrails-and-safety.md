@@ -4,6 +4,12 @@
 
 Provide configurable safety mechanisms that validate, filter, and redact agent outputs before they reach users or downstream systems. Three subsystems: **output guardrails** (validate task results, using CrewAI's built-in guardrail system), **hallucination detection** (check factual grounding), and **PII redaction** (powered by **Microsoft Presidio**, not a custom implementation).
 
+### 1.1 MVP Scope
+
+**MVP implements:** Task-level guardrails (function-based and LLM-based string types) wired through CrewAI's built-in guardrail system, and the `Guardrail` resource kind. **Deferred to post-MVP:** Hallucination detection (section 3), PII redaction via Presidio (section 4), namespace-level and crew-level guardrails, schema-based guardrails, and composite guardrail chains.
+
+---
+
 ## 2. Output Guardrails
 
 ### 2.1 Guardrail Types
@@ -325,7 +331,7 @@ Safety and guardrail functionality is distributed across three systems. Blackbea
 
 | Capability | Owner | Mechanism | Blackbeard's Role |
 |------------|-------|-----------|-------------------|
-| **Agent output guardrails** | **CrewAI** | `Task(guardrail=callback)` -- built-in guardrail callback on Agent/Task | Expose via YAML `spec.guardrails`, compile to CrewAI guardrail callbacks at execution time |
+| **Agent output guardrails** | **CrewAI** | `Task(guardrail=callback)` / `Task(guardrails=[...])` -- built-in guardrail callbacks on Task | Expose via YAML `spec.guardrails`, compile to CrewAI guardrail callbacks at execution time |
 | **Hallucination detection** | **Blackbeard** | Custom guardrail type using evaluator LLM (section 3) | Build and maintain -- CrewAI does not provide this |
 | **Request/response content filtering** | **LiteLLM** | LiteLLM's guardrails feature: PII masking, content filtering, prompt injection detection | Configure via LiteLLM config; Blackbeard generates the config from `PIIConfig` resources |
 | **PII redaction (traces/logs)** | **Blackbeard + Presidio** | Microsoft Presidio library embedded in workers (section 4) | Build and maintain -- redacts PII from execution event data before storage |

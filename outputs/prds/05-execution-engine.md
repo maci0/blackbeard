@@ -83,15 +83,20 @@ POST /api/v1/automations/{name}/kickoff
 ```
 POST /api/v1/crews/{name}/kickoff
 {
-  "inputs": {"topic": "AI safety"},
-  "execution_mode": "async"
+  "inputs": {"topic": "AI safety"}
 }
 
 → 202 Accepted
 {
-  "execution_id": "exec-abc123",
+  "id": "exec-abc123",
+  "crew_name": "research-crew",
+  "crew_namespace": "default",
   "status": "queued",
-  "status_url": "/api/v1/executions/exec-abc123"
+  "inputs": {"topic": "AI safety"},
+  "total_tokens": 0,
+  "cost_usd": "0",
+  "created_at": "2026-05-10T12:00:00Z",
+  "tasks": []
 }
 ```
 
@@ -143,7 +148,7 @@ GET /api/v1/executions/{execution_id}
 ### 3.4 Cancellation
 
 ```
-POST /api/v1/executions/{id}/cancel
+PATCH /api/v1/executions/{id}/cancel
 {
   "reason": "User requested cancellation"    // optional
 }
@@ -162,7 +167,7 @@ Cancelled by user or API request. Active LLM calls terminate best-effort; sandbo
 
 ## 4. Resource Loading
 
-1. Fetch the Automation record → get the Crew or Flow resource reference.
+1. Fetch the Crew or Flow resource directly (MVP) or via the Automation record (post-MVP).
 2. Recursively resolve all `ref:` dependencies (agents, tasks, tools, knowledge sources).
 3. Resolve the **AgentPolicy** for each agent (agent-level > crew-level > namespace-level > org default — PRD 03, section 3.1).
 4. Resolve the **Sandbox profile** for each agent based on its policy's `code_execution.sandbox` and each tool's `sandbox` field.
@@ -745,7 +750,7 @@ The Blackbeard event listener registers on CrewAI's event bus and captures the f
 The SSE endpoint streams events to the frontend as they occur:
 
 ```
-GET /api/v1/executions/{execution_id}/events/stream
+GET /api/v1/executions/{execution_id}/stream
 Accept: text/event-stream
 
 event: task_started
@@ -830,9 +835,29 @@ The ResourceLoader supports three tool loading strategies (see PRD 04 §10 for f
 4. Tool schemas are cached in-memory per execution to avoid redundant lookups
 
 **Agent policy integration:** The `search_tools` meta-tool filters results against the agent's `AgentPolicy.spec.tools` configuration:
-- `mode: all` → all tools visible
+- `mode: unrestricted` → all tools visible
 - `mode: allowlist` → only listed tools visible
 - `mode: denylist` → all except listed tools visible
+
+## 11.4 Feature Ownership
+
+The execution engine integrates features from multiple systems. Clear ownership prevents reimplementation:
+
+| Capability | Owner | Blackbeard's Role |
+|------------|-------|-------------------|
+| Agent/Task/Crew orchestration | **CrewAI** | Pass resource config through to CrewAI objects |
+| Process modes (sequential, hierarchical) | **CrewAI** | Configure via `spec.process` |
+| Memory (STM, LTM, entity) | **CrewAI** | Configure via `spec.memory: true` |
+| Checkpointing | **CrewAI** | Configure via `spec.checkpoint` |
+| LLM routing, fallbacks, load balancing | **LiteLLM** | Generate config, manage virtual keys |
+| LLM spend tracking | **LiteLLM** | Consume spend data for dashboards |
+| LLM budget enforcement | **LiteLLM** | Map AgentPolicy budgets to virtual key `max_budget` |
+| Sandbox isolation (WASM, Docker, MicroVM) | **Blackbeard** | Build and maintain -- unique to Blackbeard |
+| Policy enforcement (tool allowlists, tier promotion) | **Blackbeard** | Build and maintain -- not provided by CrewAI |
+| Execution event log + SSE streaming | **Blackbeard** | Build and maintain -- CrewAI emits events, Blackbeard captures and stores them |
+| Resource loading (YAML to CrewAI objects) | **Blackbeard** | Build and maintain -- the bridge between resource model and CrewAI |
+
+---
 
 ## 12. Async Execution Backends
 

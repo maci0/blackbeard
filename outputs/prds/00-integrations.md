@@ -135,21 +135,21 @@ The YAML below is a **reference full-profile** stack (API, worker, LiteLLM, Temp
 # docker-compose.yaml (simplified, full-profile reference)
 services:
   blackbeard-api:
-    image: ghcr.io/blackbeard/api:latest
+    build: { context: backend/, dockerfile: ../deploy/docker/Dockerfile.api }
     depends_on: [postgres, valkey, litellm, temporal, opa, spicedb]
 
   blackbeard-worker:
-    image: ghcr.io/blackbeard/worker:latest
+    build: { context: backend/, dockerfile: ../deploy/docker/Dockerfile.api }  # same image, different entrypoint (post-MVP)
     depends_on: [postgres, valkey, litellm, temporal, opa, spicedb]
     deploy:
       replicas: 2
 
   blackbeard-ui:
-    image: ghcr.io/blackbeard/ui:latest
+    build: { context: frontend/, dockerfile: ../deploy/docker/Dockerfile.ui }
     ports: ["3000:80"]
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-latest
+    image: litellm/litellm:<pinned-stable-version>
     ports: ["4000:4000"]
 
   temporal:
@@ -170,9 +170,6 @@ services:
     image: oryd/kratos:latest
     ports: ["4433:4433", "4434:4434"]
 
-  # Langfuse removed — LiteLLM provides LLM-level observability;
-  # Blackbeard's execution_events table provides crew-level observability.
-
   # Presidio runs as a Python library inside the worker process
   # (`pip install presidio-analyzer presidio-anonymizer`), not as a separate service.
 
@@ -181,11 +178,11 @@ services:
     ports: ["8080:8080"]
 
   postgres:
-    image: postgres:17
+    image: postgres:18-alpine
     ports: ["5432:5432"]
 
   valkey:
-    image: valkey/valkey:8
+    image: valkey/valkey:9-alpine
     ports: ["6379:6379"]
 
   minio:
@@ -206,7 +203,6 @@ Every integration has a simpler fallback for smaller deployments:
 |-----------------|---------------------|-----------|
 | SpiceDB | PostgreSQL RBAC tables | Loses relationship-based traversal, fine at <100 users |
 | Temporal | Celery + Valkey | Loses durable execution guarantees, fine for simple crews |
-| ~~Langfuse~~ | **Removed** — LiteLLM + execution_events table | N/A — this is now the default architecture, not a fallback |
 | Infisical | Environment variables + `.env` files | Loses rotation, audit, RBAC on secrets |
 | Ory Kratos/Hydra | Built-in JWT auth + OIDC library | Loses MFA, account recovery, passwordless |
 | OPA | In-process Python policy evaluator | Loses Rego ecosystem, harder to audit |

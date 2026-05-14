@@ -4,6 +4,12 @@
 
 Define the canonical data model for every first-class resource in Blackbeard. All resources are YAML-serialisable, versionable, and exposed through a uniform CRUD API. Python code (callbacks, guardrails, tool implementations) is never inlined — it is referenced by a qualified import path and resolved at runtime.
 
+## 1.1 MVP Scope
+
+**MVP resource kinds:** Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail. These are the only kinds implemented for MVP. **Deferred to post-MVP:** Flow, KnowledgeSource, EnvironmentVariable, Namespace (beyond `default`), ServiceAccount, and all RBAC kinds (Role, RoleBinding, SSOConfig, APIKey). The schemas and YAML examples below cover the full v1 design; see the MVP Implementation Plan for what ships first.
+
+---
+
 ## 2. Resource Catalogue
 
 ### 2.1 Agent
@@ -326,7 +332,7 @@ PRD 01 defines the core **workload resources** above. Additional resource kinds 
 | LLMConnection | PRD 01 | Configuration | Named LLM provider configuration |
 | KnowledgeSource | PRD 01 | Workload | RAG data source for agents |
 | EnvironmentVariable | PRD 01 | Configuration | Scoped secrets and config values |
-| Rule | PRD 03 | RBAC | Single permission statement |
+| Rule | PRD 03 | RBAC | Single permission statement (embedded in Roles, not independently addressable) |
 | Role | PRD 03 | RBAC | Named collection of rules |
 | RoleBinding | PRD 03 | RBAC | Associates a role with subjects |
 | AgentPolicy | PRD 03 | RBAC | Runtime constraints for agents |
@@ -346,7 +352,7 @@ PRD 01 defines the core **workload resources** above. Additional resource kinds 
 | ServiceAccount | PRD 01 | Identity | Machine identity for CI/CD, triggers, A2A |
 | Plugin | PRD 11 | Extensibility | Plugin manifest and configuration |
 
-All resource kinds follow the same `apiVersion/kind/metadata/spec` envelope and are stored in the unified `resources` table (section 7). Each kind has its own JSON Schema for `spec` validation.
+All resource kinds follow the same `apiVersion/kind/metadata/spec` envelope and are stored in the unified `resources` table (section 7). Each kind has its own JSON Schema for `spec` validation. The kind registry and URL plural mapping are defined in `blackbeard/kinds.py` (single source of truth).
 
 ### 2.10 Namespace
 
@@ -479,6 +485,8 @@ If a reference is ambiguous (resource exists in multiple namespaces), the resolv
 - Python callback paths are validated as importable at deployment time, not at definition time.
 
 ## 7. Database Schema (Relational Projection)
+
+**Schema management (MVP):** Tables are created via `Base.metadata.create_all()` in the entrypoint script. This only creates new tables -- it cannot alter existing tables. Schema changes during MVP require dropping and recreating the database. Post-MVP will introduce a proper migration system.
 
 ```
 resources

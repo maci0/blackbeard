@@ -4,6 +4,12 @@
 
 Provide a browser-based drag-and-drop canvas where users compose agents, tasks, and flows visually. The graph IS the source of truth — every node and edge maps 1:1 to the YAML resource model (PRD 01). Changes on canvas instantly update the underlying YAML; edits to YAML instantly update the canvas.
 
+### 1.1 MVP Scope
+
+**MVP ships:** Canvas with Agent/Task/Tool nodes, edges for context and tool assignment, property panel with spec fields, YAML tab (read-only initially; bidirectional sync is a stretch goal), save to API, run button triggering kickoff, basic execution view with status badges, undo/redo (30 snapshots). **Deferred to post-MVP:** Flow step nodes, Crew compound nodes (bounding box), AI Copilot, Export ZIP/PNG/SVG/React, auto-layout via ELK.js, drag reparenting, live collaboration, accessibility beyond basic keyboard nav. Monaco editor for YAML is a post-MVP enhancement (MVP uses a standard textarea or read-only code display).
+
+---
+
 ## 2. Core Concepts
 
 | Concept | Definition |
@@ -99,7 +105,7 @@ All other fields (strings, numbers, booleans, enums, tags) use auto-generated in
 | Group into Crew | Right-click selection → "Wrap in Crew" | Creates a Crew resource containing selected agents + tasks |
 | Ungroup Crew | Right-click Crew → "Unwrap" | Dissolves Crew, keeps agents + tasks as standalone |
 | Auto-layout | Toolbar button | Dagre/ELK automatic layout |
-| Undo/Redo | Ctrl+Z / Ctrl+Shift+Z | Full undo stack (50 levels) |
+| Undo/Redo | Ctrl+Z / Ctrl+Shift+Z | Full undo stack (30 snapshots) |
 | Copy/Paste | Ctrl+C / Ctrl+V | Deep-copies selected nodes with new names |
 | Search | Ctrl+K | Fuzzy search all nodes on canvas |
 | Validate | Toolbar button | Runs validation (PRD 01, section 6) and highlights errors on nodes |
@@ -218,7 +224,7 @@ Indexes:
 5. Execution View shows live task status, token metrics, and agent reasoning for a running crew.
 6. Export YAML produces a valid resource directory that `blackbeard validate` accepts.
 7. Canvas supports ≥50 nodes at 60fps during pan/zoom. ≥100 nodes at 30fps minimum. Measured with React Flow's built-in performance profiler.
-8. Undo/Redo works across all operations including node creation, deletion, edge changes, and property edits.
+8. Undo/Redo works across all operations including node creation, deletion, edge changes, and property edits (30-snapshot ring buffer).
 
 ## Verification Scenarios
 

@@ -151,7 +151,7 @@ Blackbeard targets **teams of 3–20** building production agent workflows. Solo
 
 ### Cross-cutting concerns
 
-- **Persistence**: PostgreSQL for relational data (reference compose uses PostgreSQL 18; 17+ is supported), MinIO (S3-compatible) for artifacts, Valkey for caching.
+- **Persistence**: PostgreSQL for relational data (reference compose uses PostgreSQL 18; 17+ is supported), MinIO (S3-compatible) for artifacts (post-MVP; MVP uses local filesystem), Valkey for caching.
 - **Workflow orchestration**: Temporal for durable crew/flow executions.
   - Temporal uses its own persistence backend. Default: shares the Blackbeard PostgreSQL instance with a separate `temporal` database. For production deployments with high workflow volume, a dedicated PostgreSQL instance is recommended.
 - **Auth & identity**: Ory Kratos (identity) + Ory Hydra (OAuth2/OIDC).
@@ -201,7 +201,7 @@ Event payload schemas for each module are defined in their respective PRDs (see 
 | **Valkey** | Cache, pub/sub, LiteLLM state backend | Docker or managed |
 | **WASM Runtime** | Wasmtime library | Embedded in API/worker process |
 
-**Container count:** 5 containers for `docker compose up`: api, ui, litellm, postgres, valkey. Post-MVP, the worker separates from the API as a 6th container.
+**Container count:** 5 containers for `docker compose up`: api, ui, litellm, postgres, valkey. The actual `docker-compose.yaml` uses PostgreSQL 18, Valkey 9, and a pinned LiteLLM version. Post-MVP, the worker separates from the API as a 6th container.
 
 ---
 

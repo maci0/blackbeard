@@ -11,6 +11,12 @@ Both classes use the same primitives — Objects, Verbs, Roles, RoleBindings, Ru
 
 ---
 
+## 1.1 MVP Scope
+
+**MVP implements only:** Single API key auth (`BLACKBEARD_API_KEY` env var), basic AgentPolicy resource (tool allowlists, LLM budget limits), and sandbox minimum tier enforcement. All other features in this PRD (users, groups, SSO, roles, role bindings, entity permissions, GUI RBAC editor, SpiceDB, OPA) are post-MVP. See MVP Implementation Plan and section 13 (Migration Path) for the phased rollout.
+
+---
+
 ## 2. RBAC Primitives
 
 ### 2.1 Subject Kinds
@@ -318,7 +324,7 @@ When using JIT tool discovery (PRD 04 §10), the agent's `search_tools` meta-too
 
 | Policy Mode | `search_tools` returns | `get_tool` allows |
 |-------------|----------------------|-------------------|
-| `tools.mode: all` | All tools in namespace | Any tool |
+| `tools.mode: unrestricted` | All tools in namespace | Any tool |
 | `tools.mode: allowlist` | Only `tools.allow[]` entries | Only allowed tools |
 | `tools.mode: denylist` | All except `tools.deny[]` | All except denied tools |
 
@@ -556,7 +562,7 @@ This ensures scheduled executions have a well-defined, auditable identity rather
 
 ---
 
-## 9. GUI RBAC Editor
+## 9. GUI RBAC Editor (Post-MVP)
 
 ### 9.1 Roles Tab (Human Roles)
 - **Table view**: All roles (built-in + custom) with rule count, bound users, description.
@@ -602,7 +608,7 @@ This ensures scheduled executions have a well-defined, auditable identity rather
 
 ---
 
-## 10. YAML-Based RBAC Management
+## 10. YAML-Based RBAC Management (Post-MVP)
 
 All RBAC resources (Role, RoleBinding, AgentPolicy, SSOConfig, APIKey, Sandbox) follow the same `apiVersion/kind/metadata/spec` pattern:
 

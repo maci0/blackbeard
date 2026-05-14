@@ -10,7 +10,7 @@ Provide a centralised catalogue for all tools, integrations, and MCP servers tha
 |------|-------------|-----------------|---------|
 | **Python** | A Python class/function implementing `BaseTool` | `none` if `trusted: true`, else `wasm` (auto-compiled via componentize-py) | `crewai_tools:SerperDevTool` |
 | **WASM** | A pre-compiled `.wasm` module implementing the `blackbeard:tool` WIT interface | `wasm` (always) | `tools/sentiment.wasm` |
-| **MCP (stdio)** (`mcp-stdio`) | Local MCP server launched as a subprocess | `docker` | `npx @modelcontextprotocol/server-filesystem` |
+| **MCP (stdio)** (`mcp-stdio`) | Local MCP server launched as a subprocess | `docker` | `npx @modelcontextprotocol/server-filesystem` (or `bunx`) |
 | **MCP (SSE/HTTP)** (`mcp-http`) | Remote MCP server accessed over HTTP | `none` (remote call, no local code) | `https://mcp.example.com/sse` |
 | **REST** | Generic HTTP API wrapped as a tool | `none` (remote call) | Any OpenAPI-described endpoint |
 | **Composio** | Composio-managed integration | `none` (remote call) | Pre-built OAuth connectors |
@@ -101,6 +101,20 @@ CrewAI ships with **50+ built-in tools** covering common agent tasks. Blackbeard
 - **MCP integration**: Register and manage MCP servers as tool sources
 
 Do not reimplement search, scrape, file I/O, or other capabilities that CrewAI already provides as built-in tools.
+
+---
+
+## 2.2 Feature Ownership
+
+| Capability | Owner | Blackbeard's Role |
+|------------|-------|-------------------|
+| Tool base class (`BaseTool`, `@tool`) | **CrewAI** | Use as-is -- do not reimplement |
+| 50+ built-in tools (search, file I/O, RAG, etc.) | **CrewAI / crewai_tools** | Register in Blackbeard's catalogue for discoverability; do not fork |
+| MCP integration (`crewai.mcp`) | **CrewAI** | Register MCP servers as resources; CrewAI handles the protocol |
+| WASM tool format + WIT interface | **Blackbeard** | Build and maintain -- unique to Blackbeard |
+| Tool registry UI (browse, search, install) | **Blackbeard** | Build and maintain |
+| Tool governance (RBAC, rate limits, audit) | **Blackbeard** | Build and maintain |
+| OAuth connector management | **Blackbeard** | Build and maintain (post-MVP) |
 
 ---
 
@@ -284,7 +298,7 @@ When an MCP server is registered:
 
 **MCP tool lifecycle:** When an MCP server's tool list changes (tools added, removed, or renamed), the changes are not automatically detected. Users must manually re-import tools via `blackbeard tools discover --mcp-server <name>`. Re-import is additive: new tools are created, existing tools are updated, but tools removed from the MCP server are NOT automatically deleted from Blackbeard (they are marked as `status: unavailable`). Automatic periodic re-sync is a post-v1 feature.
 
-## 6. Registry UI
+## 6. Registry UI (Post-MVP)
 
 ### 6.1 Browse & Search
 
@@ -310,7 +324,7 @@ When an MCP server is registered:
 - **Enable per-crew**: Toggle which tools are available in each crew's runtime.
 - **Configure**: Set required env vars, API keys, OAuth scopes.
 
-## 7. Tool Repository
+## 7. Tool Repository (Post-MVP)
 
 Users can publish tools to an internal repository:
 
@@ -348,7 +362,7 @@ spec:
 | `mcp.server.registered` | `{name, transport, tools_discovered}` |
 | `mcp.server.health_failed` | `{name, error}` |
 
-## 10. JIT Tool Discovery (Lazy Loading)
+## 10. JIT Tool Discovery (Lazy Loading) (Post-MVP)
 
 ### Problem
 
@@ -418,11 +432,15 @@ For agents that have a few "core" tools they always need (e.g., web search) plus
 
 ## 11. Acceptance Criteria
 
+### MVP
 1. Python tools can be registered via YAML and invoked by agents.
-2. MCP servers (stdio and SSE) can be registered; their tools are auto-discovered and appear in the registry.
-3. OAuth integrations (Gmail, Slack, GitHub) can be connected via the UI; agents can use connected integrations.
-4. Registry UI shows all tools with search, filter, and detail views.
-5. Tool rate limits are enforced; exceeding the limit returns a 429.
-6. Secrets (API keys, OAuth tokens) are never exposed in API responses, YAML exports, or traces.
-7. Tool versioning works: pinning `@1.2.0` uses that version even when `latest` is `2.0.0`.
-8. RBAC controls who can register/edit/delete tools vs. who can only view and use them.
+2. WASM tools can be compiled, registered, and invoked in the Wasmtime sandbox.
+3. Secrets (API keys) are never exposed in API responses or YAML exports.
+
+### Post-MVP
+4. MCP servers (stdio and SSE) can be registered; their tools are auto-discovered and appear in the registry.
+5. OAuth integrations (Gmail, Slack, GitHub) can be connected via the UI; agents can use connected integrations.
+6. Registry UI shows all tools with search, filter, and detail views.
+7. Tool rate limits are enforced; exceeding the limit returns a 429.
+8. Tool versioning works: pinning `@1.2.0` uses that version even when `latest` is `2.0.0`.
+9. RBAC controls who can register/edit/delete tools vs. who can only view and use them.

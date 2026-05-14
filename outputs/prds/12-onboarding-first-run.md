@@ -4,6 +4,12 @@
 
 Provide a guided first-run experience that helps new users understand Blackbeard's value, navigate the platform, and successfully build and run their first crew — all within the first 5 minutes of opening the UI.
 
+### 1.1 MVP Scope
+
+The onboarding experience described here is a stretch goal for MVP. If time permits, the Welcome Dialog (section 5.1) and "Load Example" enhancement (section 5.3) ship with MVP. The guided tour (section 5.2) and help sidebar (section 5.4) are post-MVP.
+
+---
+
 ## 2. Problem Statement
 
 Today, a new user who opens Blackbeard sees the Studio with an empty canvas and a palette sidebar. There is no explanation of what the platform does, what the workflow is, or how to get started. The user must already know CrewAI concepts (agents, tasks, crews) and Blackbeard's resource model to be productive. This creates a steep learning curve that blocks adoption.

@@ -52,9 +52,9 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 
 | Layer | Technology |
 |-------|------------|
-| **Backend** | Python 3.12+, FastAPI, SQLAlchemy, Pydantic v2 |
+| **Backend** | Python 3.13+, FastAPI, SQLAlchemy (async), Pydantic v2 |
 | **Database** | PostgreSQL 18 (17+ supported) |
-| **Cache** | Valkey 8 (Redis-compatible) |
+| **Cache** | Valkey 9 (Redis-compatible) |
 | **LLM gateway** | LiteLLM Proxy |
 | **Observability** | LiteLLM dashboard (`:4000/ui`) + execution_events table + SSE |
 | **WASM runtime** | wasmtime-py (Python bindings for Wasmtime) |
@@ -84,17 +84,18 @@ blackbeard/
 │   │   ├── config.py                  # Settings / env parsing
 │   │   │
 │   │   ├── models/                    # SQLAlchemy + Pydantic models
+│   │   │   ├── database.py            # Engine and session factory
 │   │   │   ├── resource.py            # Generic resource table
+│   │   │   ├── resource_schemas.py    # Pydantic schemas for resource API
 │   │   │   ├── execution.py           # Execution records
-│   │   │   └── schemas.py             # Pydantic schemas for API
+│   │   │   └── execution_schemas.py   # Pydantic schemas for execution API
 │   │   │
-│   │   ├── resources/                 # Resource kind handlers
-│   │   │   ├── base.py                # Base resource CRUD
-│   │   │   ├── agent.py               # Agent-specific validation
-│   │   │   ├── task.py
-│   │   │   ├── crew.py
-│   │   │   ├── tool.py
-│   │   │   └── llm_connection.py
+│   │   ├── resources/                 # Resource system
+│   │   │   ├── service.py             # Generic resource CRUD
+│   │   │   ├── validator.py           # JSON Schema validation per kind
+│   │   │   ├── spec_schemas.py        # Per-kind spec schemas
+│   │   │   ├── refs.py                # ref: resolution and dependency graph
+│   │   │   └── kinds.py               # Kind registry and URL plural mapping
 │   │   │
 │   │   ├── engine/                    # Execution engine
 │   │   │   ├── loader.py              # YAML → CrewAI objects
@@ -107,17 +108,17 @@ blackbeard/
 │   │   ├── litellm/                   # LiteLLM integration
 │   │   │   ├── config_gen.py          # LLMConnection → litellm config.yaml
 │   │   │   ├── key_manager.py         # Virtual key lifecycle
-│   │   │   └── spend.py               # Spend data sync
+│   │   │   └── helpers.py             # LiteLLM utility functions
 │   │   │
-│   │   ├── events/                    # Execution event system
+│   │   ├── langfuse/                  # Execution event system (legacy module name; does NOT depend on Langfuse)
 │   │   │   ├── listener.py            # CrewAI events → execution_events table
-│   │   │   ├── models.py              # ExecutionEvent SQLAlchemy model
-│   │   │   └── sse.py                 # SSE streaming endpoint logic
+│   │   │   └── client.py              # Event client
 │   │   │
 │   │   ├── api/                       # API routes
 │   │   │   ├── resources.py           # Generic CRUD endpoints
 │   │   │   ├── executions.py          # Kickoff, status, stream
-│   │   │   └── litellm_proxy.py       # LLM management endpoints
+│   │   │   ├── health.py              # Health check endpoint
+│   │   │   └── middleware.py          # Auth, request ID, body size limiter
 │   │   │
 │   │   └── cli/                       # CLI commands
 │   │       ├── __main__.py
@@ -186,11 +187,10 @@ blackbeard/
 │
 └── deploy/
     ├── docker/
-    │   ├── Dockerfile.api
-    │   ├── Dockerfile.worker
+    │   ├── Dockerfile.api            # API + worker in same process for MVP
     │   └── Dockerfile.ui
     └── litellm/
-        └── config.template.yaml
+        └── config.yaml
 ```
 
 ---
@@ -203,8 +203,8 @@ blackbeard/
 
 | # | Task | Output | Days |
 |---|------|--------|------|
-| 0.1 | Scaffold backend (FastAPI + SQLAlchemy + alembic + CORS middleware) | `/api/v1/health` returns 200, CORS configured for frontend origin | 0.5 |
-| 0.1b | Initialize Alembic with PostgreSQL connection, create initial (empty) migration | `alembic upgrade head` works against fresh DB | 0.5 |
+| 0.1 | Scaffold backend (FastAPI + SQLAlchemy + CORS middleware) | `/api/v1/health` returns 200, CORS configured for frontend origin | 0.5 |
+| 0.1b | Set up DB schema creation via `Base.metadata.create_all()` in entrypoint | Tables created on first startup against fresh DB | 0.5 |
 | 0.1c | Implement API key middleware: validate `X-API-Key` header against `BLACKBEARD_API_KEY` env var, return 401 on mismatch | Unauthenticated requests rejected | 0.5 |
 | 0.2 | Scaffold frontend (Vite + React + React Flow + Tailwind + shadcn/ui + React Router + layout shell with sidebar nav placeholder) | Blank canvas loads at `:3000` with navigation shell | 0.5 |
 | 0.3 | Write `docker-compose.yaml` with all services | `docker compose up` boots: API, UI, PostgreSQL, Valkey, LiteLLM (5 containers) | 1 |
@@ -225,8 +225,8 @@ blackbeard/
 
 | # | Task | Output | Days |
 |---|------|--------|------|
-| 1.1 | Design `resources` table (id, kind, name, namespace, labels, spec, raw_yaml, version) | Alembic migration | 1 |
-| 1.2 | Design `resource_refs` table (source_id, target_kind, target_name, ref_field) | Alembic migration | 0.5 |
+| 1.1 | Create `resources` SQLAlchemy model (id, kind, name, namespace, labels, spec, raw_yaml, version) | Table created via `Base.metadata.create_all()` | 1 |
+| 1.2 | Create `resource_refs` SQLAlchemy model (source_id, target_kind, target_name, ref_field) | Table created via `Base.metadata.create_all()` | 0.5 |
 | 1.3 | Implement generic resource CRUD service | `create()`, `get()`, `list()`, `update()`, `delete()` with optimistic locking | 2 |
 | 1.4 | Implement JSON Schema validators for each kind (Agent, Task, Crew, Tool, LLMConnection) | Schema files + validation on create/update | 2 |
 | 1.5 | Implement `ref:` resolution — parse refs, build dependency graph, detect cycles | `ResourceLoader.resolve(name, kind) → Resource` | 2 |
@@ -256,7 +256,7 @@ curl localhost:8000/api/v1/crews/research-crew   # returns crew with resolved re
 
 | # | Task | Output | Days |
 |---|------|--------|------|
-| 2.0 | Create alembic migrations for `executions`, `execution_tasks`, `execution_tool_calls` tables | Alembic migration | 0.5 |
+| 2.0 | Create `executions`, `execution_tasks`, `execution_tool_calls` SQLAlchemy models | Tables created via `Base.metadata.create_all()` | 0.5 |
 | 2.1 | Implement Resource Loader: YAML resources → CrewAI Agent/Task/Crew objects | `loader.build_crew(crew_name) → crewai.Crew` | 3 |
 | 2.2 | Implement LiteLLM config generation: LLMConnection resources → `litellm_config.yaml` | Auto-regenerated on LLMConnection change. Includes schema validation before reload — malformed LLMConnection cannot crash LiteLLM (see PRD 06 config reload safety) | 2 |
 | 2.3 | Implement LiteLLM virtual key manager: create per-execution key with model restrictions | `key_manager.create_key(agent, execution) → api_key` | 2 |
@@ -301,7 +301,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 
 | # | Task | Output | Days |
 |---|------|--------|------|
-| 3.0 | Create alembic migration for `execution_events` table (id, execution_id, sequence, event_type, timestamp, data JSONB) | Alembic migration | 0.5 |
+| 3.0 | Create `execution_events` SQLAlchemy model (id, execution_id, sequence, event_type, timestamp, data JSONB) | Table created via `Base.metadata.create_all()` | 0.5 |
 | 3.1 | Register CrewAI `BaseEventListener` that captures events to `execution_events` table | `BlackbeardEventListener` class | 2 |
 | 3.2 | Map CrewAI events: `CrewKickoff*` -> crew_started/completed, `TaskStarted/Completed` -> task_started/completed, `ToolUsage*` -> tool_started/finished, `LLMCall*` -> llm_started/completed | Correct event sequence | 1 |
 | 3.3 | Implement SSE streaming endpoint: `GET /api/v1/executions/{id}/events/stream` with `?after_sequence=N` reconnection support | Live event streaming to frontend | 1.5 |
@@ -358,7 +358,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 
 | # | Task | Output | Days |
 |---|------|--------|------|
-| 6.0 | Create alembic migration for `canvas_layouts` table (resource_kind, resource_name, namespace, layout JSONB, updated_at) | Migration runs, table exists | 0.5 |
+| 6.0 | Create `canvas_layouts` table (resource_kind, resource_name, namespace, layout JSONB, updated_at) | Table created via `Base.metadata.create_all()` | 0.5 |
 | 6.1 | Implement `AgentNode` component (avatar, role name, LLM badge, tool count) | Draggable node | 1 |
 | 6.2 | Implement `TaskNode` component (task name, agent badge, expected output preview) | Draggable node | 1 |
 | 6.3 | Implement `ToolNode` component (tool name, type icon) | Draggable node | 0.5 |
@@ -368,7 +368,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 | 6.7 | Implement YAML tab in PropertyPanel: Monaco editor with bidirectional sync | Edit YAML ↔ form ↔ canvas | 2 |
 | 6.8 | Implement edge semantics: connecting Task→Task creates `context` ref; connecting Tool→Agent creates `tools` ref | YAML updated on edge creation/deletion | 2 |
 | 6.9 | Implement auto-layout (ELK.js) | Toolbar button for automatic arrangement | 1 |
-| 6.10 | Implement undo/redo (Zustand middleware) | Ctrl+Z / Ctrl+Shift+Z, 50 levels | 1 |
+| 6.10 | Implement undo/redo (Zustand middleware) | Ctrl+Z / Ctrl+Shift+Z, 30-snapshot history | 1 |
 | 6.11 | Implement save: canvas state → YAML resources → API `PUT` | "Save" button persists to backend | 1 |
 | 6.12 | Implement "Run" button: triggers kickoff from studio, shows execution status inline | Run and see results without leaving studio | 1 |
 | 6.13 | Implement Execution View: read-only canvas with live status badges on nodes | Nodes show pending/running/completed/failed | 2 |
@@ -405,7 +405,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 | 8.4 | End-to-end smoke test: `docker compose up` → apply examples → run from UI → check traces | Automated E2E test | 2 |
 | 8.5 | Performance sanity check: run a crew with 5 agents, 10 tasks — completes without issues | No obvious bottlenecks | 1 |
 | 8.6 | Security review: no secrets in logs, API key required, CORS configured | Basic security hygiene | 1 |
-| 8.7 | Cut v0.1.0 release, publish Docker images | `ghcr.io/blackbeard/{api,worker,ui}:0.1.0` | 1 |
+| 8.7 | Cut v0.1.0 release, publish Docker images | `ghcr.io/blackbeard/{api,ui}:0.1.0` (worker is bundled in api for MVP) | 1 |
 
 ---
 
@@ -529,7 +529,7 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 - [ ] CLI: `apply`, `validate`, `kickoff`, `status` commands work
 - [ ] Zero custom LLM provider code (all handled by LiteLLM)
 - [ ] Execution events stored in PostgreSQL; LLM request details available in LiteLLM dashboard
-- [ ] No Langfuse dependency -- observability via execution_events + LiteLLM
+- [ ] No external trace backend -- observability via execution_events + LiteLLM
 - [ ] CI pipeline green: lint, type-check, unit tests, integration tests all pass
 - [ ] No secrets in Docker images, logs, or API responses (verified in security review)
 - [ ] README gets a developer from clone to running crew in < 5 minutes

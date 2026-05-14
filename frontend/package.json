@@ -12,7 +12,7 @@
     "format:check": "prettier --check 'src/**/*.{ts,tsx,css,html}'",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
-    "check": "npm run typecheck && npm run lint && npm run format:check",
+    "check": "bun run typecheck && bun run lint && bun run format:check",
     "preview": "vite preview"
   },
   "dependencies": {

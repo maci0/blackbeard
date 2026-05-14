@@ -30,7 +30,7 @@ POST   /api/v1/automations/{name}/kickoff      Start execution (post-MVP; PRD 09
 GET    /api/v1/executions/{id}                 Get execution status
 GET    /api/v1/executions/{id}/stream          SSE stream of execution events
 POST   /api/v1/executions/{id}/resume          Resume with human feedback
-POST   /api/v1/executions/{id}/cancel          Cancel a running execution
+PATCH  /api/v1/executions/{id}/cancel          Cancel a running execution
 GET    /api/v1/executions/{id}/trace           Get full trace
 POST   /api/v1/automations/{name}/rollback     Rollback to version
 
@@ -610,15 +610,18 @@ for await (const event of execution.stream()) {
 
 ## 10. Acceptance Criteria
 
-1. All resource kinds are CRUD-accessible via REST API with proper auth.
+### MVP
+1. All resource kinds are CRUD-accessible via REST API with proper auth (API key).
 2. API returns consistent error format with field-level detail.
-3. gRPC API mirrors REST API functionality.
-4. Webhook streaming delivers signed events with retry on failure.
-5. Plugin SDK allows registering a custom tool, LLM provider, and sandbox provider.
-6. CLI `blackbeard apply` creates resources from YAML files.
-7. CLI `blackbeard kickoff` starts an execution and `blackbeard status` shows progress.
-8. React component export produces a working embeddable widget.
-9. OpenAPI spec is auto-generated and valid; Swagger UI renders correctly.
+3. CLI `blackbeard apply` creates resources from YAML files.
+4. CLI `blackbeard kickoff` starts an execution and `blackbeard status` shows progress.
+5. OpenAPI spec is auto-generated and valid; Swagger UI renders correctly.
+
+### Post-MVP
+6. gRPC API mirrors REST API functionality.
+7. Webhook streaming delivers signed events with retry on failure.
+8. Plugin SDK allows registering a custom tool, LLM provider, and sandbox provider.
+9. React component export produces a working embeddable widget.
 10. Python and TypeScript SDKs can create resources, kick off crews (MVP) or automations (post-MVP), and stream results.
 
 ## Error Code Taxonomy

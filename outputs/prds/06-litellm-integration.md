@@ -117,6 +117,7 @@ router_settings:
   routing_strategy: usage-based-routing
   redis_host: "${VALKEY_HOST:-valkey}"   # LiteLLM uses Redis protocol; connects to Valkey
   redis_port: 6379
+  redis_password: "${VALKEY_PASSWORD:-}"  # required if Valkey has auth enabled
 ```
 
 **Users never edit LiteLLM config directly** — they manage `LLMConnection` resources in Blackbeard, and Blackbeard regenerates the LiteLLM config on every change.
@@ -284,7 +285,7 @@ spec:
 
 ## 6. Spend Tracking, Cost Attribution & LLM Observability
 
-LiteLLM is the **sole observability layer for all LLM traffic**. There is no separate trace backend (e.g., Langfuse) -- LiteLLM provides everything needed for LLM request inspection, cost tracking, and usage analytics.
+LiteLLM is the **sole observability layer for all LLM traffic**. There is no separate trace backend -- LiteLLM provides everything needed for LLM request inspection, cost tracking, and usage analytics.
 
 ### 6.1 Data Flow
 
@@ -336,7 +337,7 @@ LiteLLM provides all LLM-level observability out of the box. No additional trace
 
 **LiteLLM Dashboard** (`http://litellm:4000/ui`): Provides a built-in UI for operators to inspect individual LLM requests, view model performance metrics, manage virtual keys, and monitor spend in real-time. Blackbeard links to this dashboard from its LLM management pages.
 
-**No Langfuse dependency.** Previous architecture used Langfuse as a trace backend. This has been removed. LiteLLM handles all LLM-level observability. Crew/task/tool-level observability is handled by Blackbeard's `execution_events` table (see PRD 05, section 11.1 and PRD 07).
+**No external trace backend.** LiteLLM handles all LLM-level observability. Crew/task/tool-level observability is handled by Blackbeard's `execution_events` table (see PRD 05, section 11.1 and PRD 07).
 
 ### 6.3 Cost Dashboard Data
 
@@ -427,7 +428,7 @@ services:
     depends_on: [litellm, postgres, valkey]
     
   litellm:
-    image: ghcr.io/berriai/litellm:main-latest
+    image: litellm/litellm:<pinned-stable-version>
     environment:
       DATABASE_URL: postgresql://...
       VALKEY_HOST: valkey
@@ -515,4 +516,4 @@ This prevents a malformed LLMConnection resource from breaking the LLM routing l
 10. LiteLLM Proxy can be deployed as sidecar, standalone, or external -- all three modes work.
 11. Routing strategy changes (e.g., `least-busy` to `latency-based-routing`) take effect without restart.
 12. LiteLLM Dashboard at `:4000/ui` is accessible and shows individual LLM request details.
-13. No Langfuse dependency -- LiteLLM provides all LLM-level observability (cost, tokens, latency, request/response inspection).
+13. No external trace backend -- LiteLLM provides all LLM-level observability (cost, tokens, latency, request/response inspection).

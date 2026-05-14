@@ -4,6 +4,8 @@
 
 Provide a shared, versioned library of reusable agents, tasks, tools, crews, flows, guardrails, and templates. Teams can publish, discover, fork, and compose assets without duplicating work. The repository is the internal marketplace.
 
+**MVP scope:** This entire PRD is post-MVP. MVP has no asset repository, no publishing, no versioned assets. Resources are managed directly via the API and CLI (`blackbeard apply`).
+
 ## 2. Asset Types
 
 | Asset Kind | Description | Example |

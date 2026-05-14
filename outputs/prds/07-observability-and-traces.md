@@ -8,7 +8,7 @@ Provide comprehensive visibility into every crew, flow, and agent execution thro
 
 2. **Crew-level observability**: Blackbeard's `execution_events` table (PRD 05, section 11.1) provides a complete crew/task/agent/tool event timeline. Events are stored as an append-only log and streamed to the frontend via SSE.
 
-**No Langfuse.** Previous architecture used Langfuse as a trace backend. This has been removed. The combination of LiteLLM's built-in observability + Blackbeard's execution event log covers all use cases with fewer moving parts and no additional container dependency.
+**No external trace backend.** The combination of LiteLLM's built-in observability + Blackbeard's execution event log covers all use cases with fewer moving parts and no additional container dependency.
 
 ### What LiteLLM provides (LLM-level)
 
@@ -108,6 +108,8 @@ Every LLM call is separately logged in LiteLLM with full request/response detail
 - Sandbox tier promotions (tool requested `none`, policy promoted to `wasm`).
 
 ## 4. Execution UI
+
+**MVP scope:** The MVP ships with the execution list page, execution detail page (summary cards + live event log + task list), and a link to the LiteLLM dashboard. Dashboards (section 5) and the timeline view (section 4.3) are post-MVP.
 
 All execution observability is built into **Blackbeard's own UI**, powered by data from the `execution_events` table and the `executions`/`execution_tasks` tables. LLM-level drill-down links to the LiteLLM dashboard.
 
@@ -217,6 +219,20 @@ spec:
 - **All executions are logged.** Unlike sampling-based trace backends, the execution event log captures every execution. Events are lightweight (JSONB rows, not full prompt/completion text), so storage cost is manageable.
 - **Retention**: Configurable via `ObservabilityConfig.spec.execution_events.retention_days` (default: 90 days). A background job runs daily to delete events older than the retention period.
 
+## 7.1 Feature Ownership
+
+| Capability | Owner | Blackbeard's Role |
+|------------|-------|-------------------|
+| LLM request logging (tokens, cost, latency) | **LiteLLM** | Consume spend data via API; link to LiteLLM dashboard |
+| LLM request/response inspection | **LiteLLM** | Link to `:4000/ui` -- do not reimplement |
+| LLM spend tracking per key/user/team | **LiteLLM** | Consume via `/spend/logs` API |
+| CrewAI event capture | **CrewAI** (emits events) + **Blackbeard** (captures) | Register `BaseEventListener`, write to `execution_events` |
+| Execution event storage + SSE streaming | **Blackbeard** | Build and maintain |
+| Execution dashboards (crew/task/tool metrics) | **Blackbeard** | Build and maintain |
+| OpenTelemetry export | **Blackbeard** | Optional bridge to external systems (post-MVP) |
+
+---
+
 ## 8. Events Consumed
 
 | Source Event | Action |
@@ -238,7 +254,7 @@ spec:
 6. Optional OpenTelemetry export sends valid OTLP spans to a configured collector.
 7. PII is redacted from event data before storage (PRD 08, Presidio).
 8. Event writes (async, batched) never add >5ms latency to the execution critical path.
-9. No Langfuse dependency -- all observability is provided by LiteLLM (LLM-level) and `execution_events` (crew-level).
+9. No external trace backend -- all observability is provided by LiteLLM (LLM-level) and `execution_events` (crew-level).
 
 ## Event Data Retention
 

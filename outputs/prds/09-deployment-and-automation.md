@@ -4,6 +4,8 @@
 
 Manage the full lifecycle of deployed crews and flows: build, deploy, version, rollback, trigger, and expose via external protocols (REST, webhooks, A2A). An **Automation** is a deployed instance of a Crew or Flow resource.
 
+**MVP scope:** This entire PRD is post-MVP. MVP crews are kicked off directly via `POST /api/v1/crews/{name}/kickoff` without the Automation resource, deployment lifecycle, triggers, or versioning. See PRD 05 section 3.1 for the MVP execution path.
+
 ## 2. Automation Resource
 
 ```yaml
