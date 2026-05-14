@@ -38,6 +38,7 @@ class BlackbeardExecutionListener(BaseEventListener):
     def __init__(self, execution_id: UUID, db_url: str) -> None:
         self._execution_id = execution_id
         self._seq = 0
+        self._task_order = 0  # tracks which task (by order) is currently running
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session, sessionmaker
 
@@ -66,14 +67,15 @@ class BlackbeardExecutionListener(BaseEventListener):
         except Exception:
             logger.exception("Failed to write event for %s", self._execution_id)
 
-    def _update_task_status(
+    def _update_task_by_order(
         self,
-        task_name: str,
+        order: int,
         status: TaskStatus,
         output: str | None = None,
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
     ) -> None:
+        """Update ExecutionTask by order (CrewAI task names don't match resource names)."""
         try:
             with self._sync_session_factory() as session:
                 values: dict[str, Any] = {"status": status}
@@ -87,7 +89,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                     update(ExecutionTask)
                     .where(
                         ExecutionTask.execution_id == self._execution_id,
-                        ExecutionTask.task_name == task_name,
+                        ExecutionTask.order == order,
                     )
                     .values(**values)
                 )
@@ -117,8 +119,8 @@ class BlackbeardExecutionListener(BaseEventListener):
                 "agent_role": event.agent_role,
             }
             self._write_event("task_started", data)
-            self._update_task_status(
-                task_name=task_name,
+            self._update_task_by_order(
+                order=self._task_order,
                 status=TaskStatus.RUNNING,
                 started_at=datetime.now(UTC),
             )
@@ -132,12 +134,13 @@ class BlackbeardExecutionListener(BaseEventListener):
                 "output_preview": (output[:500] if output else None),
             }
             self._write_event("task_completed", data)
-            self._update_task_status(
-                task_name=task_name,
+            self._update_task_by_order(
+                order=self._task_order,
                 status=TaskStatus.COMPLETED,
                 output=output,
                 completed_at=datetime.now(UTC),
             )
+            self._task_order += 1
 
         @crewai_event_bus.on(ToolUsageStartedEvent)
         def on_tool_started(source: Any, event: ToolUsageStartedEvent) -> None:
