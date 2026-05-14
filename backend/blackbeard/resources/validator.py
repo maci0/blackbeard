@@ -47,8 +47,6 @@ _INTERNAL_HOSTNAMES = frozenset(
     {
         "localhost",
         "localhost.localdomain",
-        "host.docker.internal",
-        "gateway.docker.internal",
         "metadata.google.internal",
         "metadata.goog",
         "metadata",
@@ -58,11 +56,9 @@ _INTERNAL_HOSTNAMES = frozenset(
 )
 
 _INTERNAL_DOMAIN_SUFFIXES = (
-    ".internal",
     ".local",
     ".svc",
     ".svc.cluster.local",
-    ".docker.internal",
 )
 
 

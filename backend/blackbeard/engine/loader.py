@@ -79,18 +79,28 @@ class ResourceLoader:
             raise LoaderError(f"Expected LLMConnection, got {resource.kind.value}")
 
         spec = resource.spec
+        provider = spec.get("provider", "")
         model = spec.get("model", "")
         params = spec.get("parameters", {})
         vertex = spec.get("vertex", {})
+        base_url_override = spec.get("base_url")
 
-        # Use plain model name — the LiteLLM proxy maps it to the
-        # provider-specific format via its config.yaml model_list.
-        llm_kwargs: dict[str, Any] = {
-            "model": model,
-            "base_url": settings.litellm_proxy_url,
-            "api_base": settings.litellm_proxy_url,
-            "api_key": settings.litellm_master_key.get_secret_value(),
-        }
+        if provider == "ollama":
+            # Connect directly to Ollama — LiteLLM drops thinking model content
+            ollama_url = base_url_override or "http://localhost:11434"
+            llm_kwargs: dict[str, Any] = {
+                "model": f"ollama/{model}",
+                "base_url": ollama_url,
+                "api_base": ollama_url,
+            }
+        else:
+            # Route through LiteLLM proxy
+            llm_kwargs = {
+                "model": model,
+                "base_url": settings.litellm_proxy_url,
+                "api_base": settings.litellm_proxy_url,
+                "api_key": settings.litellm_master_key.get_secret_value(),
+            }
 
         apply_model_params(llm_kwargs, params)
         if vertex:

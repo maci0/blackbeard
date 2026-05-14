@@ -90,9 +90,14 @@ async def chat(body: ChatRequest = Body(...)) -> ChatResponse:
     message = choice.get("message", {})
     usage = data.get("usage", {})
 
+    content = message.get("content") or ""
+    reasoning = message.get("reasoning_content") or ""
+    if not content and reasoning:
+        content = reasoning
+
     return ChatResponse(
         model=data.get("model", body.model),
-        content=message.get("content", ""),
+        content=content,
         tokens={
             "prompt": usage.get("prompt_tokens", 0),
             "completion": usage.get("completion_tokens", 0),
@@ -148,7 +153,8 @@ async def test_model(
 
         data = resp.json()
         choice = data.get("choices", [{}])[0]
-        content = choice.get("message", {}).get("content", "")
+        msg = choice.get("message", {})
+        content = msg.get("content") or msg.get("reasoning_content") or ""
         usage = data.get("usage", {})
 
         return ModelTestResult(

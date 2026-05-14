@@ -15,6 +15,7 @@ curl -sf -X POST "$API/api/v1/llm-connections" "${H[@]}" -d '{
   "spec": {
     "provider": "ollama",
     "model": "qwen3.5",
+    "base_url": "http://host.docker.internal:11434",
     "parameters": {"temperature": 0.3, "max_tokens": 512}
   }
 }' > /dev/null
