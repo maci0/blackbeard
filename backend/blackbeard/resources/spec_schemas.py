@@ -31,9 +31,9 @@ AGENT_SCHEMA = {
                     "type": "object",
                     "properties": {
                         "enabled": {"type": "boolean", "default": True},
-                        "short_term": {"type": "boolean", "default": True},
-                        "long_term": {"type": "boolean", "default": False},
-                        "entity": {"type": "boolean", "default": False},
+                        "recency_weight": {"type": "number", "minimum": 0, "maximum": 1},
+                        "semantic_weight": {"type": "number", "minimum": 0, "maximum": 1},
+                        "importance_weight": {"type": "number", "minimum": 0, "maximum": 1},
                     },
                     "additionalProperties": False,
                 },

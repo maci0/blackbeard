@@ -179,7 +179,16 @@ class ResourceLoader:
         if isinstance(memory_spec, bool):
             agent_kwargs["memory"] = memory_spec
         elif isinstance(memory_spec, dict):
-            agent_kwargs["memory"] = memory_spec.get("enabled", True)
+            if memory_spec.get("enabled", True):
+                from crewai.memory.unified_memory import MemoryConfig
+
+                cfg_kwargs = {}
+                for key in ("recency_weight", "semantic_weight", "importance_weight"):
+                    if key in memory_spec:
+                        cfg_kwargs[key] = memory_spec[key]
+                agent_kwargs["memory"] = MemoryConfig(**cfg_kwargs) if cfg_kwargs else True
+            else:
+                agent_kwargs["memory"] = False
 
         agent = Agent(**agent_kwargs)
         self._agent_cache[ref_or_name] = agent

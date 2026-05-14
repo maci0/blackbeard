@@ -88,7 +88,8 @@ curl -sf -X POST "$API/api/v1/crews" "${H[@]}" -d '{
     "process": "sequential",
     "agents": ["ref:agents/researcher", "ref:agents/writer"],
     "tasks": ["ref:tasks/research-topic", "ref:tasks/write-report"],
-    "verbose": true
+    "verbose": true,
+    "memory": true
   }
 }' > /dev/null
 echo "  Crew/research-crew"
