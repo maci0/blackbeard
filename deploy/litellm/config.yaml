@@ -21,6 +21,7 @@ model_list:
     litellm_params:
       model: ollama/qwen3.5
       api_base: http://host.docker.internal:11434
+      merge_reasoning_content_in_choices: true
 
 litellm_settings:
   drop_params: true

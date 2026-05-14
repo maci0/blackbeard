@@ -28,7 +28,7 @@ curl -sf -X POST "$API/api/v1/agents" "${H[@]}" -d '{
   "spec": {
     "role": "Research Analyst",
     "goal": "Find accurate and relevant information on any given topic",
-    "backstory": "You are an expert research analyst with deep knowledge of search techniques and information synthesis. You excel at finding key facts and summarizing complex topics.",
+    "backstory": "You are an expert research analyst with deep knowledge of search techniques and information synthesis. You excel at finding key facts and summarizing complex topics. /no_think",
     "llm": "ref:llm-connections/ollama-qwen",
     "verbose": true
   }
@@ -43,7 +43,7 @@ curl -sf -X POST "$API/api/v1/agents" "${H[@]}" -d '{
   "spec": {
     "role": "Content Writer",
     "goal": "Write clear, engaging content based on research findings",
-    "backstory": "You are a skilled content writer who transforms complex research into readable, well-structured prose. You focus on clarity and accuracy.",
+    "backstory": "You are a skilled content writer who transforms complex research into readable, well-structured prose. You focus on clarity and accuracy. /no_think",
     "llm": "ref:llm-connections/ollama-qwen",
     "verbose": true
   }
