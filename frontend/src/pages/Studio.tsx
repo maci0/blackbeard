@@ -289,8 +289,8 @@ function StudioInner() {
         position: { x: 80, y: 60 },
         data: {
           role: 'Researcher',
-          goal: 'Find accurate and relevant information on any topic',
-          backstory: 'An expert research analyst with deep knowledge of search techniques',
+          goal: 'List key facts about a topic',
+          backstory: 'You find facts and list them. Be brief.',
         },
       },
       {
@@ -299,8 +299,8 @@ function StudioInner() {
         position: { x: 80, y: 260 },
         data: {
           role: 'Writer',
-          goal: 'Write clear, engaging content based on research findings',
-          backstory: 'A skilled content writer who transforms complex topics into readable prose',
+          goal: 'Write a short summary from given facts',
+          backstory: 'You write clear, short summaries. Be brief.',
         },
       },
       {
@@ -309,8 +309,8 @@ function StudioInner() {
         position: { x: 360, y: 60 },
         data: {
           name: 'research-topic',
-          description: 'Research the given topic thoroughly and compile key findings',
-          expected_output: 'A detailed summary of findings with sources',
+          description: 'Write 3 key facts about the given topic in bullet point format.',
+          expected_output: '3 bullet points, each one sentence.',
           agent: 'ref:agents/researcher',
         },
       },
@@ -320,8 +320,8 @@ function StudioInner() {
         position: { x: 360, y: 260 },
         data: {
           name: 'write-report',
-          description: 'Write a comprehensive report based on the research findings',
-          expected_output: 'A well-structured report in markdown format',
+          description: 'Using the research facts provided, write a 2-3 sentence summary.',
+          expected_output: 'A short summary in 2-3 sentences.',
           agent: 'ref:agents/writer',
           context: ['ref:tasks/research-topic'],
         },

@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import blackbeard.models.execution  # register Execution tables
 import blackbeard.models.resource  # noqa: F401 — register Resource/ResourceRef tables
 from blackbeard import __version__
+from blackbeard.api.chat import router as chat_router
 from blackbeard.api.executions import router as executions_router
 from blackbeard.api.health import router as health_router
 from blackbeard.api.health import shutdown_health_clients
@@ -153,5 +154,6 @@ app.add_exception_handler(Exception, global_exception_handler)
 
 # Routers
 app.include_router(health_router, prefix="/api/v1")
+app.include_router(chat_router, prefix="/api/v1")
 app.include_router(executions_router, prefix="/api/v1")
 app.include_router(resources_router, prefix="/api/v1")

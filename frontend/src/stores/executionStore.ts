@@ -48,6 +48,7 @@ interface ExecutionState {
   executions: Execution[]
   currentExecution: Execution | null
   events: ExecutionEvent[]
+  spendData: Record<string, unknown> | null
   loading: boolean
   error: string | null
 
@@ -60,6 +61,7 @@ interface ExecutionState {
   addEvents: (newEvents: ExecutionEvent[]) => void
   clearEvents: () => void
   fetchEvents: (id: string, after?: number) => Promise<void>
+  fetchSpend: (id: string) => Promise<void>
 }
 
 function executionsPath(crewName?: string): string {
@@ -72,6 +74,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
   executions: [],
   currentExecution: null,
   events: [],
+  spendData: null,
   loading: false,
   error: null,
 
@@ -86,7 +89,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
   },
 
   fetchExecution: async (id: string) => {
-    set({ loading: true, error: null, currentExecution: null })
+    set({ loading: true, error: null, currentExecution: null, spendData: null })
     try {
       const execution = await api.get<Execution>(`/api/v1/executions/${id}`)
       set({ currentExecution: execution, loading: false })
@@ -150,6 +153,16 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       get().addEvents(result.events)
     } catch {
       // Silently ignore — events are supplementary
+    }
+  },
+
+  fetchSpend: async (id: string) => {
+    try {
+      const result = await api.get<Record<string, unknown>>(`/api/v1/executions/${id}/spend`)
+      set({ spendData: result })
+    } catch {
+      // Silently ignore — spend data is optional (LiteLLM may not be tracking)
+      set({ spendData: null })
     }
   },
 }))

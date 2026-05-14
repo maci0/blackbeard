@@ -15,7 +15,7 @@ curl -sf -X POST "$API/api/v1/llm-connections" "${H[@]}" -d '{
   "spec": {
     "provider": "ollama",
     "model": "qwen3.5",
-    "parameters": {"temperature": 0.7, "max_tokens": 2048}
+    "parameters": {"temperature": 0.3, "max_tokens": 512}
   }
 }' > /dev/null
 echo "  LLMConnection/ollama-qwen"
@@ -26,10 +26,11 @@ curl -sf -X POST "$API/api/v1/agents" "${H[@]}" -d '{
   "kind": "Agent",
   "metadata": {"name": "researcher"},
   "spec": {
-    "role": "Research Analyst",
-    "goal": "Find accurate and relevant information on any given topic",
-    "backstory": "You are an expert research analyst with deep knowledge of search techniques and information synthesis. You excel at finding key facts and summarizing complex topics. /no_think",
+    "role": "Researcher",
+    "goal": "List key facts about a topic",
+    "backstory": "You find facts and list them. Be brief. /no_think",
     "llm": "ref:llm-connections/ollama-qwen",
+    "max_iter": 5,
     "verbose": true
   }
 }' > /dev/null
@@ -41,10 +42,11 @@ curl -sf -X POST "$API/api/v1/agents" "${H[@]}" -d '{
   "kind": "Agent",
   "metadata": {"name": "writer"},
   "spec": {
-    "role": "Content Writer",
-    "goal": "Write clear, engaging content based on research findings",
-    "backstory": "You are a skilled content writer who transforms complex research into readable, well-structured prose. You focus on clarity and accuracy. /no_think",
+    "role": "Writer",
+    "goal": "Write a short summary from given facts",
+    "backstory": "You write clear, short summaries. Be brief. /no_think",
     "llm": "ref:llm-connections/ollama-qwen",
+    "max_iter": 5,
     "verbose": true
   }
 }' > /dev/null
@@ -56,8 +58,8 @@ curl -sf -X POST "$API/api/v1/tasks" "${H[@]}" -d '{
   "kind": "Task",
   "metadata": {"name": "research-topic"},
   "spec": {
-    "description": "Research the given topic thoroughly. Identify key facts, recent developments, and important context. Compile your findings into a structured summary.",
-    "expected_output": "A detailed bullet-point summary of key findings with sources",
+    "description": "Write 3 key facts about the given topic in bullet point format.",
+    "expected_output": "3 bullet points, each one sentence.",
     "agent": "ref:agents/researcher"
   }
 }' > /dev/null
@@ -69,8 +71,8 @@ curl -sf -X POST "$API/api/v1/tasks" "${H[@]}" -d '{
   "kind": "Task",
   "metadata": {"name": "write-report"},
   "spec": {
-    "description": "Write a comprehensive report based on the research findings. Structure it with an introduction, key sections, and conclusion.",
-    "expected_output": "A well-structured report in markdown format, 500-1000 words",
+    "description": "Using the research facts provided, write a 2-3 sentence summary.",
+    "expected_output": "A short summary in 2-3 sentences.",
     "agent": "ref:agents/writer",
     "context": ["ref:tasks/research-topic"]
   }

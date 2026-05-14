@@ -10,6 +10,7 @@ import {
   DollarSign,
   Activity,
   Terminal,
+  BarChart3,
 } from 'lucide-react'
 import { useDocumentTitle, usePolling } from '@/lib/hooks'
 import {
@@ -23,6 +24,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { statusLabel } from '@/lib/status'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { CodeBlock } from '@/components/ui/CodeBlock'
 import { getDuration, formatDate, formatCost } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
 
@@ -222,6 +224,94 @@ function EventLog({ events }: { events: ExecutionEvent[] }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Spend section                                                       */
+/* ------------------------------------------------------------------ */
+
+interface SpendCall {
+  model: string
+  prompt_tokens: number
+  completion_tokens: number
+  spend: number
+  startTime: string
+}
+
+function SpendSection({ data }: { data: Record<string, unknown> }) {
+  const calls = useMemo(() => {
+    const raw = Array.isArray(data) ? data : Array.isArray(data.response) ? data.response : null
+    if (!raw || raw.length === 0) return null
+    return raw as SpendCall[]
+  }, [data])
+
+  if (!calls) {
+    return (
+      <div className="mt-6">
+        <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
+          <BarChart3 className="h-4 w-4 text-muted-foreground" />
+          Spend
+        </h2>
+        <p className="text-sm text-muted-foreground">No spend data available</p>
+      </div>
+    )
+  }
+
+  const totalCost = calls.reduce((sum, c) => sum + (c.spend ?? 0), 0)
+
+  return (
+    <div className="mt-6">
+      <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
+        <BarChart3 className="h-4 w-4 text-muted-foreground" />
+        Spend
+        <span className="text-xs font-normal text-muted-foreground">
+          ({calls.length} call{calls.length !== 1 ? 's' : ''}, total {formatCost(totalCost)})
+        </span>
+      </h2>
+      <div className="overflow-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/30 text-left">
+              <th className="px-4 py-2 font-medium text-muted-foreground">Model</th>
+              <th className="px-4 py-2 text-right font-medium text-muted-foreground">
+                Prompt tokens
+              </th>
+              <th className="px-4 py-2 text-right font-medium text-muted-foreground">
+                Completion tokens
+              </th>
+              <th className="px-4 py-2 text-right font-medium text-muted-foreground">Cost</th>
+              <th className="px-4 py-2 text-right font-medium text-muted-foreground">Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {calls.map((call, idx) => (
+              <tr key={idx} className="border-b transition-colors last:border-0 hover:bg-muted/10">
+                <td className="px-4 py-2 font-mono text-xs">{call.model ?? 'unknown'}</td>
+                <td className="px-4 py-2 text-right tabular-nums">
+                  {(call.prompt_tokens ?? 0).toLocaleString()}
+                </td>
+                <td className="px-4 py-2 text-right tabular-nums">
+                  {(call.completion_tokens ?? 0).toLocaleString()}
+                </td>
+                <td className="px-4 py-2 text-right tabular-nums">{formatCost(call.spend)}</td>
+                <td className="px-4 py-2 text-right text-xs text-muted-foreground">
+                  {call.startTime ? formatEventTime(call.startTime) : '--'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+          Raw JSON
+        </summary>
+        <div className="mt-2">
+          <CodeBlock code={JSON.stringify(data, null, 2)} language="json" />
+        </div>
+      </details>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -232,16 +322,19 @@ export default function ExecutionDetail() {
     loading,
     error,
     events,
+    spendData,
     fetchExecution,
     cancelExecution,
     pollExecution,
     addEvents,
     clearEvents,
     fetchEvents,
+    fetchSpend,
   } = useExecutionStore()
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const [sseDisconnected, setSseDisconnected] = useState(false)
 
   const load = useCallback(async () => {
     await fetchExecution(id)
@@ -265,6 +358,10 @@ export default function ExecutionDetail() {
   // SSE connection for live events when execution is active
   useEffect(() => {
     if (!id || !isActive) return
+
+    let reconnectCount = 0
+    setSseDisconnected(false)
+
     const es = new EventSource(`/api/v1/executions/${id}/stream`)
 
     const eventTypes = [
@@ -304,27 +401,53 @@ export default function ExecutionDetail() {
         const raw = String(e.data)
         const exec = JSON.parse(raw) as Execution
         useExecutionStore.setState({ currentExecution: exec })
+        // If status update brings us to terminal, do a final full fetch
+        if (TERMINAL_STATUSES.has(exec.status)) {
+          void fetchExecution(id)
+          void fetchEvents(id)
+        }
       } catch {
         // Ignore malformed status
       }
     })
 
-    es.onerror = () => {
-      // EventSource auto-reconnects; no action needed
+    es.onopen = () => {
+      reconnectCount = 0
+      setSseDisconnected(false)
     }
 
-    return () => es.close()
-  }, [id, isActive, addEvents])
+    es.onerror = () => {
+      reconnectCount += 1
+      // EventSource auto-reconnects, but log for visibility
+      console.warn(`[SSE] Connection error for execution ${id} (reconnect #${reconnectCount})`)
+      if (reconnectCount >= 3) {
+        setSseDisconnected(true)
+      }
+    }
 
-  // Fetch historical events for completed executions
+    return () => {
+      es.close()
+      // After SSE closes, fetch events to catch anything missed
+      void fetchEvents(id)
+    }
+  }, [id, isActive, addEvents, fetchExecution, fetchEvents])
+
+  // When execution reaches terminal status, do a final fetch to get complete data,
+  // fetch historical events, and fetch spend data
   useEffect(() => {
     if (!id || !isTerminal) return
+    void fetchExecution(id)
     void fetchEvents(id)
-  }, [id, isTerminal, fetchEvents])
+    void fetchSpend(id)
+  }, [id, isTerminal, fetchExecution, fetchEvents, fetchSpend])
 
-  // Fallback polling when not using SSE
+  // Fallback polling when SSE has disconnected
   const doPoll = useCallback(() => pollExecution(id), [pollExecution, id])
-  usePolling(doPoll, 2000, isActive && false) // Disabled — SSE handles updates
+  usePolling(doPoll, 3000, isActive && sseDisconnected)
+
+  // Also poll events when SSE is disconnected to catch missed events
+  const doPollEvents = useCallback(() => fetchEvents(id), [fetchEvents, id])
+  usePolling(doPollEvents, 5000, isActive && sseDisconnected)
 
   useDocumentTitle(currentExecution ? `${currentExecution.crew_name} run` : 'Execution')
 
@@ -537,6 +660,18 @@ export default function ExecutionDetail() {
 
         {/* Event log */}
         <EventLog events={events} />
+
+        {/* Spend */}
+        {isTerminal && spendData && <SpendSection data={spendData} />}
+        {isTerminal && !spendData && (
+          <div className="mt-6">
+            <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
+              <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              Spend
+            </h2>
+            <p className="text-sm text-muted-foreground">No spend data available</p>
+          </div>
+        )}
 
         {/* Outputs */}
         {execution.outputs && Object.keys(execution.outputs).length > 0 && (

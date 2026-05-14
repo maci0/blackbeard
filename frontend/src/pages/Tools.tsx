@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { useDocumentTitle } from '@/lib/hooks'
 import { Wrench, Search, AlertTriangle, RefreshCw, Code2, Box, Shield, X } from 'lucide-react'
 import { useResourceStore, type Resource } from '@/stores/resourceStore'
@@ -85,7 +86,10 @@ function ToolCard({ resource }: { resource: Resource }) {
   }
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md">
+    <Link
+      to={`/resources/tools/${resource.metadata.name}`}
+      className="flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       {/* Header */}
       <div className="border-b bg-muted/20 px-4 pb-3 pt-4">
         <div className="flex items-start justify-between gap-2">
@@ -136,11 +140,11 @@ function ToolCard({ resource }: { resource: Resource }) {
         {spec.sandbox ? (
           <SandboxLabel tier={spec.sandbox} />
         ) : (
-          <span className="text-xs text-muted-foreground/50">—</span>
+          <span className="text-xs text-muted-foreground/50">--</span>
         )}
         <span className="text-xs text-muted-foreground">v{resource.version}</span>
       </div>
-    </div>
+    </Link>
   )
 }
 
@@ -181,19 +185,27 @@ export default function Tools() {
             title="Tools"
             description="Tool library and registry"
             actions={
-              <button
-                onClick={() => void fetchResources('tools')}
-                aria-label="Refresh tools"
-                className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent"
-              >
-                <RefreshCw
-                  className={cn(
-                    'h-3.5 w-3.5',
-                    loading && 'animate-spin motion-reduce:animate-none',
-                  )}
-                />
-                Refresh
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  to="/studio"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90"
+                >
+                  Create in Studio
+                </Link>
+                <button
+                  onClick={() => void fetchResources('tools')}
+                  aria-label="Refresh tools"
+                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent"
+                >
+                  <RefreshCw
+                    className={cn(
+                      'h-3.5 w-3.5',
+                      loading && 'animate-spin motion-reduce:animate-none',
+                    )}
+                  />
+                  Refresh
+                </button>
+              </div>
             }
           />
         </div>
