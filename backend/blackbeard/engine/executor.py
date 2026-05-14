@@ -387,7 +387,7 @@ async def _run_crew_async(
             # Wire up execution event listener for real-time streaming
             BlackbeardExecutionListener(
                 execution_id=execution_id,
-                session_factory=thread_session,
+                db_url=settings.database_url.get_secret_value(),
             )
 
             result = crew.kickoff(inputs=inputs)
