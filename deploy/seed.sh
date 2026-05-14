@@ -14,7 +14,7 @@ curl -sf -X POST "$API/api/v1/llm-connections" "${H[@]}" -d '{
   "metadata": {"name": "ollama-qwen"},
   "spec": {
     "provider": "ollama",
-    "model": "qwen3.5",
+    "model": "qwen3.6",
     "base_url": "http://host.docker.internal:11434",
     "parameters": {"temperature": 0.3, "max_tokens": 512}
   }
@@ -59,8 +59,8 @@ curl -sf -X POST "$API/api/v1/tasks" "${H[@]}" -d '{
   "kind": "Task",
   "metadata": {"name": "research-topic"},
   "spec": {
-    "description": "Write 3 key facts about the given topic in bullet point format.",
-    "expected_output": "3 bullet points, each one sentence.",
+    "description": "Write 3 key facts about {topic} in bullet point format.",
+    "expected_output": "3 bullet points about {topic}, each one sentence.",
     "agent": "ref:agents/researcher"
   }
 }' > /dev/null
@@ -72,8 +72,8 @@ curl -sf -X POST "$API/api/v1/tasks" "${H[@]}" -d '{
   "kind": "Task",
   "metadata": {"name": "write-report"},
   "spec": {
-    "description": "Using the research facts provided, write a 2-3 sentence summary.",
-    "expected_output": "A short summary in 2-3 sentences.",
+    "description": "Using the research facts provided, write a 2-3 sentence summary about {topic}.",
+    "expected_output": "A short summary about {topic} in 2-3 sentences.",
     "agent": "ref:agents/writer",
     "context": ["ref:tasks/research-topic"]
   }

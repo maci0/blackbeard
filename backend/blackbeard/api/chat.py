@@ -114,6 +114,8 @@ class ModelTestResult(BaseModel):
     error: str | None = None
     response_preview: str | None = None
     tokens: dict[str, int] | None = None
+    context_length: int | None = None
+    parameter_size: str | None = None
 
 
 @router.post(
@@ -157,6 +159,26 @@ async def test_model(
         content = msg.get("content") or msg.get("reasoning_content") or ""
         usage = data.get("usage", {})
 
+        # Try to get model info (context length, parameter size) from Ollama
+        ctx_len = None
+        param_size = None
+        try:
+            info_resp = await client.post(
+                "http://host.docker.internal:11434/api/show",
+                json={"model": model},
+                timeout=5,
+            )
+            if info_resp.status_code == 200:
+                info = info_resp.json()
+                model_info = info.get("model_info", {})
+                for k, v in model_info.items():
+                    if k.endswith(".context_length"):
+                        ctx_len = int(v)
+                        break
+                param_size = info.get("details", {}).get("parameter_size")
+        except Exception:
+            pass
+
         return ModelTestResult(
             model=model,
             status="ok",
@@ -167,6 +189,8 @@ async def test_model(
                 "completion": usage.get("completion_tokens", 0),
                 "total": usage.get("total_tokens", 0),
             },
+            context_length=ctx_len,
+            parameter_size=param_size,
         )
 
     except httpx.ConnectError as e:

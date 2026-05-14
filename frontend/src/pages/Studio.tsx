@@ -309,8 +309,8 @@ function StudioInner() {
         position: { x: 360, y: 60 },
         data: {
           name: 'research-topic',
-          description: 'Write 3 key facts about the given topic in bullet point format.',
-          expected_output: '3 bullet points, each one sentence.',
+          description: 'Write 3 key facts about {topic} in bullet point format.',
+          expected_output: '3 bullet points about {topic}, each one sentence.',
           agent: 'ref:agents/researcher',
         },
       },
@@ -320,8 +320,8 @@ function StudioInner() {
         position: { x: 360, y: 260 },
         data: {
           name: 'write-report',
-          description: 'Using the research facts provided, write a 2-3 sentence summary.',
-          expected_output: 'A short summary in 2-3 sentences.',
+          description: 'Using the research facts provided, write a 2-3 sentence summary about {topic}.',
+          expected_output: 'A short summary about {topic} in 2-3 sentences.',
           agent: 'ref:agents/writer',
           context: ['ref:tasks/research-topic'],
         },
