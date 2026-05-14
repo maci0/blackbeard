@@ -433,9 +433,12 @@ export default function ExecutionDetail() {
   }, [id, isActive, addEvents, fetchExecution, fetchEvents])
 
   // When execution reaches terminal status, do a final fetch to get complete data,
-  // fetch historical events, and fetch spend data
+  // fetch historical events, and fetch spend data (once per execution)
+  const terminalFetchedRef = useRef<string | null>(null)
   useEffect(() => {
     if (!id || !isTerminal) return
+    if (terminalFetchedRef.current === id) return
+    terminalFetchedRef.current = id
     void fetchExecution(id)
     void fetchEvents(id)
     void fetchSpend(id)

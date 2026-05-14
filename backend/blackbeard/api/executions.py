@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Response
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
@@ -136,7 +136,7 @@ async def get_execution(
 async def get_execution_spend(
     execution_id: UUID = Path(..., description="Execution UUID"),
     session: AsyncSession = Depends(get_session),
-) -> dict:
+) -> Response:
     """Get LiteLLM spend data for an execution's requests."""
     execution = await executor.get_execution(session, execution_id)
     if not execution:
@@ -152,30 +152,13 @@ async def get_execution_spend(
                 },
             )
             if resp.status_code == 200:
-                return resp.json()
-            logger.warning(
-                "LiteLLM spend query failed: execution_id=%s status=%d",
-                execution_id,
-                resp.status_code,
-                extra={
-                    "event": "litellm_spend_error",
-                    "execution_id": str(execution_id),
-                    "http_status": resp.status_code,
-                },
-            )
-            return {"spend_logs": [], "error": f"LiteLLM returned {resp.status_code}"}
-    except httpx.RequestError as exc:
-        logger.warning(
-            "LiteLLM spend request failed: execution_id=%s error=%s",
-            execution_id,
-            exc,
-            extra={
-                "event": "litellm_spend_request_error",
-                "execution_id": str(execution_id),
-                "error_type": type(exc).__name__,
-            },
-        )
-        return {"spend_logs": [], "error": str(exc)}
+                return Response(content=resp.content, media_type="application/json")
+    except Exception:
+        pass
+    return Response(
+        content='{"spend_logs":[],"note":"No spend data available"}',
+        media_type="application/json",
+    )
 
 
 @router.get(
