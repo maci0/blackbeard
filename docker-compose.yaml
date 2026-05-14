@@ -130,7 +130,7 @@ services:
 
   # ── LiteLLM Proxy ─────────────────────────────────────────────────────────
   litellm:
-    image: litellm/litellm:main-v1.83.3-stable.patch.3
+    image: docker.litellm.ai/berriai/litellm:main-latest
     ports:
       - "127.0.0.1:4000:4000"
     environment:

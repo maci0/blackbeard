@@ -24,7 +24,21 @@ AGENT_SCHEMA = {
         "verbose": {"type": "boolean", "default": True},
         "max_iter": {"type": "integer", "minimum": 1},
         "max_rpm": {"type": "integer", "minimum": 1},
-        "memory": {"type": "boolean"},
+        "memory": {
+            "oneOf": [
+                {"type": "boolean"},
+                {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean", "default": True},
+                        "short_term": {"type": "boolean", "default": True},
+                        "long_term": {"type": "boolean", "default": False},
+                        "entity": {"type": "boolean", "default": False},
+                    },
+                    "additionalProperties": False,
+                },
+            ],
+        },
         "cache": {"type": "boolean"},
         "policy": {"type": "string", "maxLength": 500},
         "tool_discovery": {"type": "boolean", "default": True},
@@ -264,6 +278,51 @@ GUARDRAIL_SCHEMA = {
     "additionalProperties": False,
 }
 
+FLOW_SCHEMA = {
+    "type": "object",
+    "required": ["steps"],
+    "properties": {
+        "description": {"type": "string", "maxLength": 5000},
+        "state_schema": {"type": "object"},
+        "steps": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["name", "type"],
+                "properties": {
+                    "name": {"type": "string", "maxLength": 255},
+                    "type": {
+                        "type": "string",
+                        "enum": ["crew", "function", "router", "condition"],
+                    },
+                    "crew": {"type": "string", "maxLength": 500},
+                    "function_path": {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z_][a-zA-Z0-9_.]*:[a-zA-Z_][a-zA-Z0-9_]*$",
+                        "maxLength": 500,
+                    },
+                    "listen_to": {
+                        "type": "array",
+                        "items": {"type": "string", "maxLength": 255},
+                        "maxItems": 20,
+                    },
+                    "condition": {"type": "string", "maxLength": 1000},
+                    "routes": {
+                        "type": "object",
+                        "additionalProperties": {"type": "string", "maxLength": 255},
+                    },
+                },
+                "additionalProperties": False,
+            },
+            "minItems": 1,
+            "maxItems": 50,
+        },
+        "memory": {"type": "boolean", "default": False},
+        "verbose": {"type": "boolean", "default": True},
+    },
+    "additionalProperties": False,
+}
+
 # Map kind string → schema
 KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "Agent": AGENT_SCHEMA,
@@ -273,6 +332,7 @@ KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "LLMConnection": LLM_CONNECTION_SCHEMA,
     "AgentPolicy": AGENT_POLICY_SCHEMA,
     "Guardrail": GUARDRAIL_SCHEMA,
+    "Flow": FLOW_SCHEMA,
 }
 
 # Verify all kinds have schemas — catches missing schemas at import time

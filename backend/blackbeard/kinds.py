@@ -16,6 +16,7 @@ class ResourceKind(enum.StrEnum):
     LLM_CONNECTION = "LLMConnection"
     AGENT_POLICY = "AgentPolicy"
     GUARDRAIL = "Guardrail"
+    FLOW = "Flow"
 
 
 # Kind value string → URL plural path segment
@@ -27,6 +28,7 @@ KIND_TO_PLURAL: dict[str, str] = {
     ResourceKind.LLM_CONNECTION.value: "llm-connections",
     ResourceKind.AGENT_POLICY.value: "agent-policies",
     ResourceKind.GUARDRAIL.value: "guardrails",
+    ResourceKind.FLOW.value: "flows",
 }
 
 assert set(KIND_TO_PLURAL.keys()) == {k.value for k in ResourceKind}, (

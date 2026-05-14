@@ -182,9 +182,15 @@ class ResourceLoader:
             if tools:
                 agent_kwargs["tools"] = tools
 
-        for key in ("max_iter", "max_rpm", "memory", "cache"):
+        for key in ("max_iter", "max_rpm", "cache"):
             if key in spec:
                 agent_kwargs[key] = spec[key]
+
+        memory_spec = spec.get("memory")
+        if isinstance(memory_spec, bool):
+            agent_kwargs["memory"] = memory_spec
+        elif isinstance(memory_spec, dict):
+            agent_kwargs["memory"] = memory_spec.get("enabled", True)
 
         agent = Agent(**agent_kwargs)
         self._agent_cache[ref_or_name] = agent
