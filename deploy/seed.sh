@@ -15,7 +15,6 @@ curl -sf -X POST "$API/api/v1/llm-connections" "${H[@]}" -d '{
   "spec": {
     "provider": "ollama",
     "model": "qwen3.6",
-    "base_url": "http://host.docker.internal:11434",
     "parameters": {"temperature": 0.3, "max_tokens": 4096}
   }
 }' > /dev/null
@@ -94,6 +93,127 @@ curl -sf -X POST "$API/api/v1/crews" "${H[@]}" -d '{
 }' > /dev/null
 echo "  Crew/research-crew"
 
+# ── Tools ────────────────────────────────────────────────────────────
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "file-read"},
+  "spec": {
+    "type": "builtin",
+    "class_path": "FileReadTool",
+    "description": "Read the contents of a file from the local filesystem"
+  }
+}' > /dev/null
+echo "  Tool/file-read"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "file-write"},
+  "spec": {
+    "type": "builtin",
+    "class_path": "FileWriterTool",
+    "description": "Write content to a file on the local filesystem"
+  }
+}' > /dev/null
+echo "  Tool/file-write"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "directory-read"},
+  "spec": {
+    "type": "builtin",
+    "class_path": "DirectoryReadTool",
+    "description": "List files and directories in a given path"
+  }
+}' > /dev/null
+echo "  Tool/directory-read"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "scrape-website"},
+  "spec": {
+    "type": "builtin",
+    "class_path": "ScrapeWebsiteTool",
+    "description": "Scrape and extract text content from a website URL"
+  }
+}' > /dev/null
+echo "  Tool/scrape-website"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "pdf-search"},
+  "spec": {
+    "type": "builtin",
+    "class_path": "PDFSearchTool",
+    "description": "Search and extract text from PDF documents"
+  }
+}' > /dev/null
+echo "  Tool/pdf-search"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "csv-search"},
+  "spec": {
+    "type": "builtin",
+    "class_path": "CSVSearchTool",
+    "description": "Search and query data in CSV files"
+  }
+}' > /dev/null
+echo "  Tool/csv-search"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "json-search"},
+  "spec": {
+    "type": "builtin",
+    "class_path": "JSONSearchTool",
+    "description": "Search and query data in JSON files"
+  }
+}' > /dev/null
+echo "  Tool/json-search"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "txt-search"},
+  "spec": {
+    "type": "builtin",
+    "class_path": "TXTSearchTool",
+    "description": "Search and extract text from plain text files"
+  }
+}' > /dev/null
+echo "  Tool/txt-search"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "website-search"},
+  "spec": {
+    "type": "builtin",
+    "class_path": "WebsiteSearchTool",
+    "description": "Search for specific content within a website"
+  }
+}' > /dev/null
+echo "  Tool/website-search"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "vision"},
+  "spec": {
+    "type": "builtin",
+    "class_path": "VisionTool",
+    "description": "Analyze and describe images using vision models"
+  }
+}' > /dev/null
+echo "  Tool/vision"
+
 echo ""
-echo "Seed complete. 6 resources created."
+echo "Seed complete. 16 resources created."
 echo "Run a crew: curl -X POST $API/api/v1/crews/research-crew/kickoff -H 'X-API-Key: $KEY' -H 'Content-Type: application/json' -d '{\"inputs\":{\"topic\":\"AI agents\"}}'"
