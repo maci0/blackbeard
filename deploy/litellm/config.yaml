@@ -21,13 +21,13 @@ model_list:
     litellm_params:
       model: ollama/qwen3.5
       api_base: http://host.docker.internal:11434
-      merge_reasoning_content_in_choices: true
 
 litellm_settings:
   drop_params: true
   set_verbose: false
   num_retries: 3
   request_timeout: 120
+  merge_reasoning_content_in_choices: true
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
