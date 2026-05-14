@@ -42,6 +42,16 @@ AGENT_SCHEMA = {
         "cache": {"type": "boolean"},
         "policy": {"type": "string", "maxLength": 500},
         "tool_discovery": {"type": "boolean", "default": True},
+        "skills": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 500},
+            "maxItems": 20,
+        },
+        "knowledge_sources": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 500},
+            "maxItems": 20,
+        },
         "system_template": {"type": "string", "maxLength": 50000},
         "prompt_template": {"type": "string", "maxLength": 50000},
         "response_template": {"type": "string", "maxLength": 50000},
@@ -323,6 +333,32 @@ FLOW_SCHEMA = {
     "additionalProperties": False,
 }
 
+KNOWLEDGE_SOURCE_SCHEMA = {
+    "type": "object",
+    "required": ["type"],
+    "properties": {
+        "type": {
+            "type": "string",
+            "enum": ["text", "pdf", "csv", "json", "excel", "string", "url"],
+        },
+        "description": {"type": "string", "maxLength": 5000},
+        "file_paths": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 500},
+            "maxItems": 50,
+        },
+        "content": {"type": "string", "maxLength": 100000},
+        "urls": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 2000},
+            "maxItems": 20,
+        },
+        "chunk_size": {"type": "integer", "minimum": 100, "maximum": 10000, "default": 4000},
+        "chunk_overlap": {"type": "integer", "minimum": 0, "maximum": 1000, "default": 200},
+    },
+    "additionalProperties": False,
+}
+
 # Map kind string → schema
 KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "Agent": AGENT_SCHEMA,
@@ -333,6 +369,7 @@ KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "AgentPolicy": AGENT_POLICY_SCHEMA,
     "Guardrail": GUARDRAIL_SCHEMA,
     "Flow": FLOW_SCHEMA,
+    "KnowledgeSource": KNOWLEDGE_SOURCE_SCHEMA,
 }
 
 # Verify all kinds have schemas — catches missing schemas at import time

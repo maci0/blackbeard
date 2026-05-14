@@ -99,6 +99,48 @@ class ResourceLoader:
         self._llm_cache[ref_or_name] = llm
         return llm
 
+    def _build_knowledge_source(self, ref_or_name: str) -> Any:
+        """Build a CrewAI knowledge source from a KnowledgeSource resource ref."""
+        try:
+            resource = self._resolve_ref(ref_or_name)
+            if resource.kind != ResourceKind.KNOWLEDGE_SOURCE:
+                logger.warning("Expected KnowledgeSource, got %s", resource.kind.value)
+                return None
+
+            spec = resource.spec
+            ks_type = spec.get("type", "string")
+            file_paths = spec.get("file_paths", [])
+            content = spec.get("content", "")
+
+            if ks_type == "text":
+                from crewai.knowledge.source.text_file_knowledge_source import (
+                    TextFileKnowledgeSource,
+                )
+
+                return TextFileKnowledgeSource(file_paths=file_paths)
+            if ks_type == "pdf":
+                from crewai.knowledge.source.pdf_knowledge_source import PDFKnowledgeSource
+
+                return PDFKnowledgeSource(file_paths=file_paths)
+            if ks_type == "csv":
+                from crewai.knowledge.source.csv_knowledge_source import CSVKnowledgeSource
+
+                return CSVKnowledgeSource(file_paths=file_paths)
+            if ks_type == "json":
+                from crewai.knowledge.source.json_knowledge_source import JSONKnowledgeSource
+
+                return JSONKnowledgeSource(file_paths=file_paths)
+            if ks_type == "string":
+                from crewai.knowledge.source.string_knowledge_source import StringKnowledgeSource
+
+                return StringKnowledgeSource(content=content)
+
+            logger.warning("Knowledge source type '%s' not supported", ks_type)
+            return None
+        except Exception:
+            logger.exception("Failed to build knowledge source from %s", ref_or_name)
+            return None
+
     def build_tool(self, ref_or_name: str) -> Any:
         """Build a tool from a Tool resource ref.
 
@@ -189,6 +231,22 @@ class ResourceLoader:
                 agent_kwargs["memory"] = MemoryConfig(**cfg_kwargs) if cfg_kwargs else True
             else:
                 agent_kwargs["memory"] = False
+
+        # Skills — directory paths with domain instruction files
+        skills = spec.get("skills", [])
+        if skills:
+            agent_kwargs["skills"] = skills
+
+        # Knowledge sources — refs to KnowledgeSource resources
+        ks_refs = spec.get("knowledge_sources", [])
+        if ks_refs:
+            knowledge = []
+            for ref in ks_refs:
+                ks = self._build_knowledge_source(ref)
+                if ks is not None:
+                    knowledge.append(ks)
+            if knowledge:
+                agent_kwargs["knowledge_sources"] = knowledge
 
         agent = Agent(**agent_kwargs)
         self._agent_cache[ref_or_name] = agent

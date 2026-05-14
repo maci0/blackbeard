@@ -26,6 +26,7 @@ dependencies = [
     "httpx>=0.28,<1",
     "jsonschema>=4.23,<5",
     "crewai-tools>=1.14.4",
+    "crewai-files>=1.14.4",
 ]
 
 [project.optional-dependencies]
