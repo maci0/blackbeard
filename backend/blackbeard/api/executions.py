@@ -9,6 +9,7 @@ from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
@@ -16,6 +17,7 @@ from sse_starlette.sse import EventSourceResponse
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+from blackbeard.config import settings
 from blackbeard.engine import ExecutionError, executor
 from blackbeard.kinds import NAME_PATTERN
 from blackbeard.models import TERMINAL_STATUSES, ExecutionStatus, async_session, get_session
@@ -122,6 +124,58 @@ async def get_execution(
     if not execution:
         raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
     return ExecutionResponse.from_db(execution)
+
+
+@router.get(
+    "/executions/{execution_id}/spend",
+    responses={
+        200: {"description": "LiteLLM spend data for this execution"},
+        404: {"description": "Execution not found"},
+    },
+)
+async def get_execution_spend(
+    execution_id: UUID = Path(..., description="Execution UUID"),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Get LiteLLM spend data for an execution's requests."""
+    execution = await executor.get_execution(session, execution_id)
+    if not execution:
+        raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{settings.litellm_proxy_url}/spend/logs",
+                params={"request_id": str(execution_id)},
+                headers={
+                    "Authorization": f"Bearer {settings.litellm_master_key.get_secret_value()}"
+                },
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning(
+                "LiteLLM spend query failed: execution_id=%s status=%d",
+                execution_id,
+                resp.status_code,
+                extra={
+                    "event": "litellm_spend_error",
+                    "execution_id": str(execution_id),
+                    "http_status": resp.status_code,
+                },
+            )
+            return {"spend_logs": [], "error": f"LiteLLM returned {resp.status_code}"}
+    except httpx.RequestError as exc:
+        logger.warning(
+            "LiteLLM spend request failed: execution_id=%s error=%s",
+            execution_id,
+            exc,
+            extra={
+                "event": "litellm_spend_request_error",
+                "execution_id": str(execution_id),
+                "error_type": type(exc).__name__,
+            },
+        )
+        return {"spend_logs": [], "error": str(exc)}
 
 
 @router.get(

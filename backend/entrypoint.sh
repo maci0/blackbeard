@@ -27,6 +27,10 @@ async def migrate():
 
 asyncio.run(migrate())
 '
+echo "Stamping alembic version..."
+alembic stamp head 2>/dev/null || true
+echo "Running migrations..."
+alembic upgrade head 2>/dev/null || true
 echo "Starting Blackbeard API..."
 exec uvicorn blackbeard.main:app --host 0.0.0.0 --port 8000 \
   --workers "${WEB_CONCURRENCY:-1}"

@@ -5,7 +5,8 @@ or making actual LLM/CrewAI API calls. crewai.Agent, crewai.Task, crewai.Crew,
 and litellm.LLM are all mocked so no network traffic is produced.
 """
 
-from unittest.mock import patch
+from types import ModuleType
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -488,3 +489,186 @@ def test_build_task_caching(mock_task_cls, mock_agent_cls, mock_llm_cls):
 
     assert t1 is t2
     assert mock_task_cls.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Tool loading tests
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.importlib")
+def test_build_tool_python(mock_importlib):
+    """Tool with type=python should dynamically import the class_path."""
+    fake_cls = MagicMock(name="FakeTool")
+    fake_module = ModuleType("my_package.tools")
+    fake_module.SearchTool = fake_cls  # type: ignore[attr-defined]
+    mock_importlib.import_module.return_value = fake_module
+
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "search",
+        {"type": "python", "class_path": "my_package.tools.SearchTool", "config": {"k": 5}},
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+    result = loader.build_tool("ref:tools/search")
+
+    mock_importlib.import_module.assert_called_once_with("my_package.tools")
+    fake_cls.assert_called_once_with(k=5)
+    assert result is fake_cls.return_value
+
+
+@patch("blackbeard.engine.loader.importlib")
+def test_build_tool_python_no_config(mock_importlib):
+    """Tool with type=python and no config should pass empty kwargs."""
+    fake_cls = MagicMock(name="PlainTool")
+    fake_module = ModuleType("tools")
+    fake_module.PlainTool = fake_cls  # type: ignore[attr-defined]
+    mock_importlib.import_module.return_value = fake_module
+
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "plain",
+        {"type": "python", "class_path": "tools.PlainTool"},
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+    result = loader.build_tool("ref:tools/plain")
+
+    fake_cls.assert_called_once_with()
+    assert result is fake_cls.return_value
+
+
+def test_build_tool_python_missing_class_path():
+    """Tool with type=python but no class_path should raise LoaderError."""
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "broken",
+        {"type": "python"},
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+    with pytest.raises(LoaderError, match="no class_path"):
+        loader.build_tool("ref:tools/broken")
+
+
+@patch("blackbeard.engine.loader.importlib")
+def test_build_tool_builtin(mock_importlib):
+    """Tool with type=builtin should import from crewai_tools."""
+    fake_tool_cls = MagicMock(name="SerperDevTool")
+    fake_crewai_tools = MagicMock()
+    fake_crewai_tools.SerperDevTool = fake_tool_cls
+
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "serper",
+        {"type": "builtin", "class_path": "SerperDevTool"},
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+
+    with patch.dict("sys.modules", {"crewai_tools": fake_crewai_tools}):
+        result = loader.build_tool("ref:tools/serper")
+
+    fake_tool_cls.assert_called_once_with()
+    assert result is fake_tool_cls.return_value
+
+
+def test_build_tool_unsupported_type():
+    """Tool with unsupported type (e.g. wasm) should return None."""
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "wasm-tool",
+        {"type": "wasm", "module": "something.wasm"},
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+    result = loader.build_tool("ref:tools/wasm-tool")
+
+    assert result is None
+
+
+def test_build_tool_mcp_unsupported():
+    """Tool with type=mcp should return None (not yet supported)."""
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "mcp-tool",
+        {"type": "mcp", "endpoint": "http://example.com"},
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+    result = loader.build_tool("ref:tools/mcp-tool")
+
+    assert result is None
+
+
+def test_build_tool_wrong_kind_raises():
+    """build_tool with a non-Tool resource should raise LoaderError."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "not-a-tool",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    # Store the agent under Tool/ key so _resolve_ref finds it
+    loader = ResourceLoader({"Tool/not-a-tool": agent_res})
+    with pytest.raises(LoaderError, match="Expected Tool"):
+        loader.build_tool("ref:tools/not-a-tool")
+
+
+# ---------------------------------------------------------------------------
+# Agent with tools integration
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.importlib")
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+def test_build_agent_with_tool_refs(mock_agent_cls, mock_llm_cls, mock_importlib):
+    """Agent with tool refs should resolve tools and pass them to Agent constructor."""
+    fake_tool_cls = MagicMock(name="SearchTool")
+    fake_module = ModuleType("my_tools")
+    fake_module.SearchTool = fake_tool_cls  # type: ignore[attr-defined]
+    mock_importlib.import_module.return_value = fake_module
+
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "search",
+        {"type": "python", "class_path": "my_tools.SearchTool"},
+    )
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "tooled-agent",
+        {
+            "role": "Researcher",
+            "goal": "Find things",
+            "backstory": "Expert",
+            "tools": ["ref:tools/search"],
+        },
+    )
+    loader = ResourceLoader(_resource_map(tool_res, agent_res))
+    loader.build_agent("ref:agents/tooled-agent")
+
+    _, kwargs = mock_agent_cls.call_args
+    assert "tools" in kwargs
+    assert len(kwargs["tools"]) == 1
+    assert kwargs["tools"][0] is fake_tool_cls.return_value
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+def test_build_agent_with_unsupported_tool_skips(mock_agent_cls, mock_llm_cls):
+    """Agent with unsupported tool type should skip the tool (no tools kwarg)."""
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "wasm-tool",
+        {"type": "wasm", "module": "something.wasm"},
+    )
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "wasm-agent",
+        {
+            "role": "Runner",
+            "goal": "Run",
+            "backstory": "Fast",
+            "tools": ["ref:tools/wasm-tool"],
+        },
+    )
+    loader = ResourceLoader(_resource_map(tool_res, agent_res))
+    loader.build_agent("ref:agents/wasm-agent")
+
+    _, kwargs = mock_agent_cls.call_args
+    assert "tools" not in kwargs

@@ -6,6 +6,7 @@ LLM connections through LiteLLM Proxy.
 
 from __future__ import annotations
 
+import importlib
 import logging
 import re
 from typing import TYPE_CHECKING, Any
@@ -23,6 +24,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _SAFE_FILENAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+
+# The agent runs in the same process as the API server
+_SELF_API_URL = "http://localhost:8000"
 
 
 class LoaderError(Exception):
@@ -96,6 +100,46 @@ class ResourceLoader:
         self._llm_cache[ref_or_name] = llm
         return llm
 
+    def build_tool(self, ref_or_name: str) -> Any:
+        """Build a tool from a Tool resource ref.
+
+        Supports ``type: python`` (dynamic import via ``class_path``) and
+        ``type: builtin`` (import from ``crewai_tools``).  Other types
+        (``wasm``, ``mcp``) log a warning and return ``None``.
+        """
+        resource = self._resolve_ref(ref_or_name)
+        if resource.kind != ResourceKind.TOOL:
+            raise LoaderError(f"Expected Tool, got {resource.kind.value}")
+
+        spec = resource.spec
+        tool_type = spec.get("type", "python")
+
+        if tool_type == "python":
+            class_path = spec.get("class_path")
+            if not class_path:
+                raise LoaderError(f"Tool '{resource.name}' has type=python but no class_path")
+            module_path, class_name = class_path.rsplit(".", 1)
+            module = importlib.import_module(module_path)
+            tool_cls = getattr(module, class_name)
+            config = spec.get("config", {})
+            return tool_cls(**config)
+
+        if tool_type == "builtin":
+            builtin_name = spec.get("class_path") or resource.name
+            try:
+                import crewai_tools
+
+                tool_cls = getattr(crewai_tools, builtin_name, None)
+                if tool_cls is None:
+                    raise LoaderError(f"Builtin tool '{builtin_name}' not found in crewai_tools")
+                config = spec.get("config", {})
+                return tool_cls(**config)
+            except ImportError as exc:
+                raise LoaderError("crewai_tools not installed") from exc
+
+        logger.warning("Tool type '%s' not yet supported for runtime loading", tool_type)
+        return None
+
     def build_agent(self, ref_or_name: str) -> Agent:
         """Build a CrewAI Agent from an Agent resource ref."""
         if ref_or_name in self._agent_cache:
@@ -120,13 +164,13 @@ class ResourceLoader:
 
         tool_refs = spec.get("tools", [])
         if tool_refs:
-            logger.warning(
-                "Agent '%s' declares tool refs %s — "
-                "tool loading is not supported. "
-                "Refs are preserved in the resource spec but not instantiated at runtime.",
-                resource.name,
-                tool_refs,
-            )
+            tools = []
+            for ref in tool_refs:
+                tool = self.build_tool(ref)
+                if tool is not None:
+                    tools.append(tool)
+            if tools:
+                agent_kwargs["tools"] = tools
 
         for key in ("max_iter", "max_rpm", "memory", "cache"):
             if key in spec:
@@ -172,6 +216,51 @@ class ResourceLoader:
         self._task_cache[ref_or_name] = task
         return task
 
+    def _build_discovery_tools(self, namespace: str) -> list[Any]:
+        """Build the JIT discovery meta-tools for the given namespace."""
+        from blackbeard.engine.discovery_tools import GetToolTool, SearchToolsTool
+
+        return [
+            SearchToolsTool(
+                api_url=_SELF_API_URL,
+                api_key=settings.blackbeard_api_key.get_secret_value(),
+                namespace=namespace,
+            ),
+            GetToolTool(
+                api_url=_SELF_API_URL,
+                api_key=settings.blackbeard_api_key.get_secret_value(),
+                namespace=namespace,
+            ),
+        ]
+
+    def _inject_discovery_tools(
+        self,
+        agent: Agent,
+        agent_resource: Resource,
+        tool_loading: str,
+        namespace: str,
+    ) -> None:
+        """Inject discovery meta-tools into an agent if the crew/agent config allows it."""
+        if tool_loading not in ("jit", "hybrid"):
+            return
+
+        agent_spec = agent_resource.spec
+        if not agent_spec.get("tool_discovery", True):
+            return
+
+        discovery_tools = self._build_discovery_tools(namespace)
+        existing = agent.tools or []
+        agent.tools = list(existing) + discovery_tools
+        logger.debug(
+            "Injected discovery tools into agent '%s'",
+            agent_resource.name,
+            extra={
+                "event": "discovery_tools_injected",
+                "agent_name": agent_resource.name,
+                "tool_loading": tool_loading,
+            },
+        )
+
     def build_crew(self, crew_name: str) -> Crew:
         """Build a complete CrewAI Crew from a Crew resource.
 
@@ -184,9 +273,15 @@ class ResourceLoader:
             raise LoaderError(f"Crew '{crew_name}' not found")
 
         spec = resource.spec
+        tool_loading = spec.get("tool_loading", "hybrid")
 
         agent_refs = spec.get("agents", [])
         agents = [self.build_agent(ref) for ref in agent_refs]
+
+        # Inject discovery meta-tools into agents based on crew tool_loading setting
+        for agent_ref, agent in zip(agent_refs, agents, strict=False):
+            agent_resource = self._resolve_ref(agent_ref)
+            self._inject_discovery_tools(agent, agent_resource, tool_loading, resource.namespace)
 
         task_refs = spec.get("tasks", [])
         tasks = [self.build_task(ref) for ref in task_refs]
