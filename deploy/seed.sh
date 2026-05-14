@@ -215,6 +215,84 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
 }' > /dev/null
 echo "  Tool/vision"
 
+# ── MCP Servers (no auth required) ───────────────────────────────────
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "mcp-filesystem"},
+  "spec": {
+    "type": "mcp-stdio",
+    "description": "Read, write, and manage files on the local filesystem via MCP",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/workspace"]
+  }
+}' > /dev/null
+echo "  Tool/mcp-filesystem"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "mcp-fetch"},
+  "spec": {
+    "type": "mcp-stdio",
+    "description": "Fetch and extract content from URLs (web pages, APIs)",
+    "command": "uvx",
+    "args": ["mcp-server-fetch"]
+  }
+}' > /dev/null
+echo "  Tool/mcp-fetch"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "mcp-memory"},
+  "spec": {
+    "type": "mcp-stdio",
+    "description": "Persistent memory via a knowledge graph — store and retrieve entities and relations",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-memory"]
+  }
+}' > /dev/null
+echo "  Tool/mcp-memory"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "mcp-brave-search"},
+  "spec": {
+    "type": "mcp-stdio",
+    "description": "Web search via Brave Search API (requires BRAVE_API_KEY env var)",
+    "command": "npx",
+    "args": ["-y", "@anthropic/mcp-server-brave-search"]
+  }
+}' > /dev/null
+echo "  Tool/mcp-brave-search"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "mcp-context7"},
+  "spec": {
+    "type": "mcp-http",
+    "description": "Look up library documentation and code examples — no auth required",
+    "url": "https://mcp.context7.com/sse"
+  }
+}' > /dev/null
+echo "  Tool/mcp-context7"
+
+curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Tool",
+  "metadata": {"name": "mcp-sequentialthinking"},
+  "spec": {
+    "type": "mcp-stdio",
+    "description": "Dynamic problem-solving through structured sequential thinking with revision support",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+  }
+}' > /dev/null
+echo "  Tool/mcp-sequentialthinking"
+
 echo ""
-echo "Seed complete. 16 resources created."
+echo "Seed complete. 22 resources created."
 echo "Run a crew: curl -X POST $API/api/v1/crews/research-crew/kickoff -H 'X-API-Key: $KEY' -H 'Content-Type: application/json' -d '{\"inputs\":{\"topic\":\"AI agents\"}}'"

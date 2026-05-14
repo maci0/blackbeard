@@ -197,7 +197,10 @@ TOOL_SCHEMA = {
     "type": "object",
     "required": ["type"],
     "properties": {
-        "type": {"type": "string", "enum": ["python", "wasm", "builtin"]},
+        "type": {
+            "type": "string",
+            "enum": ["python", "wasm", "builtin", "mcp-stdio", "mcp-http"],
+        },
         "class_path": {"type": "string", "pattern": "^[a-zA-Z_][a-zA-Z0-9_.]*$", "maxLength": 500},
         "description": {"type": "string", "maxLength": 5000},
         "wasm_module": {
@@ -212,6 +215,14 @@ TOOL_SCHEMA = {
             "items": {"type": "string", "maxLength": 100},
             "maxItems": 20,
         },
+        "command": {"type": "string", "maxLength": 500},
+        "args": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 500},
+            "maxItems": 20,
+        },
+        "url": {"type": "string", "maxLength": 2000},
+        "env": {"type": "object"},
     },
     "additionalProperties": False,
 }
