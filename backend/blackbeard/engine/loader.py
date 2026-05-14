@@ -14,7 +14,7 @@ from crewai import LLM, Agent, Crew, Process, Task
 
 from blackbeard.config import settings
 from blackbeard.kinds import ResourceKind
-from blackbeard.litellm import apply_model_params, apply_vertex_params, build_model_string
+from blackbeard.litellm import apply_model_params, apply_vertex_params
 from blackbeard.resources.refs import parse_ref
 
 if TYPE_CHECKING:
@@ -75,15 +75,14 @@ class ResourceLoader:
             raise LoaderError(f"Expected LLMConnection, got {resource.kind.value}")
 
         spec = resource.spec
-        provider = spec.get("provider", "")
         model = spec.get("model", "")
         params = spec.get("parameters", {})
         vertex = spec.get("vertex", {})
 
-        model_str = build_model_string(provider, model)
-
+        # Use plain model name — the LiteLLM proxy maps it to the
+        # provider-specific format via its config.yaml model_list.
         llm_kwargs: dict[str, Any] = {
-            "model": model_str,
+            "model": model,
             "base_url": settings.litellm_proxy_url,
             "api_base": settings.litellm_proxy_url,
             "api_key": settings.litellm_master_key.get_secret_value(),

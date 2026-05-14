@@ -39,7 +39,7 @@ def _resource_map(*resources: Resource) -> dict[str, Resource]:
 
 @patch("blackbeard.engine.loader.LLM")
 def test_build_llm_vertex_ai(mock_llm_cls):
-    """vertex_ai provider should build model string as 'vertex_ai/<model>'."""
+    """Model name should be passed through as-is (proxy handles provider routing)."""
     conn = make_resource(
         ResourceKind.LLM_CONNECTION,
         "my-llm",
@@ -50,7 +50,7 @@ def test_build_llm_vertex_ai(mock_llm_cls):
 
     mock_llm_cls.assert_called_once()
     _, kwargs = mock_llm_cls.call_args
-    assert kwargs["model"] == "vertex_ai/claude-sonnet-4-6"
+    assert kwargs["model"] == "claude-sonnet-4-6"
 
 
 @patch("blackbeard.engine.loader.LLM")

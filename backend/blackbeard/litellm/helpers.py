@@ -6,7 +6,10 @@ from blackbeard.config import settings
 
 
 def build_model_string(provider: str, model: str) -> str:
-    """Build the LiteLLM model identifier string from provider and model name."""
+    """Build the LiteLLM model identifier string from provider and model name.
+
+    Used by config_gen to create proxy config entries (needs provider prefix).
+    """
     if provider == "vertex_ai":
         return f"vertex_ai/{model}"
     if provider == "openai":
