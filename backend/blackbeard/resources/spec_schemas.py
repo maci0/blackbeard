@@ -112,6 +112,28 @@ CREW_SCHEMA = {
         },
         "default_agent_policy": {"type": "string", "maxLength": 500},
         "inline": {"type": "object"},
+        "a2a": {
+            "type": "object",
+            "properties": {
+                "enabled": {"type": "boolean", "default": False},
+                "protocol_versions": {
+                    "type": "array",
+                    "items": {"type": "string", "maxLength": 10},
+                    "maxItems": 5,
+                },
+                "transports": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": ["json-rpc", "grpc"],
+                    },
+                    "maxItems": 2,
+                },
+                "auth": {"type": "string", "maxLength": 500},
+                "public": {"type": "boolean", "default": False},
+            },
+            "additionalProperties": False,
+        },
     },
     "additionalProperties": False,
 }
