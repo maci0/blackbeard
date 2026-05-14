@@ -282,6 +282,13 @@ def _run_crew_sync(
     asyncio.set_event_loop(loop)
     try:
         loop.run_until_complete(_run_crew_async(execution_id, resource_snapshot, crew_name, inputs))
+    except Exception:
+        logger.exception(
+            "Crew thread crashed for execution %s",
+            execution_id,
+            extra={"event": "crew_thread_crash", "execution_id": str(execution_id)},
+        )
+        raise
     finally:
         loop.close()
 
@@ -464,12 +471,34 @@ async def _run_crew_async(
                 },
             )
 
-            execution = await _get_execution_for_update(session, execution_id)
-            if execution and execution.status != ExecutionStatus.CANCELLED:
-                execution.status = ExecutionStatus.FAILED
-                execution.error = _sanitize_error(str(e))
-                execution.completed_at = datetime.now(UTC)
-                await session.commit()
+            try:
+                execution = await _get_execution_for_update(session, execution_id)
+                if execution and execution.status != ExecutionStatus.CANCELLED:
+                    execution.status = ExecutionStatus.FAILED
+                    execution.error = _sanitize_error(str(e))
+                    execution.completed_at = datetime.now(UTC)
+                    await session.commit()
+                    logger.info(
+                        "Execution %s marked as failed in DB",
+                        execution_id,
+                        extra={
+                            "event": "execution_marked_failed",
+                            "execution_id": str(execution_id),
+                        },
+                    )
+            except Exception as db_err:
+                logger.error(
+                    "Failed to mark execution %s as failed in DB: %s",
+                    execution_id,
+                    db_err,
+                    exc_info=True,
+                    extra={
+                        "event": "execution_mark_failed_db_error",
+                        "execution_id": str(execution_id),
+                        "error_type": type(db_err).__name__,
+                    },
+                )
+                raise
 
 
 async def _get_execution_for_update(session: AsyncSession, execution_id: UUID) -> Execution | None:
