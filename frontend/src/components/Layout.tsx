@@ -1,14 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Database, Play, Cpu, Wrench, Menu, X } from 'lucide-react'
+import {
+  LayoutDashboard,
+  Database,
+  Play,
+  Cpu,
+  Wrench,
+  Menu,
+  X,
+  Anchor,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from 'lucide-react'
 import { useDarkMode } from '@/lib/hooks'
 import WelcomeDialog from './onboarding/WelcomeDialog'
 import GuidedTour from './onboarding/GuidedTour'
 import HelpMenu from './onboarding/HelpMenu'
-
-/* ------------------------------------------------------------------ */
-/* Nav items                                                           */
-/* ------------------------------------------------------------------ */
 
 const navItems = [
   { to: '/studio', label: 'Studio', icon: LayoutDashboard },
@@ -18,9 +25,17 @@ const navItems = [
   { to: '/tools', label: 'Tools', icon: Wrench },
 ]
 
-/* ------------------------------------------------------------------ */
-/* Layout                                                              */
-/* ------------------------------------------------------------------ */
+function BlackbeardLogo({ size = 28 }: { size?: number }) {
+  return (
+    <div
+      className="flex shrink-0 items-center justify-center rounded-md bg-slate-900"
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    >
+      <Anchor className="text-indigo-400" style={{ width: size * 0.6, height: size * 0.6 }} />
+    </div>
+  )
+}
 
 export default function Layout() {
   const navigate = useNavigate()
@@ -29,22 +44,25 @@ export default function Layout() {
 
   const [showWelcome, setShowWelcome] = useState(false)
   const [showTour, setShowTour] = useState(false)
-  // Increment to force GuidedTour remount (fresh step=0) on restart
   const [tourKey, setTourKey] = useState(0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem('sidebar_collapsed') === 'true',
+  )
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
 
-  // Close mobile sidebar on route change
+  useEffect(() => {
+    localStorage.setItem('sidebar_collapsed', String(collapsed))
+  }, [collapsed])
+
   useEffect(() => {
     setSidebarOpen(false)
   }, [location.pathname])
 
-  // Move focus into sidebar when it opens; restore to menu button when it closes
   const prevSidebarOpen = useRef(false)
   useEffect(() => {
     if (sidebarOpen && !prevSidebarOpen.current) {
-      // Focus the first nav link inside the sidebar
       requestAnimationFrame(() => {
         const firstLink = sidebarRef.current?.querySelector<HTMLElement>('a[href]')
         firstLink?.focus()
@@ -55,7 +73,6 @@ export default function Layout() {
     prevSidebarOpen.current = sidebarOpen
   }, [sidebarOpen])
 
-  // Close mobile sidebar on Escape key
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') setSidebarOpen(false)
   }, [])
@@ -67,20 +84,15 @@ export default function Layout() {
     }
   }, [sidebarOpen, handleKeyDown])
 
-  // Show welcome dialog on first ever visit
   useEffect(() => {
     if (!localStorage.getItem('blackbeard_onboarding_completed')) {
       setShowWelcome(true)
     }
   }, [])
 
-  /* ── Welcome dialog handlers ── */
-
   const handleStartTour = () => {
     setShowWelcome(false)
-    // Navigate to Studio so tour targets are in the DOM
     void navigate('/studio')
-    // Small delay to let the page render before spotlighting elements
     setTimeout(() => {
       setTourKey((k) => k + 1)
       setShowTour(true)
@@ -92,8 +104,6 @@ export default function Layout() {
     void navigate('/studio')
   }
 
-  /* ── Tour handlers ── */
-
   const handleTourComplete = () => {
     setShowTour(false)
   }
@@ -101,7 +111,6 @@ export default function Layout() {
   const handleRestartTour = () => {
     localStorage.removeItem('blackbeard_tour_completed')
     void navigate('/studio')
-    // Delay slightly so navigation settles before spotlighting
     setTimeout(() => {
       setTourKey((k) => k + 1)
       setShowTour(true)
@@ -128,6 +137,7 @@ export default function Layout() {
         >
           {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
+        <BlackbeardLogo size={22} />
         <span className="text-sm font-bold tracking-tight">Blackbeard</span>
       </div>
 
@@ -144,22 +154,39 @@ export default function Layout() {
       <aside
         ref={sidebarRef}
         aria-label="Main navigation"
-        className={`fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r bg-card transition-transform duration-200 ease-in-out md:static md:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-card transition-all duration-200 ease-in-out md:static md:translate-x-0 ${
+          collapsed ? 'md:w-14' : 'md:w-60'
+        } w-60 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        <div className="border-b p-4">
-          <span className="text-xl font-bold tracking-tight">Blackbeard</span>
-          <p className="text-xs text-muted-foreground">Agent Management Platform</p>
-        </div>
+        {/* Branding */}
+        <button
+          onClick={() => void navigate('/studio')}
+          className={`flex items-center gap-3 border-b p-4 text-left transition-all hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+            collapsed ? 'md:justify-center md:px-2' : ''
+          }`}
+          aria-label="Go to Studio"
+        >
+          <BlackbeardLogo size={collapsed ? 24 : 28} />
+          <div className={collapsed ? 'md:hidden' : ''}>
+            <span className="text-xl font-bold tracking-tight">Blackbeard</span>
+            <p className="text-xs text-muted-foreground">Agent Management Platform</p>
+          </div>
+        </button>
 
-        <nav aria-label="Primary" data-tour="sidebar-nav" className="flex-1 space-y-1 p-2">
+        <nav
+          aria-label="Primary"
+          data-tour="sidebar-nav"
+          className={`flex-1 space-y-1 p-2 ${collapsed ? 'md:px-1' : ''}`}
+        >
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
+              title={collapsed ? label : undefined}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  collapsed ? 'md:justify-center md:px-0' : ''
+                } ${
                   isActive
                     ? 'bg-accent text-foreground ring-2 ring-inset ring-primary/20'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground'
@@ -168,23 +195,41 @@ export default function Layout() {
             >
               {({ isActive }) => (
                 <>
-                  <Icon className={`h-4 w-4 ${isActive ? 'text-primary' : ''}`} />
-                  {label}
+                  <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+                  <span className={collapsed ? 'md:sr-only' : ''}>{label}</span>
                 </>
               )}
             </NavLink>
           ))}
         </nav>
 
-        {/* Sidebar footer: Help menu + version */}
-        <div className="flex items-center justify-between border-t p-4">
-          <HelpMenu onRestartTour={handleRestartTour} />
-          <span className="text-xs text-muted-foreground">v0.1.0</span>
+        {/* Sidebar footer */}
+        <div
+          className={`flex items-center border-t p-2 ${
+            collapsed ? 'md:justify-center' : 'justify-between px-4 py-4'
+          }`}
+        >
+          <div className={collapsed ? 'md:hidden' : ''}>
+            <HelpMenu onRestartTour={handleRestartTour} />
+          </div>
+          <span className={`text-xs text-muted-foreground ${collapsed ? 'md:hidden' : ''}`}>
+            v0.1.0
+          </span>
+          <button
+            onClick={() => setCollapsed((v) => !v)}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="hidden rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </button>
         </div>
       </aside>
 
       {/* ── Main content ── */}
-      {/* inert prevents focus from reaching obscured content while mobile sidebar is open */}
       <main
         id="main-content"
         className="flex flex-1 flex-col overflow-hidden pt-12 md:pt-0"

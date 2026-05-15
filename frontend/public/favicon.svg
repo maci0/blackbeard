@@ -1,4 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="6" fill="#0f172a"/>
-  <text x="16" y="23" text-anchor="middle" font-size="20" font-family="system-ui,sans-serif" font-weight="700" fill="#818cf8">&#9875;</text>
+  <g transform="translate(6,6)" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="10" cy="4" r="3"/>
+    <line x1="10" y1="7" x2="10" y2="19"/>
+    <path d="M4 15l6 4 6-4"/>
+    <line x1="10" y1="7" x2="10" y2="7"/>
+  </g>
 </svg>
