@@ -264,7 +264,11 @@ export default function ResourceDetail() {
     setRunError(null)
     try {
       const inputs = JSON.parse(rawInputs) as Record<string, unknown>
-      const result = await api.post<{ id: string }>(`/api/v1/crews/${name}/kickoff`, { inputs })
+      const ns = resource?.metadata.namespace ?? 'default'
+      const nsParam = ns !== 'default' ? `?namespace=${encodeURIComponent(ns)}` : ''
+      const result = await api.post<{ id: string }>(`/api/v1/crews/${name}/kickoff${nsParam}`, {
+        inputs,
+      })
       void navigate(`/executions/${result.id}`)
     } catch (err) {
       setRunError((err as Error).message)

@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 
 /* ------------------------------------------------------------------ */
@@ -95,12 +95,60 @@ export function TourTooltip({
   const progress = ((step + 1) / totalSteps) * 100
 
   const { style, placement } = computePosition(targetRect)
+  const tooltipRef = useRef<HTMLDivElement>(null)
+
+  // Move focus into the tooltip whenever step changes
+  useEffect(() => {
+    // Small delay to let the DOM settle after position computation
+    const timer = setTimeout(() => {
+      tooltipRef.current?.focus()
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [step])
+
+  // Trap focus within the tooltip while the tour is active
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+      const container = tooltipRef.current
+      if (!container) return
+
+      const focusable = container.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusable.length === 0) return
+
+      const first = focusable[0]!
+      const last = focusable[focusable.length - 1]!
+
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   return (
     <div
+      ref={tooltipRef}
+      role="dialog"
+      aria-label={`Tour step ${step + 1} of ${totalSteps}: ${title}`}
+      aria-modal="true"
+      tabIndex={-1}
       style={style}
       // Stop clicks from bubbling to the backdrop click-capture layer
       onClick={(e) => e.stopPropagation()}
+      className="focus:outline-none"
     >
       {/* Announce step changes to screen readers */}
       <span className="sr-only" aria-live="polite" aria-atomic="true">

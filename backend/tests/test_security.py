@@ -235,3 +235,43 @@ async def test_body_size_limit_negative_content_length(client):
         headers=headers,
     )
     assert response.status_code == 413
+
+
+# ---------------------------------------------------------------------------
+# Query-string credential redaction
+# ---------------------------------------------------------------------------
+
+
+def test_redact_query_string_strips_api_key():
+    """api_key parameter must be redacted from logged query strings."""
+    from blackbeard.api.middleware import _redact_query_string
+
+    result = _redact_query_string("api_key=super-secret&namespace=default")
+    assert "super-secret" not in result
+    # urlencode may percent-encode brackets; check the key is paired with redacted value
+    assert "api_key=" in result
+    assert "namespace=default" in result
+
+
+def test_redact_query_string_case_insensitive():
+    """Redaction should match parameter names case-insensitively."""
+    from blackbeard.api.middleware import _redact_query_string
+
+    result = _redact_query_string("API_KEY=secret123&limit=10")
+    assert "secret123" not in result
+    assert "limit=10" in result
+
+
+def test_redact_query_string_preserves_safe_params():
+    """Non-sensitive parameters must pass through unmodified."""
+    from blackbeard.api.middleware import _redact_query_string
+
+    result = _redact_query_string("namespace=prod&limit=50")
+    assert result == "namespace=prod&limit=50"
+
+
+def test_redact_query_string_empty():
+    """Empty query string should return unchanged."""
+    from blackbeard.api.middleware import _redact_query_string
+
+    assert _redact_query_string("") == ""

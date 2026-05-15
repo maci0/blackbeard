@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import ipaddress
 import re
 import socket
+import threading
 from typing import Any
 from urllib.parse import urlparse
 
@@ -226,6 +228,24 @@ def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError])
         errors.append(ValidationError(field_name, "URL could not be parsed for SSRF validation."))
 
 
+_DNS_EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
+_DNS_EXECUTOR_LOCK = threading.Lock()
+
+
+def _get_dns_executor() -> concurrent.futures.ThreadPoolExecutor:
+    """Return a shared single-thread executor for DNS resolution."""
+    global _DNS_EXECUTOR
+    if _DNS_EXECUTOR is not None:
+        return _DNS_EXECUTOR
+    with _DNS_EXECUTOR_LOCK:
+        if _DNS_EXECUTOR is not None:
+            return _DNS_EXECUTOR
+        _DNS_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+            max_workers=2, thread_name_prefix="dns-resolve"
+        )
+        return _DNS_EXECUTOR
+
+
 def _check_dns_resolution(
     hostname: str, field_name: str, errors: list[ValidationError]
 ) -> None:
@@ -234,15 +254,13 @@ def _check_dns_resolution(
     Runs in a thread with a timeout to avoid blocking the async event loop
     when DNS is slow or unresponsive.
     """
-    import concurrent.futures
-
     def _resolve() -> list[tuple[str, ...]]:
         return socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
 
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(_resolve)
-            results = future.result(timeout=5.0)
+        pool = _get_dns_executor()
+        future = pool.submit(_resolve)
+        results = future.result(timeout=5.0)
         for _family, _type, _proto, _canonname, sockaddr in results:
             addr_str = sockaddr[0]
             try:

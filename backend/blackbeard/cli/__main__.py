@@ -573,7 +573,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
     epilog="""\b
 Examples:
   blackbeard get Agent my-agent
-  blackbeard get Crew research-crew -n prod
+  blackbeard -n prod get Crew research-crew
   blackbeard get LLMConnection openai --json
 """
 )
@@ -640,7 +640,7 @@ def get(ctx: click.Context, kind: str, name: str, output_json: bool) -> None:
     epilog="""\b
 Examples:
   blackbeard list Agent
-  blackbeard list Crew -n prod
+  blackbeard -n prod list Crew
   blackbeard list Task --label team=backend
   blackbeard list Agent --json
 """,
@@ -746,7 +746,7 @@ def list_resources_cmd(
     epilog="""\b
 Examples:
   blackbeard delete Agent my-agent
-  blackbeard delete Crew research-crew -n prod
+  blackbeard -n prod delete Crew research-crew
   blackbeard delete Agent my-agent -y
   blackbeard delete Agent my-agent --json
 """
@@ -810,7 +810,7 @@ Examples:
   blackbeard kickoff research-crew --input topic="AI agents"
   blackbeard kickoff research-crew --input topic="AI agents" --input depth=3
   blackbeard kickoff research-crew --wait
-  blackbeard kickoff research-crew -s http://prod:8000 -n prod --json
+  blackbeard -s http://prod:8000 -n prod kickoff research-crew --json
 """
 )
 @click.argument("crew_name")

@@ -28,8 +28,8 @@ export default memo(function ToolAssignEdge({
   return (
     <>
       <BaseEdge id={id} path={edgePath} style={EDGE_STYLE} />
-      <circle cx={sourceX} cy={sourceY} r={3} fill="#94a3b8" />
-      <circle cx={targetX} cy={targetY} r={3} fill="#94a3b8" />
+      <circle cx={sourceX} cy={sourceY} r={3} fill="#94a3b8" aria-hidden="true" />
+      <circle cx={targetX} cy={targetY} r={3} fill="#94a3b8" aria-hidden="true" />
     </>
   )
 })

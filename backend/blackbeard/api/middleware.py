@@ -45,6 +45,26 @@ def set_api_key(key: str) -> None:
 _REQUEST_ID_PATTERN = re.compile(r"^[a-zA-Z0-9\-]{1,64}$")
 
 
+_SENSITIVE_QS_PARAMS = frozenset({"api_key", "token", "secret", "key", "password", "credential"})
+
+
+def _redact_query_string(query: str) -> str:
+    """Redact sensitive query parameters (e.g. api_key) before logging.
+
+    Replaces values of known-sensitive parameter names with '[REDACTED]'
+    to prevent credential leakage into structured log output.
+    """
+    if not query:
+        return query
+    from urllib.parse import parse_qsl, urlencode
+
+    pairs = parse_qsl(query, keep_blank_values=True)
+    redacted = [
+        (k, "[REDACTED]") if k.lower() in _SENSITIVE_QS_PARAMS else (k, v) for k, v in pairs
+    ]
+    return urlencode(redacted)
+
+
 def get_request_id(request: Request) -> str:
     """Return a validated client-supplied X-Request-Id or a fresh UUID."""
     client_id = request.headers.get("X-Request-Id")
@@ -187,7 +207,7 @@ def _log_request(request: Request, response: Response, start: float) -> None:
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("User-Agent", "")
     content_length = request.headers.get("content-length")
-    query_string = str(request.url.query) if request.url.query else None
+    query_string = _redact_query_string(request.url.query) if request.url.query else None
 
     logger.log(
         level,

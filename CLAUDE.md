@@ -66,7 +66,7 @@ bash deploy/seed.sh              # seed DB with example crew using Ollama (requi
 
 DB schema is managed in `entrypoint.sh`: first creates PostgreSQL enum types and runs `Base.metadata.create_all()` (for initial table creation), then runs `alembic upgrade head` if configured. `create_all` only creates new tables — it cannot alter existing ones — so Alembic handles schema evolution. If `alembic.ini` or `alembic/versions` doesn't exist, migrations are skipped.
 
-**CI**: GitHub Actions — backend (ruff + mypy + pytest with Postgres service) → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (parallel, cached).
+**CI**: GitHub Actions — backend (ruff + mypy + pytest with in-memory SQLite) → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (parallel, cached).
 
 ## Conventions
 
