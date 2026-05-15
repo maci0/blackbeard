@@ -149,7 +149,7 @@ function StudioInner() {
           id: `task-${task.metadata.name}`,
           type: 'task',
           position: { x: 360, y: 60 + i * 200 },
-          data: { ...task.spec },
+          data: { name: task.metadata.name, ...task.spec },
         }))
 
         // Build edges: task.spec.agent ref → agent node
