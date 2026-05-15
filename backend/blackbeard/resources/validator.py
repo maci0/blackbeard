@@ -254,7 +254,7 @@ def _check_dns_resolution(
     Runs in a thread with a timeout to avoid blocking the async event loop
     when DNS is slow or unresponsive.
     """
-    def _resolve() -> list[tuple[str, ...]]:
+    def _resolve() -> list[tuple[Any, ...]]:
         return socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
 
     try:
