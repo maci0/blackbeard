@@ -1,16 +1,22 @@
 """FastAPI application entry point."""
 
+from __future__ import annotations
+
 import logging
 import os
 import platform
-from collections.abc import AsyncGenerator
+import secrets
+import time
 from contextlib import asynccontextmanager
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-import blackbeard.models.execution  # register Execution tables
+import blackbeard.models.execution  # register Execution/ExecutionTask tables
 import blackbeard.models.resource  # noqa: F401 — register Resource/ResourceRef tables
 from blackbeard import __version__
 from blackbeard.api.chat import router as chat_router
@@ -22,59 +28,96 @@ from blackbeard.api.middleware import (
     body_size_limiter,
     global_exception_handler,
     security_headers_middleware,
+    set_api_key,
 )
 from blackbeard.api.resources import router as resources_router
 from blackbeard.config import settings
-from blackbeard.engine import shutdown_executor
-from blackbeard.litellm import shutdown_key_manager
+from blackbeard.engine import recover_stale_executions, shutdown_executor
+from blackbeard.http_client import close_all_clients
 from blackbeard.logging_config import configure_logging
 from blackbeard.models.database import engine
 
-configure_logging(debug=settings.debug)
+configure_logging(debug=settings.debug, log_level=settings.log_level)
 logger = logging.getLogger(__name__)
 
 
 def _validate_startup_config() -> None:
     """Validate security-critical configuration before accepting traffic."""
+
+    def _fatal(reason: str) -> RuntimeError:
+        logger.critical(
+            "Startup blocked: %s",
+            reason,
+            extra={"event": "startup_validation_failed", "reason": reason},
+        )
+        return RuntimeError(reason)
+
     api_key = settings.blackbeard_api_key.get_secret_value()
     if api_key == "change-me-in-production":
         if not settings.debug:
-            raise RuntimeError(
+            raise _fatal(
                 "Refusing to start: BLACKBEARD_API_KEY is set to the insecure default. "
                 "Set a strong random value via environment variable, "
                 "or set DEBUG=true for local development."
             )
-        logger.warning("SECURITY: Using default API key — set BLACKBEARD_API_KEY for production")
+        generated = secrets.token_urlsafe(32)
+        set_api_key(generated)
+        logger.warning(
+            "SECURITY: No API key configured — generated ephemeral key for this session: ...%s",
+            generated[-8:],
+            extra={"event": "ephemeral_api_key_generated"},
+        )
+        print(  # noqa: T201
+            f"Ephemeral API key (not logged): {generated}",
+            flush=True,
+        )
     elif len(api_key) < 16:
-        raise RuntimeError(
+        raise _fatal(
             "Refusing to start: BLACKBEARD_API_KEY is too short (minimum 16 characters). "
             'Generate a strong key with: python -c "import secrets; '
             'print(secrets.token_urlsafe(32))"'
         )
     if settings.litellm_master_key.get_secret_value() == "sk-litellm-master-key":
         if not settings.debug:
-            raise RuntimeError(
+            raise _fatal(
                 "Refusing to start: LITELLM_MASTER_KEY is set to the insecure default. "
                 "Set a strong random value via environment variable, "
                 "or set DEBUG=true for local development."
             )
-        logger.warning("SECURITY: Using default LiteLLM master key — set LITELLM_MASTER_KEY")
+        logger.warning(
+            "SECURITY: Using default LiteLLM master key — set LITELLM_MASTER_KEY",
+            extra={"event": "insecure_default_litellm_key"},
+        )
     if "*" in settings.cors_origins and not settings.debug:
-        raise RuntimeError(
+        raise _fatal(
             "Refusing to start: CORS_ORIGINS contains wildcard '*'. "
             "Set explicit origins for production, or set DEBUG=true for local development."
         )
+    if not settings.debug:
+        for origin in settings.cors_origins:
+            if not origin.startswith("https://"):
+                raise _fatal(
+                    f"Refusing to start: CORS origin '{origin}' must use https:// in production. "
+                    "Set DEBUG=true for local development with http origins."
+                )
     if not settings.litellm_proxy_url.startswith(("http://", "https://")):
-        url = settings.litellm_proxy_url
-        raise RuntimeError(
-            f"Refusing to start: LITELLM_PROXY_URL has unexpected scheme: {url!r}. "
-            "Must start with http:// or https://."
+        raise _fatal(
+            f"Refusing to start: LITELLM_PROXY_URL has unexpected scheme: "
+            f"{settings.litellm_proxy_url!r}. Must start with http:// or https://."
+        )
+    forwarded_allow = os.environ.get("FORWARDED_ALLOW_IPS", "")
+    if forwarded_allow == "*" and not settings.debug:
+        logger.warning(
+            "SECURITY: FORWARDED_ALLOW_IPS='*' trusts X-Forwarded-For from any source. "
+            "Set to your reverse proxy's IP to prevent IP spoofing.",
+            extra={"event": "insecure_forwarded_allow_ips"},
         )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Application lifespan: startup and shutdown."""
+    t0_startup = time.monotonic()
     _validate_startup_config()
     pool = cast("Any", engine.pool)
     logger.info(
@@ -89,38 +132,59 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             "python_version": platform.python_version(),
             "pid": os.getpid(),
             "debug": settings.debug,
+            "log_level": settings.log_level or ("DEBUG" if settings.debug else "INFO"),
             "max_concurrent_executions": settings.max_concurrent_executions,
             "litellm_url": settings.litellm_proxy_url,
+            "cors_origin_count": len(settings.cors_origins),
             "db_pool_size": pool.size(),
             "db_pool_max_overflow": pool.overflow(),
             "db_pool_timeout": pool.timeout(),
         },
     )
+    recovered = await recover_stale_executions()
+    startup_ms = round((time.monotonic() - t0_startup) * 1000, 1)
+    logger.info(
+        "Blackbeard %s ready to accept traffic (%.0fms, %d stale executions recovered)",
+        app.version,
+        startup_ms,
+        recovered,
+        extra={
+            "event": "startup_complete",
+            "version": app.version,
+            "startup_ms": startup_ms,
+            "stale_executions_recovered": recovered,
+        },
+    )
     yield
+    t0 = time.monotonic()
     logger.info("Shutdown starting", extra={"event": "app_shutdown_start"})
     try:
         shutdown_executor()
-        logger.info("Executor shut down", extra={"event": "executor_shutdown_complete"})
+        logger.info("Executor shut down", extra={"event": "executor_shutdown"})
     finally:
         try:
-            await shutdown_key_manager()
+            await shutdown_health_clients()
+            await close_all_clients()
             logger.info(
-                "Key manager shut down",
-                extra={"event": "key_manager_shutdown_complete"},
+                "HTTP clients closed",
+                extra={"event": "http_clients_shutdown_complete"},
+            )
+        except Exception:
+            logger.exception(
+                "Error closing HTTP clients",
+                extra={"event": "http_clients_shutdown_error"},
             )
         finally:
-            try:
-                await shutdown_health_clients()
-                logger.info(
-                    "Health clients closed",
-                    extra={"event": "health_clients_shutdown_complete"},
-                )
-            finally:
-                await engine.dispose()
-                logger.info(
-                    "Database connections closed",
-                    extra={"event": "database_shutdown_complete"},
-                )
+            await engine.dispose()
+            shutdown_ms = round((time.monotonic() - t0) * 1000, 1)
+            logger.info(
+                "Shutdown complete in %.0fms",
+                shutdown_ms,
+                extra={
+                    "event": "app_shutdown_complete",
+                    "shutdown_ms": shutdown_ms,
+                },
+            )
 
 
 app = FastAPI(
@@ -128,9 +192,21 @@ app = FastAPI(
     version=__version__,
     description="Open, self-hosted Agent Management Platform",
     lifespan=lifespan,
-    docs_url="/docs" if settings.debug else None,  # Swagger UI — debug only
-    redoc_url="/redoc" if settings.debug else None,  # ReDoc — debug only
-    openapi_url="/openapi.json" if settings.debug else None,  # OpenAPI spec — debug only
+    docs_url="/docs" if settings.debug else None,
+    redoc_url="/redoc" if settings.debug else None,
+    openapi_url="/openapi.json" if settings.debug else None,
+    openapi_tags=[
+        {"name": "health", "description": "Liveness and readiness probes"},
+        {"name": "chat", "description": "Ad-hoc chat completions and model management"},
+        {
+            "name": "executions",
+            "description": "Crew execution lifecycle (kickoff, status, cancel, stream)",
+        },
+        {
+            "name": "resources",
+            "description": "Generic CRUD for all resource kinds (Agent, Task, Crew, etc.)",
+        },
+    ],
 )
 
 app.add_middleware(
@@ -152,7 +228,6 @@ app.middleware("http")(security_headers_middleware)
 
 app.add_exception_handler(Exception, global_exception_handler)
 
-# Routers
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(executions_router, prefix="/api/v1")

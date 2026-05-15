@@ -207,3 +207,74 @@ def test_generate_config_no_parameters_key():
     params = config["model_list"][0]["litellm_params"]
     assert "temperature" not in params
     assert "max_tokens" not in params
+
+
+# ---------------------------------------------------------------------------
+# Tests — helpers.py (build_model_string, apply_model_params, apply_vertex_params)
+# ---------------------------------------------------------------------------
+
+
+from blackbeard.litellm.helpers import apply_model_params, apply_vertex_params, build_model_string
+
+
+def test_build_model_string_openai():
+    """openai provider should return model string without prefix."""
+    assert build_model_string("openai", "gpt-4o") == "gpt-4o"
+
+
+def test_build_model_string_empty_provider():
+    """Empty provider should return model string without prefix."""
+    assert build_model_string("", "gpt-4o") == "gpt-4o"
+
+
+def test_build_model_string_vertex_ai():
+    """Non-openai provider should return 'provider/model'."""
+    assert build_model_string("vertex_ai", "claude-sonnet-4-6") == "vertex_ai/claude-sonnet-4-6"
+
+
+def test_build_model_string_anthropic():
+    """Generic provider should prefix with 'provider/'."""
+    assert build_model_string("anthropic", "claude-3-opus") == "anthropic/claude-3-opus"
+
+
+def test_apply_model_params_copies_known_keys():
+    """apply_model_params should copy temperature, max_tokens, top_p."""
+    target = {}
+    params = {"temperature": 0.5, "max_tokens": 1024, "top_p": 0.9}
+    apply_model_params(target, params)
+    assert target["temperature"] == 0.5
+    assert target["max_tokens"] == 1024
+    assert target["top_p"] == 0.9
+
+
+def test_apply_model_params_ignores_unknown_keys():
+    """apply_model_params should NOT copy arbitrary keys."""
+    target = {}
+    params = {"temperature": 0.5, "unknown_param": "bad"}
+    apply_model_params(target, params)
+    assert target == {"temperature": 0.5}
+    assert "unknown_param" not in target
+
+
+def test_apply_model_params_empty():
+    """apply_model_params with empty params should not modify target."""
+    target = {"existing": True}
+    apply_model_params(target, {})
+    assert target == {"existing": True}
+
+
+def test_apply_vertex_params_explicit():
+    """apply_vertex_params should set project/location from vertex dict."""
+    target = {}
+    vertex = {"project": "my-project", "location": "us-central1"}
+    apply_vertex_params(target, vertex)
+    assert target["vertex_project"] == "my-project"
+    assert target["vertex_location"] == "us-central1"
+
+
+def test_apply_vertex_params_empty():
+    """apply_vertex_params with empty dict should use global fallbacks (may be None)."""
+    target = {}
+    apply_vertex_params(target, {})
+    # If no global settings set, keys may not appear — but no KeyError should occur
+    # (just verifying it doesn't crash)

@@ -281,3 +281,72 @@ def test_parse_ref_knowledge_source():
     assert ref is not None
     assert ref.kind == ResourceKind.KNOWLEDGE_SOURCE
     assert ref.name == "my-docs"
+
+
+# ---------------------------------------------------------------------------
+# extract_refs — edge cases for robustness
+# ---------------------------------------------------------------------------
+
+
+def test_extract_refs_ignores_non_string_values():
+    """extract_refs should skip non-string values without crashing."""
+    spec = {"count": 42, "enabled": True, "data": None, "items": [1, 2, 3]}
+    refs = extract_refs(spec)
+    assert refs == []
+
+
+def test_extract_refs_mixed_ref_and_non_ref():
+    """extract_refs should extract refs while ignoring non-ref strings."""
+    spec = {
+        "agent": "ref:agents/writer",
+        "description": "not-a-ref",
+        "tags": ["production", "ref:tools/search"],
+    }
+    refs = extract_refs(spec)
+    assert len(refs) == 2
+
+
+# ---------------------------------------------------------------------------
+# detect_cycles — disjoint graph
+# ---------------------------------------------------------------------------
+
+
+def test_detect_no_cycles_disjoint():
+    """Disjoint subgraphs with no cycles should return empty."""
+    adjacency = {
+        "Agent/a": ["Task/b"],
+        "Task/b": [],
+        "Agent/c": ["Task/d"],
+        "Task/d": [],
+    }
+    assert detect_cycles(adjacency) == []
+
+
+def test_detect_multiple_cycles():
+    """Multiple independent cycles should all be detected."""
+    adjacency = {
+        "Agent/a": ["Agent/b"],
+        "Agent/b": ["Agent/a"],
+        "Crew/c": ["Crew/d"],
+        "Crew/d": ["Crew/c"],
+    }
+    result = detect_cycles(adjacency)
+    assert len(result) >= 2
+
+
+# ---------------------------------------------------------------------------
+# build_adjacency — missing metadata
+# ---------------------------------------------------------------------------
+
+
+def test_build_adjacency_missing_metadata_name():
+    """Resources with missing metadata should not crash."""
+    resources = [
+        {
+            "kind": "Agent",
+            "metadata": {"name": "ok"},
+            "spec": {"role": "R", "goal": "G", "backstory": "B"},
+        }
+    ]
+    adj = build_adjacency(resources)
+    assert "Agent/ok" in adj

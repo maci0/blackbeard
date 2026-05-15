@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, ChevronRight, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Play, ChevronRight, RefreshCw } from 'lucide-react'
 import { useDocumentTitle, usePolling } from '@/lib/hooks'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { useExecutionStore, TERMINAL_STATUSES } from '@/stores/executionStore'
 import { cn } from '@/lib/utils'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -12,7 +13,10 @@ import { formatDate, getDuration, formatCost } from '@/lib/formatters'
 
 export default function Executions() {
   const navigate = useNavigate()
-  const { executions, loading, error, fetchExecutions } = useExecutionStore()
+  const executions = useExecutionStore((s) => s.executions)
+  const loading = useExecutionStore((s) => s.loading)
+  const error = useExecutionStore((s) => s.error)
+  const fetchExecutions = useExecutionStore((s) => s.fetchExecutions)
 
   const loadExecutions = () => void fetchExecutions()
 
@@ -48,7 +52,7 @@ export default function Executions() {
               <button
                 onClick={loadExecutions}
                 aria-label="Refresh executions"
-                className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent"
+                className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <RefreshCw
                   className={cn(
@@ -61,10 +65,13 @@ export default function Executions() {
             }
           />
           {hasRunning && (
-            <p className="mt-1 text-sm">
-              <span className="inline-flex items-center gap-1 text-blue-600">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 motion-reduce:animate-none" />
-                Auto-refreshing
+            <p className="mt-1 text-sm" role="status" aria-live="polite">
+              <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 motion-reduce:animate-none"
+                />
+                Auto-refreshing every 5s
               </span>
             </p>
           )}
@@ -72,22 +79,12 @@ export default function Executions() {
 
         {/* Error */}
         {error && (
-          <div
-            role="alert"
-            className="mb-4 flex items-center justify-between rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
-          >
-            <span className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              {error}
-            </span>
-            <button
-              onClick={loadExecutions}
-              className="text-xs underline underline-offset-2"
-              aria-label="Retry loading executions"
-            >
-              Retry
-            </button>
-          </div>
+          <ErrorAlert
+            message={error}
+            onAction={loadExecutions}
+            ariaLabel="Retry loading executions"
+            className="mb-4"
+          />
         )}
 
         {/* Table */}
@@ -144,14 +141,14 @@ export default function Executions() {
                         {execution.total_tokens > 0 ? (
                           execution.total_tokens.toLocaleString()
                         ) : (
-                          <span aria-label="none">--</span>
+                          <span aria-label="No tokens recorded">--</span>
                         )}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                         {execution.cost_usd > 0 ? (
                           formatCost(execution.cost_usd)
                         ) : (
-                          <span aria-label="none">--</span>
+                          <span aria-label="No cost recorded">--</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">

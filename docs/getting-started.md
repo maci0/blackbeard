@@ -5,21 +5,21 @@ Blackbeard is an open, self-hosted Agent Management Platform built on top of Cre
 ## Prerequisites
 
 - **Podman** (or Docker) + **podman-compose** — used to orchestrate all platform services
-- **GCP service account** with Vertex AI access (for the default LLM provider)
-- **Node.js 22+** — required only for frontend development
-- **Python 3.12+** — required only for backend development
+- **GCP service account** with Vertex AI access — optional; only needed if using Vertex AI as an LLM provider
+- **Bun** — required only for frontend development
+- **Python 3.12+** and **uv** — required only for backend development
 
 ---
 
 ## 1. Start the Platform
 
 ```bash
-git clone https://github.com/your-org/blackbeard.git
+git clone <repo-url> blackbeard
 cd blackbeard
 
 # Copy and configure environment variables
 cp .env.example .env
-# Edit .env: set GOOGLE_CLOUD_PROJECT, CLOUD_ML_REGION, GOOGLE_APPLICATION_CREDENTIALS, etc.
+# Edit .env: set BLACKBEARD_API_KEY, and optionally GOOGLE_CLOUD_PROJECT, CLOUD_ML_REGION, etc.
 
 # Start all services (API, UI, PostgreSQL, Valkey, LiteLLM)
 ./run.sh
@@ -33,7 +33,7 @@ Services started by `run.sh`:
 | Blackbeard UI | http://localhost:3000 |
 | LiteLLM Proxy | http://localhost:4000 |
 
-Wait ~30 seconds for all containers to become healthy before proceeding.
+Wait ~2 minutes for all containers to become healthy before proceeding (the API and LiteLLM containers have a 120-second startup grace period).
 
 ---
 
@@ -48,10 +48,9 @@ Navigate to **http://localhost:3000** in your browser. The home page opens the S
 The `blackbeard` CLI can apply a directory of YAML files, creating or updating all resources in dependency order.
 
 ```bash
-# Install the CLI (inside backend venv)
+# Install the CLI (requires uv: https://docs.astral.sh/uv/)
 cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+uv sync
 
 # Apply the research-crew example
 blackbeard apply -f examples/research-crew/

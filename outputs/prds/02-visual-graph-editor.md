@@ -132,6 +132,90 @@ A second tab on the canvas switches to **Execution View**:
 
 **Node-to-execution mapping**: Canvas nodes use the convention `{kind}-{name}` as their React Flow node ID (e.g., `task-research-ai`, `agent-researcher`). Execution SSE events carry `task_name` and `agent_name` fields. The UI maps events to nodes by constructing the node ID from the event's resource name. If a node ID doesn't match any canvas node (e.g., a dynamically-created subtask in hierarchical mode), the event is displayed in a "Unmapped Events" panel below the canvas. This convention must match the SSE event payload format defined in PRD 05. Execution SSE events carry `event_type`, `task_name`, and `agent_name` fields that map to canvas nodes via `{kind}-{name}` node IDs.
 
+## 7.1 Agent Training & Testing UI
+
+When viewing an Agent resource detail page (navigated from Studio or Resources list), a **Training** tab provides an interactive training workflow powered by CrewAI's built-in training system (see PRD 05, §11.5).
+
+### Training Panel Layout
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Agent: Researcher                                    [Train ▼] │
+├─────────────────────────────────────────────────────────────────┤
+│  Tabs: [Overview] [Spec] [YAML] [Training] [History]            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Start Training Session                                  │    │
+│  │                                                         │    │
+│  │  Crew:  [research-crew          ▼]  (crews using agent) │    │
+│  │  Iterations: [3     ]                                    │    │
+│  │  Inputs (JSON): {"topic": "AI safety"}                  │    │
+│  │                                                         │    │
+│  │  [Start Training]                                       │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  ── Active Session: Iteration 2/3 ──                           │
+│                                                                 │
+│  Agent Output:                                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ 1. AI safety research has identified alignment as...     │    │
+│  │ 2. Interpretability techniques like mechanistic...       │    │
+│  │ 3. Governance frameworks are being developed by...       │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  Your Feedback:                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ Good facts but too verbose. Keep each bullet to one      │    │
+│  │ sentence max. Focus more on technical approaches.        │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│  [Submit Feedback & Continue]                                   │
+│                                                                 │
+│  ── Training History ──────────────────────────────────────     │
+│                                                                 │
+│  │ Session    │ Crew          │ Iterations │ Score │ Date       │
+│  │ train-001  │ research-crew │ 3/3 ✓      │ 8.5   │ May 14    │
+│  │ train-002  │ analysis-crew │ 5/5 ✓      │ 7.2   │ May 13    │
+│                                                                 │
+│  ── Test Results ─────────────────────────────────────────     │
+│  [Run Test]  Iterations: [5]  Eval Model: [gpt-4o ▼]          │
+│                                                                 │
+│  Last test: avg 8.2 | research-topic: 8.5 | write-report: 7.9 │
+│  ┌────────────────────────────────────────┐                     │
+│  │  Score  ██████████████░░ 8.2/10        │                     │
+│  │  █ █ █ █ █  (per-iteration scores)     │                     │
+│  └────────────────────────────────────────┘                     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Entry Points
+
+| Location | Action | Behavior |
+|----------|--------|----------|
+| **Resource Detail** (`/resources/agents/{name}`) | Training tab | Full training panel |
+| **Studio** → Agent node → Property Panel | "Train" button | Navigates to `/resources/agents/{name}?tab=training` |
+| **Crew Detail** (`/resources/crews/{name}`) | "Train Crew" action button | Navigates to training UI pre-selecting this crew |
+
+### Interaction Flow
+
+1. **Select crew**: Dropdown shows all crews that reference this agent (queried via `ref:agents/{name}` lookup).
+2. **Configure**: Set iteration count (1-20) and provide sample inputs as JSON.
+3. **Start**: `POST /api/v1/crews/{name}/train` — session created, first iteration runs.
+4. **Review**: After each iteration, the UI displays agent outputs. Human types feedback in a text area.
+5. **Submit**: `POST /api/v1/training-sessions/{id}/feedback` — next iteration starts.
+6. **Complete**: After all iterations, the summary shows per-agent quality scores and consolidated suggestions.
+7. **Test**: Optionally run `POST /api/v1/crews/{name}/test` to benchmark the trained agent with an eval model.
+
+### Acceptance Criteria (UI)
+
+- Training tab appears on Agent resource detail pages.
+- Crew dropdown only shows crews that use this agent.
+- Feedback text area supports multi-line input and Cmd+Enter to submit.
+- Progress indicator shows current iteration / total.
+- Training history table shows past sessions with clickable rows for detail.
+- Test results display per-task scores with a simple bar chart.
+- "Train" button in Studio Property Panel navigates correctly.
+
 ## 8. AI Copilot
 
 An optional chat sidebar (left panel) for prompt-based creation:

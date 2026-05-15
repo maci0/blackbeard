@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import * as TabsPrimitive from '@radix-ui/react-tabs'
 import { Trash2, Pencil, Save, X, AlertTriangle, Play, Check, Info } from 'lucide-react'
+import { modKey } from '@/lib/platform'
 
 import { CodeBlock } from '@/components/ui/CodeBlock'
 import { useResourceStore, type Resource } from '@/stores/resourceStore'
@@ -11,6 +12,7 @@ import { useDocumentTitle } from '@/lib/hooks'
 import { resourceToYaml, parseYaml } from '@/lib/yaml'
 import { formatDate } from '@/lib/formatters'
 import { KindBadge } from '@/components/ui/KindBadge'
+import { PLURAL_TO_KIND } from '@/lib/kinds'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { RunDialog } from '@/components/studio/RunDialog'
 import { Spinner } from '@/components/ui/Spinner'
@@ -24,6 +26,7 @@ function InlineAlert({ message }: { message: string | null }) {
   return (
     <div
       role="alert"
+      aria-live="assertive"
       className="mb-4 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
     >
       <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -114,7 +117,10 @@ function SpecDisplay({ spec }: { spec: Record<string, unknown> }) {
   return (
     <dl className="divide-y divide-border">
       {entries.map(([key, value]) => (
-        <div key={key} className="grid grid-cols-[180px_1fr] items-start gap-6 py-3">
+        <div
+          key={key}
+          className="grid grid-cols-1 items-start gap-2 py-3 sm:grid-cols-[180px_1fr] sm:gap-6"
+        >
           <dt className="text-sm font-medium text-muted-foreground">{prettifyKey(key)}</dt>
           <dd className="min-w-0 text-sm">
             <SpecValue value={value} />
@@ -149,10 +155,12 @@ export default function ResourceDetail() {
   const [showRunDialog, setShowRunDialog] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const deleteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
     }
   }, [])
 
@@ -221,6 +229,21 @@ export default function ResourceDetail() {
     }
   }
 
+  const handleSaveRef = useRef(handleSave)
+  handleSaveRef.current = handleSave
+
+  useEffect(() => {
+    if (!editMode) return
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        void handleSaveRef.current()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [editMode])
+
   const handleDelete = async () => {
     setDeleting(true)
     setDeleteError(null)
@@ -230,6 +253,8 @@ export default function ResourceDetail() {
     } catch (err) {
       setDeleteError((err as Error).message)
       setDeleteOpen(false)
+      if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
+      deleteErrorTimerRef.current = setTimeout(() => setDeleteError(null), 8000)
     } finally {
       setDeleting(false)
     }
@@ -267,13 +292,13 @@ export default function ResourceDetail() {
           <div className="mt-4 flex items-center justify-center gap-2">
             <button
               onClick={() => void loadResource()}
-              className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent"
+              className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Retry
             </button>
             <Link
               to="/resources"
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90"
+              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Back to Resources
             </Link>
@@ -298,13 +323,19 @@ export default function ResourceDetail() {
               ›
             </li>
             <li>
+              <span className="text-foreground/80">{PLURAL_TO_KIND[kindPlural] ?? kindPlural}</span>
+            </li>
+            <li aria-hidden="true" className="text-muted-foreground/40">
+              ›
+            </li>
+            <li aria-current="page">
               <span className="font-medium text-foreground">{resource.metadata.name}</span>
             </li>
           </ol>
         </nav>
 
         {/* Header */}
-        <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-wrap items-center gap-3">
             <KindBadge kind={resource.kind} />
             <h1 className="text-2xl font-semibold tracking-tight">{resource.metadata.name}</h1>
@@ -312,12 +343,12 @@ export default function ResourceDetail() {
               v{resource.version}
             </span>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             {editMode ? (
               <>
                 <button
                   onClick={handleCancelEdit}
-                  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent"
+                  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="h-3.5 w-3.5" />
                   Cancel
@@ -325,7 +356,7 @@ export default function ResourceDetail() {
                 <button
                   onClick={() => void handleSave()}
                   disabled={saving}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 >
                   {saving ? (
                     <Spinner size="sm" className="text-white" />
@@ -343,7 +374,7 @@ export default function ResourceDetail() {
                       setShowRunDialog(true)
                       setRunError(null)
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm text-white transition-colors hover:bg-emerald-700"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <Play className="h-3.5 w-3.5" />
                     Run
@@ -351,14 +382,14 @@ export default function ResourceDetail() {
                 )}
                 <button
                   onClick={handleEdit}
-                  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent"
+                  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                   Edit
                 </button>
                 <button
                   onClick={() => setDeleteOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete
@@ -369,7 +400,7 @@ export default function ResourceDetail() {
         </div>
 
         {/* Metadata strip */}
-        <div className="mb-6 flex flex-wrap items-center gap-6 rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+        <div className="mb-6 flex flex-col gap-4 rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
           {resource.metadata.namespace && resource.metadata.namespace !== 'default' && (
             <>
               <div>
@@ -378,7 +409,7 @@ export default function ResourceDetail() {
                 </span>
                 <p className="mt-0.5 font-medium text-foreground">{resource.metadata.namespace}</p>
               </div>
-              <div className="h-8 w-px bg-border" />
+              <div className="hidden h-8 w-px bg-border sm:block" />
             </>
           )}
           <div>
@@ -387,7 +418,7 @@ export default function ResourceDetail() {
             </span>
             <p className="mt-0.5 font-mono text-xs text-foreground">{resource.apiVersion}</p>
           </div>
-          <div className="h-8 w-px bg-border" />
+          <div className="hidden h-8 w-px bg-border sm:block" />
           <div>
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
               Updated
@@ -396,7 +427,7 @@ export default function ResourceDetail() {
           </div>
           {Object.keys(resource.metadata.labels ?? {}).length > 0 ? (
             <>
-              <div className="h-8 w-px bg-border" />
+              <div className="hidden h-8 w-px bg-border sm:block" />
               <div>
                 <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
                   Labels
@@ -423,14 +454,15 @@ export default function ResourceDetail() {
         {saveSuccess && (
           <div
             role="status"
+            aria-live="polite"
             className="mb-4 flex items-center gap-2 text-sm text-green-600 dark:text-green-400"
           >
             <Check className="h-4 w-4" />
             Saved successfully
             <button
               onClick={() => setSaveSuccess(false)}
-              className="ml-auto rounded p-0.5 transition-colors hover:bg-green-100 dark:hover:bg-green-900"
-              aria-label="Dismiss"
+              className="ml-auto rounded p-2 transition-colors hover:bg-green-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-green-900"
+              aria-label="Dismiss success message"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -468,7 +500,7 @@ export default function ResourceDetail() {
             {editMode && (
               <div className="mb-3 flex items-center gap-2 rounded-md bg-blue-50 p-2 text-sm text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                 <Info className="h-4 w-4 shrink-0" />
-                <span>Editing in YAML mode. Changes will be validated on save.</span>
+                <span>Editing in YAML mode. Changes will be validated on save ({modKey}+S).</span>
               </div>
             )}
             <div
@@ -480,7 +512,7 @@ export default function ResourceDetail() {
                 <textarea
                   value={yamlContent}
                   onChange={(e) => setYamlContent(e.target.value)}
-                  className="h-[500px] w-full resize-none rounded-lg border bg-[#0d1117] p-4 font-mono text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="h-[500px] w-full resize-none bg-[#0d1117] p-4 font-mono text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
                   spellCheck={false}
                   aria-label="YAML editor"
                 />
@@ -493,7 +525,7 @@ export default function ResourceDetail() {
                 Click{' '}
                 <button
                   onClick={handleEdit}
-                  className="underline underline-offset-2 transition-colors hover:text-foreground"
+                  className="underline underline-offset-2 transition-colors hover:text-foreground focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Edit
                 </button>{' '}
@@ -523,13 +555,14 @@ export default function ResourceDetail() {
       {deleteError && (
         <div
           role="alert"
+          aria-live="assertive"
           className="fixed bottom-6 left-1/2 z-50 flex w-full max-w-sm -translate-x-1/2 items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-lg"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {deleteError}
           <button
             onClick={() => setDeleteError(null)}
-            className="ml-auto rounded p-0.5 transition-colors hover:bg-destructive/10"
+            className="ml-auto rounded p-2 transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Dismiss error"
           >
             <X className="h-3.5 w-3.5" />

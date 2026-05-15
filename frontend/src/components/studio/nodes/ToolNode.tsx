@@ -13,13 +13,21 @@ export default memo(function ToolNode({ data, selected }: NodeProps) {
 
   return (
     <div
+      aria-label={`Tool: ${name ?? 'Unnamed Tool'}`}
       className={cn(
-        'w-[140px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
+        'w-[160px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
         selected
-          ? 'border-emerald-400 shadow-md shadow-emerald-100 ring-2 ring-emerald-300 ring-offset-1'
+          ? 'border-emerald-400 shadow-md shadow-emerald-100 ring-2 ring-emerald-300 ring-offset-1 dark:shadow-emerald-950 dark:ring-offset-slate-900'
           : 'border-slate-200 hover:border-emerald-200 hover:shadow-md dark:border-slate-700',
       )}
     >
+      {/* Target handle on the left — agents can assign tools */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-3.5 !w-3.5 !border-2 !border-emerald-400 !bg-white"
+      />
+
       {/* Header strip */}
       <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-emerald-500 px-3 py-2">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 text-white">
@@ -59,7 +67,7 @@ export default memo(function ToolNode({ data, selected }: NodeProps) {
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-2.5 !w-2.5 !border-2 !border-emerald-400 !bg-white"
+        className="!h-3.5 !w-3.5 !border-2 !border-emerald-400 !bg-white"
       />
     </div>
   )

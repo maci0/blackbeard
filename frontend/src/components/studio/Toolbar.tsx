@@ -5,10 +5,6 @@ import { toResourceName } from '@/lib/utils'
 import { modKey } from '@/lib/platform'
 import { type RunStatus, RunStatusBadge } from './RunStatusBadge'
 
-/* ------------------------------------------------------------------ */
-/* Component                                                           */
-/* ------------------------------------------------------------------ */
-
 export function Toolbar({
   crewName,
   onCrewNameChange,
@@ -47,7 +43,7 @@ export function Toolbar({
   redo: () => void
 }) {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b bg-card px-4">
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-card px-2 sm:gap-3 sm:px-4">
       {/* Crew name + Load button */}
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <label
@@ -70,8 +66,9 @@ export function Toolbar({
         {/* Normalized name preview */}
         {crewName && toResourceName(crewName) !== crewName && (
           <span
-            className="shrink-0 text-[10px] text-muted-foreground"
+            className="hidden shrink-0 text-[10px] text-muted-foreground sm:inline"
             title="Resource name will be saved as this slug"
+            aria-label={`Resource name will be saved as ${toResourceName(crewName)}`}
           >
             Saved as: {toResourceName(crewName)}
           </span>
@@ -84,7 +81,10 @@ export function Toolbar({
           }}
         >
           <DropdownMenu.Trigger asChild>
-            <button className="text-2xs flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            <button
+              aria-label="Load saved crew"
+              className="text-2xs flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
               <FolderOpen className="h-3 w-3" />
               Load
               <ChevronDown className="h-3 w-3" />
@@ -159,6 +159,8 @@ export function Toolbar({
           data-tour="save-button"
           onClick={onSave}
           disabled={status === 'saving' || status === 'loading'}
+          title={`Save (${modKey}+S)`}
+          aria-label={`Save crew${dirty ? ' (unsaved changes)' : ''}`}
           className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >
           {status === 'saving' ? (
@@ -179,6 +181,15 @@ export function Toolbar({
           data-tour="run-button"
           onClick={onRunClick}
           disabled={status === 'running' || status === 'saving' || status === 'loading'}
+          title={
+            status === 'running'
+              ? 'Crew is already running'
+              : status === 'saving'
+                ? 'Saving in progress…'
+                : status === 'loading'
+                  ? 'Loading crew…'
+                  : 'Run this crew'
+          }
           className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600"
         >
           {status === 'running' ? (

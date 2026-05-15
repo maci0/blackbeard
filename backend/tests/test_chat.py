@@ -25,6 +25,13 @@ def test_chat_message_defaults():
     assert msg.content == "Hello"
 
 
+@pytest.mark.parametrize("role", ["user", "assistant", "system"])
+def test_chat_message_explicit_roles(role):
+    """All standard chat roles should be accepted."""
+    msg = ChatMessage(role=role, content="test")
+    assert msg.role == role
+
+
 def test_chat_request_validation():
     req = ChatRequest(model="gpt-4o", messages=[ChatMessage(content="Hi")])
     assert req.model == "gpt-4o"
@@ -108,3 +115,80 @@ async def test_models_available_requires_auth(client: AsyncClient):
     """GET /models/available without API key should return 401."""
     response = await client.get("/api/v1/models/available")
     assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# _extract_content unit tests (critical parsing logic — previously untested)
+# ---------------------------------------------------------------------------
+
+from blackbeard.api.chat import _extract_content
+
+
+def test_extract_content_standard_response():
+    """Standard OpenAI-format response should extract content and token counts."""
+    data = {
+        "choices": [{"message": {"content": "Hello!"}}],
+        "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
+    }
+    content, tokens = _extract_content(data)
+    assert content == "Hello!"
+    assert tokens == {"prompt": 5, "completion": 2, "total": 7}
+
+
+def test_extract_content_empty_choices():
+    """Empty choices list should return empty content."""
+    data = {"choices": [], "usage": {}}
+    content, tokens = _extract_content(data)
+    assert content == ""
+    assert tokens == {"prompt": 0, "completion": 0, "total": 0}
+
+
+def test_extract_content_missing_choices():
+    """Missing choices key should return empty content."""
+    data = {"usage": {"total_tokens": 5}}
+    content, _tokens = _extract_content(data)
+    assert content == ""
+
+
+def test_extract_content_reasoning_content_fallback():
+    """Should fall back to reasoning_content when content is missing."""
+    data = {
+        "choices": [{"message": {"reasoning_content": "Let me think..."}}],
+        "usage": {"total_tokens": 10},
+    }
+    content, _tokens = _extract_content(data)
+    assert content == "Let me think..."
+
+
+def test_extract_content_missing_usage():
+    """Missing usage key should default token counts to 0."""
+    data = {"choices": [{"message": {"content": "Hi"}}]}
+    content, tokens = _extract_content(data)
+    assert content == "Hi"
+    assert tokens == {"prompt": 0, "completion": 0, "total": 0}
+
+
+def test_extract_content_null_content():
+    """Null content in message should return empty string."""
+    data = {"choices": [{"message": {"content": None}}], "usage": {}}
+    content, _tokens = _extract_content(data)
+    assert content == ""
+
+
+# ---------------------------------------------------------------------------
+# ChatRequest boundary validation
+# ---------------------------------------------------------------------------
+
+
+def test_chat_request_rejects_oversized_model():
+    """Model name exceeding 256 chars should be rejected."""
+    with pytest.raises(ValidationError):
+        ChatRequest(model="x" * 257, messages=[ChatMessage(content="Hi")])
+
+
+def test_chat_request_temperature_bounds():
+    """Temperature outside 0.0-2.0 should be rejected."""
+    with pytest.raises(ValidationError):
+        ChatRequest(model="gpt-4o", messages=[ChatMessage(content="Hi")], temperature=3.0)
+    with pytest.raises(ValidationError):
+        ChatRequest(model="gpt-4o", messages=[ChatMessage(content="Hi")], temperature=-0.1)

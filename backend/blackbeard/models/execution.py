@@ -109,10 +109,16 @@ class Execution(Base):
         back_populates="execution",
         cascade="all, delete-orphan",
         order_by="ExecutionTask.order",
+        lazy="raise",
     )
 
     __table_args__ = (
-        Index("ix_execution_crew", "crew_name", "crew_namespace"),
+        Index(
+            "ix_execution_crew_created",
+            "crew_name",
+            "crew_namespace",
+            created_at.desc(),
+        ),
         Index("ix_execution_namespace", "crew_namespace"),
         Index("ix_execution_status_created", "status", "created_at"),
         Index("ix_execution_created_at", "created_at"),
@@ -120,6 +126,16 @@ class Execution(Base):
         CheckConstraint("prompt_tokens >= 0", name="ck_execution_prompt_tokens_nonneg"),
         CheckConstraint("completion_tokens >= 0", name="ck_execution_completion_tokens_nonneg"),
         CheckConstraint("cost_usd >= 0", name="ck_execution_cost_nonneg"),
+        CheckConstraint("length(crew_name) >= 1", name="ck_execution_crew_name_nonempty"),
+        CheckConstraint("length(crew_namespace) >= 1", name="ck_execution_crew_ns_nonempty"),
+        CheckConstraint(
+            "status != 'running' OR started_at IS NOT NULL",
+            name="ck_execution_running_has_started_at",
+        ),
+        CheckConstraint(
+            "status NOT IN ('completed', 'failed', 'cancelled') OR completed_at IS NOT NULL",
+            name="ck_execution_terminal_has_completed_at",
+        ),
     )
 
     def __repr__(self) -> str:
@@ -165,12 +181,13 @@ class ExecutionTask(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    execution: Mapped[Execution] = relationship("Execution", back_populates="tasks")
+    execution: Mapped[Execution] = relationship("Execution", back_populates="tasks", lazy="raise")
     tool_calls: Mapped[list[ExecutionToolCall]] = relationship(
         "ExecutionToolCall",
         back_populates="task",
         cascade="all, delete-orphan",
         order_by="ExecutionToolCall.called_at",
+        lazy="raise",
     )
 
     __table_args__ = (
@@ -179,6 +196,7 @@ class ExecutionTask(Base):
         CheckConstraint("tokens_used >= 0", name="ck_exec_task_tokens_nonneg"),
         CheckConstraint("cost_usd >= 0", name="ck_exec_task_cost_nonneg"),
         CheckConstraint('"order" >= 0', name="ck_exec_task_order_nonneg"),
+        CheckConstraint("length(task_name) >= 1", name="ck_exec_task_name_nonempty"),
     )
 
 
@@ -205,14 +223,17 @@ class ExecutionToolCall(Base):
         server_default=text("now()"),
     )
 
-    task: Mapped[ExecutionTask] = relationship("ExecutionTask", back_populates="tool_calls")
+    task: Mapped[ExecutionTask] = relationship(
+        "ExecutionTask", back_populates="tool_calls", lazy="raise"
+    )
 
     __table_args__ = (
-        Index("ix_tool_call_task", "task_id"),
+        Index("ix_tool_call_task_time", "task_id", "called_at"),
         CheckConstraint(
             "duration_ms IS NULL OR duration_ms >= 0",
             name="ck_tool_call_duration_nonneg",
         ),
+        CheckConstraint("length(tool_name) >= 1", name="ck_tool_call_name_nonempty"),
     )
 
 
@@ -229,7 +250,19 @@ class ExecutionEvent(Base):
     )
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=text("now()"),
+    )
+    data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'")
+    )
 
-    __table_args__ = (Index("ix_exec_event_execution_seq", "execution_id", "sequence"),)
+    __table_args__ = (
+        UniqueConstraint("execution_id", "sequence", name="uq_exec_event_execution_seq"),
+        Index("ix_exec_event_exec_seq", "execution_id", "sequence"),
+        CheckConstraint("sequence >= 0", name="ck_event_seq_nonneg"),
+        CheckConstraint("length(event_type) >= 1", name="ck_event_type_nonempty"),
+    )

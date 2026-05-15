@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Database, Search, ChevronRight, RefreshCw, AlertTriangle, X } from 'lucide-react'
+import { Database, Search, ChevronRight, RefreshCw, X } from 'lucide-react'
 import { useResourceStore, type Resource } from '@/stores/resourceStore'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { KindBadge } from '@/components/ui/KindBadge'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -26,7 +27,10 @@ const FILTER_OPTIONS = [
 
 export default function Resources() {
   const navigate = useNavigate()
-  const { resources, loading, error, fetchAllResources } = useResourceStore()
+  const resources = useResourceStore((s) => s.resources)
+  const loading = useResourceStore((s) => s.loading)
+  const error = useResourceStore((s) => s.error)
+  const fetchAllResources = useResourceStore((s) => s.fetchAllResources)
   const [kindFilter, setKindFilter] = useState('')
   const [search, setSearch] = useState('')
 
@@ -73,7 +77,7 @@ export default function Resources() {
                 <button
                   onClick={() => void fetchAllResources()}
                   aria-label="Refresh resources"
-                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent"
+                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <RefreshCw
                     className={cn(
@@ -85,7 +89,7 @@ export default function Resources() {
                 </button>
                 <button
                   onClick={() => void navigate('/studio')}
-                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Create in Studio
                 </button>
@@ -96,22 +100,12 @@ export default function Resources() {
 
         {/* Error */}
         {error && (
-          <div
-            role="alert"
-            className="mb-4 flex items-center justify-between rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
-          >
-            <span className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              {error}
-            </span>
-            <button
-              onClick={() => void fetchAllResources()}
-              className="text-xs underline underline-offset-2"
-              aria-label="Retry loading resources"
-            >
-              Retry
-            </button>
-          </div>
+          <ErrorAlert
+            message={error}
+            onAction={() => void fetchAllResources()}
+            ariaLabel="Retry loading resources"
+            className="mb-4"
+          />
         )}
 
         {/* Filters */}
@@ -126,7 +120,7 @@ export default function Resources() {
             />
             <input
               id="resources-search"
-              type="text"
+              type="search"
               placeholder="Search by name…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}

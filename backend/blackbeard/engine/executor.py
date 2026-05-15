@@ -12,13 +12,14 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from crewai.crews.crew_output import CrewOutput
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import defer, selectinload
 
 from blackbeard.config import settings
 from blackbeard.engine.execution_listener import BlackbeardExecutionListener
 from blackbeard.engine.loader import ResourceLoader
 from blackbeard.kinds import ResourceKind
+from blackbeard.logging_config import request_id_var
 from blackbeard.models import (
     TERMINAL_STATUSES,
     Execution,
@@ -37,7 +38,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_SAFE_ERROR_PREFIXES = ("Crew '", "Agent '", "Task '", "Tool '", "Resource '", "Kind '")
+_SAFE_ERROR_PREFIXES = (
+    "Crew '",
+    "Agent '",
+    "Task '",
+    "Tool '",
+    "Resource '",
+    "Kind '",
+    "LLMConnection '",
+    "AgentPolicy '",
+    "Guardrail '",
+    "Flow '",
+    "KnowledgeSource '",
+)
 
 _CREW_RELEVANT_KINDS = (
     ResourceKind.CREW,
@@ -60,7 +73,6 @@ def _sanitize_error(error_msg: str) -> str:
     return "Execution failed — check server logs for details"
 
 
-# Each crew run gets its own thread + event loop to avoid blocking the main async loop
 _executor = ThreadPoolExecutor(
     max_workers=settings.max_concurrent_executions,
     thread_name_prefix="crew-exec",
@@ -70,11 +82,38 @@ _executor = ThreadPoolExecutor(
 def shutdown_executor(wait: bool = False) -> None:
     """Shutdown the thread pool executor, cancelling pending futures."""
     _executor.shutdown(wait=wait, cancel_futures=True)
-    logger.info("Execution thread pool shut down")
+    logger.info("Execution thread pool shut down", extra={"event": "executor_shutdown"})
+    from blackbeard.engine.execution_listener import dispose_sync_engine
+
+    dispose_sync_engine()
+    logger.info("Sync DB engine disposed", extra={"event": "sync_engine_disposed"})
 
 
 class ExecutionError(Exception):
     pass
+
+
+class ExecutionNotFoundError(ExecutionError):
+    """Raised when the crew or execution cannot be found."""
+
+
+def _log_task_exception(task: asyncio.Task) -> None:  # type: ignore[type-arg]
+    """Log exceptions from fire-and-forget asyncio tasks that would otherwise be silent."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.error(
+            "Background task failed: %s",
+            exc,
+            exc_info=exc,
+            extra={
+                "event": "background_task_failed",
+                "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
+                "task_name": task.get_name(),
+            },
+        )
 
 
 async def _load_crew_resources(
@@ -90,6 +129,7 @@ async def _load_crew_resources(
         .where(Resource.namespace == namespace)
         .where(Resource.kind.in_(_CREW_RELEVANT_KINDS))
         .options(defer(Resource.raw_yaml), defer(Resource.labels))
+        .order_by(Resource.kind, Resource.name)
         .limit(_NAMESPACE_RESOURCE_LIMIT + 1)
     )
 
@@ -109,7 +149,7 @@ async def _load_crew_resources(
 
     resources = {f"{r.kind.value}/{r.name}": r for r in rows}
     if f"Crew/{crew_name}" not in resources:
-        raise ExecutionError(f"Crew '{crew_name}' not found in namespace '{namespace}'")
+        raise ExecutionNotFoundError(f"Crew '{crew_name}' not found in namespace '{namespace}'")
 
     return resources
 
@@ -141,32 +181,44 @@ async def kickoff(
     # Flush to assign execution.id before creating child ExecutionTask rows.
     await session.flush()
 
+    # CPython internals — best-effort for diagnostic logging only
+    try:
+        pool_queued = _executor._work_queue.qsize()
+        pool_workers = len(_executor._threads)
+    except AttributeError:
+        pool_queued, pool_workers = 0, 0
     logger.info(
-        "Kickoff: execution_id=%s crew=%s namespace=%s input_keys=%s",
+        "Kickoff: execution_id=%s crew=%s namespace=%s input_keys=%s pool=%d/%d",
         execution.id,
         crew_name,
         namespace,
         sorted(inputs.keys()),
+        pool_workers,
+        settings.max_concurrent_executions,
         extra={
             "event": "execution_kickoff",
             "execution_id": str(execution.id),
             "crew_name": crew_name,
             "namespace": namespace,
+            "pool_active_threads": pool_workers,
+            "pool_max_workers": settings.max_concurrent_executions,
+            "pool_queued_tasks": pool_queued,
         },
     )
 
     task_refs = crew_resource.spec.get("tasks", [])
-    for i, task_ref in enumerate(task_refs):
-        ref = parse_ref(task_ref)
-        task_name = ref.name if ref else task_ref
-
-        exec_task = ExecutionTask(
-            execution_id=execution.id,
-            task_name=task_name,
-            order=i,
-            status=TaskStatus.PENDING,
+    if task_refs:
+        session.add_all(
+            [
+                ExecutionTask(
+                    execution_id=execution.id,
+                    task_name=(ref.name if (ref := parse_ref(task_ref)) else task_ref),
+                    order=i,
+                    status=TaskStatus.PENDING,
+                )
+                for i, task_ref in enumerate(task_refs)
+            ]
         )
-        session.add(exec_task)
 
     await session.commit()
 
@@ -202,7 +254,8 @@ async def kickoff(
             error_msg = _sanitize_error(str(exc))
             # This callback runs on the main event loop thread, so we can
             # schedule the async mark-failed coroutine directly.
-            loop.create_task(_mark_failed_async(execution_id, error_msg))  # noqa: RUF006
+            task = loop.create_task(_mark_failed_async(execution_id, error_msg))
+            task.add_done_callback(_log_task_exception)
 
     future.add_done_callback(_on_thread_error)
 
@@ -259,46 +312,63 @@ def _run_crew_sync(
     inputs: dict[str, Any],
 ) -> None:
     """Run a crew in a dedicated event loop, blocking until completion (for ThreadPoolExecutor)."""
+    request_id_var.set(str(execution_id))
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    thread_session, thread_engine = _thread_session_factory()
     try:
-        loop.run_until_complete(_run_crew_async(execution_id, resource_snapshot, crew_name, inputs))
+        loop.run_until_complete(
+            _run_crew_async(execution_id, resource_snapshot, crew_name, inputs, thread_session)
+        )
     except Exception:
         logger.exception(
             "Crew thread crashed for execution %s",
             execution_id,
-            extra={"event": "crew_thread_crash", "execution_id": str(execution_id)},
+            extra={
+                "event": "crew_thread_crash",
+                "execution_id": str(execution_id),
+                "crew_name": crew_name,
+            },
         )
         raise
     finally:
+        loop.run_until_complete(thread_engine.dispose())
         loop.close()
 
 
-def _thread_session_factory() -> Any:
+def _thread_session_factory() -> tuple[Any, Any]:
     """Create a fresh engine+session factory for the current thread's event loop.
 
     asyncpg connections are bound to the event loop that created them, so the
     executor thread (which runs its own loop) cannot share the main engine.
+    Returns (session_factory, engine) so callers can dispose the engine.
     """
     from sqlalchemy.ext.asyncio import (
         AsyncSession as _AsyncSession,
     )
     from sqlalchemy.ext.asyncio import (
-        async_sessionmaker as asm,
-    )
-    from sqlalchemy.ext.asyncio import (
-        create_async_engine as cae,
+        async_sessionmaker,
+        create_async_engine,
     )
 
-    thread_engine = cae(
+    thread_engine = create_async_engine(
         settings.database_url.get_secret_value(),
         echo=False,
         pool_size=2,
         max_overflow=3,
         pool_pre_ping=True,
         pool_timeout=30,
+        pool_recycle=3600,
+        connect_args={
+            "server_settings": {
+                "statement_timeout": "30000",
+                "idle_in_transaction_session_timeout": "60000",
+            },
+            "command_timeout": 10,
+        },
     )
-    return asm(thread_engine, class_=_AsyncSession, expire_on_commit=False)
+    factory = async_sessionmaker(thread_engine, class_=_AsyncSession, expire_on_commit=False)
+    return factory, thread_engine
 
 
 async def _run_crew_async(
@@ -306,9 +376,9 @@ async def _run_crew_async(
     resource_snapshot: dict[str, dict[str, Any]],
     crew_name: str,
     inputs: dict[str, Any],
+    thread_session: Any,
 ) -> None:
     """Run a crew and update the execution record with results."""
-    thread_session = _thread_session_factory()
     async with thread_session() as session:
         execution = await _get_execution_for_update(session, execution_id)
         if not execution:
@@ -340,14 +410,17 @@ async def _run_crew_async(
         execution.started_at = datetime.now(UTC)
         await session.commit()
         logger.info(
-            "Execution %s running: crew=%s",
+            "Execution %s running: crew=%s namespace=%s input_keys=%s",
             execution_id,
             crew_name,
+            running_namespace,
+            sorted(inputs.keys()),
             extra={
                 "event": "execution_running",
                 "execution_id": str(execution_id),
                 "crew_name": crew_name,
                 "namespace": running_namespace,
+                "input_keys": sorted(inputs.keys()),
             },
         )
 
@@ -366,10 +439,10 @@ async def _run_crew_async(
             crew = loader.build_crew(crew_name)
 
             # Wire up execution event listener for real-time streaming.
-            # Keep a reference so the listener is not garbage-collected
+            # Must keep a reference so the listener is not garbage-collected
             # while the crew is running (BaseEventListener registers via
             # weak references internally).
-            _listener = BlackbeardExecutionListener(
+            listener = BlackbeardExecutionListener(  # noqa: F841
                 execution_id=execution_id,
                 db_url=settings.database_url.get_secret_value(),
             )
@@ -378,6 +451,15 @@ async def _run_crew_async(
 
             execution = await _get_execution_for_update(session, execution_id)
             if not execution:
+                logger.error(
+                    "Execution %s vanished after crew completed — results lost",
+                    execution_id,
+                    extra={
+                        "event": "execution_result_lost",
+                        "execution_id": str(execution_id),
+                        "crew_name": crew_name,
+                    },
+                )
                 return
 
             if execution.status == ExecutionStatus.CANCELLED:
@@ -446,6 +528,7 @@ async def _run_crew_async(
                     "crew_name": crew_name,
                     "namespace": running_namespace,
                     "error_type": type(e).__name__,
+                    "error_message": str(e)[:500],
                     "duration_s": round(duration_s, 1) if duration_s else None,
                 },
             )
@@ -509,8 +592,13 @@ async def list_executions(
     status: ExecutionStatus | None = None,
     limit: int = 100,
     offset: int = 0,
+    include_tasks: bool = False,
 ) -> tuple[list[Execution], int]:
-    """List executions with optional filters."""
+    """List executions with optional filters.
+
+    By default, tasks are NOT eagerly loaded to keep list queries fast.
+    Pass ``include_tasks=True`` to load tasks (e.g. for detail views).
+    """
     filters = []
     if crew_name:
         filters.append(Execution.crew_name == crew_name)
@@ -522,12 +610,10 @@ async def list_executions(
     query = select(Execution).where(*filters)
     count_query = select(func.count(Execution.id)).where(*filters)
 
-    query = (
-        query.options(selectinload(Execution.tasks))
-        .order_by(Execution.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
+    if include_tasks:
+        query = query.options(selectinload(Execution.tasks))
+
+    query = query.order_by(Execution.created_at.desc()).limit(limit).offset(offset)
     result = await session.execute(query)
     items = list(result.scalars().all())
 
@@ -537,6 +623,27 @@ async def list_executions(
         total = (await session.execute(count_query)).scalar() or 0
 
     return items, total
+
+
+async def list_execution_events(
+    session: AsyncSession,
+    execution_id: UUID,
+    after: int = -1,
+    limit: int = 200,
+) -> list[Any]:
+    """List execution events after a given sequence number.
+
+    Returns a list of ExecutionEvent rows ordered by sequence.
+    """
+    from blackbeard.models import ExecutionEvent
+
+    result = await session.execute(
+        select(ExecutionEvent)
+        .where(ExecutionEvent.execution_id == execution_id, ExecutionEvent.sequence > after)
+        .order_by(ExecutionEvent.sequence)
+        .limit(limit)
+    )
+    return list(result.scalars())
 
 
 async def cancel_execution(session: AsyncSession, execution_id: UUID) -> Execution | None:
@@ -576,3 +683,49 @@ async def cancel_execution(session: AsyncSession, execution_id: UUID) -> Executi
         )
 
     return execution
+
+
+async def recover_stale_executions() -> int:
+    """Mark any QUEUED or RUNNING executions as FAILED on startup.
+
+    After a crash or restart, in-flight executions cannot resume because the
+    background threads and their event loops are gone.  This function should
+    be called once during application startup (before accepting traffic) to
+    clean up stale rows so users see a clear failure rather than an execution
+    that is stuck forever.
+
+    Returns the number of executions recovered.
+    """
+    now = datetime.now(UTC)
+    async with async_session() as session:
+        result = await session.execute(
+            update(Execution)
+            .where(Execution.status.in_([ExecutionStatus.QUEUED, ExecutionStatus.RUNNING]))
+            .values(
+                status=ExecutionStatus.FAILED,
+                error="Execution interrupted by server restart",
+                completed_at=now,
+            )
+            .returning(Execution.id)
+        )
+        recovered_ids = list(result.scalars())
+        await session.commit()
+
+    count = len(recovered_ids)
+    if count > 0:
+        logger.warning(
+            "Recovered %d stale executions on startup: %s",
+            count,
+            [str(eid) for eid in recovered_ids[:10]],
+            extra={
+                "event": "stale_executions_recovered",
+                "count": count,
+                "execution_ids": [str(eid) for eid in recovered_ids[:10]],
+            },
+        )
+    else:
+        logger.info(
+            "No stale executions found on startup",
+            extra={"event": "stale_executions_check", "count": 0},
+        )
+    return count

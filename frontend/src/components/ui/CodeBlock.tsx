@@ -26,6 +26,8 @@ export function CodeBlock({ code, language = 'yaml', className }: CodeBlockProps
 
   return (
     <div
+      role="region"
+      aria-label={`${language.toUpperCase()} code`}
       className={cn(
         'overflow-auto rounded-lg border border-border bg-[#0d1117] text-sm',
         className,

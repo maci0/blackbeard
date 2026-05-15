@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from blackbeard.resources.validator import ValidationError
+class ValidationError:
+    """A single validation error."""
+
+    __slots__ = ("field", "message")
+
+    def __init__(self, field: str, message: str) -> None:
+        self.field = field
+        self.message = message
+
+    def __repr__(self) -> str:
+        return f"ValidationError({self.field}: {self.message})"
+
+    def to_dict(self) -> dict[str, str]:
+        return {"field": self.field, "message": self.message}
 
 
 class ResourceNotFoundError(Exception):

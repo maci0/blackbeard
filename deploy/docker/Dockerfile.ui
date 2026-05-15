@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM oven/bun:1-alpine AS build
+FROM oven/bun:1.2.17-alpine AS build
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
@@ -15,9 +15,14 @@ LABEL org.opencontainers.image.source="https://github.com/blackbeard" \
       org.opencontainers.image.title="blackbeard-ui" \
       org.opencontainers.image.description="Blackbeard Agent Management Platform — UI"
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY security-headers.conf /etc/nginx/security-headers.conf
+# SECURITY: Empty by default. Only set this for local development.
+# Setting this in production means anyone who can reach the UI can make
+# authenticated API calls without knowing the API key.
+ENV NGINX_API_KEY_FALLBACK=
 EXPOSE 3000
+STOPSIGNAL SIGQUIT
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=5s \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
 CMD ["nginx", "-g", "daemon off;"]

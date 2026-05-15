@@ -1,5 +1,7 @@
 """REST API endpoints for generic resource CRUD operations."""
 
+from __future__ import annotations
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
@@ -128,6 +130,19 @@ async def create_resource(
         resource, created = await service.create(data)
         await session.commit()
     except ResourceValidationError as exc:
+        logger.warning(
+            "Resource validation failed: %s/%s namespace=%s",
+            data.kind,
+            data.metadata.name,
+            data.metadata.namespace,
+            extra={
+                "event": "resource_api_validation_failed",
+                "resource_kind": data.kind,
+                "resource_name": data.metadata.name,
+                "namespace": data.metadata.namespace,
+                "error_count": len(exc.errors),
+            },
+        )
         raise HTTPException(
             status_code=422,
             detail=[e.to_dict() for e in exc.errors],
@@ -224,6 +239,19 @@ async def update_resource(
     except ResourceConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ResourceValidationError as exc:
+        logger.warning(
+            "Resource update validation failed: %s/%s namespace=%s",
+            kind,
+            name,
+            namespace,
+            extra={
+                "event": "resource_update_validation_failed",
+                "resource_kind": kind,
+                "resource_name": name,
+                "namespace": namespace,
+                "error_count": len(exc.errors),
+            },
+        )
         raise HTTPException(
             status_code=422,
             detail=[e.to_dict() for e in exc.errors],
@@ -234,11 +262,7 @@ async def update_resource(
 @router.delete(
     "/{kind_plural}/{name}",
     status_code=204,
-    responses={
-        404: {
-            "description": ("Resource not found (silently ignored — delete is idempotent)"),
-        },
-    },
+    responses={204: {"description": "Resource deleted (or did not exist — idempotent)"}},
 )
 async def delete_resource(
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
@@ -263,4 +287,15 @@ async def delete_resource(
         await service.delete(kind, name, namespace)
         await session.commit()
     except ResourceNotFoundError:
-        logger.debug("Delete no-op: %s/%s not found in namespace=%s", kind, name, namespace)
+        logger.debug(
+            "Delete no-op: %s/%s not found in namespace=%s",
+            kind,
+            name,
+            namespace,
+            extra={
+                "event": "resource_delete_noop",
+                "resource_kind": kind,
+                "resource_name": name,
+                "namespace": namespace,
+            },
+        )

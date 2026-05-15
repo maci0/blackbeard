@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useDocumentTitle } from '@/lib/hooks'
-import { Wrench, Search, AlertTriangle, RefreshCw, Code2, Box, Shield, X } from 'lucide-react'
+import { Wrench, Search, RefreshCw, Code2, Box, Shield, X } from 'lucide-react'
 import { useResourceStore, type Resource } from '@/stores/resourceStore'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
@@ -185,17 +186,11 @@ export default function Tools() {
             title="Tools"
             description="Tool library and registry"
             actions={
-              <div className="flex items-center gap-2">
-                <Link
-                  to="/studio"
-                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90"
-                >
-                  Create in Studio
-                </Link>
+              <>
                 <button
                   onClick={() => void fetchResources('tools')}
                   aria-label="Refresh tools"
-                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent"
+                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <RefreshCw
                     className={cn(
@@ -205,29 +200,25 @@ export default function Tools() {
                   />
                   Refresh
                 </button>
-              </div>
+                <Link
+                  to="/studio"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Create in Studio
+                </Link>
+              </>
             }
           />
         </div>
 
         {/* Error */}
         {error && (
-          <div
-            role="alert"
-            className="mb-4 flex items-center justify-between rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
-          >
-            <span className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              {error}
-            </span>
-            <button
-              onClick={() => void fetchResources('tools')}
-              className="text-xs underline underline-offset-2"
-              aria-label="Retry loading tools"
-            >
-              Retry
-            </button>
-          </div>
+          <ErrorAlert
+            message={error}
+            onAction={() => void fetchResources('tools')}
+            ariaLabel="Retry loading tools"
+            className="mb-4"
+          />
         )}
 
         {/* Search */}
@@ -243,7 +234,7 @@ export default function Tools() {
               />
               <input
                 id="tools-search"
-                type="text"
+                type="search"
                 placeholder="Search tools…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -257,7 +248,8 @@ export default function Tools() {
                 </span>
                 <button
                   onClick={() => setSearch('')}
-                  className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label="Clear search"
+                  className="inline-flex items-center gap-1 rounded text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="h-3.5 w-3.5" />
                   Clear search

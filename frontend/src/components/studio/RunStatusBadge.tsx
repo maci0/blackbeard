@@ -62,6 +62,7 @@ export function RunStatusBadge({
     return (
       <button
         onClick={onNavigate}
+        aria-label={`View execution: ${message || status}`}
         className={`text-2xs flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium transition-opacity hover:opacity-75 ${cfg.cls}`}
       >
         {inner}

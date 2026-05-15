@@ -1,28 +1,29 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { User } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, parseRef } from '@/lib/utils'
 
 export default memo(function AgentNode({ data, selected }: NodeProps) {
   const role = data['role'] as string | undefined
   const goal = data['goal'] as string | undefined
   const llm = data['llm'] as string | undefined
-  const llmDisplay = llm?.startsWith('ref:') ? llm.split('/').pop() || llm : llm
+  const llmDisplay = llm ? parseRef(llm) : undefined
   const tools = Array.isArray(data['tools']) ? (data['tools'] as unknown[]) : []
 
   return (
     <div
+      aria-label={`Agent: ${role ?? 'Unnamed Agent'}`}
       className={cn(
         'w-[160px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
         selected
-          ? 'border-violet-400 shadow-md shadow-violet-100 ring-2 ring-violet-300 ring-offset-1'
+          ? 'border-violet-400 shadow-md shadow-violet-100 ring-2 ring-violet-300 ring-offset-1 dark:shadow-violet-950 dark:ring-offset-slate-900'
           : 'border-slate-200 hover:border-violet-200 hover:shadow-md dark:border-slate-700',
       )}
     >
       <Handle
         type="target"
         position={Position.Top}
-        className="!h-2.5 !w-2.5 !border-2 !border-violet-400 !bg-white"
+        className="!h-3.5 !w-3.5 !border-2 !border-violet-400 !bg-white"
       />
 
       {/* Header strip */}
@@ -65,7 +66,7 @@ export default memo(function AgentNode({ data, selected }: NodeProps) {
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!h-2.5 !w-2.5 !border-2 !border-violet-400 !bg-white"
+        className="!h-3.5 !w-3.5 !border-2 !border-violet-400 !bg-white"
       />
     </div>
   )

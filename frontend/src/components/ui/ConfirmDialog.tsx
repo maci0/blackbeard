@@ -61,7 +61,7 @@ export function ConfirmDialog({
             <button
               onClick={() => void handleConfirm()}
               disabled={busy}
-              className={`rounded-lg px-4 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${btnClass}`}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${btnClass}`}
             >
               {busy ? 'Processing...' : confirmLabel}
             </button>

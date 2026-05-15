@@ -1,6 +1,13 @@
+import { memo } from 'react'
 import { BaseEdge, getBezierPath, type EdgeProps } from '@xyflow/react'
 
-export default function ToolAssignEdge({
+const EDGE_STYLE = {
+  stroke: '#94a3b8',
+  strokeWidth: 1.5,
+  strokeDasharray: '5 4',
+} as const
+
+export default memo(function ToolAssignEdge({
   id,
   sourceX,
   sourceY,
@@ -20,17 +27,9 @@ export default function ToolAssignEdge({
 
   return (
     <>
-      <BaseEdge
-        id={id}
-        path={edgePath}
-        style={{
-          stroke: '#cbd5e1',
-          strokeWidth: 1.5,
-          strokeDasharray: '5 4',
-        }}
-      />
+      <BaseEdge id={id} path={edgePath} style={EDGE_STYLE} />
       <circle cx={sourceX} cy={sourceY} r={3} fill="#94a3b8" />
       <circle cx={targetX} cy={targetY} r={3} fill="#94a3b8" />
     </>
   )
-}
+})

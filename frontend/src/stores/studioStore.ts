@@ -106,12 +106,18 @@ export const useStudioStore = create<StudioState>()((set, get) => {
 
     removeNode: (id) => {
       pushHistory()
-      set((state) => ({
-        nodes: state.nodes.filter((n) => n.id !== id),
-        edges: state.edges.filter((e) => e.source !== id && e.target !== id),
-        selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
-        dirty: true,
-      }))
+      set((state) => {
+        const nodes = state.nodes.filter((n) => n.id !== id)
+        const edges = state.edges.some((e) => e.source === id || e.target === id)
+          ? state.edges.filter((e) => e.source !== id && e.target !== id)
+          : state.edges
+        return {
+          nodes,
+          edges,
+          selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
+          dirty: true,
+        }
+      })
     },
 
     updateNodeData: (id, data) => {
@@ -120,10 +126,15 @@ export const useStudioStore = create<StudioState>()((set, get) => {
         pushHistory()
         lastHistoryPush = now
       }
-      set((state) => ({
-        nodes: state.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...data } } : n)),
-        dirty: true,
-      }))
+      set((state) => {
+        const idx = state.nodes.findIndex((n) => n.id === id)
+        if (idx === -1) return state
+        const node = state.nodes[idx]!
+        const updated = { ...node, data: { ...node.data, ...data } }
+        const nodes = state.nodes.slice()
+        nodes[idx] = updated
+        return { nodes, dirty: true }
+      })
     },
 
     setSelectedNode: (id) => set({ selectedNodeId: id }),

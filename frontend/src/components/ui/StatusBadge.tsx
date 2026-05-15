@@ -1,5 +1,5 @@
 import { CheckCircle2, XCircle, Clock, Ban } from 'lucide-react'
-import { statusLabel } from '@/lib/status'
+import { statusLabel } from '@/lib/formatters'
 
 const STATUS_CLASSES: Record<string, string> = {
   queued: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
@@ -25,6 +25,7 @@ export function StatusBadge({ status }: { status: string }) {
   const Icon = STATUS_ICON[status]
   return (
     <span
+      role="status"
       className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${classes}`}
     >
       {status === 'running' ? (

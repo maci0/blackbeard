@@ -24,9 +24,40 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _SAFE_FILENAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+_PATH_TRAVERSAL_INDICATORS = ("..", "~", "\\")
+_SENSITIVE_PATH_PREFIXES = ("/etc/", "/proc/", "/sys/", "/dev/", "/var/run/")
 
-# The agent runs in the same process as the API server
-_SELF_API_URL = "http://localhost:8000"
+# Builtin tool names must be PascalCase identifiers — no dunders, no dots
+_SAFE_BUILTIN_NAME = re.compile(r"^[A-Z][a-zA-Z0-9]+$")
+
+# Allowlist for dynamic tool imports — only these module prefixes are permitted
+# for type=python tools. Prevents arbitrary code execution via class_path.
+_ALLOWED_TOOL_MODULE_PREFIXES = (
+    "crewai_tools.",
+    "crewai.tools.",
+    "langchain_community.tools.",
+    "langchain.tools.",
+)
+
+# Discovery tools call back to the API within the same container.
+# Uses configured host/port so it works regardless of deployment setup.
+_SELF_API_URL = f"http://localhost:{settings.port}"
+
+
+def _check_path_safety(path: str, context: str) -> None:
+    """Raise LoaderError if path contains traversal characters or targets sensitive directories."""
+    if any(ind in path for ind in _PATH_TRAVERSAL_INDICATORS):
+        raise LoaderError(f"{context}: path traversal characters not allowed")
+    if any(path.startswith(p) for p in _SENSITIVE_PATH_PREFIXES):
+        raise LoaderError(f"{context}: access to '{path}' is not allowed")
+
+
+def _validate_tool_config(config: dict[str, Any], tool_name: str) -> None:
+    """Reject tool config values containing path traversal or sensitive paths."""
+    for key, val in config.items():
+        if not isinstance(val, str):
+            continue
+        _check_path_safety(val, f"Tool '{tool_name}' config.{key}")
 
 
 class LoaderError(Exception):
@@ -45,6 +76,8 @@ class ResourceLoader:
         self._llm_cache: dict[str, LLM] = {}
         self._agent_cache: dict[str, Agent] = {}
         self._task_cache: dict[str, Task] = {}
+        self._tools_loaded = 0
+        self._tools_skipped = 0
 
     def _resolve_ref(self, ref_str: str) -> Resource:
         """Resolve a ref string to a Resource object."""
@@ -54,15 +87,14 @@ class ResourceLoader:
         key = f"{ref.kind.value}/{ref.name}"
         resource = self._resources.get(key)
         if resource is None:
-            available = sorted(self._resources.keys())
             logger.error(
-                "Ref '%s' not found. Available: %s",
+                "Ref '%s' not found (%d resources loaded)",
                 key,
-                available,
+                len(self._resources),
                 extra={
                     "event": "ref_not_found",
                     "ref": key,
-                    "available_count": len(available),
+                    "available_count": len(self._resources),
                 },
             )
             raise LoaderError(f"Referenced resource '{key}' not found")
@@ -104,41 +136,87 @@ class ResourceLoader:
         try:
             resource = self._resolve_ref(ref_or_name)
             if resource.kind != ResourceKind.KNOWLEDGE_SOURCE:
-                logger.warning("Expected KnowledgeSource, got %s", resource.kind.value)
+                logger.warning(
+                    "Expected KnowledgeSource, got %s",
+                    resource.kind.value,
+                    extra={
+                        "event": "knowledge_source_kind_mismatch",
+                        "ref": ref_or_name,
+                        "actual_kind": resource.kind.value,
+                    },
+                )
                 return None
 
             spec = resource.spec
             ks_type = spec.get("type", "string")
             file_paths = spec.get("file_paths", [])
+
+            for fp in file_paths:
+                if not isinstance(fp, str):
+                    raise LoaderError(
+                        f"KnowledgeSource '{resource.name}': file_path must be string"
+                    )
+                _check_path_safety(fp, f"KnowledgeSource '{resource.name}'")
             content = spec.get("content", "")
 
-            if ks_type == "text":
-                from crewai.knowledge.source.text_file_knowledge_source import (
-                    TextFileKnowledgeSource,
+            # Lazy-import map: type string → (module_path, class_name, kwargs)
+            ks_types: dict[str, tuple[str, str, dict[str, Any]]] = {
+                "text": (
+                    "crewai.knowledge.source.text_file_knowledge_source",
+                    "TextFileKnowledgeSource",
+                    {"file_paths": file_paths},
+                ),
+                "pdf": (
+                    "crewai.knowledge.source.pdf_knowledge_source",
+                    "PDFKnowledgeSource",
+                    {"file_paths": file_paths},
+                ),
+                "csv": (
+                    "crewai.knowledge.source.csv_knowledge_source",
+                    "CSVKnowledgeSource",
+                    {"file_paths": file_paths},
+                ),
+                "json": (
+                    "crewai.knowledge.source.json_knowledge_source",
+                    "JSONKnowledgeSource",
+                    {"file_paths": file_paths},
+                ),
+                "string": (
+                    "crewai.knowledge.source.string_knowledge_source",
+                    "StringKnowledgeSource",
+                    {"content": content},
+                ),
+            }
+
+            entry = ks_types.get(ks_type)
+            if entry is None:
+                logger.warning(
+                    "Knowledge source type '%s' not supported",
+                    ks_type,
+                    extra={
+                        "event": "knowledge_source_type_unsupported",
+                        "ref": ref_or_name,
+                        "ks_type": ks_type,
+                    },
                 )
+                return None
 
-                return TextFileKnowledgeSource(file_paths=file_paths)
-            if ks_type == "pdf":
-                from crewai.knowledge.source.pdf_knowledge_source import PDFKnowledgeSource
-
-                return PDFKnowledgeSource(file_paths=file_paths)
-            if ks_type == "csv":
-                from crewai.knowledge.source.csv_knowledge_source import CSVKnowledgeSource
-
-                return CSVKnowledgeSource(file_paths=file_paths)
-            if ks_type == "json":
-                from crewai.knowledge.source.json_knowledge_source import JSONKnowledgeSource
-
-                return JSONKnowledgeSource(file_paths=file_paths)
-            if ks_type == "string":
-                from crewai.knowledge.source.string_knowledge_source import StringKnowledgeSource
-
-                return StringKnowledgeSource(content=content)
-
-            logger.warning("Knowledge source type '%s' not supported", ks_type)
-            return None
-        except Exception:
-            logger.exception("Failed to build knowledge source from %s", ref_or_name)
+            module_path, class_name, kwargs = entry
+            module = importlib.import_module(module_path)
+            cls = getattr(module, class_name)
+            return cls(**kwargs)
+        except Exception as exc:
+            logger.exception(
+                "Failed to build knowledge source from %s: %s",
+                ref_or_name,
+                exc,
+                extra={
+                    "event": "knowledge_source_build_failed",
+                    "ref": ref_or_name,
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc)[:500],
+                },
+            )
             return None
 
     def build_tool(self, ref_or_name: str) -> Any:
@@ -146,7 +224,8 @@ class ResourceLoader:
 
         Supports ``type: python`` (dynamic import via ``class_path``) and
         ``type: builtin`` (import from ``crewai_tools``).  Other types
-        (``wasm``, ``mcp``) log a warning and return ``None``.
+        (``wasm``, ``mcp-stdio``, ``mcp-http``) log a warning and return
+        ``None``.
         """
         resource = self._resolve_ref(ref_or_name)
         if resource.kind != ResourceKind.TOOL:
@@ -159,27 +238,59 @@ class ResourceLoader:
             class_path = spec.get("class_path")
             if not class_path:
                 raise LoaderError(f"Tool '{resource.name}' has type=python but no class_path")
+            if not any(class_path.startswith(p) for p in _ALLOWED_TOOL_MODULE_PREFIXES):
+                raise LoaderError(
+                    f"Tool '{resource.name}': class_path '{class_path}' is not in the "
+                    f"allowed module list. Permitted prefixes: "
+                    f"{', '.join(_ALLOWED_TOOL_MODULE_PREFIXES)}"
+                )
             module_path, class_name = class_path.rsplit(".", 1)
             module = importlib.import_module(module_path)
             tool_cls = getattr(module, class_name)
-            config = spec.get("config", {})
-            return tool_cls(**config)
 
-        if tool_type == "builtin":
+        elif tool_type == "builtin":
             builtin_name = spec.get("class_path") or resource.name
+            if not _SAFE_BUILTIN_NAME.match(builtin_name):
+                raise LoaderError(
+                    f"Builtin tool name '{builtin_name}' is not a valid PascalCase identifier"
+                )
             try:
                 import crewai_tools
 
                 tool_cls = getattr(crewai_tools, builtin_name, None)
                 if tool_cls is None:
                     raise LoaderError(f"Builtin tool '{builtin_name}' not found in crewai_tools")
-                config = spec.get("config", {})
-                return tool_cls(**config)
             except ImportError as exc:
                 raise LoaderError("crewai_tools not installed") from exc
 
-        logger.warning("Tool type '%s' not yet supported for runtime loading", tool_type)
-        return None
+        else:
+            self._tools_skipped += 1
+            logger.warning(
+                "Tool type '%s' not yet supported for runtime loading (tool=%s)",
+                tool_type,
+                resource.name,
+                extra={
+                    "event": "tool_type_unsupported",
+                    "tool_name": resource.name,
+                    "tool_type": tool_type,
+                },
+            )
+            return None
+
+        config = spec.get("config", {})
+        _validate_tool_config(config, resource.name)
+        self._tools_loaded += 1
+        logger.debug(
+            "Tool loaded: %s type=%s",
+            resource.name,
+            tool_type,
+            extra={
+                "event": "tool_loaded",
+                "tool_name": resource.name,
+                "tool_type": tool_type,
+            },
+        )
+        return tool_cls(**config)
 
     def build_agent(self, ref_or_name: str) -> Agent:
         """Build a CrewAI Agent from an Agent resource ref."""
@@ -205,11 +316,7 @@ class ResourceLoader:
 
         tool_refs = spec.get("tools", [])
         if tool_refs:
-            tools = []
-            for ref in tool_refs:
-                tool = self.build_tool(ref)
-                if tool is not None:
-                    tools.append(tool)
+            tools = [t for ref in tool_refs if (t := self.build_tool(ref)) is not None]
             if tools:
                 agent_kwargs["tools"] = tools
 
@@ -240,11 +347,23 @@ class ResourceLoader:
         # Knowledge sources — refs to KnowledgeSource resources
         ks_refs = spec.get("knowledge_sources", [])
         if ks_refs:
-            knowledge = []
-            for ref in ks_refs:
-                ks = self._build_knowledge_source(ref)
-                if ks is not None:
-                    knowledge.append(ks)
+            knowledge = [
+                ks for ref in ks_refs if (ks := self._build_knowledge_source(ref)) is not None
+            ]
+            failed_count = len(ks_refs) - len(knowledge)
+            if failed_count > 0:
+                logger.warning(
+                    "Agent '%s': %d/%d knowledge sources failed to load",
+                    resource.name,
+                    failed_count,
+                    len(ks_refs),
+                    extra={
+                        "event": "knowledge_sources_partial",
+                        "agent_name": resource.name,
+                        "total_sources": len(ks_refs),
+                        "failed_sources": failed_count,
+                    },
+                )
             if knowledge:
                 agent_kwargs["knowledge_sources"] = knowledge
 
@@ -292,15 +411,16 @@ class ResourceLoader:
         """Build the JIT discovery meta-tools for the given namespace."""
         from blackbeard.engine.discovery_tools import GetToolTool, SearchToolsTool
 
+        api_key = settings.blackbeard_api_key.get_secret_value()
         return [
             SearchToolsTool(
                 api_url=_SELF_API_URL,
-                api_key=settings.blackbeard_api_key.get_secret_value(),
+                api_key=api_key,
                 namespace=namespace,
             ),
             GetToolTool(
                 api_url=_SELF_API_URL,
-                api_key=settings.blackbeard_api_key.get_secret_value(),
+                api_key=api_key,
                 namespace=namespace,
             ),
         ]
@@ -350,10 +470,14 @@ class ResourceLoader:
         agent_refs = spec.get("agents", [])
         agents = [self.build_agent(ref) for ref in agent_refs]
 
-        # Inject discovery meta-tools into agents based on crew tool_loading setting
-        for agent_ref, agent in zip(agent_refs, agents, strict=False):
-            agent_resource = self._resolve_ref(agent_ref)
-            self._inject_discovery_tools(agent, agent_resource, tool_loading, resource.namespace)
+        for ref_str, agent in zip(agent_refs, agents, strict=True):
+            ref = parse_ref(ref_str)
+            if ref:
+                agent_resource = self._resources.get(f"{ref.kind.value}/{ref.name}")
+                if agent_resource:
+                    self._inject_discovery_tools(
+                        agent, agent_resource, tool_loading, resource.namespace
+                    )
 
         task_refs = spec.get("tasks", [])
         tasks = [self.build_task(ref) for ref in task_refs]
@@ -390,16 +514,20 @@ class ResourceLoader:
 
         crew = Crew(**crew_kwargs)
         logger.info(
-            "Crew built: %s agents=%d tasks=%d process=%s",
+            "Crew built: %s agents=%d tasks=%d tools=%d skipped=%d process=%s",
             crew_name,
             len(agents),
             len(tasks),
+            self._tools_loaded,
+            self._tools_skipped,
             process_str,
             extra={
                 "event": "crew_built",
                 "crew_name": crew_name,
                 "agent_count": len(agents),
                 "task_count": len(tasks),
+                "tools_loaded": self._tools_loaded,
+                "tools_skipped": self._tools_skipped,
                 "crew_process": process_str,
             },
         )

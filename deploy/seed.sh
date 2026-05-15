@@ -1,14 +1,72 @@
 #!/bin/bash
 set -euo pipefail
 
+usage() {
+  cat <<'EOF'
+Usage: bash deploy/seed.sh [OPTIONS]
+
+Seed the Blackbeard database with an example research crew and common tools.
+Requires a running Blackbeard stack and Ollama with qwen3.6 pulled.
+
+Resources are created via POST — re-running will fail with 409 Conflict if
+resources already exist. Use the API or CLI to delete them first, or ignore
+the errors.
+
+Options:
+  --help, -h    Show this help
+
+Environment:
+  BLACKBEARD_API       API base URL (default: http://localhost:8000)
+  BLACKBEARD_API_KEY   API key     (default: change-me-in-production)
+
+Examples:
+  bash deploy/seed.sh
+  BLACKBEARD_API=http://prod:8000 BLACKBEARD_API_KEY=my-key bash deploy/seed.sh
+EOF
+  exit 0
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h) usage ;;
+  esac
+done
+
 API="${BLACKBEARD_API:-http://localhost:8000}"
 KEY="${BLACKBEARD_API_KEY:-change-me-in-production}"
 H=(-H "X-API-Key: $KEY" -H "Content-Type: application/json")
 
+# Verify server is reachable before seeding
+if ! curl -sSf "$API/api/v1/health" > /dev/null 2>&1; then
+  echo "Error: Cannot reach Blackbeard API at $API" >&2
+  echo "  Is the server running? Try: curl $API/api/v1/health" >&2
+  exit 1
+fi
+
+ERRORS=0
+CREATED=0
+
+seed() {
+  local label="$1"
+  shift
+  local body
+  if body=$(curl -sSf "$@" 2>&1); then
+    echo "  + $label"
+    CREATED=$((CREATED + 1))
+  else
+    echo "  x $label (failed — may already exist)" >&2
+    # Show the API error response if non-empty, to aid debugging
+    if [ -n "$body" ]; then
+      echo "    $body" >&2
+    fi
+    ERRORS=$((ERRORS + 1))
+  fi
+}
+
 echo "Seeding Blackbeard at $API ..."
 
-# ── LLM Connection: Ollama qwen3.5 ──────────────────────────────────
-curl -sf -X POST "$API/api/v1/llm-connections" "${H[@]}" -d '{
+# ── LLM Connection: Ollama qwen3.6 ──────────────────────────────────
+seed "LLMConnection/ollama-qwen" -X POST "$API/api/v1/llm-connections" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "LLMConnection",
   "metadata": {"name": "ollama-qwen"},
@@ -17,11 +75,10 @@ curl -sf -X POST "$API/api/v1/llm-connections" "${H[@]}" -d '{
     "model": "qwen3.6",
     "parameters": {"temperature": 0.3, "max_tokens": 4096}
   }
-}' > /dev/null
-echo "  LLMConnection/ollama-qwen"
+}'
 
 # ── Agent: Researcher ────────────────────────────────────────────────
-curl -sf -X POST "$API/api/v1/agents" "${H[@]}" -d '{
+seed "Agent/researcher" -X POST "$API/api/v1/agents" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Agent",
   "metadata": {"name": "researcher"},
@@ -33,11 +90,10 @@ curl -sf -X POST "$API/api/v1/agents" "${H[@]}" -d '{
     "max_iter": 5,
     "verbose": true
   }
-}' > /dev/null
-echo "  Agent/researcher"
+}'
 
 # ── Agent: Writer ────────────────────────────────────────────────────
-curl -sf -X POST "$API/api/v1/agents" "${H[@]}" -d '{
+seed "Agent/writer" -X POST "$API/api/v1/agents" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Agent",
   "metadata": {"name": "writer"},
@@ -49,11 +105,10 @@ curl -sf -X POST "$API/api/v1/agents" "${H[@]}" -d '{
     "max_iter": 5,
     "verbose": true
   }
-}' > /dev/null
-echo "  Agent/writer"
+}'
 
 # ── Task: Research ───────────────────────────────────────────────────
-curl -sf -X POST "$API/api/v1/tasks" "${H[@]}" -d '{
+seed "Task/research-topic" -X POST "$API/api/v1/tasks" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Task",
   "metadata": {"name": "research-topic"},
@@ -62,11 +117,10 @@ curl -sf -X POST "$API/api/v1/tasks" "${H[@]}" -d '{
     "expected_output": "3 bullet points about {topic}, each one sentence.",
     "agent": "ref:agents/researcher"
   }
-}' > /dev/null
-echo "  Task/research-topic"
+}'
 
 # ── Task: Write report ───────────────────────────────────────────────
-curl -sf -X POST "$API/api/v1/tasks" "${H[@]}" -d '{
+seed "Task/write-report" -X POST "$API/api/v1/tasks" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Task",
   "metadata": {"name": "write-report"},
@@ -76,11 +130,10 @@ curl -sf -X POST "$API/api/v1/tasks" "${H[@]}" -d '{
     "agent": "ref:agents/writer",
     "context": ["ref:tasks/research-topic"]
   }
-}' > /dev/null
-echo "  Task/write-report"
+}'
 
 # ── Crew: Research Crew ──────────────────────────────────────────────
-curl -sf -X POST "$API/api/v1/crews" "${H[@]}" -d '{
+seed "Crew/research-crew" -X POST "$API/api/v1/crews" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Crew",
   "metadata": {"name": "research-crew"},
@@ -91,11 +144,10 @@ curl -sf -X POST "$API/api/v1/crews" "${H[@]}" -d '{
     "verbose": true,
     "memory": true
   }
-}' > /dev/null
-echo "  Crew/research-crew"
+}'
 
 # ── Tools ────────────────────────────────────────────────────────────
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/file-read" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "file-read"},
@@ -104,10 +156,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "class_path": "FileReadTool",
     "description": "Read the contents of a file from the local filesystem"
   }
-}' > /dev/null
-echo "  Tool/file-read"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/file-write" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "file-write"},
@@ -116,10 +167,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "class_path": "FileWriterTool",
     "description": "Write content to a file on the local filesystem"
   }
-}' > /dev/null
-echo "  Tool/file-write"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/directory-read" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "directory-read"},
@@ -128,10 +178,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "class_path": "DirectoryReadTool",
     "description": "List files and directories in a given path"
   }
-}' > /dev/null
-echo "  Tool/directory-read"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/scrape-website" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "scrape-website"},
@@ -140,10 +189,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "class_path": "ScrapeWebsiteTool",
     "description": "Scrape and extract text content from a website URL"
   }
-}' > /dev/null
-echo "  Tool/scrape-website"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/pdf-search" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "pdf-search"},
@@ -152,10 +200,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "class_path": "PDFSearchTool",
     "description": "Search and extract text from PDF documents"
   }
-}' > /dev/null
-echo "  Tool/pdf-search"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/csv-search" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "csv-search"},
@@ -164,10 +211,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "class_path": "CSVSearchTool",
     "description": "Search and query data in CSV files"
   }
-}' > /dev/null
-echo "  Tool/csv-search"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/json-search" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "json-search"},
@@ -176,10 +222,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "class_path": "JSONSearchTool",
     "description": "Search and query data in JSON files"
   }
-}' > /dev/null
-echo "  Tool/json-search"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/txt-search" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "txt-search"},
@@ -188,10 +233,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "class_path": "TXTSearchTool",
     "description": "Search and extract text from plain text files"
   }
-}' > /dev/null
-echo "  Tool/txt-search"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/website-search" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "website-search"},
@@ -200,10 +244,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "class_path": "WebsiteSearchTool",
     "description": "Search for specific content within a website"
   }
-}' > /dev/null
-echo "  Tool/website-search"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/vision" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "vision"},
@@ -212,11 +255,10 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "class_path": "VisionTool",
     "description": "Analyze and describe images using vision models"
   }
-}' > /dev/null
-echo "  Tool/vision"
+}'
 
 # ── MCP Servers (no auth required) ───────────────────────────────────
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/mcp-filesystem" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "mcp-filesystem"},
@@ -226,10 +268,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/workspace"]
   }
-}' > /dev/null
-echo "  Tool/mcp-filesystem"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/mcp-fetch" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "mcp-fetch"},
@@ -239,10 +280,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "command": "uvx",
     "args": ["mcp-server-fetch"]
   }
-}' > /dev/null
-echo "  Tool/mcp-fetch"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/mcp-memory" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "mcp-memory"},
@@ -252,10 +292,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-memory"]
   }
-}' > /dev/null
-echo "  Tool/mcp-memory"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/mcp-brave-search" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "mcp-brave-search"},
@@ -265,10 +304,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "command": "npx",
     "args": ["-y", "@anthropic/mcp-server-brave-search"]
   }
-}' > /dev/null
-echo "  Tool/mcp-brave-search"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/mcp-context7" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "mcp-context7"},
@@ -277,10 +315,9 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "description": "Look up library documentation and code examples — no auth required",
     "url": "https://mcp.context7.com/sse"
   }
-}' > /dev/null
-echo "  Tool/mcp-context7"
+}'
 
-curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
+seed "Tool/mcp-sequentialthinking" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Tool",
   "metadata": {"name": "mcp-sequentialthinking"},
@@ -290,9 +327,15 @@ curl -sf -X POST "$API/api/v1/tools" "${H[@]}" -d '{
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
   }
-}' > /dev/null
-echo "  Tool/mcp-sequentialthinking"
+}'
 
 echo ""
-echo "Seed complete. 22 resources created."
-echo "Run a crew: curl -X POST $API/api/v1/crews/research-crew/kickoff -H 'X-API-Key: $KEY' -H 'Content-Type: application/json' -d '{\"inputs\":{\"topic\":\"AI agents\"}}'"
+echo "Seed complete: $CREATED created, $ERRORS failed."
+if [ "$ERRORS" -gt 0 ]; then
+  echo "Some resources failed — they may already exist (409 Conflict)." >&2
+  exit 1
+fi
+
+echo ""
+echo "Try it:"
+echo "  blackbeard kickoff research-crew --input topic=\"AI agents\" --wait"

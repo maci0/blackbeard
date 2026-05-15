@@ -56,18 +56,18 @@ blackbeard status <execution-id> --watch               # poll until complete
 ┌─────────────┐     ┌──────────────┐     ┌──────────────┐
 │   React UI  │────▶│  FastAPI API  │────▶│  PostgreSQL   │
 │  (Studio)   │     │  (Blackbeard) │     │              │
-└─────────────┘     └──────┬───────┘     └──────────────┘
-                           │
-                    ┌──────▼───────┐
-                    │   LiteLLM    │
-                    │   (Proxy)    │
-                    └──────┬───────┘
-                           │
-                    ┌──────▼───────┐
-                    │  Vertex AI   │
-                    │  Claude/     │
-                    │  Gemini      │
-                    └──────────────┘
+└─────────────┘     └──┬───────┬───┘     └──────────────┘
+                       │       │
+                ┌──────▼──┐  ┌─▼──────────┐
+                │ LiteLLM │  │   Valkey    │
+                │ (Proxy) │  │   (Cache)   │
+                └────┬────┘  └────────────┘
+                     │
+              ┌──────▼───────┐
+              │  Vertex AI   │
+              │  Claude/     │
+              │  Gemini      │
+              └──────────────┘
 ```
 
 ## Project Structure
@@ -100,10 +100,12 @@ blackbeard/
 | `Agent` | CrewAI agent with role, goal, backstory, LLM |
 | `Task` | Work unit assigned to an agent |
 | `Crew` | Orchestrates agents + tasks (sequential/hierarchical) |
-| `Tool` | Python or WASM tool for agents |
+| `Tool` | Callable tool for agents (Python, builtin, WASM, MCP) |
 | `LLMConnection` | LLM provider config (Vertex AI, OpenAI, etc.) |
 | `AgentPolicy` | Tool allowlists, budget limits, sandbox tiers |
 | `Guardrail` | Task-level safety checks (function or LLM-based) |
+| `Flow` | Multi-step pipeline orchestrating crews and functions |
+| `KnowledgeSource` | RAG-accessible content for agent knowledge |
 
 ## API
 
@@ -171,17 +173,17 @@ uv run mypy blackbeard/ --ignore-missing-imports  # type check
 
 # Frontend
 cd frontend
-npm ci                          # install deps
-npm run dev                     # dev server on :3000
-npm run check                   # typecheck + lint + format check
-npm run build                   # production build
+bun install                     # install deps
+bun run dev                     # dev server on :3000
+bun run check                   # typecheck + lint + format check
+bun run build                   # production build
 ```
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Python 3.13+, FastAPI, SQLAlchemy, Pydantic v2 |
+| Backend | Python 3.12+, FastAPI, SQLAlchemy, Pydantic v2 |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS, Radix UI |
 | Graph Editor | React Flow (xyflow v12) |
 | Database | PostgreSQL 18 |
@@ -192,7 +194,6 @@ npm run build                   # production build
 
 ## Known Limitations
 
-- **Tool refs on agents** are stored but not yet loaded at execution time. Tools must be registered directly via CrewAI's tool system.
 - **Inline crew resources** (`spec.inline`) are validated as an opaque object — individual inline agents/tasks are not schema-validated.
 
 ## License

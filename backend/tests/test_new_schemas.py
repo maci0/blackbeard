@@ -1,6 +1,9 @@
 """Tests for AgentPolicy and Guardrail JSON Schema validation."""
 
+import pytest
+
 from blackbeard.resources.validator import validate_resource
+from tests.conftest import has_validation_error as _has_error
 
 # ---------------------------------------------------------------------------
 # AgentPolicy schema
@@ -22,7 +25,7 @@ def test_agent_policy_invalid_mode():
     spec = {"tools": {"mode": "invalid"}}
     errors, _ = validate_resource("AgentPolicy", spec)
     assert len(errors) > 0
-    assert any("mode" in e.field and "invalid" in e.message for e in errors)
+    assert _has_error(errors, field_contains="mode", msg_contains="invalid")
 
 
 def test_agent_policy_with_budget():
@@ -52,7 +55,7 @@ def test_agent_policy_extra_field():
     spec = {"unknown_field": "bad"}
     errors, _ = validate_resource("AgentPolicy", spec)
     assert len(errors) > 0
-    assert any("additional" in e.message.lower() or "unknown_field" in e.message for e in errors)
+    assert _has_error(errors, msg_contains="additional")
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +66,7 @@ def test_agent_policy_extra_field():
 def test_valid_guardrail_function():
     spec = {
         "type": "function",
-        "function_path": "mypackage.guardrails.check_pii",
+        "function_path": "blackbeard.guardrails.check_pii",
         "on_fail": "reject",
     }
     errors, _ = validate_resource("Guardrail", spec)
@@ -84,21 +87,21 @@ def test_guardrail_missing_type():
     spec = {"function_path": "mypackage.guardrails.check_pii"}
     errors, _ = validate_resource("Guardrail", spec)
     assert len(errors) > 0
-    assert any("type" in e.field or "type" in e.message for e in errors)
+    assert _has_error(errors, field_contains="type") or _has_error(errors, msg_contains="type")
 
 
 def test_guardrail_invalid_type():
     spec = {"type": "invalid"}
     errors, _ = validate_resource("Guardrail", spec)
     assert len(errors) > 0
-    assert any("type" in e.field and "invalid" in e.message for e in errors)
+    assert _has_error(errors, field_contains="type", msg_contains="invalid")
 
 
 def test_guardrail_invalid_on_fail():
     spec = {"type": "function", "on_fail": "invalid"}
     errors, _ = validate_resource("Guardrail", spec)
     assert len(errors) > 0
-    assert any("on_fail" in e.field and "invalid" in e.message for e in errors)
+    assert _has_error(errors, field_contains="on_fail", msg_contains="invalid")
 
 
 def test_guardrail_all_on_fail_values():
@@ -161,6 +164,7 @@ def test_flow_empty_steps():
     spec = {"steps": []}
     errors, _ = validate_resource("Flow", spec)
     assert len(errors) > 0
+    assert _has_error(errors, field_contains="steps")
 
 
 def test_flow_step_missing_required_fields():
@@ -174,18 +178,21 @@ def test_flow_invalid_step_type():
     spec = {"steps": [{"name": "step-1", "type": "invalid"}]}
     errors, _ = validate_resource("Flow", spec)
     assert len(errors) > 0
+    assert _has_error(errors, msg_contains="invalid")
 
 
 def test_flow_step_extra_field():
     spec = {"steps": [{"name": "s", "type": "crew", "unknown": True}]}
     errors, _ = validate_resource("Flow", spec)
     assert len(errors) > 0
+    assert _has_error(errors, msg_contains="additional")
 
 
 def test_flow_extra_top_level_field():
     spec = {"steps": [{"name": "s", "type": "crew"}], "unknown_field": True}
     errors, _ = validate_resource("Flow", spec)
     assert len(errors) > 0
+    assert _has_error(errors, msg_contains="additional")
 
 
 # ---------------------------------------------------------------------------
@@ -234,12 +241,14 @@ def test_knowledge_source_invalid_type():
     spec = {"type": "invalid"}
     errors, _ = validate_resource("KnowledgeSource", spec)
     assert len(errors) > 0
+    assert _has_error(errors, field_contains="type")
 
 
 def test_knowledge_source_extra_field():
     spec = {"type": "string", "unknown_field": True}
     errors, _ = validate_resource("KnowledgeSource", spec)
     assert len(errors) > 0
+    assert _has_error(errors, msg_contains="additional")
 
 
 def test_knowledge_source_chunk_size_bounds():
@@ -247,11 +256,13 @@ def test_knowledge_source_chunk_size_bounds():
     spec = {"type": "text", "chunk_size": 50}
     errors, _ = validate_resource("KnowledgeSource", spec)
     assert len(errors) > 0
+    assert _has_error(errors, field_contains="chunk_size")
 
     # chunk_size maximum is 10000
     spec = {"type": "text", "chunk_size": 20000}
     errors, _ = validate_resource("KnowledgeSource", spec)
     assert len(errors) > 0
+    assert _has_error(errors, field_contains="chunk_size")
 
 
 def test_knowledge_source_all_types_valid():
@@ -276,3 +287,75 @@ def test_valid_tool_mcp_http():
     spec = {"type": "mcp-http", "url": "http://example.com/mcp"}
     errors, _ = validate_resource("Tool", spec)
     assert errors == []
+
+
+# ---------------------------------------------------------------------------
+# ResourceCreate / ResourceMetadata Pydantic validation
+# ---------------------------------------------------------------------------
+
+
+from pydantic import ValidationError as PydanticValidationError
+
+from blackbeard.models.resource_schemas import ResourceCreate, ResourceMetadata
+
+
+def test_resource_metadata_rejects_uppercase_name():
+    """Resource names must be lowercase alphanumeric + hyphens."""
+    with pytest.raises(PydanticValidationError, match="string_pattern_mismatch"):
+        ResourceMetadata(name="Invalid_Name")
+
+
+def test_resource_metadata_rejects_empty_name():
+    """Empty name should fail validation."""
+    with pytest.raises(PydanticValidationError):
+        ResourceMetadata(name="")
+
+
+def test_resource_metadata_accepts_valid_name():
+    meta = ResourceMetadata(name="my-resource")
+    assert meta.name == "my-resource"
+    assert meta.namespace == "default"
+
+
+def test_resource_metadata_label_key_too_long():
+    """Label keys exceeding 63 chars should fail."""
+    with pytest.raises(PydanticValidationError, match="too long"):
+        ResourceMetadata(name="test", labels={"k" * 64: "v"})
+
+
+def test_resource_metadata_label_value_too_long():
+    """Label values exceeding 255 chars should fail."""
+    with pytest.raises(PydanticValidationError, match="too long"):
+        ResourceMetadata(name="test", labels={"k": "v" * 256})
+
+
+def test_resource_create_rejects_invalid_kind():
+    """Invalid kind should be rejected at the Pydantic level."""
+    with pytest.raises(PydanticValidationError, match="Invalid kind"):
+        ResourceCreate(
+            kind="Widget",
+            metadata=ResourceMetadata(name="test"),
+            spec={"foo": "bar"},
+        )
+
+
+def test_resource_create_rejects_invalid_api_version():
+    """Unsupported apiVersion should be rejected."""
+    with pytest.raises(PydanticValidationError, match="Unsupported apiVersion"):
+        ResourceCreate(
+            apiVersion="blackbeard/v999",
+            kind="Agent",
+            metadata=ResourceMetadata(name="test"),
+            spec={"role": "R", "goal": "G", "backstory": "B"},
+        )
+
+
+def test_resource_create_accepts_valid():
+    """Valid ResourceCreate should pass validation."""
+    rc = ResourceCreate(
+        kind="Agent",
+        metadata=ResourceMetadata(name="test"),
+        spec={"role": "R", "goal": "G", "backstory": "B"},
+    )
+    assert rc.kind == "Agent"
+    assert rc.apiVersion == "blackbeard/v1"

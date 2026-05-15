@@ -295,3 +295,139 @@ async def test_create_and_get_llm_connection(client: AsyncClient):
     get_resp = await client.get("/api/v1/llm-connections/gpt4", headers=API_KEY_HEADER)
     assert get_resp.status_code == 200
     assert get_resp.json()["spec"]["provider"] == "openai"
+
+
+# ---------------------------------------------------------------------------
+# Update edge cases
+# ---------------------------------------------------------------------------
+
+
+async def test_update_nonexistent_resource(client: AsyncClient):
+    """PUT on a resource that doesn't exist should return 404."""
+    update_payload = {
+        "version": 1,
+        "spec": {"role": "R", "goal": "G", "backstory": "B"},
+    }
+    response = await client.put(
+        "/api/v1/agents/ghost-agent", json=update_payload, headers=API_KEY_HEADER
+    )
+    assert response.status_code == 404
+
+
+async def test_update_with_invalid_spec(client: AsyncClient):
+    """PUT with spec violating JSON Schema should return 422."""
+    r = await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
+    assert r.status_code == 201
+
+    update_payload = {
+        "version": 1,
+        "spec": {"goal": "Only goal, missing role and backstory"},
+    }
+    response = await client.put(
+        "/api/v1/agents/researcher", json=update_payload, headers=API_KEY_HEADER
+    )
+    assert response.status_code == 422
+
+
+async def test_delete_nonexistent_is_idempotent(client: AsyncClient):
+    """DELETE on a non-existent resource should return 204 (idempotent)."""
+    response = await client.delete("/api/v1/agents/ghost-agent", headers=API_KEY_HEADER)
+    assert response.status_code == 204
+
+
+# ---------------------------------------------------------------------------
+# Resource response shape
+# ---------------------------------------------------------------------------
+
+
+async def test_resource_response_shape(client: AsyncClient):
+    """Created resource should have all expected fields in the response."""
+    response = await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
+    assert response.status_code == 201
+    data = response.json()
+
+    required = {
+        "id",
+        "apiVersion",
+        "kind",
+        "metadata",
+        "spec",
+        "version",
+        "created_at",
+        "updated_at",
+    }
+    assert required.issubset(data.keys()), f"Missing: {required - set(data.keys())}"
+    assert data["apiVersion"] == "blackbeard/v1"
+    assert data["metadata"]["namespace"] == "default"
+
+
+# ---------------------------------------------------------------------------
+# Pagination
+# ---------------------------------------------------------------------------
+
+
+async def test_list_agents_pagination(client: AsyncClient):
+    """Pagination with limit+offset should return correct slices."""
+    for i in range(5):
+        r = await client.post(
+            "/api/v1/agents", json=_agent_payload(f"agent-{i}"), headers=API_KEY_HEADER
+        )
+        assert r.status_code == 201
+
+    response = await client.get("/api/v1/agents?limit=2&offset=0", headers=API_KEY_HEADER)
+    data = response.json()
+    assert len(data["items"]) == 2
+    assert data["total"] == 5
+    assert data["has_more"] is True
+
+    response = await client.get("/api/v1/agents?limit=2&offset=4", headers=API_KEY_HEADER)
+    data = response.json()
+    assert len(data["items"]) == 1
+    assert data["has_more"] is False
+
+
+# ---------------------------------------------------------------------------
+# Invalid API version
+# ---------------------------------------------------------------------------
+
+
+async def test_create_resource_invalid_api_version(client: AsyncClient):
+    """POST with unsupported apiVersion should return 422."""
+    payload = {
+        "apiVersion": "blackbeard/v999",
+        "kind": "Agent",
+        "metadata": {"name": "test"},
+        "spec": {"role": "R", "goal": "G", "backstory": "B"},
+    }
+    response = await client.post("/api/v1/agents", json=payload, headers=API_KEY_HEADER)
+    assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Resource name validation
+# ---------------------------------------------------------------------------
+
+
+async def test_create_resource_invalid_name(client: AsyncClient):
+    """POST with uppercase/invalid name should return 422."""
+    payload = {
+        "apiVersion": "blackbeard/v1",
+        "kind": "Agent",
+        "metadata": {"name": "Invalid_Name", "namespace": "default"},
+        "spec": {"role": "R", "goal": "G", "backstory": "B"},
+    }
+    response = await client.post("/api/v1/agents", json=payload, headers=API_KEY_HEADER)
+    assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Ref integrity — dangling refs
+# ---------------------------------------------------------------------------
+
+
+async def test_create_task_with_dangling_ref_succeeds(client: AsyncClient):
+    """Creating a task referencing a non-existent agent should still succeed (soft refs)."""
+    payload = _task_payload(name="orphan-task", agent_ref="ref:agents/nonexistent")
+    response = await client.post("/api/v1/tasks", json=payload, headers=API_KEY_HEADER)
+    # Refs are soft — creation succeeds even if target doesn't exist
+    assert response.status_code == 201

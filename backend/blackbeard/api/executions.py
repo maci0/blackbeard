@@ -11,18 +11,26 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Response
-from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.config import settings
-from blackbeard.engine import ExecutionError, executor
+from blackbeard.engine import ExecutionError
+from blackbeard.engine import executor as _executor_mod
+from blackbeard.engine.executor import ExecutionNotFoundError
+from blackbeard.http_client import get_client
 from blackbeard.kinds import NAME_PATTERN
-from blackbeard.models import TERMINAL_STATUSES, ExecutionStatus, async_session, get_session
-from blackbeard.models.execution import ExecutionEvent
+from blackbeard.models import (
+    TERMINAL_STATUSES,
+    ExecutionStatus,
+    async_session,
+    get_session,
+)
 from blackbeard.models.execution_schemas import (
+    ExecutionEventItem,
+    ExecutionEventsResponse,
     ExecutionListResponse,
     ExecutionResponse,
     KickoffRequest,
@@ -31,6 +39,19 @@ from blackbeard.models.execution_schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["executions"])
+
+_MAX_CONCURRENT_SSE = 20
+_sse_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_SSE)
+
+
+def _get_spend_client() -> httpx.AsyncClient:
+    """Return a shared httpx client for LiteLLM spend queries."""
+    key = settings.litellm_master_key.get_secret_value()
+    return get_client(
+        "litellm-spend",
+        timeout=10,
+        headers={"Authorization": f"Bearer {key}"},
+    )
 
 
 @router.post(
@@ -60,9 +81,26 @@ async def kickoff_crew(
 ) -> ExecutionResponse:
     """Kick off a crew execution. Returns immediately with status=queued."""
     try:
-        execution = await executor.kickoff(session, crew_name, body.inputs, namespace)
-    except ExecutionError as exc:
+        execution = await _executor_mod.kickoff(session, crew_name, body.inputs, namespace)
+    except ExecutionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ExecutionError as exc:
+        # Internal consistency error (e.g., execution vanished after creation)
+        logger.error(
+            "Kickoff internal error: crew=%s namespace=%s: %s",
+            crew_name,
+            namespace,
+            exc,
+            extra={
+                "event": "kickoff_internal_error",
+                "crew_name": crew_name,
+                "namespace": namespace,
+            },
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Execution could not be created. Check server logs.",
+        ) from exc
     return ExecutionResponse.from_db(execution)
 
 
@@ -93,16 +131,17 @@ async def list_executions(
     session: AsyncSession = Depends(get_session),
 ) -> ExecutionListResponse:
     """List executions with optional filters."""
-    items, total = await executor.list_executions(
+    items, total = await _executor_mod.list_executions(
         session,
         crew_name=crew_name,
         namespace=namespace,
         status=status,
         limit=limit,
         offset=offset,
+        include_tasks=False,
     )
     return ExecutionListResponse(
-        items=[ExecutionResponse.from_db(e) for e in items],
+        items=[ExecutionResponse.from_db(e, include_tasks=False) for e in items],
         total=total,
         limit=limit,
         offset=offset,
@@ -120,7 +159,7 @@ async def get_execution(
     session: AsyncSession = Depends(get_session),
 ) -> ExecutionResponse:
     """Get execution details by ID."""
-    execution = await executor.get_execution(session, execution_id)
+    execution = await _executor_mod.get_execution(session, execution_id)
     if not execution:
         raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
     return ExecutionResponse.from_db(execution)
@@ -131,6 +170,7 @@ async def get_execution(
     responses={
         200: {"description": "LiteLLM spend data for this execution"},
         404: {"description": "Execution not found"},
+        502: {"description": "LiteLLM spend service unavailable"},
     },
 )
 async def get_execution_spend(
@@ -138,31 +178,56 @@ async def get_execution_spend(
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     """Get LiteLLM spend data for an execution's requests."""
-    execution = await executor.get_execution(session, execution_id)
-    if not execution:
+    status = await _executor_mod.get_execution_status(session, execution_id)
+    if status is None:
         raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
 
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(
-                f"{settings.litellm_proxy_url}/spend/logs",
-                params={"request_id": str(execution_id)},
-                headers={
-                    "Authorization": f"Bearer {settings.litellm_master_key.get_secret_value()}"
-                },
-            )
-            if resp.status_code == 200:
-                return Response(content=resp.content, media_type="application/json")
-    except Exception:
-        pass
-    return Response(
-        content='{"spend_logs":[],"note":"No spend data available"}',
-        media_type="application/json",
-    )
+        client = _get_spend_client()
+        resp = await client.get(
+            f"{settings.litellm_proxy_url}/spend/logs",
+            params={"request_id": str(execution_id)},
+        )
+        if resp.status_code == 200:
+            return Response(content=resp.content, media_type="application/json")
+        logger.warning(
+            "LiteLLM spend query returned %d for execution %s",
+            resp.status_code,
+            execution_id,
+            extra={
+                "event": "spend_fetch_error",
+                "execution_id": str(execution_id),
+                "http_status": resp.status_code,
+            },
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=f"Spend service returned status {resp.status_code}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(
+            "Failed to fetch spend data for execution %s: %s",
+            execution_id,
+            e,
+            exc_info=True,
+            extra={
+                "event": "spend_fetch_failed",
+                "execution_id": str(execution_id),
+                "error_type": type(e).__name__,
+                "error_message": str(e)[:500],
+            },
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Spend service is unavailable. Try again later.",
+        ) from e
 
 
 @router.get(
     "/executions/{execution_id}/events",
+    response_model=ExecutionEventsResponse,
     responses={
         200: {"description": "List of execution events for streaming/replay"},
         404: {"description": "Execution not found"},
@@ -173,32 +238,31 @@ async def list_execution_events(
     after: int = Query(default=-1, ge=-1, description="Return events with sequence > after"),
     limit: int = Query(default=200, ge=1, le=1000, description="Max events to return"),
     session: AsyncSession = Depends(get_session),
-) -> dict:
+) -> ExecutionEventsResponse:
     """List execution events, optionally after a given sequence number."""
-    # Verify execution exists
-    exec_check = await executor.get_execution_status(session, execution_id)
+    exec_check = await _executor_mod.get_execution_status(session, execution_id)
     if exec_check is None:
         raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
 
-    result = await session.execute(
-        select(ExecutionEvent)
-        .where(ExecutionEvent.execution_id == execution_id, ExecutionEvent.sequence > after)
-        .order_by(ExecutionEvent.sequence)
-        .limit(limit)
+    items = await _executor_mod.list_execution_events(
+        session, execution_id, after=after, limit=limit + 1
     )
-    items = list(result.scalars())
-    return {
-        "events": [
-            {
-                "sequence": e.sequence,
-                "event_type": e.event_type,
-                "timestamp": e.timestamp.isoformat(),
-                "data": e.data,
-            }
+    has_more = len(items) > limit
+    if has_more:
+        items = items[:limit]
+    return ExecutionEventsResponse(
+        events=[
+            ExecutionEventItem(
+                sequence=e.sequence,
+                event_type=e.event_type,
+                timestamp=e.timestamp.isoformat(),
+                data=e.data,
+            )
             for e in items
         ],
-        "next_sequence": items[-1].sequence if items else after,
-    }
+        next_sequence=items[-1].sequence if items else after,
+        has_more=has_more,
+    )
 
 
 @router.patch(
@@ -215,7 +279,7 @@ async def cancel_execution(
 ) -> ExecutionResponse:
     """Cancel a queued or running execution."""
     try:
-        execution = await executor.cancel_execution(session, execution_id)
+        execution = await _executor_mod.cancel_execution(session, execution_id)
     except ExecutionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not execution:
@@ -228,144 +292,173 @@ async def cancel_execution(
     responses={
         200: {"description": "SSE stream of execution status and heartbeat events"},
         404: {"description": "Execution not found"},
-        408: {"description": "Stream timeout — execution still running after ~30 minutes"},
+        429: {"description": "Too many concurrent SSE streams"},
     },
 )
 async def stream_execution(
     execution_id: UUID = Path(..., description="Execution UUID"),
 ) -> EventSourceResponse:
     """SSE stream of execution status events."""
-    # Validate execution exists before starting SSE stream (lightweight status-only query)
+    if _sse_semaphore.locked():
+        logger.warning(
+            "SSE stream rejected: max concurrent streams reached (%d)",
+            _MAX_CONCURRENT_SSE,
+            extra={
+                "event": "sse_stream_rejected",
+                "execution_id": str(execution_id),
+                "max_concurrent_sse": _MAX_CONCURRENT_SSE,
+            },
+        )
+        raise HTTPException(
+            status_code=429,
+            detail="Too many concurrent SSE streams",
+            headers={"Retry-After": "5"},
+        )
+
+    # Lightweight status-only query to avoid loading full execution before SSE starts
     async with async_session() as check_session:
-        check = await executor.get_execution_status(check_session, execution_id)
+        check = await _executor_mod.get_execution_status(check_session, execution_id)
     if check is None:
         raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
 
-    max_polls = 400  # ~30 min with progressive backoff (1s→3s→5s)
+    max_polls = 400  # ~32 min with progressive backoff (2s→3s→5s)
     logger.info(
-        "SSE stream opened: execution_id=%s",
+        "SSE stream opened: execution_id=%s max_streams=%d",
         execution_id,
-        extra={"event": "sse_stream_opened", "execution_id": str(execution_id)},
+        _MAX_CONCURRENT_SSE,
+        extra={
+            "event": "sse_stream_opened",
+            "execution_id": str(execution_id),
+            "max_concurrent_sse": _MAX_CONCURRENT_SSE,
+        },
     )
 
     async def event_generator() -> AsyncGenerator[dict[str, str]]:
+        # Non-blocking acquire: fail fast if all SSE slots are taken.
+        # The locked() check in the handler is a fast-path optimization, but
+        # between that check and this acquire, other streams can start (TOCTOU).
+        acquired = False
+        try:
+            await asyncio.wait_for(_sse_semaphore.acquire(), timeout=0)
+            acquired = True
+        except TimeoutError:
+            msg = json.dumps({"detail": "Too many concurrent SSE streams"})
+            yield {"event": "error", "data": msg}
+            return
         last_status: ExecutionStatus | None = None
         current_status: ExecutionStatus | None = None
         last_event_seq = -1
         polls = 0
         try:
-            while polls < max_polls:
-                polls += 1
+            try:
+                while polls < max_polls:
+                    polls += 1
 
-                async with async_session() as session:
-                    if last_status is None:
-                        # First poll: no prior status to compare, fetch full execution data
-                        execution = await executor.get_execution(session, execution_id)
-                        if not execution:
-                            msg = f"Execution '{execution_id}' not found"
-                            yield {"event": "error", "data": json.dumps({"detail": msg})}
-                            break
-                        current_status = execution.status
-                        data = ExecutionResponse.from_db(execution).model_dump_json()
-                        yield {"event": "status", "data": data}
-                        last_status = current_status
-                    else:
-                        current_status = await executor.get_execution_status(session, execution_id)
-
-                        if current_status is None:
-                            msg = f"Execution '{execution_id}' not found"
-                            yield {"event": "error", "data": json.dumps({"detail": msg})}
-                            break
-
-                        if current_status != last_status or current_status in TERMINAL_STATUSES:
-                            execution = await executor.get_execution(session, execution_id)
-                            if execution:
-                                data = ExecutionResponse.from_db(execution).model_dump_json()
-                                yield {"event": "status", "data": data}
+                    async with async_session() as session:
+                        if last_status is None:
+                            execution = await _executor_mod.get_execution(session, execution_id)
+                            if not execution:
+                                msg = f"Execution '{execution_id}' not found"
+                                yield {"event": "error", "data": json.dumps({"detail": msg})}
+                                break
+                            current_status = execution.status
+                            data = ExecutionResponse.from_db(execution).model_dump_json()
+                            yield {"event": "status", "data": data}
                             last_status = current_status
                         else:
-                            heartbeat = {"status": current_status.value}
-                            yield {"event": "heartbeat", "data": json.dumps(heartbeat)}
+                            current_status = await _executor_mod.get_execution_status(
+                                session, execution_id
+                            )
 
-                    # Stream new execution events
-                    event_result = await session.execute(
-                        select(ExecutionEvent)
-                        .where(
-                            ExecutionEvent.execution_id == execution_id,
-                            ExecutionEvent.sequence > last_event_seq,
+                            if current_status is None:
+                                msg = f"Execution '{execution_id}' not found"
+                                yield {"event": "error", "data": json.dumps({"detail": msg})}
+                                break
+
+                            if current_status != last_status or current_status in TERMINAL_STATUSES:
+                                execution = await _executor_mod.get_execution(session, execution_id)
+                                if execution:
+                                    data = ExecutionResponse.from_db(execution).model_dump_json()
+                                    yield {"event": "status", "data": data}
+                                last_status = current_status
+                            else:
+                                heartbeat = {"status": current_status.value}
+                                yield {"event": "heartbeat", "data": json.dumps(heartbeat)}
+
+                        new_events = await _executor_mod.list_execution_events(
+                            session, execution_id, after=last_event_seq, limit=50
                         )
-                        .order_by(ExecutionEvent.sequence)
-                        .limit(50)
-                    )
-                    new_events = list(event_result.scalars())
-                    for ev in new_events:
-                        yield {
-                            "event": ev.event_type,
-                            "data": json.dumps(
-                                {
-                                    "sequence": ev.sequence,
-                                    "timestamp": ev.timestamp.isoformat(),
-                                    **ev.data,
-                                }
-                            ),
-                        }
-                        last_event_seq = ev.sequence
+                        for ev in new_events:
+                            yield {
+                                "event": ev.event_type,
+                                "data": json.dumps(
+                                    {
+                                        "sequence": ev.sequence,
+                                        "timestamp": ev.timestamp.isoformat(),
+                                        **ev.data,
+                                    }
+                                ),
+                            }
+                            last_event_seq = ev.sequence
 
-                if current_status is not None and current_status in TERMINAL_STATUSES:
-                    logger.info(
-                        "SSE stream closed: execution_id=%s status=%s polls=%d",
+                    if current_status is not None and current_status in TERMINAL_STATUSES:
+                        logger.info(
+                            "SSE stream closed: execution_id=%s status=%s polls=%d",
+                            execution_id,
+                            current_status.value,
+                            polls,
+                            extra={
+                                "event": "sse_stream_closed",
+                                "execution_id": str(execution_id),
+                                "final_status": current_status.value,
+                                "polls": polls,
+                            },
+                        )
+                        break
+
+                    await asyncio.sleep(2 if polls < 10 else 3 if polls < 30 else 5)
+                else:
+                    logger.warning(
+                        "SSE stream timeout: execution_id=%s polls=%d",
                         execution_id,
-                        current_status.value,
                         polls,
                         extra={
-                            "event": "sse_stream_closed",
+                            "event": "sse_stream_timeout",
                             "execution_id": str(execution_id),
-                            "final_status": current_status.value,
                             "polls": polls,
                         },
                     )
-                    break
-
-                await asyncio.sleep(1 if polls < 30 else 3 if polls < 60 else 5)
-            else:
-                logger.warning(
-                    "SSE stream timeout: execution_id=%s polls=%d",
+                    msg = "Stream timeout — execution still running"
+                    yield {"event": "error", "data": json.dumps({"detail": msg})}
+            except asyncio.CancelledError:
+                logger.info(
+                    "SSE stream client disconnected: execution_id=%s polls=%d",
                     execution_id,
                     polls,
                     extra={
-                        "event": "sse_stream_timeout",
+                        "event": "sse_stream_disconnected",
                         "execution_id": str(execution_id),
                         "polls": polls,
                     },
                 )
-                msg = "Stream timeout — execution still running"
-                yield {"event": "error", "data": json.dumps({"detail": msg})}
-        except asyncio.CancelledError:
-            logger.info(
-                "SSE stream client disconnected: execution_id=%s polls=%d",
-                execution_id,
-                polls,
-                extra={
-                    "event": "sse_stream_disconnected",
-                    "execution_id": str(execution_id),
-                    "polls": polls,
-                },
-            )
-        except Exception as e:
-            logger.error(
-                "SSE stream error: execution_id=%s polls=%d error=%s",
-                execution_id,
-                polls,
-                e,
-                exc_info=True,
-                extra={
-                    "event": "sse_stream_error",
-                    "execution_id": str(execution_id),
-                    "polls": polls,
-                    "error_type": type(e).__name__,
-                },
-            )
-            yield {"event": "error", "data": json.dumps({"detail": "Internal stream error"})}
+            except Exception as e:
+                logger.error(
+                    "SSE stream error: execution_id=%s polls=%d error=%s",
+                    execution_id,
+                    polls,
+                    e,
+                    exc_info=True,
+                    extra={
+                        "event": "sse_stream_error",
+                        "execution_id": str(execution_id),
+                        "polls": polls,
+                        "error_type": type(e).__name__,
+                    },
+                )
+                yield {"event": "error", "data": json.dumps({"detail": "Internal stream error"})}
+        finally:
+            if acquired:
+                _sse_semaphore.release()
 
     return EventSourceResponse(
         event_generator(),

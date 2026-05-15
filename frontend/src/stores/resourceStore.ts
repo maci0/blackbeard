@@ -1,21 +1,9 @@
 import { create } from 'zustand'
 import { api } from '@/api/client'
 import { KIND_TO_PLURAL, ALL_PLURALS } from '@/lib/kinds'
+import type { Resource } from '@/lib/types'
 
-export interface Resource {
-  id: string
-  apiVersion: string
-  kind: string
-  metadata: {
-    name: string
-    namespace: string
-    labels: Record<string, string>
-  }
-  spec: Record<string, unknown>
-  version: number
-  created_at: string
-  updated_at: string
-}
+export type { Resource }
 
 interface ResourceState {
   resources: Record<string, Resource[]>

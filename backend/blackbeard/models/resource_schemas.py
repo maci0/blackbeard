@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 if TYPE_CHECKING:
     from blackbeard.models.resource import Resource
 
+from blackbeard.config import API_VERSION
 from blackbeard.kinds import ALL_KINDS, NAME_PATTERN
 
 # Label key/value constraints (prevent abuse via oversized JSONB labels)
@@ -40,13 +41,13 @@ class ResourceMetadata(BaseModel):
         return self
 
 
-_SUPPORTED_API_VERSIONS = frozenset({"blackbeard/v1"})
+_SUPPORTED_API_VERSIONS = frozenset({API_VERSION})
 
 
 class ResourceCreate(BaseModel):
     """Schema for creating a resource via API or YAML apply."""
 
-    apiVersion: str = Field(default="blackbeard/v1")
+    apiVersion: str = Field(default=API_VERSION)
     kind: str = Field(..., min_length=1)
     metadata: ResourceMetadata
     spec: dict[str, Any] = Field(..., min_length=1, max_length=500)
@@ -65,7 +66,7 @@ class ResourceCreate(BaseModel):
     @classmethod
     def kind_must_be_valid(cls, v: str) -> str:
         if v not in ALL_KINDS:
-            raise ValueError(f"Invalid kind '{v}'. Valid kinds: {', '.join(ALL_KINDS)}")
+            raise ValueError(f"Invalid kind '{v}'. Valid kinds: {', '.join(sorted(ALL_KINDS))}")
         return v
 
 
@@ -73,7 +74,7 @@ class ResourceUpdate(BaseModel):
     """Schema for updating a resource (partial or full)."""
 
     metadata: ResourceMetadata | None = None
-    spec: dict[str, Any] | None = None
+    spec: dict[str, Any] | None = Field(default=None, min_length=1, max_length=500)
     version: int = Field(..., ge=1, description="Current version for optimistic locking")
 
 
@@ -81,7 +82,7 @@ class ResourceResponse(BaseModel):
     """Schema for resource API responses."""
 
     id: UUID
-    apiVersion: str = "blackbeard/v1"
+    apiVersion: str = API_VERSION
     kind: str
     metadata: ResourceMetadata
     spec: dict[str, Any]
@@ -96,7 +97,7 @@ class ResourceResponse(BaseModel):
         """Build response from a SQLAlchemy Resource model."""
         return cls.model_construct(
             id=resource.id,
-            apiVersion="blackbeard/v1",
+            apiVersion=API_VERSION,
             kind=resource.kind.value,
             metadata=ResourceMetadata.model_construct(
                 name=resource.name,

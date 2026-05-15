@@ -3,24 +3,9 @@
 Covers validate_resource() for all five resource kinds plus error paths.
 """
 
-from blackbeard.resources.validator import ValidationError, validate_resource
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _has_error(
-    errors: list[ValidationError], field_contains: str = "", msg_contains: str = ""
-) -> bool:
-    """Return True if any error matches both optional substrings."""
-    for e in errors:
-        field_ok = not field_contains or field_contains in e.field
-        msg_ok = not msg_contains or msg_contains.lower() in e.message.lower()
-        if field_ok and msg_ok:
-            return True
-    return False
-
+from blackbeard.resources.exceptions import ValidationError
+from blackbeard.resources.validator import validate_resource
+from tests.conftest import has_validation_error as _has_error
 
 # ---------------------------------------------------------------------------
 # Agent
@@ -229,7 +214,7 @@ def test_tool_invalid_type_enum():
     spec = {"type": "java"}
     errors, _ = validate_resource("Tool", spec)
     assert len(errors) > 0
-    assert _has_error(errors, msg_contains="java") or _has_error(errors, field_contains="type")
+    assert _has_error(errors, field_contains="type")
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +336,189 @@ def test_llm_connection_allows_external_base_url():
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# KnowledgeSource — path traversal and SSRF protection
+# ---------------------------------------------------------------------------
+
+
+def test_knowledge_source_blocks_path_traversal():
+    """KnowledgeSource file_paths with '../' should be rejected."""
+    spec = {"type": "text", "file_paths": ["../../etc/passwd"]}
+    errors, _ = validate_resource("KnowledgeSource", spec)
+    assert len(errors) > 0
+    assert _has_error(errors, field_contains="file_paths")
+
+
+def test_knowledge_source_blocks_absolute_path():
+    """KnowledgeSource file_paths with absolute path should be rejected."""
+    spec = {"type": "text", "file_paths": ["/etc/passwd"]}
+    errors, _ = validate_resource("KnowledgeSource", spec)
+    assert len(errors) > 0
+    assert _has_error(errors, field_contains="file_paths")
+
+
+def test_knowledge_source_blocks_internal_url():
+    """KnowledgeSource urls pointing to localhost should be rejected (SSRF)."""
+    spec = {"type": "url", "urls": ["http://localhost:8080/secret"]}
+    errors, _ = validate_resource("KnowledgeSource", spec)
+    assert _has_error(errors, field_contains="url", msg_contains="internal")
+
+
+def test_knowledge_source_blocks_metadata_url():
+    """KnowledgeSource urls pointing to cloud metadata should be rejected."""
+    spec = {"type": "url", "urls": ["http://169.254.169.254/latest/meta-data/"]}
+    errors, _ = validate_resource("KnowledgeSource", spec)
+    assert _has_error(errors, field_contains="url", msg_contains="internal")
+
+
+def test_knowledge_source_allows_safe_paths():
+    """KnowledgeSource with safe relative paths should pass."""
+    spec = {"type": "text", "file_paths": ["data/notes.txt", "docs/guide.pdf"]}
+    errors, _ = validate_resource("KnowledgeSource", spec)
+    assert errors == []
+
+
+# ---------------------------------------------------------------------------
+# Tool — SSRF and env-var exfiltration protection
+# ---------------------------------------------------------------------------
+
+
+def test_tool_blocks_internal_url():
+    """Tool spec.url pointing to localhost should be rejected (SSRF)."""
+    spec = {"type": "mcp-http", "url": "http://localhost:8080/mcp"}
+    errors, _ = validate_resource("Tool", spec)
+    assert _has_error(errors, field_contains="url", msg_contains="internal")
+
+
+def test_tool_blocks_private_ip_url():
+    """Tool spec.url pointing to private IP should be rejected."""
+    spec = {"type": "mcp-http", "url": "http://10.0.0.1:9090/mcp"}
+    errors, _ = validate_resource("Tool", spec)
+    assert _has_error(errors, field_contains="url", msg_contains="internal")
+
+
+def test_tool_blocks_internal_env_var():
+    """Tool spec.env referencing internal env vars should be rejected."""
+    spec = {"type": "mcp-stdio", "command": "server", "env": {"DATABASE_URL": "postgres://x"}}
+    errors, _ = validate_resource("Tool", spec)
+    assert _has_error(errors, field_contains="env", msg_contains="restricted")
+
+
+def test_tool_allows_external_url():
+    """Tool with external URL should pass validation."""
+    spec = {"type": "mcp-http", "url": "https://api.example.com/mcp"}
+    errors, _ = validate_resource("Tool", spec)
+    assert errors == []
+
+
+def test_tool_blocks_exact_blocked_env_var():
+    """Tool env with exact-match blocked vars (PATH, LD_PRELOAD, HOME) should be rejected."""
+    for var in ("PATH", "LD_PRELOAD", "HOME"):
+        spec = {"type": "mcp-stdio", "command": "server", "env": {var: "/tmp"}}
+        errors, _ = validate_resource("Tool", spec)
+        assert _has_error(errors, field_contains="env", msg_contains="restricted"), (
+            f"Expected rejection for env var '{var}'"
+        )
+
+
+def test_tool_blocks_env_shell_expansion():
+    """Tool env values referencing internal vars via $ expansion should be rejected."""
+    spec = {
+        "type": "mcp-stdio",
+        "command": "server",
+        "env": {"MY_VAR": "prefix-$DATABASE_URL"},
+    }
+    errors, _ = validate_resource("Tool", spec)
+    assert _has_error(errors, field_contains="env", msg_contains="shell expansion")
+
+
+# ---------------------------------------------------------------------------
+# URL validation — scheme and embedded credentials
+# ---------------------------------------------------------------------------
+
+
+def test_llm_connection_blocks_ftp_scheme():
+    """base_url with non-http(s) scheme should be rejected."""
+    spec = {"provider": "openai", "model": "gpt-4o", "base_url": "ftp://evil.com/v1"}
+    errors, _ = validate_resource("LLMConnection", spec)
+    assert _has_error(errors, field_contains="base_url", msg_contains="http")
+
+
+def test_llm_connection_blocks_embedded_credentials():
+    """base_url with embedded user:pass should be rejected."""
+    spec = {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "base_url": "https://user:pass@api.example.com/v1",
+    }
+    errors, _ = validate_resource("LLMConnection", spec)
+    assert _has_error(errors, field_contains="base_url", msg_contains="credentials")
+
+
+# ---------------------------------------------------------------------------
+# KnowledgeSource — backslash path traversal
+# ---------------------------------------------------------------------------
+
+
+def test_knowledge_source_blocks_backslash_traversal():
+    """KnowledgeSource file_paths with backslash traversal should be rejected."""
+    spec = {"type": "text", "file_paths": ["..\\..\\etc\\passwd"]}
+    errors, _ = validate_resource("KnowledgeSource", spec)
+    assert len(errors) > 0
+    assert _has_error(errors, field_contains="file_paths")
+
+
+def test_knowledge_source_blocks_tilde_path():
+    """KnowledgeSource file_paths starting with ~ should be rejected."""
+    spec = {"type": "text", "file_paths": ["~/secret.txt"]}
+    errors, _ = validate_resource("KnowledgeSource", spec)
+    assert len(errors) > 0
+    assert _has_error(errors, field_contains="file_paths")
+
+
+# ---------------------------------------------------------------------------
+# LLMConnection — additional SSRF edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_llm_connection_blocks_link_local_ip():
+    """base_url pointing to link-local IP (169.254.x.x) should be rejected."""
+    spec = {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "base_url": "http://169.254.169.254/latest/meta-data",
+    }
+    errors, _ = validate_resource("LLMConnection", spec)
+    assert _has_error(errors, field_contains="base_url", msg_contains="internal")
+
+
+def test_llm_connection_blocks_kubernetes_svc():
+    """base_url pointing to Kubernetes service domain should be rejected."""
+    spec = {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "base_url": "http://litellm.default.svc.cluster.local:4000/v1",
+    }
+    errors, _ = validate_resource("LLMConnection", spec)
+    assert _has_error(errors, field_contains="base_url", msg_contains="internal")
+
+
+def test_llm_connection_blocks_obfuscated_ip():
+    """base_url with decimal IP representation of 127.0.0.1 should be rejected."""
+    spec = {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "base_url": "http://2130706433:8080/v1",
+    }
+    errors, _ = validate_resource("LLMConnection", spec)
+    assert _has_error(errors, field_contains="base_url", msg_contains="internal")
+
+
+# ---------------------------------------------------------------------------
+# Unknown kind
+# ---------------------------------------------------------------------------
+
+
 def test_unknown_kind():
     errors, _ = validate_resource("Widget", {"foo": "bar"})
     assert len(errors) == 1
@@ -369,3 +537,125 @@ def test_validation_error_to_dict():
     err = ValidationError(field="spec.role", message="Required field missing")
     d = err.to_dict()
     assert d == {"field": "spec.role", "message": "Required field missing"}
+
+
+# ---------------------------------------------------------------------------
+# _is_internal_host edge cases (SSRF bypass prevention)
+# ---------------------------------------------------------------------------
+
+
+from blackbeard.resources.validator import _is_internal_host
+
+
+def test_is_internal_host_localhost():
+    assert _is_internal_host("localhost") is True
+
+
+def test_is_internal_host_loopback_ip():
+    assert _is_internal_host("127.0.0.1") is True
+
+
+def test_is_internal_host_metadata_google():
+    assert _is_internal_host("metadata.google.internal") is True
+
+
+def test_is_internal_host_k8s_svc():
+    assert _is_internal_host("service.default.svc.cluster.local") is True
+
+
+def test_is_internal_host_trailing_dot():
+    """Trailing dot normalization should still detect internal hosts."""
+    assert _is_internal_host("localhost.") is True
+
+
+def test_is_internal_host_case_insensitive():
+    """SSRF check should be case-insensitive."""
+    assert _is_internal_host("LOCALHOST") is True
+    assert _is_internal_host("Metadata.Google.Internal") is True
+
+
+def test_is_internal_host_external_ok():
+    assert _is_internal_host("api.openai.com") is False
+
+
+def test_is_internal_host_private_10():
+    assert _is_internal_host("10.0.0.1") is True
+
+
+def test_is_internal_host_private_172():
+    assert _is_internal_host("172.16.0.1") is True
+
+
+def test_is_internal_host_private_192():
+    assert _is_internal_host("192.168.1.1") is True
+
+
+def test_is_internal_host_link_local():
+    assert _is_internal_host("169.254.169.254") is True
+
+
+def test_is_internal_host_ipv6_loopback():
+    assert _is_internal_host("::1") is True
+
+
+# ---------------------------------------------------------------------------
+# _is_path_traversal edge cases
+# ---------------------------------------------------------------------------
+
+
+from blackbeard.resources.validator import _is_path_traversal
+
+
+def test_path_traversal_dotdot():
+    assert _is_path_traversal("../../etc/passwd") is True
+
+
+def test_path_traversal_absolute():
+    assert _is_path_traversal("/etc/passwd") is True
+
+
+def test_path_traversal_tilde():
+    assert _is_path_traversal("~/secret") is True
+
+
+def test_path_traversal_backslash():
+    assert _is_path_traversal("..\\..\\windows") is True
+
+
+def test_path_traversal_safe_relative():
+    assert _is_path_traversal("data/notes.txt") is False
+
+
+def test_path_traversal_safe_filename():
+    assert _is_path_traversal("report.json") is False
+
+
+# ---------------------------------------------------------------------------
+# validate_resource returns refs on success
+# ---------------------------------------------------------------------------
+
+
+def test_validate_resource_returns_refs():
+    """validate_resource should return extracted refs for successful validation."""
+    spec = {
+        "description": "Test task",
+        "expected_output": "Output",
+        "agent": "ref:agents/researcher",
+        "context": ["ref:tasks/gather-data"],
+    }
+    errors, refs = validate_resource("Task", spec)
+    assert errors == []
+    assert refs is not None
+    assert len(refs) == 2
+    raw_values = {r.raw for r in refs}
+    assert "ref:agents/researcher" in raw_values
+    assert "ref:tasks/gather-data" in raw_values
+
+
+def test_validate_resource_no_refs():
+    """validate_resource should return empty refs list for specs without refs."""
+    spec = {"role": "R", "goal": "G", "backstory": "B"}
+    errors, refs = validate_resource("Agent", spec)
+    assert errors == []
+    assert refs is not None
+    assert len(refs) == 0

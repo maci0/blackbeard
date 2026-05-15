@@ -3,6 +3,8 @@
 Used to validate the `spec` field of resources on create/update.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 from blackbeard.kinds import ALL_KINDS
@@ -65,7 +67,7 @@ TASK_SCHEMA = {
     "properties": {
         "description": {"type": "string", "minLength": 1, "maxLength": 50000},
         "expected_output": {"type": "string", "minLength": 1, "maxLength": 10000},
-        "agent": {"type": "string", "maxLength": 500},
+        "agent": {"type": "string", "minLength": 1, "maxLength": 500},
         "context": {
             "type": "array",
             "items": {"type": "string", "maxLength": 500},
@@ -78,7 +80,7 @@ TASK_SCHEMA = {
         },
         "async_execution": {"type": "boolean", "default": False},
         "human_input": {"type": "boolean", "default": False},
-        "output_json": {"type": "object"},
+        "output_json": {"type": "object", "maxProperties": 100},
         "output_pydantic": {"type": "string", "maxLength": 500},
         "output_file": {
             "type": "string",
@@ -126,7 +128,7 @@ CREW_SCHEMA = {
                             "enum": ["lancedb", "chromadb", "qdrant"],
                             "default": "lancedb",
                         },
-                        "config": {"type": "object"},
+                        "config": {"type": "object", "maxProperties": 50},
                     },
                     "additionalProperties": False,
                 },
@@ -136,7 +138,7 @@ CREW_SCHEMA = {
             "type": "object",
             "properties": {
                 "provider": {"type": "string", "maxLength": 100},
-                "config": {"type": "object"},
+                "config": {"type": "object", "maxProperties": 50},
             },
             "additionalProperties": False,
         },
@@ -152,7 +154,7 @@ CREW_SCHEMA = {
                 "type": "object",
                 "required": ["name"],
                 "properties": {
-                    "name": {"type": "string", "maxLength": 255},
+                    "name": {"type": "string", "minLength": 1, "maxLength": 255},
                     "description": {"type": "string", "maxLength": 1000},
                     "required": {"type": "boolean", "default": True},
                     "default": {},
@@ -166,7 +168,7 @@ CREW_SCHEMA = {
             "default": "hybrid",
         },
         "default_agent_policy": {"type": "string", "maxLength": 500},
-        "inline": {"type": "object"},
+        "inline": {"type": "object", "maxProperties": 200},
         "a2a": {
             "type": "object",
             "properties": {
@@ -208,7 +210,7 @@ TOOL_SCHEMA = {
             "pattern": "^(?![/\\\\])(?!.*\\.\\.).*\\.wasm$",
             "maxLength": 500,
         },
-        "config": {"type": "object"},
+        "config": {"type": "object", "maxProperties": 50},
         "sandbox": {"type": "string", "enum": ["none", "wasm"], "default": "none"},
         "capabilities": {
             "type": "array",
@@ -222,7 +224,11 @@ TOOL_SCHEMA = {
             "maxItems": 20,
         },
         "url": {"type": "string", "maxLength": 2000},
-        "env": {"type": "object"},
+        "env": {
+            "type": "object",
+            "additionalProperties": {"type": "string", "maxLength": 10000},
+            "maxProperties": 50,
+        },
     },
     "additionalProperties": False,
 }
@@ -231,8 +237,8 @@ LLM_CONNECTION_SCHEMA = {
     "type": "object",
     "required": ["provider", "model"],
     "properties": {
-        "provider": {"type": "string", "maxLength": 100},
-        "model": {"type": "string", "maxLength": 200},
+        "provider": {"type": "string", "minLength": 1, "maxLength": 100},
+        "model": {"type": "string", "minLength": 1, "maxLength": 200},
         "parameters": {
             "type": "object",
             "properties": {
@@ -247,7 +253,7 @@ LLM_CONNECTION_SCHEMA = {
                     "maxItems": 10,
                 },
             },
-            "additionalProperties": True,
+            "additionalProperties": False,
         },
         "vertex": {
             "type": "object",
@@ -255,6 +261,7 @@ LLM_CONNECTION_SCHEMA = {
                 "project": {"type": "string", "maxLength": 100},
                 "location": {"type": "string", "maxLength": 100},
             },
+            "additionalProperties": False,
         },
         "api_key_env": {
             "type": "string",
@@ -288,6 +295,7 @@ AGENT_POLICY_SCHEMA = {
                     "maxItems": 100,
                 },
             },
+            "additionalProperties": False,
         },
         "budget": {
             "type": "object",
@@ -295,12 +303,14 @@ AGENT_POLICY_SCHEMA = {
                 "max_usd": {"type": "number", "minimum": 0},
                 "max_tokens": {"type": "integer", "minimum": 1},
             },
+            "additionalProperties": False,
         },
         "sandbox": {
             "type": "object",
             "properties": {
                 "minimum_tier": {"type": "string", "enum": ["none", "wasm", "docker", "microvm"]},
             },
+            "additionalProperties": False,
         },
     },
     "additionalProperties": False,
@@ -329,14 +339,14 @@ FLOW_SCHEMA = {
     "required": ["steps"],
     "properties": {
         "description": {"type": "string", "maxLength": 5000},
-        "state_schema": {"type": "object"},
+        "state_schema": {"type": "object", "maxProperties": 100},
         "steps": {
             "type": "array",
             "items": {
                 "type": "object",
                 "required": ["name", "type"],
                 "properties": {
-                    "name": {"type": "string", "maxLength": 255},
+                    "name": {"type": "string", "minLength": 1, "maxLength": 255},
                     "type": {
                         "type": "string",
                         "enum": ["crew", "function", "router", "condition"],
@@ -380,7 +390,11 @@ KNOWLEDGE_SOURCE_SCHEMA = {
         "description": {"type": "string", "maxLength": 5000},
         "file_paths": {
             "type": "array",
-            "items": {"type": "string", "maxLength": 500},
+            "items": {
+                "type": "string",
+                "pattern": "^(?![/\\\\~])(?!.*\\.\\.).*$",
+                "maxLength": 500,
+            },
             "maxItems": 50,
         },
         "content": {"type": "string", "maxLength": 100000},
@@ -395,7 +409,6 @@ KNOWLEDGE_SOURCE_SCHEMA = {
     "additionalProperties": False,
 }
 
-# Map kind string → schema
 KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "Agent": AGENT_SCHEMA,
     "Task": TASK_SCHEMA,

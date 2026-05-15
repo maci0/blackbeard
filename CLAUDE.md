@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Blackbeard
 
-Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail) with a visual graph editor, async execution engine, and LiteLLM proxy for model routing (with built-in spend/token/latency tracking).
+Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource) with a visual graph editor, async execution engine, and LiteLLM proxy for model routing (with built-in spend/token/latency tracking).
 
 ## Commands
 
@@ -62,18 +62,18 @@ bash deploy/seed.sh              # seed DB with example crew using Ollama (requi
 
 ### Infrastructure
 
-**docker-compose.yaml**: 5 services — api, ui, postgres (18), valkey (9), litellm. API and UI containers run with `no-new-privileges`. Infrastructure containers (postgres, valkey, litellm) additionally use `cap_drop: ALL`.
+**docker-compose.yaml**: 5 services — api, ui, postgres (18), valkey (9), litellm. All containers use `no-new-privileges`, `cap_drop: ALL`. Postgres adds back CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID; Valkey adds back SETGID, SETUID.
 
-DB schema is managed in `entrypoint.sh`: first creates PostgreSQL enum types and runs `Base.metadata.create_all()` (for initial table creation), then stamps and runs Alembic migrations. `create_all` only creates new tables — it cannot alter existing ones — so Alembic handles schema evolution. If no Alembic env is configured yet, the Alembic commands are no-ops (`|| true`).
+DB schema is managed in `entrypoint.sh`: first creates PostgreSQL enum types and runs `Base.metadata.create_all()` (for initial table creation), then runs `alembic upgrade head` if configured. `create_all` only creates new tables — it cannot alter existing ones — so Alembic handles schema evolution. If `alembic.ini` or `alembic/versions` doesn't exist, migrations are skipped.
 
 **CI**: GitHub Actions — backend (ruff + mypy + pytest with Postgres service) → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (parallel, cached).
 
 ## Conventions
 
-- **Python**: ruff lint + format, mypy strict, `from __future__ import annotations` in all modules, type annotations on all functions. Rules: `E F I N W UP B SIM ANN RUF PT C4 PIE T20 TCH`. Tests exempt from `ANN`; API files exempt from `TCH` (FastAPI needs types at runtime) and `B008` (Depends in defaults).
+- **Python**: ruff lint + format, mypy strict, `from __future__ import annotations` in all modules, type annotations on all functions. Rules: `E F I N W UP B SIM ANN RUF PT C4 PIE T20 TCH`. Tests exempt from `ANN` and `E402`; API files exempt from `TCH` (FastAPI needs types at runtime) and `B008` (Depends in defaults).
 - **TypeScript**: ESLint `recommendedTypeChecked` + Prettier. Strict mode, `noUncheckedIndexedAccess`. Use `void` for fire-and-forget promises in React (e.g., `onClick={() => void handleClick()}`).
 - **Imports**: Use `@/` path alias in frontend. Backend uses relative imports within packages.
 - **Resource names**: lowercase alphanumeric + hyphens (`^[a-z0-9][a-z0-9\-]*$`).
 - **Ref format**: `ref:<kind-plural>/<name>` (e.g., `ref:agents/researcher`).
 - **No backward compat**: This is a fresh MVP. Use current API versions directly — no `hasattr`/`getattr` guards, no `try/except ImportError` fallbacks.
-- **Tests**: Backend tests use in-memory SQLite with PostgreSQL types monkey-patched in `conftest.py`. No external services needed. `test_health.py` is the exception — it needs a live Postgres.
+- **Tests**: Backend tests use in-memory SQLite with PostgreSQL types monkey-patched in `conftest.py`. No external services needed.

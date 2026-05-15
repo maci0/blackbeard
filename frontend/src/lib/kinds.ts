@@ -1,4 +1,7 @@
-/** Canonical resource kind registry — single source of truth for the frontend. */
+/** Resource kind registry — mirrors backend/blackbeard/kinds.py (keep in sync). */
+
+/** Canonical API version. Mirrors backend/blackbeard/config.py API_VERSION. */
+export const API_VERSION = 'blackbeard/v1'
 
 export const KIND_TO_PLURAL: Record<string, string> = {
   Agent: 'agents',
@@ -8,6 +11,8 @@ export const KIND_TO_PLURAL: Record<string, string> = {
   LLMConnection: 'llm-connections',
   AgentPolicy: 'agent-policies',
   Guardrail: 'guardrails',
+  Flow: 'flows',
+  KnowledgeSource: 'knowledge-sources',
 }
 
 export const PLURAL_TO_KIND: Record<string, string> = Object.fromEntries(

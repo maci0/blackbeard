@@ -4,6 +4,8 @@ Provides structured log output with request_id for correlating logs
 to individual API requests during incident investigation.
 """
 
+from __future__ import annotations
+
 import contextvars
 import json
 import logging
@@ -49,6 +51,24 @@ _LOG_RECORD_BUILTIN = frozenset(
     }
 )
 
+# Keys that must never appear in structured log output — defense-in-depth
+# against accidental secret leakage through extra={} fields.
+_SENSITIVE_KEYS = frozenset(
+    {
+        "api_key",
+        "api_secret",
+        "password",
+        "secret",
+        "token",
+        "credential",
+        "authorization",
+        "private_key",
+        "secret_key",
+        "access_key",
+        "master_key",
+    }
+)
+
 
 class _JsonFormatter(logging.Formatter):
     """Structured JSON log formatter for production log aggregation."""
@@ -59,26 +79,49 @@ class _JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
+            "service": "blackbeard",
             "request_id": getattr(record, "request_id", "-"),
             "thread": record.threadName,
+            "pid": record.process,
         }
         if record.levelno >= logging.WARNING:
             log_entry["source"] = f"{record.pathname}:{record.lineno}:{record.funcName}"
         if record.exc_info and record.exc_info[1]:
             log_entry["exception"] = self.formatException(record.exc_info)
+            log_entry["error.type"] = type(record.exc_info[1]).__name__
         for key, val in record.__dict__.items():
             if key not in _LOG_RECORD_BUILTIN and key not in log_entry:
-                log_entry[key] = val
+                key_lower = key.lower()
+                if key_lower in _SENSITIVE_KEYS or any(
+                    key_lower.endswith(f"_{s}") for s in _SENSITIVE_KEYS
+                ):
+                    log_entry[key] = "[REDACTED]"
+                else:
+                    log_entry[key] = val
         return json.dumps(log_entry, default=str)
 
 
-def configure_logging(debug: bool = False) -> None:
+def configure_logging(debug: bool = False, log_level: str = "") -> None:
     """Configure the blackbeard logger hierarchy with request_id context.
 
     Call once at startup, before any log statements execute.
     Uses human-readable format in debug mode, structured JSON in production.
+
+    log_level overrides the default (DEBUG in debug mode, INFO otherwise).
+    Accepts standard level names: DEBUG, INFO, WARNING, ERROR, CRITICAL.
     """
-    level = logging.DEBUG if debug else logging.INFO
+    if log_level:
+        level = getattr(logging, log_level.upper(), None)
+        if not isinstance(level, int):
+            logging.getLogger(__name__).warning(
+                "Invalid LOG_LEVEL '%s', falling back to %s",
+                log_level,
+                "DEBUG" if debug else "INFO",
+                extra={"event": "invalid_log_level", "configured_value": log_level},
+            )
+            level = logging.DEBUG if debug else logging.INFO
+    else:
+        level = logging.DEBUG if debug else logging.INFO
 
     handler = logging.StreamHandler(sys.stderr)
     handler.addFilter(_RequestIdFilter())
@@ -98,3 +141,17 @@ def configure_logging(debug: bool = False) -> None:
     app_logger.handlers.clear()
     app_logger.addHandler(handler)
     app_logger.propagate = False
+
+    for noisy in ("httpx", "httpcore", "sqlalchemy.engine", "urllib3"):
+        logging.getLogger(noisy).setLevel(max(level, logging.WARNING))
+
+    app_logger.info(
+        "Logging configured: level=%s format=%s",
+        logging.getLevelName(level),
+        "text" if debug else "json",
+        extra={
+            "event": "logging_configured",
+            "log_level": logging.getLevelName(level),
+            "log_format": "text" if debug else "json",
+        },
+    )

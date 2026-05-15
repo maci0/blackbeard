@@ -1,3 +1,5 @@
+import { capitalize } from './utils'
+
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
   const d = new Date(dateStr)
@@ -30,3 +32,14 @@ export function formatCost(cost: number | string | null | undefined): string {
   if (n >= 0.01) return `$${n.toFixed(3)}`
   return `$${n.toFixed(4)}`
 }
+
+const STATUS_DISPLAY: Record<string, string> = {
+  queued: 'Queued',
+  running: 'Running',
+  completed: 'Completed',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+  pending: 'Pending',
+}
+
+export const statusLabel = (status: string): string => STATUS_DISPLAY[status] ?? capitalize(status)

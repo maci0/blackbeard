@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { ListChecks } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, parseRef } from '@/lib/utils'
 
 export default memo(function TaskNode({ data, selected }: NodeProps) {
   const name = data['name'] as string | undefined
@@ -11,17 +11,18 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
 
   return (
     <div
+      aria-label={`Task: ${name ?? 'Unnamed Task'}`}
       className={cn(
         'w-[160px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
         selected
-          ? 'border-blue-400 shadow-md shadow-blue-100 ring-2 ring-blue-300 ring-offset-1'
+          ? 'border-blue-400 shadow-md shadow-blue-100 ring-2 ring-blue-300 ring-offset-1 dark:shadow-blue-950 dark:ring-offset-slate-900'
           : 'border-slate-200 hover:border-blue-200 hover:shadow-md dark:border-slate-700',
       )}
     >
       <Handle
         type="target"
         position={Position.Top}
-        className="!h-2.5 !w-2.5 !border-2 !border-blue-400 !bg-white"
+        className="!h-3.5 !w-3.5 !border-2 !border-blue-400 !bg-white"
       />
 
       {/* Header strip */}
@@ -50,7 +51,7 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
         <div className="flex flex-wrap gap-1 pt-0.5">
           {agent && (
             <span className="text-2xs inline-flex items-center rounded-md border border-blue-100 bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">
-              → {agent.startsWith('ref:') ? agent.split('/').pop() || agent : agent}
+              → {parseRef(agent)}
             </span>
           )}
           {expectedOutput && (
@@ -67,7 +68,7 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!h-2.5 !w-2.5 !border-2 !border-blue-400 !bg-white"
+        className="!h-3.5 !w-3.5 !border-2 !border-blue-400 !bg-white"
       />
     </div>
   )

@@ -292,6 +292,7 @@ class WasmSandbox:
                     wasm_path=wasm_path,
                     duration_ms=duration_ms,
                     error_type=type(e).__name__,
+                    error_message=error_msg[:500],
                 ),
             )
 

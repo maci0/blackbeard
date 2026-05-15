@@ -21,6 +21,7 @@ def generate_litellm_config(llm_connections: list[Resource]) -> str:
     Returns the YAML string.
     """
     model_list = []
+    skipped = 0
 
     for conn in llm_connections:
         spec = conn.spec
@@ -28,6 +29,18 @@ def generate_litellm_config(llm_connections: list[Resource]) -> str:
         model = spec.get("model", "")
         params = spec.get("parameters", {})
         vertex = spec.get("vertex", {})
+
+        if not model:
+            logger.warning(
+                "LLMConnection '%s' has no model specified, skipping",
+                conn.name,
+                extra={
+                    "event": "litellm_config_skip_no_model",
+                    "connection_name": conn.name,
+                },
+            )
+            skipped += 1
+            continue
 
         litellm_model = build_model_string(provider, model)
 
@@ -69,4 +82,15 @@ def generate_litellm_config(llm_connections: list[Resource]) -> str:
         },
     }
 
+    logger.info(
+        "LiteLLM config generated: models=%d skipped=%d",
+        len(model_list),
+        skipped,
+        extra={
+            "event": "litellm_config_generated",
+            "model_count": len(model_list),
+            "skipped_count": skipped,
+            "model_names": [m["model_name"] for m in model_list],
+        },
+    )
     return yaml.safe_dump(config, default_flow_style=False, sort_keys=False)

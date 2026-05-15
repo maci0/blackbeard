@@ -86,6 +86,20 @@ from blackbeard.models.database import (
 API_KEY_HEADER = {"X-API-Key": "change-me-in-production"}
 
 
+def has_validation_error(
+    errors: list,
+    field_contains: str = "",
+    msg_contains: str = "",
+) -> bool:
+    """Return True if any ValidationError matches both optional substrings."""
+    for e in errors:
+        field_ok = not field_contains or field_contains in e.field
+        msg_ok = not msg_contains or msg_contains.lower() in e.message.lower()
+        if field_ok and msg_ok:
+            return True
+    return False
+
+
 @pytest.fixture
 async def db_session():
     """Create an in-memory SQLite database and yield a single session for the test."""

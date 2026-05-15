@@ -50,13 +50,13 @@ function App() {
                     <div className="flex items-center justify-center gap-3">
                       <Link
                         to="/studio"
-                        className="inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90"
+                        className="inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         Go to Studio
                       </Link>
                       <Link
                         to="/resources"
-                        className="inline-flex rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent"
+                        className="inline-flex rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         Browse Resources
                       </Link>

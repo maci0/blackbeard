@@ -1,8 +1,7 @@
 /** YAML serialization and parsing utilities for Blackbeard resources. */
 
 import yaml from 'js-yaml'
-import type { Resource } from '@/stores/resourceStore'
-import { capitalize, toResourceName } from '@/lib/utils'
+import type { Resource } from '@/lib/types'
 
 export function serializeValue(value: unknown, indent: number): string {
   const pad = '  '.repeat(indent)
@@ -91,40 +90,4 @@ export function parseYaml(yamlStr: string): Record<string, unknown> {
     return {}
   }
   return result as Record<string, unknown>
-}
-
-const NODE_SPEC_FIELDS: Record<string, readonly string[]> = {
-  agent: ['role', 'goal', 'backstory', 'llm', 'verbose', 'tools'],
-  task: ['description', 'expected_output', 'agent'],
-  tool: ['type', 'class_path', 'description', 'sandbox'],
-}
-
-export function nodeToYaml(
-  nodeType: string,
-  nodeId: string,
-  data: Record<string, unknown>,
-): string {
-  const kind = capitalize(nodeType)
-  const rawName =
-    (data['role'] as string | undefined) ?? (data['name'] as string | undefined) ?? nodeId
-  const name = toResourceName(rawName)
-
-  const fields = NODE_SPEC_FIELDS[nodeType] ?? []
-  const spec: Record<string, unknown> = {}
-  for (const f of fields) {
-    if (data[f] !== undefined && data[f] !== '' && data[f] !== null) {
-      spec[f] = data[f]
-    }
-  }
-
-  const specYaml = serializeValue(spec, 1)
-
-  return [
-    'apiVersion: blackbeard/v1',
-    `kind: ${kind}`,
-    'metadata:',
-    `  name: ${name}`,
-    'spec:',
-    ...(specYaml.startsWith('\n') ? [specYaml.slice(1)] : [specYaml]),
-  ].join('\n')
 }

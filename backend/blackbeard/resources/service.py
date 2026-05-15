@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import defer
 
 from blackbeard.kinds import ResourceKind
+from blackbeard.logging_config import request_id_var
 from blackbeard.models.resource import Resource, ResourceRef
 from blackbeard.resources.exceptions import (
     ResourceConflictError,
@@ -20,8 +21,6 @@ from blackbeard.resources.refs import RefInfo, RefParseError, extract_refs
 from blackbeard.resources.validator import validate_resource
 
 if TYPE_CHECKING:
-    from uuid import UUID
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from blackbeard.models.resource_schemas import ResourceCreate, ResourceUpdate
@@ -66,7 +65,6 @@ class ResourceService:
         """
         kind_enum = _parse_kind(data.kind)
 
-        # Validate spec
         errors, validated_refs = validate_resource(data.kind, data.spec)
         if errors:
             logger.warning(
@@ -81,11 +79,11 @@ class ResourceService:
                     "resource_name": data.metadata.name,
                     "namespace": data.metadata.namespace,
                     "error_count": len(errors),
+                    "request_id": request_id_var.get("-"),
                 },
             )
             raise ResourceValidationError(errors)
 
-        # Lock the row if it exists to prevent lost updates on concurrent upsert
         result = await self.session.execute(
             select(Resource)
             .where(
@@ -114,8 +112,19 @@ class ResourceService:
                 self.session.add(resource)
                 await self.session.flush()
         except IntegrityError:
-            # Race condition: another transaction inserted between our SELECT and INSERT.
-            # Re-fetch the winning row and update it instead.
+            logger.info(
+                "Create race: %s/%s namespace=%s — retrying as upsert",
+                kind_enum.value,
+                data.metadata.name,
+                data.metadata.namespace,
+                extra={
+                    "event": "resource_create_race",
+                    "resource_kind": kind_enum.value,
+                    "resource_name": data.metadata.name,
+                    "namespace": data.metadata.namespace,
+                    "request_id": request_id_var.get("-"),
+                },
+            )
             result = await self.session.execute(
                 select(Resource)
                 .where(
@@ -142,6 +151,7 @@ class ResourceService:
                 "resource_kind": kind_enum.value,
                 "resource_name": data.metadata.name,
                 "namespace": data.metadata.namespace,
+                "request_id": request_id_var.get("-"),
             },
         )
         return resource, True
@@ -152,14 +162,6 @@ class ResourceService:
         resource = await self._get_by_identity(kind_enum, name, namespace)
         if not resource:
             raise ResourceNotFoundError(kind, name, namespace)
-        return resource
-
-    async def get_by_id(self, resource_id: UUID) -> Resource:
-        """Get a resource by its UUID."""
-        result = await self.session.execute(select(Resource).where(Resource.id == resource_id))
-        resource = result.scalar_one_or_none()
-        if not resource:
-            raise ResourceNotFoundError("unknown", str(resource_id))
         return resource
 
     async def list_resources(
@@ -177,13 +179,11 @@ class ResourceService:
         if namespace:
             filters.append(Resource.namespace == namespace)
         if labels:
-            for key, value in labels.items():
-                filters.append(Resource.labels[key].astext == value)
+            filters.append(Resource.labels.contains(labels))
 
         query = select(Resource).options(defer(Resource.raw_yaml)).where(*filters)
         count_query = select(func.count(Resource.id)).where(*filters)
 
-        # Deterministic ordering for stable pagination
         query = (
             query.order_by(Resource.kind, Resource.namespace, Resource.name)
             .limit(limit)
@@ -210,7 +210,6 @@ class ResourceService:
         """Update a resource with optimistic locking."""
         kind_enum = _parse_kind(kind)
 
-        # Lock the row for update to prevent lost updates
         result = await self.session.execute(
             select(Resource)
             .where(
@@ -224,7 +223,6 @@ class ResourceService:
         if not resource:
             raise ResourceNotFoundError(kind, name, namespace)
 
-        # Optimistic locking check
         if resource.version != data.version:
             raise ResourceConflictError(kind, name, data.version, resource.version)
 
@@ -265,6 +263,7 @@ class ResourceService:
                 "resource_name": name,
                 "namespace": namespace,
                 "version": resource.version,
+                "request_id": request_id_var.get("-"),
             },
         )
         return resource
@@ -284,6 +283,7 @@ class ResourceService:
                 "resource_kind": kind,
                 "resource_name": name,
                 "namespace": namespace,
+                "request_id": request_id_var.get("-"),
             },
         )
 
@@ -327,6 +327,7 @@ class ResourceService:
                 "resource_name": resource.name,
                 "namespace": resource.namespace,
                 "version": resource.version,
+                "request_id": request_id_var.get("-"),
             },
         )
         return resource
@@ -342,6 +343,14 @@ class ResourceService:
                     resource.kind.value,
                     resource.name,
                     e,
+                    extra={
+                        "event": "ref_sync_skipped",
+                        "resource_kind": resource.kind.value,
+                        "resource_name": resource.name,
+                        "namespace": resource.namespace,
+                        "error_message": str(e)[:500],
+                        "request_id": request_id_var.get("-"),
+                    },
                 )
                 return
 

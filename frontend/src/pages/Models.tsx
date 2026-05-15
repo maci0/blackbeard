@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useDocumentTitle } from '@/lib/hooks'
+import { API_VERSION } from '@/lib/kinds'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   Plus,
@@ -16,8 +17,8 @@ import {
 } from 'lucide-react'
 import { useResourceStore, type Resource } from '@/stores/resourceStore'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { EmptyState } from '@/components/ui/EmptyState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { cn } from '@/lib/utils'
@@ -96,7 +97,7 @@ function ModelCard({ resource, onDelete }: { resource: Resource; onDelete: () =>
               e.stopPropagation()
               onDelete()
             }}
-            className="shrink-0 rounded p-1.5 text-muted-foreground opacity-40 transition-all hover:bg-destructive/10 hover:text-destructive focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+            className="shrink-0 rounded p-1.5 text-muted-foreground opacity-40 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
             title="Delete connection"
             aria-label="Delete connection"
           >
@@ -232,8 +233,8 @@ function AddModelDialog({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[480px] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border bg-card shadow-2xl">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:fade-in" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[480px] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border bg-card shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
           {/* Header */}
           <div className="flex items-center justify-between border-b px-5 py-4">
             <div>
@@ -243,7 +244,7 @@ function AddModelDialog({
               </Dialog.Description>
             </div>
             <Dialog.Close
-              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-accent"
+              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Close"
             >
               <X className="h-4 w-4" />
@@ -260,6 +261,7 @@ function AddModelDialog({
                 <input
                   id="model-name"
                   required
+                  aria-required="true"
                   type="text"
                   value={form.name}
                   onChange={set('name')}
@@ -293,6 +295,7 @@ function AddModelDialog({
                 <input
                   id="model-model"
                   required
+                  aria-required="true"
                   type="text"
                   value={form.model}
                   onChange={set('model')}
@@ -313,9 +316,12 @@ function AddModelDialog({
                   step="0.1"
                   value={form.temperature}
                   onChange={set('temperature')}
+                  aria-describedby="model-temperature-hint"
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                 />
-                <p className="mt-1 text-xs text-muted-foreground/70">Range: 0.0 – 2.0</p>
+                <p id="model-temperature-hint" className="mt-1 text-xs text-muted-foreground/70">
+                  Range: 0.0 – 2.0
+                </p>
               </div>
 
               <div>
@@ -328,9 +334,12 @@ function AddModelDialog({
                   min="1"
                   value={form.max_tokens}
                   onChange={set('max_tokens')}
+                  aria-describedby="model-max-tokens-hint"
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                 />
-                <p className="mt-1 text-xs text-muted-foreground/70">Minimum 1</p>
+                <p id="model-max-tokens-hint" className="mt-1 text-xs text-muted-foreground/70">
+                  Minimum 1
+                </p>
               </div>
             </fieldset>
 
@@ -393,7 +402,7 @@ export default function Models() {
 
   const models = resources['llm-connections'] ?? []
 
-  useDocumentTitle('LLM Connections')
+  useDocumentTitle('Models')
 
   useEffect(() => {
     void fetchResources('llm-connections')
@@ -405,7 +414,7 @@ export default function Models() {
     setSubmitError(null)
     try {
       await createResource({
-        apiVersion: 'blackbeard/v1',
+        apiVersion: API_VERSION,
         kind: 'LLMConnection',
         metadata: { name: form.name, namespace: 'default' },
         spec: {
@@ -457,7 +466,7 @@ export default function Models() {
               <>
                 <button
                   onClick={() => void fetchResources('llm-connections')}
-                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent"
+                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Refresh models"
                 >
                   <RefreshCw
@@ -473,7 +482,7 @@ export default function Models() {
                     setSubmitError(null)
                     setAddOpen(true)
                   }}
-                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Plus className="h-4 w-4" />
                   Add Connection
@@ -487,14 +496,15 @@ export default function Models() {
         {successMessage && (
           <div
             role="status"
+            aria-live="polite"
             className="mb-4 flex items-center gap-2 text-sm text-green-600 dark:text-green-400"
           >
             <Check className="h-4 w-4" />
             {successMessage}
             <button
               onClick={() => setSuccessMessage(null)}
-              className="ml-auto rounded p-0.5 transition-colors hover:bg-green-100 dark:hover:bg-green-900"
-              aria-label="Dismiss"
+              className="ml-auto rounded p-2 transition-colors hover:bg-green-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-green-900"
+              aria-label="Dismiss success message"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -503,33 +513,40 @@ export default function Models() {
 
         {/* Error */}
         {error && (
-          <div
-            role="alert"
-            className="mb-4 flex items-center justify-between rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
-          >
-            <span className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              {error}
-            </span>
-            <button
-              onClick={() => void fetchResources('llm-connections')}
-              className="text-xs underline underline-offset-2"
-              aria-label="Retry loading connections"
-            >
-              Retry
-            </button>
-          </div>
+          <ErrorAlert
+            message={error}
+            onAction={() => void fetchResources('llm-connections')}
+            ariaLabel="Retry loading connections"
+            className="mb-4"
+          />
         )}
 
         {/* Content */}
         {loading && models.length === 0 ? (
           <TableSkeleton />
         ) : models.length === 0 ? (
-          <EmptyState
-            icon={<Settings />}
-            title="No LLM connections"
-            description="Add an LLM connection to get started"
-          />
+          <div className="page-enter flex flex-col items-center justify-center py-16 text-center">
+            <div
+              aria-hidden="true"
+              className="mb-4 text-muted-foreground/60 [&>svg]:h-12 [&>svg]:w-12"
+            >
+              <Settings />
+            </div>
+            <h2 className="text-sm font-medium text-foreground">No LLM connections</h2>
+            <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+              Add an LLM connection to get started
+            </p>
+            <button
+              onClick={() => {
+                setSubmitError(null)
+                setAddOpen(true)
+              }}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Connection
+            </button>
+          </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {models.map((resource) => (

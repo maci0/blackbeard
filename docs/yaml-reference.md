@@ -69,8 +69,11 @@ spec:
 | `verbose` | boolean | — | Log chain-of-thought (default `true`) |
 | `max_iter` | integer ≥ 1 | — | Max reasoning iterations |
 | `max_rpm` | integer ≥ 1 | — | Rate limit for LLM calls |
-| `memory` | boolean | — | Enable cross-task memory |
+| `memory` | boolean\|object | — | Enable cross-task memory; object form supports `enabled`, `recency_weight`, `semantic_weight`, `importance_weight` |
 | `cache` | boolean | — | Cache tool results |
+| `tool_discovery` | boolean | — | Allow JIT tool discovery via meta-tools (default `true`) |
+| `skills` | string[] | — | Directory paths with domain instruction files |
+| `knowledge_sources` | string[] | — | `ref:` KnowledgeSource resources for RAG |
 | `system_template` | string | — | Custom system prompt template (stored but not yet passed to CrewAI at runtime) |
 | `prompt_template` | string | — | Custom task prompt template (stored but not yet passed to CrewAI at runtime) |
 | `response_template` | string | — | Custom response format template (stored but not yet passed to CrewAI at runtime) |
@@ -182,19 +185,28 @@ spec:
 | `tasks` | string[] (≥1) | ✅ | Ordered task `ref:` list |
 | `description` | string | — | Human-readable description |
 | `verbose` | boolean | — | Verbose logging (default `true`) |
-| `memory` | boolean | — | Shared cross-agent memory |
+| `memory` | boolean\|object | — | Shared cross-agent memory; object form supports `enabled`, `provider` (`lancedb`\|`chromadb`\|`qdrant`), `config` |
+| `embedder` | object | — | Embedder config for RAG (`provider`, `config`) |
 | `cache` | boolean | — | Shared tool cache |
 | `max_rpm` | integer ≥ 1 | — | Crew-wide LLM rate limit |
 | `manager_llm` | string | — | LLM for the hierarchical manager |
 | `manager_agent` | string | — | Custom manager agent (hierarchical) |
 | `planning` | boolean | — | Pre-execution planning step |
 | `planning_llm` | string | — | LLM used during planning |
+| `tool_loading` | `jit`\|`eager`\|`hybrid` | — | Tool loading strategy (default `hybrid`) |
 | `default_agent_policy` | string | — | Default `AgentPolicy` ref for all agents |
 | `inputs` | object[] | — | Runtime input declarations |
 | `inputs[].name` | string | ✅ | Input variable name |
 | `inputs[].description` | string | — | Description shown in UI |
 | `inputs[].required` | boolean | — | Whether input is mandatory (default `true`) |
 | `inputs[].default` | any | — | Default value when not provided |
+| `inline` | object | — | Embed agents, tasks, and LLM connections directly in the crew YAML (see below) |
+| `a2a` | object | — | Agent-to-Agent protocol configuration |
+| `a2a.enabled` | boolean | — | Enable A2A protocol (default `false`) |
+| `a2a.protocol_versions` | string[] | — | Supported protocol versions |
+| `a2a.transports` | string[] | — | Supported transport protocols (`json-rpc`, `grpc`) |
+| `a2a.auth` | string | — | Authentication configuration |
+| `a2a.public` | boolean | — | Whether the crew is publicly discoverable (default `false`) |
 
 ### Inline Resources
 
@@ -247,7 +259,7 @@ metadata:
     category: search
 spec:
   # --- Required ---
-  type: python                             # "python", "wasm", or "builtin"
+  type: python                             # "python", "wasm", "builtin", "mcp-stdio", or "mcp-http"
 
   # --- For type: python ---
   class_path: crewai_tools.SerperDevTool  # Dotted import path to a BaseTool subclass
@@ -261,19 +273,34 @@ spec:
   #   - "http_fetch"
   #   - "env"
 
-  # --- Optional (both types) ---
+  # --- For type: mcp-stdio ---
+  # type: mcp-stdio
+  # command: "npx"                        # Command to launch the MCP server
+  # args: ["-y", "@modelcontextprotocol/server-filesystem"]
+  # env:                                  # Environment variables for the MCP server process
+  #   HOME: /tmp
+
+  # --- For type: mcp-http ---
+  # type: mcp-http
+  # url: "http://localhost:3001/mcp"      # URL of the running MCP HTTP server
+
+  # --- Optional (all types) ---
   config:                                  # Arbitrary config passed to the tool constructor
     result_n: 5
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | `python`\|`wasm`\|`builtin` | ✅ | Tool implementation type |
-| `class_path` | string | — | Dotted path to Python `BaseTool` subclass (required for `python`) |
+| `type` | `python`\|`wasm`\|`builtin`\|`mcp-stdio`\|`mcp-http` | ✅ | Tool implementation type |
+| `class_path` | string | — | Dotted path to Python `BaseTool` subclass (required for `python`; tool name for `builtin`) |
 | `description` | string | — | Human-readable description of what the tool does |
 | `sandbox` | `none`\|`wasm` | — | Sandbox enforcement level (default `none`) |
 | `wasm_module` | string | — | Path to `.wasm` module file (required for `wasm`) |
 | `capabilities` | string[] | — | WASI capability grants for WASM tools (e.g. `http_fetch`, `env`) |
+| `command` | string | — | Command to launch the MCP server (required for `mcp-stdio`) |
+| `args` | string[] | — | Arguments for the MCP server command (`mcp-stdio`) |
+| `url` | string | — | URL of the MCP HTTP server (required for `mcp-http`) |
+| `env` | object | — | Environment variables for the MCP server process (`mcp-stdio`) |
 | `config` | object | — | Constructor kwargs passed to the tool |
 
 > **Note:** The `env` capability passes a safe default set of environment variables (PATH, HOME, USER, etc.). Granular per-variable access (`env:VAR_NAME`) is planned but not yet implemented.
@@ -419,3 +446,99 @@ spec:
 | `function_path` | string | — | Dotted path to Python callable `(output: str) -> bool` (required for `function`) |
 | `llm_prompt` | string | — | Prompt template with `{output}` placeholder (required for `llm`) |
 | `llm` | string | — | LLMConnection ref used for the LLM judge |
+
+---
+
+## Flow
+
+A Flow orchestrates multiple crews and functions into a multi-step pipeline with state passing.
+
+```yaml
+apiVersion: blackbeard/v1
+kind: Flow
+metadata:
+  name: research-pipeline
+  namespace: default
+spec:
+  # --- Required ---
+  steps:
+    - name: research
+      type: crew
+      crew: "ref:crews/research-crew"
+    - name: summarize
+      type: crew
+      crew: "ref:crews/summary-crew"
+      listen_to: [research]
+    - name: route-output
+      type: router
+      listen_to: [summarize]
+      routes:
+        short: next-step-a
+        long: next-step-b
+
+  # --- Optional ---
+  description: "End-to-end research and summary pipeline"
+  state_schema:                            # JSON Schema for the shared flow state
+    type: object
+    properties:
+      topic: { type: string }
+  memory: false                            # Enable flow-level memory (default: false)
+  verbose: true                            # Verbose logging (default: true)
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `steps` | object[] (≥1) | ✅ | Ordered list of flow steps |
+| `steps[].name` | string | ✅ | Step identifier |
+| `steps[].type` | `crew`\|`function`\|`router`\|`condition` | ✅ | Step type |
+| `steps[].crew` | string | — | Crew ref (required for `crew` steps) |
+| `steps[].function_path` | string | — | `module:function` path (required for `function` steps) |
+| `steps[].listen_to` | string[] | — | Steps whose completion triggers this step |
+| `steps[].condition` | string | — | Condition expression (for `condition` steps) |
+| `steps[].routes` | object | — | Named routes mapping to step names (for `router` steps) |
+| `description` | string | — | Human-readable description |
+| `state_schema` | object | — | JSON Schema for shared flow state |
+| `memory` | boolean | — | Flow-level memory (default `false`) |
+| `verbose` | boolean | — | Verbose logging (default `true`) |
+
+---
+
+## KnowledgeSource
+
+A KnowledgeSource provides RAG-accessible content to agents. Attach knowledge sources to agents via the `knowledge_sources` field.
+
+```yaml
+apiVersion: blackbeard/v1
+kind: KnowledgeSource
+metadata:
+  name: product-docs
+  namespace: default
+spec:
+  # --- Required ---
+  type: text                               # "text", "pdf", "csv", "json", "excel", "string", or "url"
+
+  # --- For file-based types (text, pdf, csv, json, excel) ---
+  file_paths:
+    - "docs/product-manual.txt"
+    - "docs/faq.txt"
+
+  # --- For type: string ---
+  # content: "Inline knowledge content goes here..."
+
+  # --- Optional ---
+  description: "Product documentation for RAG"
+  chunk_size: 4000                         # Chunk size for text splitting (default: 4000)
+  chunk_overlap: 200                       # Overlap between chunks (default: 200)
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `text`\|`pdf`\|`csv`\|`json`\|`excel`\|`string`\|`url` | ✅ | Knowledge source format (see note below) |
+| `description` | string | — | Human-readable description |
+| `file_paths` | string[] | — | Paths to source files (required for file-based types) |
+| `content` | string | — | Inline text content (required for `string` type) |
+| `urls` | string[] | — | URLs to fetch content from (for `url` type) |
+| `chunk_size` | integer 100–10000 | — | Text chunk size (default `4000`) |
+| `chunk_overlap` | integer 0–1000 | — | Overlap between chunks (default `200`) |
+
+> **Note:** For MVP, only `text`, `pdf`, `csv`, `json`, and `string` types are supported at runtime. `excel` and `url` are accepted by the schema but not yet handled by the resource loader.

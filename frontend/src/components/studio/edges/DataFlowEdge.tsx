@@ -1,6 +1,17 @@
+import { memo } from 'react'
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from '@xyflow/react'
 
-export default function DataFlowEdge({
+const STYLE_DEFAULT = {
+  stroke: '#94a3b8',
+  strokeWidth: 1.5,
+} as const
+
+const STYLE_SELECTED = {
+  stroke: '#6366f1',
+  strokeWidth: 2.5,
+} as const
+
+export default memo(function DataFlowEdge({
   id,
   sourceX,
   sourceY,
@@ -27,10 +38,7 @@ export default function DataFlowEdge({
         id={id}
         path={edgePath}
         markerEnd={markerEnd}
-        style={{
-          stroke: selected ? '#6366f1' : '#94a3b8',
-          strokeWidth: selected ? 2.5 : 1.5,
-        }}
+        style={selected ? STYLE_SELECTED : STYLE_DEFAULT}
         className={selected ? 'studio-edge-animated' : undefined}
       />
 
@@ -42,7 +50,7 @@ export default function DataFlowEdge({
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
               pointerEvents: 'none',
             }}
-            className="rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-slate-400 shadow-sm"
+            className="rounded-full border border-border bg-card px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-muted-foreground shadow-sm"
           >
             {typeof data.label === 'string' ? data.label : JSON.stringify(data.label)}
           </div>
@@ -50,4 +58,4 @@ export default function DataFlowEdge({
       )}
     </>
   )
-}
+})

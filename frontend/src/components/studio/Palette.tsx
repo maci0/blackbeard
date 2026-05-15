@@ -1,7 +1,7 @@
 import type { DragEvent } from 'react'
 import { User, ListChecks, Wrench } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
-import { getDefaultNodeData } from '@/lib/utils'
+import { getDefaultNodeData } from './defaults'
 
 interface PaletteItem {
   type: string
@@ -20,8 +20,9 @@ const ITEMS: PaletteItem[] = [
     icon: User,
     headerBg: 'bg-gradient-to-r from-violet-600 to-violet-500',
     iconBg: 'bg-white/20',
-    textColor: 'text-violet-700',
-    borderColor: 'border-violet-200 hover:border-violet-400',
+    textColor: 'text-violet-700 dark:text-violet-300',
+    borderColor:
+      'border-violet-200 hover:border-violet-400 dark:border-violet-800 dark:hover:border-violet-600',
   },
   {
     type: 'task',
@@ -29,8 +30,9 @@ const ITEMS: PaletteItem[] = [
     icon: ListChecks,
     headerBg: 'bg-gradient-to-r from-blue-600 to-blue-500',
     iconBg: 'bg-white/20',
-    textColor: 'text-blue-700',
-    borderColor: 'border-blue-200 hover:border-blue-400',
+    textColor: 'text-blue-700 dark:text-blue-300',
+    borderColor:
+      'border-blue-200 hover:border-blue-400 dark:border-blue-800 dark:hover:border-blue-600',
   },
   {
     type: 'tool',
@@ -38,8 +40,9 @@ const ITEMS: PaletteItem[] = [
     icon: Wrench,
     headerBg: 'bg-gradient-to-r from-emerald-600 to-emerald-500',
     iconBg: 'bg-white/20',
-    textColor: 'text-emerald-700',
-    borderColor: 'border-emerald-200 hover:border-emerald-400',
+    textColor: 'text-emerald-700 dark:text-emerald-300',
+    borderColor:
+      'border-emerald-200 hover:border-emerald-400 dark:border-emerald-800 dark:hover:border-emerald-600',
   },
 ]
 
@@ -94,7 +97,7 @@ export default function Palette() {
     <aside
       aria-label="Node palette"
       data-tour="palette"
-      className="flex w-[108px] shrink-0 flex-col border-r bg-card"
+      className="hidden w-[108px] shrink-0 flex-col border-r bg-card sm:flex"
     >
       <div className="border-b px-3 pb-2 pt-3">
         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">

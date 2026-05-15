@@ -1,11 +1,13 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
   createContext,
   useContext,
   type ChangeEvent,
 } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import * as Tabs from '@radix-ui/react-tabs'
 import { X, Trash2 } from 'lucide-react'
 import { CodeBlock } from '@/components/ui/CodeBlock'
@@ -13,12 +15,8 @@ import { Link } from 'react-router-dom'
 import { useStudioStore } from '@/stores/studioStore'
 import { useResourceStore, type Resource } from '@/stores/resourceStore'
 import { modKey } from '@/lib/platform'
-import { nodeToYaml } from '@/lib/yaml'
+import { nodeToYaml } from './nodeYaml'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-
-/* ------------------------------------------------------------------ */
-/* Shared form primitives                                               */
-/* ------------------------------------------------------------------ */
 
 /** Context providing a generated field id from the enclosing FieldGroup */
 const FieldIdContext = createContext<string>('')
@@ -27,7 +25,7 @@ function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: str
   return (
     <label
       htmlFor={htmlFor}
-      className="text-2xs mb-1 block font-semibold tracking-wide text-muted-foreground"
+      className="mb-1 block text-xs font-semibold tracking-wide text-muted-foreground"
     >
       {children}
     </label>
@@ -134,10 +132,6 @@ function FieldGroup({ label, children }: { label: string; children: React.ReactN
   )
 }
 
-/* ------------------------------------------------------------------ */
-/* Per-type property forms                                             */
-/* ------------------------------------------------------------------ */
-
 const EMPTY_RESOURCES: Resource[] = []
 
 function AgentForm({
@@ -227,7 +221,9 @@ function TaskForm({
 }) {
   const str = (key: string) => (data[key] as string | undefined) ?? ''
 
-  const agentNodes = useStudioStore((state) => state.nodes.filter((n) => n.type === 'agent'))
+  const agentNodes = useStudioStore(
+    useShallow((state) => state.nodes.filter((n) => n.type === 'agent')),
+  )
 
   return (
     <div className="space-y-3">
@@ -339,25 +335,26 @@ function ToolForm({
   )
 }
 
-/* ------------------------------------------------------------------ */
-/* Panel header accent colours per type                                */
-/* ------------------------------------------------------------------ */
-
 const TYPE_META: Record<string, { label: string; accent: string; border: string }> = {
   agent: { label: 'Agent', accent: 'bg-violet-500', border: 'border-violet-200' },
   task: { label: 'Task', accent: 'bg-blue-500', border: 'border-blue-200' },
   tool: { label: 'Tool', accent: 'bg-emerald-500', border: 'border-emerald-200' },
 }
 
-/* ------------------------------------------------------------------ */
-/* Main panel                                                           */
-/* ------------------------------------------------------------------ */
-
 export default function PropertyPanel() {
-  const { nodes, selectedNodeId, updateNodeData, setSelectedNode, removeNode } = useStudioStore()
+  const selectedNodeId = useStudioStore((s) => s.selectedNodeId)
+  const selectedNode = useStudioStore(
+    useShallow((state) => {
+      if (!state.selectedNodeId) return null
+      const n = state.nodes.find((node) => node.id === state.selectedNodeId)
+      if (!n) return null
+      return { id: n.id, type: n.type, data: n.data }
+    }),
+  )
+  const updateNodeData = useStudioStore((s) => s.updateNodeData)
+  const setSelectedNode = useStudioStore((s) => s.setSelectedNode)
+  const removeNode = useStudioStore((s) => s.removeNode)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId)
 
   const onChange = useCallback(
     (field: string, value: unknown) => {
@@ -367,11 +364,34 @@ export default function PropertyPanel() {
     [selectedNodeId, updateNodeData],
   )
 
-  if (!selectedNode) {
+  // Close panel on Escape key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedNodeId) {
+        setSelectedNode(null)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [selectedNodeId, setSelectedNode])
+
+  const nodeType = selectedNode?.type ?? 'agent'
+  const data = selectedNode?.data
+  const meta = TYPE_META[nodeType] ?? {
+    label: nodeType,
+    accent: 'bg-slate-500',
+    border: 'border-slate-200',
+  }
+  const yamlContent = useMemo(
+    () => (selectedNode ? nodeToYaml(nodeType, selectedNode.id, data!) : ''),
+    [selectedNode, nodeType, data],
+  )
+
+  if (!selectedNode || !data) {
     return (
       <aside
         aria-label="Node properties"
-        className="flex w-[300px] shrink-0 flex-col items-center justify-center border-l bg-card p-6 text-center"
+        className="hidden w-[300px] shrink-0 flex-col items-center justify-center border-l bg-card p-6 text-center sm:flex"
       >
         <p className="text-sm font-medium text-muted-foreground">No node selected</p>
         <p className="mt-1 text-xs text-muted-foreground/70">
@@ -381,19 +401,10 @@ export default function PropertyPanel() {
     )
   }
 
-  const nodeType = selectedNode.type ?? 'agent'
-  const data = selectedNode.data
-  const meta = TYPE_META[nodeType] ?? {
-    label: nodeType,
-    accent: 'bg-slate-500',
-    border: 'border-slate-200',
-  }
-  const yamlContent = nodeToYaml(nodeType, selectedNode.id, data)
-
   return (
     <aside
       aria-label="Node properties"
-      className="flex w-[300px] shrink-0 flex-col overflow-hidden border-l bg-card"
+      className="absolute right-0 top-0 z-20 flex h-full w-[300px] shrink-0 flex-col overflow-hidden border-l bg-card shadow-lg sm:static sm:z-auto sm:shadow-none"
     >
       {/* Header */}
       <div
@@ -439,10 +450,13 @@ export default function PropertyPanel() {
 
         {/* Properties tab */}
         <Tabs.Content value="properties" className="min-h-0 flex-1 overflow-y-auto p-4">
-          {nodeType === 'agent' && <AgentForm data={data} onChange={onChange} />}
-          {nodeType === 'task' && <TaskForm data={data} onChange={onChange} />}
-          {nodeType === 'tool' && <ToolForm data={data} onChange={onChange} />}
-          {nodeType !== 'agent' && nodeType !== 'task' && nodeType !== 'tool' && (
+          {nodeType === 'agent' ? (
+            <AgentForm data={data} onChange={onChange} />
+          ) : nodeType === 'task' ? (
+            <TaskForm data={data} onChange={onChange} />
+          ) : nodeType === 'tool' ? (
+            <ToolForm data={data} onChange={onChange} />
+          ) : (
             <p className="text-xs text-muted-foreground">No properties for this node type.</p>
           )}
         </Tabs.Content>

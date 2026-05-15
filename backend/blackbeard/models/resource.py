@@ -70,13 +70,17 @@ class Resource(Base):
         foreign_keys="ResourceRef.source_id",
         back_populates="source",
         cascade="all, delete-orphan",
+        lazy="raise",
     )
 
     __table_args__ = (
         UniqueConstraint("kind", "name", "namespace", name="uq_resource_kind_name_ns"),
         Index("ix_resource_ns_kind", "namespace", "kind"),
+        Index("ix_resource_kind_ns_name", "kind", "namespace", "name"),
         Index("ix_resource_labels", "labels", postgresql_using="gin"),
         CheckConstraint("version >= 1", name="ck_resource_version_positive"),
+        CheckConstraint("length(name) >= 1", name="ck_resource_name_nonempty"),
+        CheckConstraint("length(namespace) >= 1", name="ck_resource_namespace_nonempty"),
     )
 
     def __repr__(self) -> str:
@@ -108,13 +112,16 @@ class ResourceRef(Base):
     ref_field: Mapped[str] = mapped_column(String(255), nullable=False)
 
     source: Mapped[Resource] = relationship(
-        "Resource", foreign_keys=[source_id], back_populates="outgoing_refs"
+        "Resource", foreign_keys=[source_id], back_populates="outgoing_refs", lazy="raise"
     )
 
     __table_args__ = (
         Index("ix_ref_source", "source_id"),
         Index("ix_ref_target", "target_kind", "target_name", "target_namespace"),
         UniqueConstraint("source_id", "ref_field", name="uq_ref_source_field"),
+        CheckConstraint("length(target_name) >= 1", name="ck_ref_target_name_nonempty"),
+        CheckConstraint("length(target_namespace) >= 1", name="ck_ref_target_ns_nonempty"),
+        CheckConstraint("length(ref_field) >= 1", name="ck_ref_field_nonempty"),
     )
 
     def __repr__(self) -> str:

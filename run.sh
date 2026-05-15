@@ -1,6 +1,34 @@
 #!/bin/bash
 set -euo pipefail
 
+usage() {
+  cat <<'EOF'
+Usage: ./run.sh [OPTIONS]
+
+Build and start all Blackbeard services (API, UI, Postgres, Valkey, LiteLLM).
+Extra flags are passed through to 'docker compose up'.
+
+Options:
+  --detach, -d    Run containers in background
+  --help, -h      Show this help
+
+Environment:
+  GOOGLE_APPLICATION_CREDENTIALS   Path to GCP credentials JSON (set in .env)
+
+Examples:
+  ./run.sh                  # foreground
+  ./run.sh --detach         # background
+  ./run.sh --force-recreate # rebuild from scratch
+EOF
+  exit 0
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h) usage ;;
+  esac
+done
+
 if docker compose version &>/dev/null; then
   COMPOSE="docker compose"
 elif command -v podman-compose &>/dev/null; then
@@ -12,7 +40,10 @@ fi
 
 if [ ! -f .env ]; then
   cp .env.example .env
-  echo "Created .env from .env.example — edit it before running in production."
+  echo ""
+  echo "WARNING: Created .env from .env.example with default credentials." >&2
+  echo "         Change BLACKBEARD_API_KEY and POSTGRES_PASSWORD before deploying." >&2
+  echo ""
 fi
 
 creds=$(grep -s '^GOOGLE_APPLICATION_CREDENTIALS=' .env | cut -d= -f2- || echo "deploy/docker/empty-credentials.json")
@@ -37,7 +68,6 @@ echo "Starting Blackbeard..."
 echo "  API:      http://localhost:8000"
 echo "  UI:       http://localhost:3000"
 echo "  LiteLLM:  http://localhost:4000"
-echo "  Langfuse: http://localhost:3001"
 echo ""
 
 exec $COMPOSE up "$@"

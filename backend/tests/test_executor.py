@@ -11,8 +11,11 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
+from pydantic import ValidationError
 
 from blackbeard.engine.executor import _sanitize_error
+from blackbeard.models.execution import TERMINAL_STATUSES, ExecutionStatus
+from blackbeard.models.execution_schemas import KickoffRequest, _exceeds_depth
 from tests.conftest import API_KEY_HEADER
 
 # ---------------------------------------------------------------------------
@@ -288,7 +291,7 @@ async def test_cancel_already_cancelled_returns_conflict(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — executions require auth
+# Tests — list executions with filters
 # ---------------------------------------------------------------------------
 
 
@@ -407,6 +410,11 @@ def test_sanitize_error_501_chars_truncated():
         "Tool '",
         "Resource '",
         "Kind '",
+        "LLMConnection '",
+        "AgentPolicy '",
+        "Guardrail '",
+        "Flow '",
+        "KnowledgeSource '",
     ],
 )
 def test_sanitize_error_all_safe_prefixes(prefix):
@@ -424,6 +432,11 @@ def test_sanitize_error_all_safe_prefixes(prefix):
         "Tool '",
         "Resource '",
         "Kind '",
+        "LLMConnection '",
+        "AgentPolicy '",
+        "Guardrail '",
+        "Flow '",
+        "KnowledgeSource '",
     ],
 )
 def test_sanitize_error_all_safe_prefixes_truncate_at_limit(prefix):
@@ -433,3 +446,288 @@ def test_sanitize_error_all_safe_prefixes_truncate_at_limit(prefix):
     assert len(result) == 503
     assert result.endswith("...")
     assert result[: len(prefix)] == prefix
+
+
+# ---------------------------------------------------------------------------
+# Tests — TERMINAL_STATUSES (critical for cancel logic)
+# ---------------------------------------------------------------------------
+
+
+def test_terminal_statuses_contains_expected():
+    """TERMINAL_STATUSES must contain exactly the three terminal states."""
+    expected = frozenset(
+        {ExecutionStatus.COMPLETED, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED}
+    )
+    assert expected == TERMINAL_STATUSES
+
+
+def test_queued_and_running_not_terminal():
+    """QUEUED and RUNNING must not be terminal — cancel relies on this."""
+    assert ExecutionStatus.QUEUED not in TERMINAL_STATUSES
+    assert ExecutionStatus.RUNNING not in TERMINAL_STATUSES
+
+
+# ---------------------------------------------------------------------------
+# Tests — KickoffRequest validation (security boundary)
+# ---------------------------------------------------------------------------
+
+
+def test_kickoff_request_accepts_valid_inputs():
+    req = KickoffRequest(inputs={"topic": "AI", "depth": "detailed"})
+    assert req.inputs["topic"] == "AI"
+
+
+def test_kickoff_request_empty_inputs():
+    req = KickoffRequest()
+    assert req.inputs == {}
+
+
+def test_kickoff_request_rejects_too_many_entries():
+    inputs = {f"key-{i}": f"val-{i}" for i in range(101)}
+    with pytest.raises(ValidationError, match=r"Too many"):
+        KickoffRequest(inputs=inputs)
+
+
+def test_kickoff_request_rejects_oversized_value():
+    inputs = {"big": "x" * 50_001}
+    with pytest.raises(ValidationError, match="exceeds"):
+        KickoffRequest(inputs=inputs)
+
+
+def test_kickoff_request_accepts_max_value_length():
+    inputs = {"big": "x" * 50_000}
+    req = KickoffRequest(inputs=inputs)
+    assert len(req.inputs["big"]) == 50_000
+
+
+def test_kickoff_request_rejects_unsafe_key():
+    """Input keys must match [a-zA-Z_][a-zA-Z0-9_]* — reject injection vectors."""
+    with pytest.raises(ValidationError, match="invalid"):
+        KickoffRequest(inputs={"key with spaces": "val"})
+
+
+def test_kickoff_request_rejects_key_starting_with_digit():
+    with pytest.raises(ValidationError, match="invalid"):
+        KickoffRequest(inputs={"123abc": "val"})
+
+
+def test_kickoff_request_rejects_oversized_key():
+    """Input keys longer than 256 chars should be rejected."""
+    with pytest.raises(ValidationError, match="at most"):
+        KickoffRequest(inputs={"k" * 257: "val"})
+
+
+def test_kickoff_request_accepts_max_key_length():
+    req = KickoffRequest(inputs={"k" * 256: "val"})
+    assert len(next(iter(req.inputs.keys()))) == 256
+
+
+def test_kickoff_request_rejects_deeply_nested():
+    nested: dict = {}
+    current = nested
+    for _ in range(11):
+        current["level"] = {}
+        current = current["level"]
+    with pytest.raises(ValidationError, match="depth"):
+        KickoffRequest(inputs=nested)
+
+
+# ---------------------------------------------------------------------------
+# Tests — _exceeds_depth helper
+# ---------------------------------------------------------------------------
+
+
+def test_exceeds_depth_flat_dict():
+    assert _exceeds_depth({"a": 1, "b": 2}) is False
+
+
+def test_exceeds_depth_at_limit():
+    nested: dict = {}
+    current = nested
+    for _ in range(9):
+        current["k"] = {}
+        current = current["k"]
+    assert _exceeds_depth(nested, limit=10) is False
+
+
+def test_exceeds_depth_over_limit():
+    nested: dict = {}
+    current = nested
+    for _ in range(10):
+        current["k"] = {}
+        current = current["k"]
+    assert _exceeds_depth(nested, limit=10) is True
+
+
+def test_exceeds_depth_scalar_root():
+    """Scalar (non-container) values should never exceed depth."""
+    assert _exceeds_depth(42) is False
+    assert _exceeds_depth("hello") is False
+    assert _exceeds_depth(None) is False
+
+
+def test_exceeds_depth_with_lists():
+    obj = {"a": [{"b": [{"c": 1}]}]}
+    assert _exceeds_depth(obj, limit=6) is False
+    assert _exceeds_depth(obj, limit=4) is True
+
+
+# ---------------------------------------------------------------------------
+# Tests — _snapshot_resource
+# ---------------------------------------------------------------------------
+
+
+def test_snapshot_resource_captures_essentials():
+    """_snapshot_resource should capture kind/name/namespace/spec only."""
+    from blackbeard.engine.executor import _snapshot_resource
+    from blackbeard.kinds import ResourceKind
+    from blackbeard.models.resource import Resource
+
+    r = Resource()
+    r.kind = ResourceKind.AGENT
+    r.name = "test-agent"
+    r.namespace = "default"
+    r.spec = {"role": "R", "goal": "G", "backstory": "B"}
+    r.raw_yaml = "should-not-appear"
+    r.labels = {"env": "test"}
+
+    snap = _snapshot_resource(r)
+    assert snap == {
+        "kind": "Agent",
+        "name": "test-agent",
+        "namespace": "default",
+        "spec": {"role": "R", "goal": "G", "backstory": "B"},
+    }
+    assert "raw_yaml" not in snap
+    assert "labels" not in snap
+
+
+def test_snapshot_resource_none_spec():
+    """_snapshot_resource with None spec should return empty dict for spec."""
+    from blackbeard.engine.executor import _snapshot_resource
+    from blackbeard.kinds import ResourceKind
+    from blackbeard.models.resource import Resource
+
+    r = Resource()
+    r.kind = ResourceKind.TOOL
+    r.name = "empty-tool"
+    r.namespace = "default"
+    r.spec = None
+
+    snap = _snapshot_resource(r)
+    assert snap["spec"] == {}
+
+
+def test_snapshot_resource_spec_is_copy():
+    """_snapshot_resource spec should be a new dict, not a reference to the original."""
+    from blackbeard.engine.executor import _snapshot_resource
+    from blackbeard.kinds import ResourceKind
+    from blackbeard.models.resource import Resource
+
+    original_spec = {"role": "R", "goal": "G"}
+    r = Resource()
+    r.kind = ResourceKind.AGENT
+    r.name = "ag"
+    r.namespace = "default"
+    r.spec = original_spec
+
+    snap = _snapshot_resource(r)
+    snap["spec"]["injected"] = "bad"
+    assert "injected" not in original_spec
+
+
+# ---------------------------------------------------------------------------
+# Tests — kickoff input validation at the API boundary
+# ---------------------------------------------------------------------------
+
+
+async def test_kickoff_rejects_empty_body(client: AsyncClient):
+    """POST /crews/{name}/kickoff without a body should return 422."""
+    await _create_full_crew(client)
+    response = await client.post(
+        "/api/v1/crews/test-crew/kickoff",
+        content=b"",
+        headers={**API_KEY_HEADER, "Content-Type": "application/json"},
+    )
+    assert response.status_code == 422
+
+
+async def test_kickoff_rejects_non_json_body(client: AsyncClient):
+    """POST /crews/{name}/kickoff with non-JSON body should return 422."""
+    await _create_full_crew(client)
+    response = await client.post(
+        "/api/v1/crews/test-crew/kickoff",
+        content=b"not json",
+        headers={**API_KEY_HEADER, "Content-Type": "application/json"},
+    )
+    assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Tests — execution listing pagination
+# ---------------------------------------------------------------------------
+
+
+async def test_list_executions_pagination(client: AsyncClient):
+    """Pagination parameters should limit results correctly."""
+    await _create_full_crew(client)
+    # Create 3 executions
+    for _ in range(3):
+        await client.post(
+            "/api/v1/crews/test-crew/kickoff",
+            json={"inputs": {}},
+            headers=API_KEY_HEADER,
+        )
+
+    # Fetch page 1 (limit 2)
+    response = await client.get("/api/v1/executions?limit=2&offset=0", headers=API_KEY_HEADER)
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 2
+    assert data["total"] == 3
+    assert data["has_more"] is True
+
+    # Fetch page 2
+    response = await client.get("/api/v1/executions?limit=2&offset=2", headers=API_KEY_HEADER)
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests — execution response shape validation
+# ---------------------------------------------------------------------------
+
+
+async def test_execution_response_has_required_fields(client: AsyncClient):
+    """Execution response should include all required fields with correct types."""
+    await _create_full_crew(client)
+    kickoff_resp = await client.post(
+        "/api/v1/crews/test-crew/kickoff",
+        json={"inputs": {"topic": "AI"}},
+        headers=API_KEY_HEADER,
+    )
+    assert kickoff_resp.status_code == 202
+    data = kickoff_resp.json()
+
+    # Verify all required fields are present
+    required_fields = {
+        "id",
+        "crew_name",
+        "crew_namespace",
+        "status",
+        "inputs",
+        "total_tokens",
+        "prompt_tokens",
+        "completion_tokens",
+        "cost_usd",
+        "created_at",
+        "tasks",
+    }
+    assert required_fields.issubset(data.keys()), (
+        f"Missing fields: {required_fields - set(data.keys())}"
+    )
+    # Verify types
+    assert isinstance(data["total_tokens"], int)
+    assert isinstance(data["tasks"], list)
+    assert data["crew_namespace"] == "default"

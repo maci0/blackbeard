@@ -291,6 +291,7 @@ def test_build_crew(mock_crew_cls, mock_task_cls, mock_agent_cls, mock_llm_cls):
     from crewai import Process
 
     assert kwargs["process"] is Process.sequential
+    assert kwargs["verbose"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -500,19 +501,19 @@ def test_build_task_caching(mock_task_cls, mock_agent_cls, mock_llm_cls):
 def test_build_tool_python(mock_importlib):
     """Tool with type=python should dynamically import the class_path."""
     fake_cls = MagicMock(name="FakeTool")
-    fake_module = ModuleType("my_package.tools")
+    fake_module = ModuleType("crewai_tools.search")
     fake_module.SearchTool = fake_cls  # type: ignore[attr-defined]
     mock_importlib.import_module.return_value = fake_module
 
     tool_res = make_resource(
         ResourceKind.TOOL,
         "search",
-        {"type": "python", "class_path": "my_package.tools.SearchTool", "config": {"k": 5}},
+        {"type": "python", "class_path": "crewai_tools.search.SearchTool", "config": {"k": 5}},
     )
     loader = ResourceLoader(_resource_map(tool_res))
     result = loader.build_tool("ref:tools/search")
 
-    mock_importlib.import_module.assert_called_once_with("my_package.tools")
+    mock_importlib.import_module.assert_called_once_with("crewai_tools.search")
     fake_cls.assert_called_once_with(k=5)
     assert result is fake_cls.return_value
 
@@ -521,14 +522,14 @@ def test_build_tool_python(mock_importlib):
 def test_build_tool_python_no_config(mock_importlib):
     """Tool with type=python and no config should pass empty kwargs."""
     fake_cls = MagicMock(name="PlainTool")
-    fake_module = ModuleType("tools")
+    fake_module = ModuleType("crewai_tools.plain")
     fake_module.PlainTool = fake_cls  # type: ignore[attr-defined]
     mock_importlib.import_module.return_value = fake_module
 
     tool_res = make_resource(
         ResourceKind.TOOL,
         "plain",
-        {"type": "python", "class_path": "tools.PlainTool"},
+        {"type": "python", "class_path": "crewai_tools.plain.PlainTool"},
     )
     loader = ResourceLoader(_resource_map(tool_res))
     result = loader.build_tool("ref:tools/plain")
@@ -549,8 +550,43 @@ def test_build_tool_python_missing_class_path():
         loader.build_tool("ref:tools/broken")
 
 
-@patch("blackbeard.engine.loader.importlib")
-def test_build_tool_builtin(mock_importlib):
+def test_build_tool_python_disallowed_class_path():
+    """Tool with class_path outside the allowlist should raise LoaderError (security).
+
+    The allowlist only permits crewai_tools.*, crewai.tools.*, langchain_community.tools.*,
+    and langchain.tools.* prefixes to prevent arbitrary code execution.
+    """
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "evil",
+        {"type": "python", "class_path": "subprocess.Popen"},
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+    with pytest.raises(LoaderError, match="not in the allowed module list"):
+        loader.build_tool("ref:tools/evil")
+
+
+@pytest.mark.parametrize(
+    "class_path",
+    [
+        "shutil.rmtree",
+        "my_custom_module.EvilTool",
+        "builtins.__import__",
+    ],
+)
+def test_build_tool_python_various_disallowed_paths(class_path):
+    """Various module paths outside the allowlist should all be rejected."""
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "bad-tool",
+        {"type": "python", "class_path": class_path},
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+    with pytest.raises(LoaderError, match="not in the allowed module list"):
+        loader.build_tool("ref:tools/bad-tool")
+
+
+def test_build_tool_builtin():
     """Tool with type=builtin should import from crewai_tools."""
     fake_tool_cls = MagicMock(name="SerperDevTool")
     fake_crewai_tools = MagicMock()
@@ -633,14 +669,14 @@ def test_build_tool_wrong_kind_raises():
 def test_build_agent_with_tool_refs(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Agent with tool refs should resolve tools and pass them to Agent constructor."""
     fake_tool_cls = MagicMock(name="SearchTool")
-    fake_module = ModuleType("my_tools")
+    fake_module = ModuleType("crewai_tools.search")
     fake_module.SearchTool = fake_tool_cls  # type: ignore[attr-defined]
     mock_importlib.import_module.return_value = fake_module
 
     tool_res = make_resource(
         ResourceKind.TOOL,
         "search",
-        {"type": "python", "class_path": "my_tools.SearchTool"},
+        {"type": "python", "class_path": "crewai_tools.search.SearchTool"},
     )
     agent_res = make_resource(
         ResourceKind.AGENT,
@@ -713,9 +749,7 @@ def test_build_agent_with_knowledge_sources(mock_agent_cls, mock_llm_cls):
     )
     loader = ResourceLoader(_resource_map(ks_res, agent_res))
 
-    with patch(
-        "blackbeard.engine.loader.ResourceLoader._build_knowledge_source"
-    ) as mock_build_ks:
+    with patch("blackbeard.engine.loader.ResourceLoader._build_knowledge_source") as mock_build_ks:
         mock_ks = MagicMock()
         mock_build_ks.return_value = mock_ks
         loader.build_agent("ref:agents/smart-agent")
@@ -801,3 +835,453 @@ def test_build_agent_memory_dict_disabled(mock_agent_cls, mock_llm_cls):
 
     _, kwargs = mock_agent_cls.call_args
     assert kwargs["memory"] is False
+
+
+# ---------------------------------------------------------------------------
+# _validate_tool_config (security-critical path traversal protection)
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.importlib")
+def test_build_tool_rejects_config_path_traversal(mock_importlib):
+    """Tool config values with path traversal characters should raise LoaderError."""
+    fake_cls = MagicMock(name="FakeTool")
+    fake_module = ModuleType("crewai_tools.search")
+    fake_module.SearchTool = fake_cls  # type: ignore[attr-defined]
+    mock_importlib.import_module.return_value = fake_module
+
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "evil-cfg",
+        {
+            "type": "python",
+            "class_path": "crewai_tools.search.SearchTool",
+            "config": {"data_dir": "../../../etc/passwd"},
+        },
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+    with pytest.raises(LoaderError, match="path traversal"):
+        loader.build_tool("ref:tools/evil-cfg")
+
+
+@patch("blackbeard.engine.loader.importlib")
+def test_build_tool_rejects_config_sensitive_path(mock_importlib):
+    """Tool config values pointing to sensitive system paths should raise LoaderError."""
+    fake_cls = MagicMock(name="FakeTool")
+    fake_module = ModuleType("crewai_tools.read")
+    fake_module.ReadTool = fake_cls  # type: ignore[attr-defined]
+    mock_importlib.import_module.return_value = fake_module
+
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "secret-cfg",
+        {
+            "type": "python",
+            "class_path": "crewai_tools.read.ReadTool",
+            "config": {"path": "/etc/shadow"},
+        },
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+    with pytest.raises(LoaderError, match="not allowed"):
+        loader.build_tool("ref:tools/secret-cfg")
+
+
+# ---------------------------------------------------------------------------
+# build_agent — forwarded kwargs (max_iter, max_rpm, cache)
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+def test_build_agent_forwards_extra_kwargs(mock_agent_cls, mock_llm_cls):
+    """max_iter, max_rpm, cache should be forwarded to Agent constructor."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "tuned-agent",
+        {
+            "role": "R",
+            "goal": "G",
+            "backstory": "B",
+            "max_iter": 15,
+            "max_rpm": 30,
+            "cache": False,
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res))
+    loader.build_agent("ref:agents/tuned-agent")
+
+    _, kwargs = mock_agent_cls.call_args
+    assert kwargs["max_iter"] == 15
+    assert kwargs["max_rpm"] == 30
+    assert kwargs["cache"] is False
+
+
+# ---------------------------------------------------------------------------
+# build_crew — memory config
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+@patch("blackbeard.engine.loader.Crew")
+def test_build_crew_memory_bool(mock_crew_cls, mock_task_cls, mock_agent_cls, mock_llm_cls):
+    """Crew with memory=True should pass memory=True to Crew constructor."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "ag",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "tk",
+        {"description": "D", "expected_output": "E", "agent": "ref:agents/ag"},
+    )
+    crew_res = make_resource(
+        ResourceKind.CREW,
+        "mem-crew",
+        {
+            "process": "sequential",
+            "agents": ["ref:agents/ag"],
+            "tasks": ["ref:tasks/tk"],
+            "memory": True,
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res, task_res, crew_res))
+    loader.build_crew("mem-crew")
+
+    _, kwargs = mock_crew_cls.call_args
+    assert kwargs["memory"] is True
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+@patch("blackbeard.engine.loader.Crew")
+def test_build_crew_memory_dict(mock_crew_cls, mock_task_cls, mock_agent_cls, mock_llm_cls):
+    """Crew with memory dict should extract enabled field."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "ag",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "tk",
+        {"description": "D", "expected_output": "E", "agent": "ref:agents/ag"},
+    )
+    crew_res = make_resource(
+        ResourceKind.CREW,
+        "dict-mem-crew",
+        {
+            "process": "sequential",
+            "agents": ["ref:agents/ag"],
+            "tasks": ["ref:tasks/tk"],
+            "memory": {"enabled": True, "provider": "mem0"},
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res, task_res, crew_res))
+    loader.build_crew("dict-mem-crew")
+
+    _, kwargs = mock_crew_cls.call_args
+    assert kwargs["memory"] is True
+
+
+# ---------------------------------------------------------------------------
+# Crew — embedder passthrough
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+@patch("blackbeard.engine.loader.Crew")
+def test_build_crew_embedder_passthrough(
+    mock_crew_cls, mock_task_cls, mock_agent_cls, mock_llm_cls
+):
+    """Crew with embedder config should forward it to Crew constructor."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "ag",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "tk",
+        {"description": "D", "expected_output": "E", "agent": "ref:agents/ag"},
+    )
+    embedder_cfg = {"provider": "openai", "config": {"model": "text-embedding-3-small"}}
+    crew_res = make_resource(
+        ResourceKind.CREW,
+        "embed-crew",
+        {
+            "process": "sequential",
+            "agents": ["ref:agents/ag"],
+            "tasks": ["ref:tasks/tk"],
+            "embedder": embedder_cfg,
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res, task_res, crew_res))
+    loader.build_crew("embed-crew")
+
+    _, kwargs = mock_crew_cls.call_args
+    assert kwargs["embedder"] == embedder_cfg
+
+
+# ---------------------------------------------------------------------------
+# Crew — cache and max_rpm forwarding
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+@patch("blackbeard.engine.loader.Crew")
+def test_build_crew_cache_and_max_rpm(mock_crew_cls, mock_task_cls, mock_agent_cls, mock_llm_cls):
+    """Crew with cache and max_rpm should forward them to Crew constructor."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "ag",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "tk",
+        {"description": "D", "expected_output": "E", "agent": "ref:agents/ag"},
+    )
+    crew_res = make_resource(
+        ResourceKind.CREW,
+        "perf-crew",
+        {
+            "process": "sequential",
+            "agents": ["ref:agents/ag"],
+            "tasks": ["ref:tasks/tk"],
+            "cache": True,
+            "max_rpm": 60,
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res, task_res, crew_res))
+    loader.build_crew("perf-crew")
+
+    _, kwargs = mock_crew_cls.call_args
+    assert kwargs["cache"] is True
+    assert kwargs["max_rpm"] == 60
+
+
+# ---------------------------------------------------------------------------
+# Task — async_execution and human_input forwarding
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+def test_build_task_async_and_human_input(mock_task_cls, mock_agent_cls, mock_llm_cls):
+    """Task with async_execution and human_input should forward them."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "ag",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "interactive-task",
+        {
+            "description": "D",
+            "expected_output": "E",
+            "agent": "ref:agents/ag",
+            "async_execution": True,
+            "human_input": True,
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res, task_res))
+    loader.build_task("ref:tasks/interactive-task")
+
+    _, kwargs = mock_task_cls.call_args
+    assert kwargs["async_execution"] is True
+    assert kwargs["human_input"] is True
+
+
+# ---------------------------------------------------------------------------
+# Agent — skills forwarding
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+def test_build_agent_with_skills(mock_agent_cls, mock_llm_cls):
+    """Agent with skills list should forward it to Agent constructor."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "skilled-agent",
+        {
+            "role": "Expert",
+            "goal": "Be skilled",
+            "backstory": "Trained",
+            "skills": ["data/domain-instructions/"],
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res))
+    loader.build_agent("ref:agents/skilled-agent")
+
+    _, kwargs = mock_agent_cls.call_args
+    assert kwargs["skills"] == ["data/domain-instructions/"]
+
+
+# ---------------------------------------------------------------------------
+# Agent — memory dict with custom weights → MemoryConfig
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+def test_build_agent_memory_dict_with_weights(mock_agent_cls, mock_llm_cls):
+    """Agent with memory dict including weights should create a MemoryConfig."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "weighted-mem-agent",
+        {
+            "role": "R",
+            "goal": "G",
+            "backstory": "B",
+            "memory": {
+                "enabled": True,
+                "recency_weight": 0.5,
+                "semantic_weight": 0.3,
+                "importance_weight": 0.2,
+            },
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res))
+
+    with patch("crewai.memory.unified_memory.MemoryConfig") as mock_mem_cfg:
+        mock_mem_cfg.return_value = "memory-config-sentinel"
+        loader.build_agent("ref:agents/weighted-mem-agent")
+
+        mock_mem_cfg.assert_called_once_with(
+            recency_weight=0.5,
+            semantic_weight=0.3,
+            importance_weight=0.2,
+        )
+        _, kwargs = mock_agent_cls.call_args
+        assert kwargs["memory"] == "memory-config-sentinel"
+
+
+# ---------------------------------------------------------------------------
+# Builtin tool name validation (security-critical)
+# ---------------------------------------------------------------------------
+
+
+def test_build_tool_builtin_rejects_unsafe_name():
+    """Builtin tool with unsafe name (dunder, dots) should raise LoaderError."""
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "bad-builtin",
+        {"type": "builtin", "class_path": "__import__"},
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+    with pytest.raises(LoaderError, match="not a valid PascalCase"):
+        loader.build_tool("ref:tools/bad-builtin")
+
+
+def test_build_tool_builtin_rejects_dotted_name():
+    """Builtin tool with dotted module path should raise LoaderError."""
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "dotted",
+        {"type": "builtin", "class_path": "subprocess.run"},
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+    with pytest.raises(LoaderError, match="not a valid PascalCase"):
+        loader.build_tool("ref:tools/dotted")
+
+
+# ---------------------------------------------------------------------------
+# Tool config with nested path traversal in non-string values
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.importlib")
+def test_build_tool_config_non_string_values_are_safe(mock_importlib):
+    """Tool config with non-string values should not trigger path traversal check."""
+    fake_cls = MagicMock(name="FakeTool")
+    fake_module = ModuleType("crewai_tools.search")
+    fake_module.SearchTool = fake_cls  # type: ignore[attr-defined]
+    mock_importlib.import_module.return_value = fake_module
+
+    tool_res = make_resource(
+        ResourceKind.TOOL,
+        "numeric-cfg",
+        {
+            "type": "python",
+            "class_path": "crewai_tools.search.SearchTool",
+            "config": {"count": 5, "enabled": True},
+        },
+    )
+    loader = ResourceLoader(_resource_map(tool_res))
+    result = loader.build_tool("ref:tools/numeric-cfg")
+    assert result is fake_cls.return_value
+
+
+# ---------------------------------------------------------------------------
+# build_crew — hierarchical process
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+@patch("blackbeard.engine.loader.Crew")
+def test_build_crew_hierarchical_process_enum(
+    mock_crew_cls, mock_task_cls, mock_agent_cls, mock_llm_cls
+):
+    """Crew with process='hierarchical' should set Process.hierarchical."""
+    from crewai import Process
+
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "ag",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "tk",
+        {"description": "D", "expected_output": "E", "agent": "ref:agents/ag"},
+    )
+    crew_res = make_resource(
+        ResourceKind.CREW,
+        "hier-crew",
+        {
+            "process": "hierarchical",
+            "agents": ["ref:agents/ag"],
+            "tasks": ["ref:tasks/tk"],
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res, task_res, crew_res))
+    loader.build_crew("hier-crew")
+
+    _, kwargs = mock_crew_cls.call_args
+    assert kwargs["process"] is Process.hierarchical
+
+
+# ---------------------------------------------------------------------------
+# Loader isolation — different loaders don't share caches
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+def test_loader_caches_are_per_instance(mock_llm_cls):
+    """Two ResourceLoader instances should have independent caches."""
+    conn = make_resource(
+        ResourceKind.LLM_CONNECTION,
+        "shared-llm",
+        {"provider": "openai", "model": "gpt-4o"},
+    )
+    loader1 = ResourceLoader(_resource_map(conn))
+    loader2 = ResourceLoader(_resource_map(conn))
+
+    loader1.build_llm("ref:llm-connections/shared-llm")
+    loader2.build_llm("ref:llm-connections/shared-llm")
+
+    # Each loader builds its own instance
+    assert mock_llm_cls.call_count == 2

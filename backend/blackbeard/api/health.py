@@ -1,45 +1,32 @@
 """Health check endpoints."""
 
+from __future__ import annotations
+
 import asyncio
+import contextlib
 import logging
-import threading
 import time
 from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
+from redis.asyncio import from_url as _redis_from_url
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from blackbeard import __version__
 from blackbeard.config import settings
+from blackbeard.http_client import get_client
 from blackbeard.models import get_session
-
-_redis_from_url: Any = None
-_HAS_REDIS = False
-try:
-    from redis.asyncio import from_url as _redis_from_url_import
-
-    _redis_from_url = _redis_from_url_import
-    _HAS_REDIS = True
-except ImportError:
-    pass
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["health"])
 
-_health_client: httpx.AsyncClient | None = None
-_health_client_lock = threading.Lock()
-
 
 def _get_health_client() -> httpx.AsyncClient:
-    global _health_client
-    if _health_client is None:
-        with _health_client_lock:
-            if _health_client is None:
-                _health_client = httpx.AsyncClient(timeout=3.0)
-    return _health_client
+    return get_client("health", timeout=3.0)
 
 
 _NO_CACHE = "no-cache, no-store, must-revalidate"
@@ -48,6 +35,7 @@ _NO_CACHE = "no-cache, no-store, must-revalidate"
 class HealthResponse(BaseModel):
     status: str
     service: str
+    version: str
 
 
 class ComponentCheck(BaseModel):
@@ -60,13 +48,14 @@ class ComponentCheck(BaseModel):
 class ReadinessResponse(BaseModel):
     status: str
     service: str
+    version: str
     checks: dict[str, ComponentCheck]
 
 
 @router.get("/health", response_model=HealthResponse)
 async def health(response: Response) -> HealthResponse:
     response.headers["Cache-Control"] = _NO_CACHE
-    return HealthResponse(status="ok", service="blackbeard")
+    return HealthResponse(status="ok", service="blackbeard", version=__version__)
 
 
 _valkey_client: Any = None
@@ -76,61 +65,72 @@ _valkey_lock = asyncio.Lock()
 async def _check_valkey() -> dict[str, object]:
     """Ping Valkey/Redis and return status dict."""
     global _valkey_client
-    if not _HAS_REDIS:
-        return {"status": "skipped", "reason": "redis package not installed"}
-
+    t0 = time.monotonic()
     try:
         if _valkey_client is None:
             async with _valkey_lock:
                 if _valkey_client is None:
-                    # redis.asyncio expects redis:// scheme; Valkey is wire-compatible
                     url = settings.valkey_url.get_secret_value().replace("valkey://", "redis://", 1)
                     _valkey_client = _redis_from_url(url, socket_connect_timeout=2)
-        t0 = time.monotonic()
         await _valkey_client.ping()
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
         return {"status": "up", "latency_ms": latency_ms}
     except Exception as e:
+        latency_ms = round((time.monotonic() - t0) * 1000, 1)
+        old_client = _valkey_client
         _valkey_client = None
+        if old_client is not None:
+            with contextlib.suppress(Exception):
+                await old_client.aclose()
         err = type(e).__name__
         logger.warning(
-            "Health check: valkey is down: %s: %s",
+            "Health check: valkey is down: %s: %s (%.0fms)",
             err,
             e,
+            latency_ms,
             exc_info=True,
-            extra={"event": "health_check_failed", "component": "valkey", "error_type": err},
+            extra={
+                "event": "health_check_failed",
+                "component": "valkey",
+                "error_type": err,
+                "latency_ms": latency_ms,
+            },
         )
-        return {"status": "down", "reason": type(e).__name__}
+        return {"status": "down", "reason": "connection_failed"}
 
 
 async def _check_litellm() -> dict[str, object]:
     """Hit LiteLLM /health/liveliness and return status dict."""
+    t0 = time.monotonic()
     try:
         client = _get_health_client()
-        t0 = time.monotonic()
         resp = await client.get(f"{settings.litellm_proxy_url}/health/liveliness")
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
         if resp.status_code == 200:
             return {"status": "up", "latency_ms": latency_ms}
         return {"status": "degraded", "http_status": resp.status_code, "latency_ms": latency_ms}
     except Exception as e:
+        latency_ms = round((time.monotonic() - t0) * 1000, 1)
         err = type(e).__name__
         logger.warning(
-            "Health check: litellm is down: %s: %s",
+            "Health check: litellm is down: %s: %s (%.0fms)",
             err,
             e,
+            latency_ms,
             exc_info=True,
-            extra={"event": "health_check_failed", "component": "litellm", "error_type": err},
+            extra={
+                "event": "health_check_failed",
+                "component": "litellm",
+                "error_type": err,
+                "latency_ms": latency_ms,
+            },
         )
-        return {"status": "down", "reason": type(e).__name__}
+        return {"status": "down", "reason": "connection_failed"}
 
 
 async def shutdown_health_clients() -> None:
     """Close persistent health-check clients. Called during app lifespan shutdown."""
-    global _health_client, _valkey_client
-    if _health_client is not None:
-        await _health_client.aclose()
-        _health_client = None
+    global _valkey_client
     if _valkey_client is not None:
         try:
             await _valkey_client.aclose()
@@ -138,7 +138,12 @@ async def shutdown_health_clients() -> None:
             logger.warning(
                 "Error closing valkey client: %s",
                 e,
-                extra={"event": "valkey_close_error"},
+                exc_info=True,
+                extra={
+                    "event": "valkey_close_error",
+                    "error_type": type(e).__name__,
+                    "error_message": str(e)[:500],
+                },
             )
         _valkey_client = None
 
@@ -146,14 +151,25 @@ async def shutdown_health_clients() -> None:
 @router.get(
     "/health/ready",
     response_model=ReadinessResponse,
-    responses={503: {"description": "One or more components are down", "model": ReadinessResponse}},
+    responses={
+        503: {
+            "description": "Critical component (database) is down",
+            "model": ReadinessResponse,
+        },
+    },
 )
 async def readiness(
     response: Response,
     session: AsyncSession = Depends(get_session),
 ) -> ReadinessResponse:
-    """Readiness check — verifies database, Valkey, and LiteLLM connectivity."""
+    """Readiness check -- verifies database, Valkey, and LiteLLM connectivity.
+
+    Returns 200 with status=healthy (all up) or status=degraded (non-critical
+    component down). Returns 503 with status=unhealthy only when a critical
+    component (database) is down.
+    """
     overall = "healthy"
+    t0_ready = time.monotonic()
 
     async def _check_database() -> dict[str, object]:
         try:
@@ -162,18 +178,22 @@ async def readiness(
             latency_ms = round((time.monotonic() - t0) * 1000, 1)
             return {"status": "up", "latency_ms": latency_ms}
         except Exception as e:
+            latency_ms = round((time.monotonic() - t0) * 1000, 1)
+            err = type(e).__name__
             logger.warning(
-                "Health check: database is down: %s: %s",
-                type(e).__name__,
+                "Health check: database is down: %s: %s (%.0fms)",
+                err,
                 e,
+                latency_ms,
                 exc_info=True,
                 extra={
                     "event": "health_check_failed",
                     "component": "database",
-                    "error_type": type(e).__name__,
+                    "error_type": err,
+                    "latency_ms": latency_ms,
                 },
             )
-            return {"status": "down", "reason": type(e).__name__}
+            return {"status": "down", "reason": "connection_failed"}
 
     timeout_result: dict[str, object] = {"status": "down", "reason": "timeout"}
 
@@ -198,42 +218,47 @@ async def readiness(
         "valkey": valkey_result,
         "litellm": litellm_result,
     }
-    if any(v["status"] in ("down", "degraded") for v in checks.values()):
-        overall = "unhealthy"
+    # Database is a hard dependency — if it is down, the service is unhealthy.
+    # Valkey (cache) and LiteLLM (model proxy) are soft dependencies — degraded
+    # but the API can still serve resource CRUD.
+    critical_components = {"database"}
+    for comp_name, comp_check in checks.items():
+        if comp_check["status"] in ("down", "degraded"):
+            if comp_name in critical_components:
+                overall = "unhealthy"
+                break
+            overall = "degraded"
 
-    if overall != "healthy":
+    total_ms = round((time.monotonic() - t0_ready) * 1000, 1)
+    if overall == "unhealthy":
         response.status_code = 503
-        logger.warning(
-            "Readiness check unhealthy: db=%s valkey=%s litellm=%s",
-            checks["database"]["status"],
-            checks["valkey"]["status"],
-            checks["litellm"]["status"],
-            extra={
-                "event": "readiness_unhealthy",
-                "db_status": checks["database"]["status"],
-                "db_latency_ms": checks["database"].get("latency_ms"),
-                "valkey_status": checks["valkey"]["status"],
-                "valkey_latency_ms": checks["valkey"].get("latency_ms"),
-                "litellm_status": checks["litellm"]["status"],
-                "litellm_latency_ms": checks["litellm"].get("latency_ms"),
-            },
-        )
-    else:
-        logger.debug(
-            "Readiness check healthy: db=%s valkey=%s litellm=%s",
-            checks["database"]["status"],
-            checks["valkey"]["status"],
-            checks["litellm"]["status"],
-            extra={
-                "event": "readiness_healthy",
-                "db_latency_ms": checks["database"].get("latency_ms"),
-                "valkey_latency_ms": checks["valkey"].get("latency_ms"),
-                "litellm_latency_ms": checks["litellm"].get("latency_ms"),
-            },
-        )
+        response.headers["Retry-After"] = "5"
+
+    log_level = logging.WARNING if overall != "healthy" else logging.DEBUG
+    log_event = f"readiness_{overall}"
+    logger.log(
+        log_level,
+        "Readiness check %s (%.0fms): db=%s valkey=%s litellm=%s",
+        overall,
+        total_ms,
+        checks["database"]["status"],
+        checks["valkey"]["status"],
+        checks["litellm"]["status"],
+        extra={
+            "event": log_event,
+            "total_ms": total_ms,
+            "db_status": checks["database"]["status"],
+            "db_latency_ms": checks["database"].get("latency_ms"),
+            "valkey_status": checks["valkey"]["status"],
+            "valkey_latency_ms": checks["valkey"].get("latency_ms"),
+            "litellm_status": checks["litellm"]["status"],
+            "litellm_latency_ms": checks["litellm"].get("latency_ms"),
+        },
+    )
     response.headers["Cache-Control"] = _NO_CACHE
     return ReadinessResponse(
         status=overall,
         service="blackbeard",
+        version=__version__,
         checks={k: ComponentCheck(**v) for k, v in checks.items()},
     )

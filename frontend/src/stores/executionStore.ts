@@ -36,8 +36,6 @@ export interface Execution {
   prompt_tokens: number
   completion_tokens: number
   cost_usd: number
-  langfuse_trace_id: string | null
-  langfuse_trace_url: string | null
   created_at: string
   started_at: string | null
   completed_at: string | null
@@ -140,11 +138,11 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
 
   addEvents: (newEvents: ExecutionEvent[]) => {
     set((state) => {
-      // Deduplicate by sequence number
-      const existing = new Set(state.events.map((e) => e.sequence))
-      const unique = newEvents.filter((e) => !existing.has(e.sequence))
+      if (newEvents.length === 0) return state
+      const lastSeq = state.events.length > 0 ? state.events[state.events.length - 1]!.sequence : -1
+      const unique = newEvents.filter((e) => e.sequence > lastSeq)
       if (unique.length === 0) return state
-      return { events: [...state.events, ...unique].sort((a, b) => a.sequence - b.sequence) }
+      return { events: state.events.concat(unique) }
     })
   },
 
@@ -152,10 +150,17 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     set({ events: [] })
   },
 
-  fetchEvents: async (id: string, after = -1) => {
+  fetchEvents: async (id: string, after?: number) => {
+    // Default to the last known sequence to avoid re-fetching all events
+    const lastSeq =
+      after ??
+      (() => {
+        const evts = get().events
+        return evts.length > 0 ? evts[evts.length - 1]!.sequence : -1
+      })()
     try {
       const result = await api.get<{ events: ExecutionEvent[]; next_sequence: number }>(
-        `/api/v1/executions/${id}/events?after=${after}&limit=1000`,
+        `/api/v1/executions/${id}/events?after=${lastSeq}&limit=200`,
       )
       get().addEvents(result.events)
     } catch {

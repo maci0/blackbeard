@@ -5,7 +5,7 @@ import { useStudioStore } from '@/stores/studioStore'
 import { api } from '@/api/client'
 import { capitalize, toResourceName, parseRef } from '@/lib/utils'
 import { useDocumentTitle } from '@/lib/hooks'
-import { KIND_TO_PLURAL } from '@/lib/kinds'
+import { API_VERSION, KIND_TO_PLURAL } from '@/lib/kinds'
 import Palette from '@/components/studio/Palette'
 import Canvas from '@/components/studio/Canvas'
 import PropertyPanel from '@/components/studio/PropertyPanel'
@@ -32,7 +32,7 @@ function buildResourceBody(node: Node, crewName: string) {
   const { name: _unused, ...spec } = data
 
   return {
-    apiVersion: 'blackbeard/v1',
+    apiVersion: API_VERSION,
     kind: capitalize(type),
     metadata: {
       name: toResourceName(rawName),
@@ -59,18 +59,18 @@ function StudioInner() {
 
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const {
-    nodes,
-    selectedNodeId,
-    setNodes,
-    setEdges,
-    markClean,
-    dirty,
-    canUndo,
-    canRedo,
-    undo,
-    redo,
-  } = useStudioStore()
+  // Select individual slices to avoid re-rendering on every node position change.
+  // NOTE: nodes is NOT subscribed here — handleSave reads it via getState() at
+  // call time, avoiding re-renders on every drag frame.
+  const selectedNodeId = useStudioStore((s) => s.selectedNodeId)
+  const setNodes = useStudioStore((s) => s.setNodes)
+  const setEdges = useStudioStore((s) => s.setEdges)
+  const markClean = useStudioStore((s) => s.markClean)
+  const dirty = useStudioStore((s) => s.dirty)
+  const canUndo = useStudioStore((s) => s.canUndo)
+  const canRedo = useStudioStore((s) => s.canRedo)
+  const undo = useStudioStore((s) => s.undo)
+  const redo = useStudioStore((s) => s.redo)
 
   useDocumentTitle('Studio')
 
@@ -198,14 +198,18 @@ function StudioInner() {
 
   /* ── Save all nodes to the API ── */
   const handleSave = useCallback(async (): Promise<boolean> => {
-    if (nodes.length === 0) {
+    // Read nodes at call time to avoid closing over the array reference,
+    // which changes on every position update and would cause this callback
+    // (and downstream handleRun) to be recreated on every drag frame.
+    const currentNodes = useStudioStore.getState().nodes
+    if (currentNodes.length === 0) {
       applyStatus('error', 'Nothing to save — add some nodes first')
       return false
     }
     applyStatus('saving', 'Saving…')
     try {
       await Promise.all(
-        nodes.map((node) => {
+        currentNodes.map((node) => {
           const body = buildResourceBody(node, crewName)
           const plural =
             KIND_TO_PLURAL[capitalize(node.type ?? '')] ?? `${node.type ?? 'resource'}s`
@@ -214,8 +218,8 @@ function StudioInner() {
       )
 
       // Synthesize and save the Crew resource
-      const agentNodes = nodes.filter((n) => n.type === 'agent')
-      const taskNodes = nodes.filter((n) => n.type === 'task')
+      const agentNodes = currentNodes.filter((n) => n.type === 'agent')
+      const taskNodes = currentNodes.filter((n) => n.type === 'task')
       const agentRefs = agentNodes.map((n) => {
         const d = n.data
         const raw = (d['role'] as string | undefined) ?? (d['name'] as string | undefined) ?? n.id
@@ -227,7 +231,7 @@ function StudioInner() {
         return `ref:tasks/${toResourceName(raw)}`
       })
       const crewBody = {
-        apiVersion: 'blackbeard/v1',
+        apiVersion: API_VERSION,
         kind: 'Crew',
         metadata: { name: toResourceName(crewName) },
         spec: {
@@ -241,14 +245,14 @@ function StudioInner() {
       markClean()
       applyStatus(
         'success',
-        `Saved ${nodes.length} resource${nodes.length !== 1 ? 's' : ''} + crew`,
+        `Saved ${currentNodes.length} resource${currentNodes.length !== 1 ? 's' : ''} + crew`,
       )
       return true
     } catch (err) {
       applyStatus('error', err instanceof Error ? err.message : 'Save failed')
       return false
     }
-  }, [nodes, crewName, applyStatus, markClean])
+  }, [crewName, applyStatus, markClean])
 
   /* ── Run the crew (auto-saves first) ── */
   const handleRun = useCallback(
@@ -383,7 +387,7 @@ function StudioInner() {
         redo={redo}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
         <Palette />
         <Canvas onLoadExample={handleLoadExample} />
         {selectedNodeId && <PropertyPanel />}

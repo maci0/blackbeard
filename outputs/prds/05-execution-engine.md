@@ -810,6 +810,9 @@ Blackbeard delegates to CrewAI's built-in features rather than reimplementing th
 | **Checkpointing** | CrewAI native checkpointing | Enabled via execution config | Allows pausing and resuming executions from the last completed task |
 | **Human-in-the-loop** | `Task(human_input=True)` | `spec.human_input: true` on Task resource | Pauses execution after task completion and waits for human feedback before proceeding |
 | **Guardrails** | `Task(guardrail=callback)` | `spec.guardrails` on Task resource (see PRD 08) | Validates task output using CrewAI's built-in guardrail callback mechanism |
+| **Training** | `Crew.train(n_iterations, inputs, filename)` | Via API: `POST /crews/{name}/train` | Iterative human feedback loop that produces trained agent data (`.pkl`) for improved outputs |
+| **Testing** | `Crew.test(n_iterations, inputs, openai_model_name)` | Via API: `POST /crews/{name}/test` | Benchmarks crew performance with an eval model, returns per-task scores |
+| **Replay** | `Crew.replay(task_id)` | Via API: `POST /crews/{name}/replay` | Re-executes a specific task from a prior execution for debugging |
 
 **Principle:** Blackbeard is a management layer over CrewAI, not a reimplementation. When CrewAI provides a feature natively, Blackbeard exposes it through YAML configuration and passes it through. Blackbeard only builds features that CrewAI does not provide: RBAC, sandbox isolation, visual editing, deployment lifecycle, and the execution event log.
 
@@ -856,6 +859,201 @@ The execution engine integrates features from multiple systems. Clear ownership 
 | Policy enforcement (tool allowlists, tier promotion) | **Blackbeard** | Build and maintain -- not provided by CrewAI |
 | Execution event log + SSE streaming | **Blackbeard** | Build and maintain -- CrewAI emits events, Blackbeard captures and stores them |
 | Resource loading (YAML to CrewAI objects) | **Blackbeard** | Build and maintain -- the bridge between resource model and CrewAI |
+| Training & testing (human feedback loop) | **CrewAI** | Expose via API + UI — Blackbeard orchestrates training sessions, CrewAI handles the feedback loop |
+
+---
+
+## 11.5 Crew Training & Testing
+
+CrewAI provides a built-in training system that improves agent performance through iterative human feedback. Blackbeard exposes this as a first-class feature accessible from both the API and the agent detail UI.
+
+### How CrewAI Training Works
+
+1. **Training loop**: `crew.train(n_iterations=N, inputs={...}, filename="trained_agents_data.pkl")` runs the crew N times. After each iteration, the human reviews each agent's output and provides feedback.
+2. **Feedback capture**: CrewAI stores per-agent, per-iteration data: initial output, human feedback, and improved output in a session-specific `training_data.pkl`.
+3. **Consolidated suggestions**: After training completes, CrewAI consolidates feedback into `trained_agents_data.pkl` — keyed by agent role, containing suggestions, quality metrics, and final summaries.
+4. **Runtime use**: On subsequent `crew.kickoff()` calls, if the trained data file exists, agents automatically incorporate the consolidated suggestions into their prompts, producing higher-quality outputs without code changes.
+
+### Crew Testing
+
+`crew.test(n_iterations=N, inputs={...}, openai_model_name="gpt-4o")` runs the crew N times and uses an evaluation model to score outputs. Returns average scores and per-task scores — useful for measuring improvement after training.
+
+### Task Replay
+
+`crew.replay(task_id="uuid")` re-executes a specific task from a previous execution, useful for debugging individual task failures without re-running the entire crew.
+
+### API Endpoints
+
+```
+POST /api/v1/crews/{name}/train
+{
+  "n_iterations": 3,
+  "inputs": {"topic": "AI safety"},
+  "filename": "research-crew-trained.pkl"    // optional, defaults to "{crew-name}-trained.pkl"
+}
+
+→ 202 Accepted
+{
+  "training_session_id": "train-abc123",
+  "status": "running",
+  "n_iterations": 3,
+  "current_iteration": 0
+}
+```
+
+Training sessions are interactive — after each iteration, the session pauses for human feedback:
+
+```
+GET /api/v1/training-sessions/{session_id}
+
+→ 200 OK
+{
+  "training_session_id": "train-abc123",
+  "status": "waiting_for_feedback",
+  "current_iteration": 1,
+  "n_iterations": 3,
+  "agent_outputs": [
+    {
+      "agent_role": "Researcher",
+      "task_name": "research-topic",
+      "output": "1. AI safety involves...",
+      "awaiting_feedback": true
+    }
+  ]
+}
+
+POST /api/v1/training-sessions/{session_id}/feedback
+{
+  "feedback": [
+    {
+      "agent_role": "Researcher",
+      "feedback": "Good facts but too verbose. Limit to one sentence per bullet."
+    }
+  ]
+}
+
+→ 200 OK
+{
+  "status": "running",
+  "current_iteration": 2
+}
+```
+
+After all iterations complete:
+
+```
+GET /api/v1/training-sessions/{session_id}
+
+→ 200 OK
+{
+  "status": "completed",
+  "trained_data_file": "research-crew-trained.pkl",
+  "iterations_completed": 3,
+  "summary": {
+    "Researcher": {"suggestions": "...", "quality_score": 8.5},
+    "Writer": {"suggestions": "...", "quality_score": 9.0}
+  }
+}
+```
+
+Testing endpoint:
+
+```
+POST /api/v1/crews/{name}/test
+{
+  "n_iterations": 5,
+  "inputs": {"topic": "AI safety"},
+  "eval_model": "gpt-4o"                    // model used for scoring
+}
+
+→ 202 Accepted
+{
+  "test_session_id": "test-abc123",
+  "status": "running"
+}
+
+GET /api/v1/test-sessions/{session_id}
+
+→ 200 OK
+{
+  "status": "completed",
+  "avg_score": 8.2,
+  "task_scores": {
+    "research-topic": {"avg": 8.5, "scores": [8, 9, 8, 9, 8.5]},
+    "write-report": {"avg": 7.9, "scores": [7, 8, 8, 8, 8.5]}
+  }
+}
+```
+
+Replay endpoint:
+
+```
+POST /api/v1/crews/{name}/replay
+{
+  "task_id": "uuid-of-failed-task"
+}
+
+→ 202 Accepted
+{
+  "execution_id": "exec-xyz789",
+  "status": "running",
+  "replaying_task": "research-topic"
+}
+```
+
+### Database Schema
+
+```sql
+training_sessions
+  id              UUID PK
+  crew_name       VARCHAR(255) NOT NULL
+  crew_namespace  VARCHAR(255) NOT NULL DEFAULT 'default'
+  status          VARCHAR(32)          -- running, waiting_for_feedback, completed, failed
+  n_iterations    INTEGER NOT NULL
+  current_iter    INTEGER NOT NULL DEFAULT 0
+  inputs          JSONB
+  filename        VARCHAR(512)         -- path to trained_agents_data.pkl
+  agent_outputs   JSONB                -- current iteration outputs awaiting feedback
+  summary         JSONB                -- final training summary with per-agent scores
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  completed_at    TIMESTAMPTZ
+
+test_sessions
+  id              UUID PK
+  crew_name       VARCHAR(255) NOT NULL
+  crew_namespace  VARCHAR(255) NOT NULL DEFAULT 'default'
+  status          VARCHAR(32)          -- running, completed, failed
+  n_iterations    INTEGER NOT NULL
+  eval_model      VARCHAR(255)
+  inputs          JSONB
+  results         JSONB                -- avg_score, task_scores
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  completed_at    TIMESTAMPTZ
+```
+
+### UI: Agent Detail Training Panel
+
+When viewing an Agent resource detail page, a **"Train"** tab/section provides:
+
+1. **Start Training**: Select a crew that uses this agent → set iterations → provide sample inputs → start training session.
+2. **Feedback Loop**: After each iteration, the UI shows the agent's output for each task and presents a text area for human feedback. Submit feedback to advance to the next iteration.
+3. **Training History**: List of past training sessions for this agent's crews, with scores and feedback summaries.
+4. **Test**: Run a test session to benchmark agent performance with an eval model. Display score charts (per-iteration, per-task).
+5. **Active Training Data**: Show whether a `trained_agents_data.pkl` exists for the agent's crew and what suggestions it contains. Option to reset/delete training data.
+
+The training panel is accessible from:
+- **Resource Detail page** (`/resources/agents/{name}`) → Training tab
+- **Studio** → Select agent node → Property Panel → "Train" button → navigates to training UI
+
+### Acceptance Criteria
+
+31. `POST /api/v1/crews/{name}/train` creates a training session and runs the first iteration.
+32. After each iteration, the session pauses in `waiting_for_feedback` status until human feedback is submitted.
+33. After all iterations, the trained data file is persisted and available for subsequent `kickoff` calls.
+34. `POST /api/v1/crews/{name}/test` runs the crew N times and returns per-task scores from the eval model.
+35. `POST /api/v1/crews/{name}/replay` re-executes a specific task from a prior execution.
+36. The Agent Detail page shows a training panel with start, feedback, history, and test capabilities.
+37. Training data files are stored in a configurable directory (default: `training_data/`) and associated with the crew resource.
 
 ---
 

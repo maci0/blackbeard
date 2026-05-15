@@ -26,6 +26,10 @@ class ApiClient {
     this.apiKey = key
   }
 
+  getApiKey(): string {
+    return this.apiKey
+  }
+
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const { method = 'GET', body, headers = {} } = options
 

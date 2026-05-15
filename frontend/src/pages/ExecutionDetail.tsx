@@ -1,7 +1,6 @@
 import { useEffect, useCallback, useState, useMemo, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
-  ExternalLink,
   XCircle,
   AlertTriangle,
   CheckCircle2,
@@ -13,6 +12,7 @@ import {
   BarChart3,
 } from 'lucide-react'
 import { useDocumentTitle, usePolling } from '@/lib/hooks'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import {
   useExecutionStore,
   TERMINAL_STATUSES,
@@ -21,12 +21,13 @@ import {
   type ExecutionEvent,
 } from '@/stores/executionStore'
 import { StatusBadge } from '@/components/ui/StatusBadge'
-import { statusLabel } from '@/lib/status'
+import { statusLabel } from '@/lib/formatters'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { CodeBlock } from '@/components/ui/CodeBlock'
 import { getDuration, formatDate, formatCost } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
+import { api } from '@/api/client'
 
 /* ------------------------------------------------------------------ */
 /* Summary card                                                        */
@@ -49,7 +50,8 @@ function SummaryCard({
     <div
       className={cn(
         'flex items-start gap-3 rounded-lg border bg-card p-4',
-        borderColor && `border-t-2 ${borderColor}`,
+        borderColor && 'border-t-2',
+        borderColor,
       )}
     >
       <div className="rounded-md bg-muted p-2">
@@ -107,6 +109,11 @@ function TaskRow({ task, index }: { task: ExecutionTask; index: number }) {
               onClick={() => setExpanded((v) => !v)}
               className="mt-1 text-xs text-primary hover:underline"
               aria-expanded={expanded}
+              aria-label={
+                expanded
+                  ? `Collapse output for ${task.task_name}`
+                  : `Expand output for ${task.task_name}`
+              }
             >
               {expanded ? 'Show less' : 'Show more'}
             </button>
@@ -206,6 +213,8 @@ function EventLog({ events }: { events: ExecutionEvent[] }) {
       <div
         ref={containerRef}
         onScroll={handleScroll}
+        role="log"
+        aria-label="Execution event log"
         className="max-h-[400px] overflow-y-auto rounded-lg border bg-[#0d1117] p-4"
       >
         <div className="space-y-0.5 font-mono text-xs leading-relaxed">
@@ -266,18 +275,24 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
         </span>
       </h2>
       <div className="overflow-auto rounded-lg border">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm" aria-label="LLM spend breakdown">
           <thead>
             <tr className="border-b bg-muted/30 text-left">
-              <th className="px-4 py-2 font-medium text-muted-foreground">Model</th>
-              <th className="px-4 py-2 text-right font-medium text-muted-foreground">
+              <th scope="col" className="px-4 py-2 font-medium text-muted-foreground">
+                Model
+              </th>
+              <th scope="col" className="px-4 py-2 text-right font-medium text-muted-foreground">
                 Prompt tokens
               </th>
-              <th className="px-4 py-2 text-right font-medium text-muted-foreground">
+              <th scope="col" className="px-4 py-2 text-right font-medium text-muted-foreground">
                 Completion tokens
               </th>
-              <th className="px-4 py-2 text-right font-medium text-muted-foreground">Cost</th>
-              <th className="px-4 py-2 text-right font-medium text-muted-foreground">Time</th>
+              <th scope="col" className="px-4 py-2 text-right font-medium text-muted-foreground">
+                Cost
+              </th>
+              <th scope="col" className="px-4 py-2 text-right font-medium text-muted-foreground">
+                Time
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -317,20 +332,18 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
 
 export default function ExecutionDetail() {
   const { id = '' } = useParams<{ id: string }>()
-  const {
-    currentExecution,
-    loading,
-    error,
-    events,
-    spendData,
-    fetchExecution,
-    cancelExecution,
-    pollExecution,
-    addEvents,
-    clearEvents,
-    fetchEvents,
-    fetchSpend,
-  } = useExecutionStore()
+  const currentExecution = useExecutionStore((s) => s.currentExecution)
+  const loading = useExecutionStore((s) => s.loading)
+  const error = useExecutionStore((s) => s.error)
+  const events = useExecutionStore((s) => s.events)
+  const spendData = useExecutionStore((s) => s.spendData)
+  const fetchExecution = useExecutionStore((s) => s.fetchExecution)
+  const cancelExecution = useExecutionStore((s) => s.cancelExecution)
+  const pollExecution = useExecutionStore((s) => s.pollExecution)
+  const addEvents = useExecutionStore((s) => s.addEvents)
+  const clearEvents = useExecutionStore((s) => s.clearEvents)
+  const fetchEvents = useExecutionStore((s) => s.fetchEvents)
+  const fetchSpend = useExecutionStore((s) => s.fetchSpend)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
@@ -362,18 +375,13 @@ export default function ExecutionDetail() {
     let reconnectCount = 0
     setSseDisconnected(false)
 
-    const es = new EventSource(`/api/v1/executions/${id}/stream`)
+    const apiKey = api.getApiKey()
+    const sseUrl = apiKey
+      ? `/api/v1/executions/${id}/stream?api_key=${encodeURIComponent(apiKey)}`
+      : `/api/v1/executions/${id}/stream`
+    const es = new EventSource(sseUrl)
 
-    const eventTypes = [
-      'crew_started',
-      'task_started',
-      'task_completed',
-      'tool_started',
-      'tool_finished',
-      'llm_started',
-      'llm_completed',
-      'crew_completed',
-    ]
+    const eventTypes = Object.keys(EVENT_COLORS)
 
     const handleEvent = (e: MessageEvent<string>) => {
       try {
@@ -480,13 +488,13 @@ export default function ExecutionDetail() {
           <div className="mt-4 flex items-center justify-center gap-2">
             <button
               onClick={() => void load()}
-              className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent"
+              className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Retry
             </button>
             <Link
               to="/executions"
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90"
+              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Back to Executions
             </Link>
@@ -512,14 +520,14 @@ export default function ExecutionDetail() {
             <li aria-hidden="true" className="text-muted-foreground/40">
               ›
             </li>
-            <li>
+            <li aria-current="page">
               <span className="font-medium text-foreground">{execution.crew_name}</span>
             </li>
           </ol>
         </nav>
 
         {/* Header */}
-        <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="mb-1.5 flex flex-wrap items-center gap-3">
               <StatusBadge status={execution.status} />
@@ -532,21 +540,10 @@ export default function ExecutionDetail() {
             <p className="font-mono text-xs text-muted-foreground">{execution.id}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {execution.langfuse_trace_url && (
-              <a
-                href={execution.langfuse_trace_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                View in Langfuse
-              </a>
-            )}
             {isActive && (
               <button
                 onClick={() => setShowCancelConfirm(true)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10"
+                className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <XCircle className="h-3.5 w-3.5" />
                 Cancel
@@ -612,22 +609,13 @@ export default function ExecutionDetail() {
 
         {/* Cancel error */}
         {cancelError && (
-          <div
-            role="alert"
-            className="mb-6 flex items-center justify-between rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
-          >
-            <span className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              {cancelError}
-            </span>
-            <button
-              onClick={() => setCancelError(null)}
-              className="text-xs underline underline-offset-2"
-              aria-label="Dismiss cancel error"
-            >
-              Dismiss
-            </button>
-          </div>
+          <ErrorAlert
+            message={cancelError}
+            actionLabel="Dismiss"
+            onAction={() => setCancelError(null)}
+            ariaLabel="Dismiss cancel error"
+            className="mb-6"
+          />
         )}
 
         {/* Tasks */}
@@ -665,16 +653,7 @@ export default function ExecutionDetail() {
         <EventLog events={events} />
 
         {/* Spend */}
-        {isTerminal && spendData && <SpendSection data={spendData} />}
-        {isTerminal && !spendData && (
-          <div className="mt-6">
-            <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
-              Spend
-            </h2>
-            <p className="text-sm text-muted-foreground">No spend data available</p>
-          </div>
-        )}
+        {isTerminal && <SpendSection data={spendData ?? {}} />}
 
         {/* Outputs */}
         {execution.outputs && Object.keys(execution.outputs).length > 0 && (

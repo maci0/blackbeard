@@ -23,24 +23,3 @@ export function parseRef(ref: string): string {
   const idx = ref.lastIndexOf('/')
   return idx >= 0 ? ref.slice(idx + 1) : ref
 }
-
-/** `name` in task/tool data becomes metadata.name (not a spec field). */
-export function getDefaultNodeData(type: string): Record<string, unknown> {
-  switch (type) {
-    case 'agent':
-      return {
-        role: 'New Agent',
-        goal: '',
-        backstory: '',
-        llm: '',
-        tools: [],
-        verbose: false,
-      }
-    case 'task':
-      return { name: 'New Task', description: '', expected_output: '', agent: '' }
-    case 'tool':
-      return { name: 'New Tool', type: 'python', class_path: '', description: '', sandbox: 'none' }
-    default:
-      return { label: 'New Node' }
-  }
-}

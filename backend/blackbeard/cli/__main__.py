@@ -1,6 +1,9 @@
 """Blackbeard CLI entry point — Rich-powered output."""
 
+from __future__ import annotations
+
 import json
+import re
 import time
 from graphlib import TopologicalSorter
 from importlib.metadata import version as pkg_version
@@ -16,10 +19,9 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.syntax import Syntax
 from rich.table import Table
 
-from blackbeard.kinds import ALL_KINDS, KIND_TO_PLURAL
+from blackbeard.kinds import ALL_KINDS, KIND_TO_PLURAL, NAME_PATTERN
 from blackbeard.models.execution import TERMINAL_STATUSES
-from blackbeard.resources.refs import build_adjacency, detect_cycles
-from blackbeard.resources.validator import ValidationError, validate_resource
+from blackbeard.resources import ValidationError, build_adjacency, detect_cycles, validate_resource
 
 # Rich consoles — stderr for errors/progress, stdout for data
 console = Console(stderr=True)
@@ -42,12 +44,15 @@ def _require_api_key(ctx: click.Context) -> str:
         console.print(
             "[red bold]Error:[/] API key required. Set BLACKBEARD_API_KEY or pass --api-key."
         )
-        raise SystemExit(1)
+        raise SystemExit(2)
     return cast("str", key)
 
 
-def _output_json(data: object) -> None:
-    out.print_json(json.dumps(data, default=str))
+def _output_json(data: object, *, compact: bool = False) -> None:
+    if compact:
+        out.print(json.dumps(data, default=str, separators=(",", ":")))
+    else:
+        out.print_json(json.dumps(data, default=str))
 
 
 def _extract_detail(response: httpx.Response) -> str:
@@ -81,6 +86,12 @@ def _handle_http_error(response: httpx.Response) -> NoReturn:
         console.print("[dim]Hint: Check your API key (--api-key or BLACKBEARD_API_KEY)[/]")
     elif response.status_code == 404:
         console.print("[dim]Hint: Verify the resource name and namespace (-n)[/]")
+    elif response.status_code == 409:
+        console.print("[dim]Hint: Resource version conflict — re-fetch and retry[/]")
+    elif response.status_code == 422:
+        console.print("[dim]Hint: Check your resource spec against the expected schema[/]")
+    elif response.status_code >= 500:
+        console.print("[dim]Hint: Server error — check server logs for details[/]")
     raise SystemExit(1)
 
 
@@ -163,7 +174,7 @@ def validate_resources(
     "output_json",
     is_flag=True,
     default=False,
-    help="Output results as JSON (for scripting; skips interactive prompts)",
+    help="Output as JSON for scripting (skips interactive prompts)",
 )
 @click.pass_context
 def cli(
@@ -175,10 +186,84 @@ def cli(
 ) -> None:
     """Blackbeard — Agent Management Platform CLI."""
     ctx.ensure_object(dict)
-    ctx.obj["server"] = server
+    ctx.obj["server"] = server.rstrip("/")
     ctx.obj["api_key"] = api_key
     ctx.obj["namespace"] = namespace
     ctx.obj["json"] = output_json
+
+
+@cli.command(
+    epilog="""\b
+Examples:
+  blackbeard health
+  blackbeard health --ready
+  blackbeard health --json
+"""
+)
+@click.option(
+    "--ready",
+    "-r",
+    is_flag=True,
+    default=False,
+    help="Run full readiness check (database, cache, LiteLLM) instead of liveness",
+)
+@click.option(
+    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
+)
+@click.pass_context
+def health(ctx: click.Context, ready: bool, output_json: bool) -> None:
+    """Check server health and component readiness."""
+    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
+    server = ctx.obj["server"]
+    endpoint = "/api/v1/health/ready" if ready else "/api/v1/health"
+    url = f"{server}{endpoint}"
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(url)
+    except httpx.RequestError as exc:
+        _handle_request_error(server, exc)
+
+    try:
+        data = response.json()
+    except Exception:
+        console.print(
+            f"[red bold]Error:[/] Server returned non-JSON response (HTTP {response.status_code})"
+        )
+        raise SystemExit(1) from None
+
+    if ctx.obj["json"]:
+        _output_json(data)
+        if response.status_code != 200:
+            raise SystemExit(1)
+        return
+
+    status_val = data.get("status", "unknown")
+    color = "green" if status_val in ("ok", "healthy") else "red"
+
+    if not ready:
+        out.print(
+            f"[{color} bold]{status_val}[/]  "
+            f"[dim]{data.get('service', '')} v{data.get('version', '?')}[/]"
+        )
+    else:
+        table = Table(show_header=False, box=None, padding=(0, 2))
+        table.add_column("Component", style="bold", width=12)
+        table.add_column("Status")
+        table.add_column("Latency", justify="right", style="dim")
+
+        checks = data.get("checks", {})
+        for name, check in checks.items():
+            c_status = check.get("status", "?")
+            c_color = {"up": "green", "degraded": "yellow"}.get(c_status, "red")
+            latency = check.get("latency_ms")
+            lat_str = f"{latency}ms" if latency is not None else "—"
+            table.add_row(name, f"[{c_color}]{c_status}[/]", lat_str)
+
+        out.print(Panel(table, title=f"[{color}]{status_val}[/]", border_style=color))
+
+    if response.status_code != 200:
+        raise SystemExit(1)
 
 
 @cli.command(
@@ -197,9 +282,13 @@ Examples:
     type=click.Path(exists=True),
     help="File or directory of YAML resources",
 )
+@click.option(
+    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
+)
 @click.pass_context
-def validate(ctx: click.Context, path: str) -> None:
+def validate(ctx: click.Context, path: str, output_json: bool) -> None:
     """Validate YAML resource files without applying them."""
+    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     resources = load_yaml_resources(Path(path))
 
     if not resources:
@@ -292,9 +381,17 @@ Examples:
     help="Validate and show what would be applied, without making changes",
 )
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    default=False,
+    help="Output as JSON for scripting (skips confirmation prompt)",
+)
 @click.pass_context
-def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
+def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: bool) -> None:
     """Apply YAML resource files to the server (create or update)."""
+    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
 
@@ -304,7 +401,6 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
         console.print(f"[red bold]Error:[/] No resource files found in [bold]{path}[/]")
         raise SystemExit(2)
 
-    # Local validation first
     per_errors, cycles = validate_resources(resources)
     if per_errors or cycles:
         if per_errors:
@@ -334,11 +430,11 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
                 }
             )
         else:
-            console.print(Panel("[cyan]Dry run — no changes applied[/]", border_style="cyan"))
+            out.print(Panel("[cyan]Dry run — no changes applied[/]", border_style="cyan"))
             for res in resources:
                 kind = res.get("kind", "")
                 name = res.get("metadata", {}).get("name", "?")
-                console.print(f"  [cyan]→[/] {kind}/{name}: would apply")
+                out.print(f"  [cyan]→[/] {kind}/{name}: would apply")
         return
 
     if not yes and not ctx.obj["json"]:
@@ -366,7 +462,13 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
             f"[yellow]Warning:[/] Could not sort by dependencies ({exc}), applying in file order."
         )
 
-    # Apply resources with progress
+    # Inject CLI namespace into resources that lack one
+    namespace = ctx.obj["namespace"]
+    for res in resources:
+        meta = res.setdefault("metadata", {})
+        if "namespace" not in meta:
+            meta["namespace"] = namespace
+
     headers = {"X-API-Key": api_key}
     results: list[dict[str, Any]] = []
 
@@ -379,12 +481,13 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
         ) as progress:
             task = progress.add_task("Applying resources...", total=len(resources))
 
+            total = len(resources)
             with httpx.Client(timeout=30.0) as client:
-                for res in resources:
+                for idx, res in enumerate(resources, 1):
                     kind = res.get("kind", "")
                     name = res.get("metadata", {}).get("name", "?")
                     label = f"{kind}/{name}"
-                    progress.update(task, description=f"Applying {label}...")
+                    progress.update(task, description=f"Applying {label} [{idx}/{total}]...")
 
                     plural = KIND_TO_PLURAL.get(kind)
                     if not plural:
@@ -399,8 +502,9 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
                         progress.advance(task)
                         continue
 
+                    source = res.get("_source_file")
                     body = {k: v for k, v in res.items() if k != "_source_file"}
-                    url = f"{server.rstrip('/')}/api/v1/{plural}"
+                    url = f"{server}/api/v1/{plural}"
 
                     try:
                         response = client.post(url, json=body, headers=headers)
@@ -413,6 +517,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
                                 {
                                     "resource": label,
                                     "status": "error",
+                                    "source": source,
                                     "detail": f"HTTP {response.status_code}: {detail}",
                                 }
                             )
@@ -421,6 +526,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
                             {
                                 "resource": label,
                                 "status": "error",
+                                "source": source,
                                 "detail": f"Connection failed: {exc}",
                             }
                         )
@@ -429,7 +535,6 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted.[/]")
 
-    # Output results
     if ctx.obj["json"]:
         _output_json({"results": results})
     else:
@@ -439,8 +544,12 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
         table.add_column("Detail")
 
         for r in results:
+            detail = r.get("detail", "")
+            source = r.get("source")
             if r["status"] == "error":
-                table.add_row("[red]✗[/]", r["resource"], f"[red]{r.get('detail', '')}[/]")
+                if source:
+                    detail = f"{detail} [dim]({source})[/]"
+                table.add_row("[red]✗[/]", r["resource"], f"[red]{detail}[/]")
             elif r["status"] == "created":
                 table.add_row("[green]✓[/]", r["resource"], "[green]created[/]")
             else:
@@ -468,17 +577,27 @@ Examples:
   blackbeard get LLMConnection openai --json
 """
 )
-@click.argument("kind", type=click.Choice(ALL_KINDS, case_sensitive=True))
+@click.argument("kind", type=click.Choice(sorted(ALL_KINDS), case_sensitive=False))
 @click.argument("name")
+@click.option(
+    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
+)
 @click.pass_context
-def get(ctx: click.Context, kind: str, name: str) -> None:
+def get(ctx: click.Context, kind: str, name: str, output_json: bool) -> None:
     """Get a single resource by kind and name."""
+    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
+    if not re.fullmatch(NAME_PATTERN, name):
+        console.print(
+            f"[red bold]Error:[/] Invalid resource name {name!r}."
+            " Names must be lowercase alphanumeric with hyphens."
+        )
+        raise SystemExit(2)
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
     namespace = ctx.obj["namespace"]
     plural = KIND_TO_PLURAL[kind]
 
-    url = f"{server.rstrip('/')}/api/v1/{plural}/{name}"
+    url = f"{server}/api/v1/{plural}/{name}"
     headers = {"X-API-Key": api_key}
 
     try:
@@ -496,7 +615,24 @@ def get(ctx: click.Context, kind: str, name: str) -> None:
         _output_json(data)
         return
 
-    out.print(Syntax(json.dumps(data, indent=2, default=str), "json", theme="monokai"))
+    meta = data.get("metadata", {})
+    header = Table(show_header=False, box=None, padding=(0, 2))
+    header.add_column("Key", style="bold dim", width=12)
+    header.add_column("Value")
+    header.add_row("Kind", kind)
+    header.add_row("Name", meta.get("name", name))
+    header.add_row("Namespace", meta.get("namespace", namespace))
+    header.add_row("Version", str(data.get("version", "—")))
+    item_labels = meta.get("labels", {})
+    if item_labels:
+        header.add_row(
+            "Labels",
+            ", ".join(f"{k}={v}" for k, v in item_labels.items()),
+        )
+    out.print(header)
+    out.print()
+    spec_json = json.dumps(data.get("spec", data), indent=2, default=str)
+    out.print(Syntax(spec_json, "json", theme="monokai"))
 
 
 @cli.command(
@@ -509,7 +645,7 @@ Examples:
   blackbeard list Agent --json
 """,
 )
-@click.argument("kind", type=click.Choice(ALL_KINDS, case_sensitive=True))
+@click.argument("kind", type=click.Choice(sorted(ALL_KINDS), case_sensitive=False))
 @click.option(
     "--label",
     "-l",
@@ -525,9 +661,15 @@ Examples:
     type=click.IntRange(1, 1000),
     help="Maximum number of results",
 )
+@click.option(
+    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
+)
 @click.pass_context
-def list_resources_cmd(ctx: click.Context, kind: str, labels: tuple[str, ...], limit: int) -> None:
+def list_resources_cmd(
+    ctx: click.Context, kind: str, labels: tuple[str, ...], limit: int, output_json: bool
+) -> None:
     """List resources of a given kind."""
+    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
     namespace = ctx.obj["namespace"]
@@ -541,11 +683,18 @@ def list_resources_cmd(ctx: click.Context, kind: str, labels: tuple[str, ...], l
                 console.print(
                     f"[red bold]Error:[/] Invalid --label: expected KEY=VALUE, got: {item!r}"
                 )
+                console.print("[dim]Example: --label team=backend[/]")
+                raise SystemExit(2)
+            key, _, _ = item.partition("=")
+            if not key:
+                console.print(
+                    f"[red bold]Error:[/] Invalid --label: key cannot be empty in {item!r}"
+                )
                 raise SystemExit(2)
             label_parts.append(item)
         params["label_selector"] = ",".join(label_parts)
 
-    url = f"{server.rstrip('/')}/api/v1/{plural}"
+    url = f"{server}/api/v1/{plural}"
     headers = {"X-API-Key": api_key}
 
     try:
@@ -565,7 +714,7 @@ def list_resources_cmd(ctx: click.Context, kind: str, labels: tuple[str, ...], l
 
     items = data.get("items", [])
     if not items:
-        console.print(f"[dim]No {kind} resources found in namespace '{namespace}'.[/]")
+        out.print(f"[dim]No {kind} resources found in namespace '{namespace}'.[/]")
         return
 
     table = Table(title=f"{kind} Resources")
@@ -588,7 +737,9 @@ def list_resources_cmd(ctx: click.Context, kind: str, labels: tuple[str, ...], l
     out.print(table)
     total = data.get("total", len(items))
     if total > len(items):
-        out.print(f"[dim]Showing {len(items)} of {total} (use --limit to see more)[/]")
+        out.print(f"[dim]Showing {len(items)} of {total} (increase --limit to see more)[/]")
+    else:
+        out.print(f"[dim]{len(items)} resource(s)[/]")
 
 
 @cli.command(
@@ -597,14 +748,29 @@ Examples:
   blackbeard delete Agent my-agent
   blackbeard delete Crew research-crew -n prod
   blackbeard delete Agent my-agent -y
+  blackbeard delete Agent my-agent --json
 """
 )
-@click.argument("kind", type=click.Choice(ALL_KINDS, case_sensitive=True))
+@click.argument("kind", type=click.Choice(sorted(ALL_KINDS), case_sensitive=False))
 @click.argument("name")
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    default=False,
+    help="Output as JSON for scripting (skips confirmation prompt)",
+)
 @click.pass_context
-def delete(ctx: click.Context, kind: str, name: str, yes: bool) -> None:
+def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: bool) -> None:
     """Delete a resource by kind and name."""
+    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
+    if not re.fullmatch(NAME_PATTERN, name):
+        console.print(
+            f"[red bold]Error:[/] Invalid resource name {name!r}."
+            " Names must be lowercase alphanumeric with hyphens."
+        )
+        raise SystemExit(2)
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
     namespace = ctx.obj["namespace"]
@@ -618,7 +784,7 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool) -> None:
         console.print("[yellow]Aborted.[/]")
         return
 
-    url = f"{server.rstrip('/')}/api/v1/{plural}/{name}"
+    url = f"{server}/api/v1/{plural}/{name}"
     headers = {"X-API-Key": api_key}
 
     try:
@@ -631,10 +797,10 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool) -> None:
         _handle_http_error(response)
 
     if ctx.obj["json"]:
-        _output_json({"deleted": f"{kind}/{name}", "namespace": namespace})
+        _output_json({"deleted": f"{kind}/{name}", "namespace": namespace, "status": "deleted"})
         return
 
-    console.print(f"[green]✓[/] Deleted [bold]{kind}/{name}[/] from namespace '{namespace}'")
+    out.print(f"[green]✓[/] Deleted [bold]{kind}/{name}[/] from namespace '{namespace}'")
 
 
 @cli.command(
@@ -643,6 +809,7 @@ Examples:
   blackbeard kickoff research-crew
   blackbeard kickoff research-crew --input topic="AI agents"
   blackbeard kickoff research-crew --input topic="AI agents" --input depth=3
+  blackbeard kickoff research-crew --wait
   blackbeard kickoff research-crew -s http://prod:8000 -n prod --json
 """
 )
@@ -654,15 +821,39 @@ Examples:
     metavar="KEY=VALUE",
     help="Input key=value pairs; values are parsed as JSON if valid (repeatable)",
 )
+@click.option(
+    "--wait",
+    "-w",
+    is_flag=True,
+    default=False,
+    help="Wait for execution to complete, polling status until done",
+)
+@click.option(
+    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
+)
 @click.pass_context
-def kickoff(ctx: click.Context, crew_name: str, inputs: tuple[str, ...]) -> None:
+def kickoff(
+    ctx: click.Context,
+    crew_name: str,
+    inputs: tuple[str, ...],
+    wait: bool,
+    output_json: bool,
+) -> None:
     """Kick off a crew execution.
 
     CREW_NAME is the name of the crew to run, e.g. research-crew.
     """
+    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
     namespace = ctx.obj["namespace"]
+
+    if not re.fullmatch(NAME_PATTERN, crew_name):
+        console.print(
+            f"[red bold]Error:[/] Invalid crew name {crew_name!r}."
+            " Names must be lowercase alphanumeric with hyphens."
+        )
+        raise SystemExit(2)
 
     parsed_inputs: dict[str, Any] = {}
     for item in inputs:
@@ -679,7 +870,7 @@ def kickoff(ctx: click.Context, crew_name: str, inputs: tuple[str, ...]) -> None
         except (json.JSONDecodeError, ValueError):
             parsed_inputs[key] = value
 
-    url = f"{server.rstrip('/')}/api/v1/crews/{crew_name}/kickoff"
+    url = f"{server}/api/v1/crews/{crew_name}/kickoff"
     headers = {"X-API-Key": api_key}
     body = {"inputs": parsed_inputs}
 
@@ -699,22 +890,36 @@ def kickoff(ctx: click.Context, crew_name: str, inputs: tuple[str, ...]) -> None
         _handle_http_error(response)
 
     data = response.json()
+    execution_id = data.get("id", "unknown")
+    status_val = data.get("status", "unknown")
+    is_json = ctx.obj["json"]
 
-    if ctx.obj["json"]:
+    if is_json and not wait:
         _output_json(data)
         return
 
-    execution_id = data.get("id", "unknown")
-    status_val = data.get("status", "unknown")
-
-    out.print(
-        Panel.fit(
-            f"[bold]Execution ID:[/] {execution_id}\n[bold]Status:[/] {status_val}",
-            title="[green]Execution Submitted[/]",
-            border_style="green",
+    if not is_json:
+        out.print(
+            Panel.fit(
+                f"[bold]Execution ID:[/] {execution_id}\n[bold]Status:[/] {status_val}",
+                title="[green]Execution Submitted[/]",
+                border_style="green",
+            )
         )
-    )
-    console.print(f"\nTrack with: [bold]blackbeard status {execution_id} --watch[/]")
+
+    if wait:
+        # Delegate to the status command with --watch
+        ctx.invoke(
+            status,
+            execution_id=execution_id,
+            watch=True,
+            interval=2,
+            output_json=is_json,
+        )
+    else:
+        prog = ctx.find_root().info_name or "blackbeard"
+        ns_flag = f" -n {namespace}" if namespace != "default" else ""
+        console.print(f"\nTrack with: [bold]{prog} status {execution_id} -w{ns_flag}[/]")
 
 
 @cli.command(
@@ -724,6 +929,7 @@ Examples:
   blackbeard status abc-123 -w
   blackbeard status abc-123 -w -i 5
   blackbeard status abc-123 --json
+  blackbeard status abc-123 --json -w    # one JSON object per poll (JSONL)
 """
 )
 @click.argument("execution_id")
@@ -742,9 +948,15 @@ Examples:
     type=click.IntRange(1, 60),
     help="Polling interval in seconds (used with --watch)",
 )
+@click.option(
+    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
+)
 @click.pass_context
-def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) -> None:
+def status(
+    ctx: click.Context, execution_id: str, watch: bool, interval: int, output_json: bool
+) -> None:
     """Show execution status and details."""
+    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
     is_json = ctx.obj["json"]
@@ -752,14 +964,14 @@ def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) ->
     interval_from_cli = (
         ctx.get_parameter_source("interval") == click.core.ParameterSource.COMMANDLINE
     )
-    if not watch and interval_from_cli and not is_json:
+    if not watch and interval_from_cli:
         console.print(
             "[yellow]Warning:[/] --interval/-i has no effect without --watch (-w)."
             " Add -w to enable polling."
         )
 
     terminal_states = {s.value for s in TERMINAL_STATUSES}
-    url = f"{server.rstrip('/')}/api/v1/executions/{execution_id}"
+    url = f"{server}/api/v1/executions/{execution_id}"
     headers = {"X-API-Key": api_key}
 
     def _status_color(s: str) -> str:
@@ -843,12 +1055,13 @@ def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) ->
                 for t in tasks:
                     t_status = t.get("status", "—")
                     t_color = _status_color(t_status)
+                    t_tokens = t.get("tokens_used")
                     task_table.add_row(
                         str(t.get("order", "—")),
                         t.get("task_name", "—"),
                         t.get("agent_name") or "—",
                         f"[{t_color}]{t_status}[/]",
-                        str(t.get("tokens_used", 0)),
+                        f"{t_tokens:,}" if t_tokens else "—",
                     )
 
                 out.print(task_table)
@@ -861,14 +1074,17 @@ def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) ->
             render(fetch())
             return
 
-        console.print(f"[dim]Watching execution {execution_id} (Ctrl-C to stop)...[/]\n")
+        console.print(
+            f"[dim]Watching execution {execution_id}"
+            f" (Ctrl-C to stop, polling every {interval}s)...[/]\n"
+        )
         try:
             first = True
             while True:
                 data = fetch()
 
                 if is_json:
-                    out.print_json(json.dumps(data, default=str))
+                    _output_json(data, compact=True)
                 else:
                     if not first:
                         console.print("\n[dim]─── refreshed ───[/]\n")
@@ -882,6 +1098,10 @@ def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) ->
                 time.sleep(interval)
         except KeyboardInterrupt:
             console.print("\n[dim]Stopped watching.[/]")
+            return
+
+        if current_status in ("failed", "cancelled"):
+            raise SystemExit(1)
 
 
 if __name__ == "__main__":

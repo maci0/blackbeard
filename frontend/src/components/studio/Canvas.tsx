@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import {
   ReactFlow,
   Background,
@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react'
 import { User, ListChecks, Wrench, Sparkles } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
-import { getDefaultNodeData } from '@/lib/utils'
+import { getDefaultNodeData } from './defaults'
 import AgentNode from './nodes/AgentNode'
 import TaskNode from './nodes/TaskNode'
 import ToolNode from './nodes/ToolNode'
@@ -37,19 +37,16 @@ const EDGE_TYPES: EdgeTypes = {
   toolassign: ToolAssignEdge,
 }
 
-/* ------------------------------------------------------------------ */
-/* Edge type selector based on connected node types                    */
-/* ------------------------------------------------------------------ */
+const FIT_VIEW_OPTIONS = { padding: 0.2 } as const
+const SNAP_GRID: [number, number] = [20, 20]
+const PRO_OPTIONS = { hideAttribution: true } as const
+const DELETE_KEY_CODE = ['Delete', 'Backspace']
 
-function pickEdgeType(nodes: Node[], connection: Connection): string {
-  const sourceNode = nodes.find((n) => n.id === connection.source)
+function pickEdgeType(nodeMap: Map<string, Node>, connection: Connection): string {
+  const sourceNode = connection.source ? nodeMap.get(connection.source) : undefined
   if (sourceNode?.type === 'tool') return 'toolassign'
   return 'dataflow'
 }
-
-/* ------------------------------------------------------------------ */
-/* MiniMap node colors                                                 */
-/* ------------------------------------------------------------------ */
 
 function minimapNodeColor(node: Node): string {
   switch (node.type) {
@@ -64,10 +61,6 @@ function minimapNodeColor(node: Node): string {
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Inner canvas that uses useReactFlow (must be child of Provider)     */
-/* ------------------------------------------------------------------ */
-
 function CanvasInner() {
   const { screenToFlowPosition } = useReactFlow()
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
@@ -81,12 +74,16 @@ function CanvasInner() {
     })
     return () => observer.disconnect()
   }, [])
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, setSelectedNode } =
-    useStudioStore()
-  const nodesRef = useRef(nodes)
-  nodesRef.current = nodes
+  const nodes = useStudioStore((s) => s.nodes)
+  const edges = useStudioStore((s) => s.edges)
+  const onNodesChange = useStudioStore((s) => s.onNodesChange)
+  const onEdgesChange = useStudioStore((s) => s.onEdgesChange)
+  const onConnect = useStudioStore((s) => s.onConnect)
+  const addNode = useStudioStore((s) => s.addNode)
+  const setSelectedNode = useStudioStore((s) => s.setSelectedNode)
+  const nodeMapRef = useRef(new Map<string, Node>())
+  nodeMapRef.current = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes])
 
-  /* ── Keyboard shortcuts (undo/redo/save) ── */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
@@ -106,10 +103,9 @@ function CanvasInner() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  /** Derive an edge type from the connected nodes and attach arrow marker */
   const handleConnect = useCallback(
     (connection: Connection) => {
-      const edgeType = pickEdgeType(nodesRef.current, connection)
+      const edgeType = pickEdgeType(nodeMapRef.current, connection)
       const enriched: Edge = {
         ...connection,
         id: `${connection.source}-${connection.target}-${Date.now()}`,
@@ -174,11 +170,11 @@ function CanvasInner() {
       onDrop={onDrop}
       onDragOver={onDragOver}
       fitView
-      fitViewOptions={{ padding: 0.2 }}
+      fitViewOptions={FIT_VIEW_OPTIONS}
       snapToGrid
-      snapGrid={[20, 20]}
-      deleteKeyCode={['Delete', 'Backspace']}
-      proOptions={{ hideAttribution: true }}
+      snapGrid={SNAP_GRID}
+      deleteKeyCode={DELETE_KEY_CODE}
+      proOptions={PRO_OPTIONS}
       className="studio-canvas"
     >
       <Background
@@ -202,24 +198,19 @@ function CanvasInner() {
   )
 }
 
-/* ------------------------------------------------------------------ */
-/* Empty canvas guidance overlay                                       */
-/* ------------------------------------------------------------------ */
-
 function EmptyCanvasOverlay({ onLoadExample }: { onLoadExample?: () => void }) {
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
       <div className="pointer-events-auto select-none text-center">
-        {/* Icon cluster */}
         <div aria-hidden="true" className="mb-5 flex items-center justify-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100">
-            <User className="h-5 w-5 text-violet-500" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900">
+            <User className="h-5 w-5 text-violet-500 dark:text-violet-400" />
           </div>
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100">
-            <ListChecks className="h-5 w-5 text-blue-500" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900">
+            <ListChecks className="h-5 w-5 text-blue-500 dark:text-blue-400" />
           </div>
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100">
-            <Wrench className="h-5 w-5 text-emerald-500" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900">
+            <Wrench className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />
           </div>
         </div>
 
@@ -231,9 +222,9 @@ function EmptyCanvasOverlay({ onLoadExample }: { onLoadExample?: () => void }) {
         {onLoadExample && (
           <button
             onClick={onLoadExample}
-            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+            <Sparkles className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
             Load example crew
           </button>
         )}
@@ -242,12 +233,8 @@ function EmptyCanvasOverlay({ onLoadExample }: { onLoadExample?: () => void }) {
   )
 }
 
-/* ------------------------------------------------------------------ */
-/* Exported Canvas — thin wrapper so CanvasInner is always a child     */
-/* ------------------------------------------------------------------ */
-
 export default function Canvas({ onLoadExample }: { onLoadExample?: () => void }) {
-  const { nodes } = useStudioStore()
+  const isEmpty = useStudioStore((state) => state.nodes.length === 0)
 
   return (
     <div
@@ -255,7 +242,7 @@ export default function Canvas({ onLoadExample }: { onLoadExample?: () => void }
       className="relative flex-1 overflow-hidden bg-slate-50 dark:bg-slate-900"
     >
       <CanvasInner />
-      {nodes.length === 0 && <EmptyCanvasOverlay onLoadExample={onLoadExample} />}
+      {isEmpty && <EmptyCanvasOverlay onLoadExample={onLoadExample} />}
     </div>
   )
 }

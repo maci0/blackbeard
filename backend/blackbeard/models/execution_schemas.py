@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import enum
+import re
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
@@ -14,8 +14,26 @@ if TYPE_CHECKING:
     from blackbeard.models.execution import Execution
 
 
-def _enum_value(v: object) -> str:
-    return v.value if isinstance(v, enum.Enum) else str(v)
+_SAFE_INPUT_KEY = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+# Keys whose values should be redacted in API responses to prevent
+# accidental exposure of secrets passed as crew inputs.
+_SENSITIVE_INPUT_KEYS = re.compile(
+    r"(password|secret|token|credential|api.?key|auth|private.?key|access.?key)",
+    re.IGNORECASE,
+)
+_REDACTED = "[REDACTED]"
+
+
+def _redact_sensitive_inputs(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of inputs with sensitive-looking values redacted."""
+    redacted: dict[str, Any] = {}
+    for k, v in inputs.items():
+        if _SENSITIVE_INPUT_KEYS.search(k):
+            redacted[k] = _REDACTED
+        else:
+            redacted[k] = v
+    return redacted
 
 
 def _exceeds_depth(obj: object, limit: int = 10, current: int = 0) -> bool:
@@ -33,7 +51,6 @@ class KickoffRequest(BaseModel):
 
     inputs: dict[str, Any] = Field(
         default_factory=dict,
-        max_length=100,
         description="Key-value inputs passed to the crew (max 100 entries)",
     )
 
@@ -49,6 +66,8 @@ class KickoffRequest(BaseModel):
         for k, v in self.inputs.items():
             if not isinstance(k, str) or len(k) > max_key_len:
                 raise ValueError(f"Input key must be a string of at most {max_key_len} chars")
+            if not _SAFE_INPUT_KEY.match(k):
+                raise ValueError(f"Input key '{k}' is invalid: must match [a-zA-Z_][a-zA-Z0-9_]*")
             if isinstance(v, str) and len(v) > max_val_len:
                 raise ValueError(f"Input value for '{k}' exceeds {max_val_len} chars")
         if _exceeds_depth(self.inputs):
@@ -63,7 +82,9 @@ class ExecutionTaskResponse(BaseModel):
     task_name: str
     agent_name: str | None = None
     order: int
-    status: str = Field(description="Task status: pending, running, completed, or failed")
+    status: Literal["pending", "running", "completed", "failed"] = Field(
+        description="Task status",
+    )
     output: str | None = None
     error: str | None = None
     tokens_used: int = 0
@@ -80,8 +101,8 @@ class ExecutionResponse(BaseModel):
     id: UUID
     crew_name: str
     crew_namespace: str
-    status: str = Field(
-        description="Execution status: queued, running, completed, failed, or cancelled",
+    status: Literal["queued", "running", "completed", "failed", "cancelled"] = Field(
+        description="Execution status",
     )
     inputs: dict[str, Any]
     outputs: dict[str, Any] | None = None
@@ -98,31 +119,42 @@ class ExecutionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
     @classmethod
-    def from_db(cls, execution: Execution) -> ExecutionResponse:
-        """Build response from a SQLAlchemy Execution model."""
-        raw_tasks = execution.tasks or []
-        tasks = [
-            ExecutionTaskResponse.model_construct(
-                id=t.id,
-                task_name=t.task_name,
-                agent_name=t.agent_name,
-                order=t.order,
-                status=_enum_value(t.status),
-                output=t.output,
-                error=t.error,
-                tokens_used=t.tokens_used,
-                cost_usd=t.cost_usd,
-                started_at=t.started_at,
-                completed_at=t.completed_at,
-            )
-            for t in raw_tasks
-        ]
+    def from_db(
+        cls,
+        execution: Execution,
+        include_tasks: bool = True,
+    ) -> ExecutionResponse:
+        """Build response from a SQLAlchemy Execution model.
+
+        When ``include_tasks`` is False, the tasks list is left empty to avoid
+        triggering a lazy load (which would fail in async context and is
+        expensive in list views).
+        """
+        tasks: list[ExecutionTaskResponse] = []
+        if include_tasks:
+            raw_tasks = execution.tasks or []
+            tasks = [
+                ExecutionTaskResponse.model_construct(
+                    id=t.id,
+                    task_name=t.task_name,
+                    agent_name=t.agent_name,
+                    order=t.order,
+                    status=t.status.value,
+                    output=t.output,
+                    error=t.error,
+                    tokens_used=t.tokens_used,
+                    cost_usd=t.cost_usd,
+                    started_at=t.started_at,
+                    completed_at=t.completed_at,
+                )
+                for t in raw_tasks
+            ]
         return cls.model_construct(
             id=execution.id,
             crew_name=execution.crew_name,
             crew_namespace=execution.crew_namespace,
-            status=_enum_value(execution.status),
-            inputs=execution.inputs or {},
+            status=execution.status.value,
+            inputs=_redact_sensitive_inputs(execution.inputs) if execution.inputs else {},
             outputs=execution.outputs,
             error=execution.error,
             total_tokens=execution.total_tokens,
@@ -143,4 +175,21 @@ class ExecutionListResponse(BaseModel):
     total: int
     limit: int = 100
     offset: int = 0
+    has_more: bool = False
+
+
+class ExecutionEventItem(BaseModel):
+    """Single event from an execution."""
+
+    sequence: int
+    event_type: str
+    timestamp: str
+    data: dict[str, Any]
+
+
+class ExecutionEventsResponse(BaseModel):
+    """Response for listing execution events."""
+
+    events: list[ExecutionEventItem]
+    next_sequence: int
     has_more: bool = False

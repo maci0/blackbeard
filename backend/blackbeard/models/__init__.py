@@ -2,7 +2,7 @@
 
 ORM models:
     Resource, ResourceRef — generic resource storage (resource.py)
-    Execution, ExecutionTask, ExecutionToolCall — execution tracking (execution.py)
+    Execution, ExecutionTask, ExecutionToolCall, ExecutionEvent — execution tracking (execution.py)
 
 API schemas (Pydantic):
     resource_schemas — request/response models for resource endpoints

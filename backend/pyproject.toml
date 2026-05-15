@@ -16,28 +16,33 @@ dependencies = [
     "alembic>=1.15,<2",
     "pydantic>=2.11,<3",
     "pydantic-settings>=2.9,<3",
-    # valkey health checks use redis.asyncio (wire-compatible); no valkey package needed
     "crewai>=1.14,<2",
-    "wasmtime>=42,<43",
+    "redis>=5.0,<7",  # health.py uses redis.asyncio for Valkey health checks (wire-compatible)
+    "wasmtime>=44,<45",  # 42.0.0 has CVE-2026-44216/34941..34946 (no Python patch release; 43.0.0 has CVE-2026-34983)
     "click>=8.1,<9",
     "rich>=14.0,<15",
     "pyyaml>=6.0,<7",
     "sse-starlette>=2.2,<3",
     "httpx>=0.28,<1",
     "jsonschema>=4.23,<5",
-    "crewai-tools>=1.14.4",
-    "crewai-files>=1.14.4",
+    "crewai-tools>=1.14.4,<2",
+]
+
+[tool.uv]
+constraint-dependencies = [
+    "pillow>=12.2.0",  # CVE-2026-40192, CVE-2026-42308..42311 (transitive via crewai)
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3,<9",
-    "pytest-asyncio>=0.25,<1",
+    "pytest>=9.0.3,<10",  # 9.0.3 fixes CVE-2025-71176 (tmpdir privilege escalation)
+    "pytest-asyncio>=1.0,<2",  # 1.x supports pytest 9
     "pytest-cov>=6.1,<7",
     "ruff>=0.11,<1",
     "mypy>=1.15,<2",
     "types-PyYAML>=6.0.12,<7",
     "aiosqlite>=0.20,<1",
+    "pip-audit>=2.9,<3",
 ]
 
 [project.scripts]
