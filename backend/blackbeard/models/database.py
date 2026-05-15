@@ -133,8 +133,8 @@ _LONG_CHECKOUT_THRESHOLD_S = 5.0
 
 
 @event.listens_for(engine.sync_engine, "checkin")
-def _on_checkin(dbapi_conn: Any, _connection_rec: Any) -> None:
-    start = getattr(dbapi_conn, "_bb_checkout_time", None)
+def _on_checkin(_dbapi_conn: Any, connection_rec: Any) -> None:
+    start = connection_rec.info.pop("_bb_checkout_time", None)
     if start is not None:
         held_s = time.monotonic() - start
         if held_s >= _LONG_CHECKOUT_THRESHOLD_S:
@@ -151,8 +151,8 @@ def _on_checkin(dbapi_conn: Any, _connection_rec: Any) -> None:
 
 
 @event.listens_for(engine.sync_engine, "checkout")
-def _stamp_checkout_time(dbapi_conn: Any, _connection_rec: Any, _connection_proxy: Any) -> None:
-    dbapi_conn._bb_checkout_time = time.monotonic()
+def _stamp_checkout_time(_dbapi_conn: Any, connection_rec: Any, _connection_proxy: Any) -> None:
+    connection_rec.info["_bb_checkout_time"] = time.monotonic()
 
 
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

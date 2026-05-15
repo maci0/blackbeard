@@ -38,13 +38,11 @@ services:
     init: true
     stop_grace_period: 30s
     logging: *default-logging
-    read_only: true
     mem_limit: 2g
     cpus: 2
     pids_limit: 256
     tmpfs:
       - /tmp
-      - /home/appuser
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -70,10 +68,8 @@ services:
       - api
     restart: unless-stopped
     logging: *default-logging
-    read_only: true
     tmpfs:
       - /tmp
-      - /var/cache/nginx
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -99,7 +95,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-blackbeard}
       POSTGRES_DB: ${POSTGRES_DB:-blackbeard}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
       - ./deploy/docker/initdb:/docker-entrypoint-initdb.d:ro
     shm_size: 256m
     command:
@@ -212,13 +208,11 @@ services:
     init: true
     stop_grace_period: 30s
     logging: *default-logging
-    read_only: true
-    mem_limit: 1g
+    mem_limit: 2g
     cpus: 1
     pids_limit: 128
     tmpfs:
       - /tmp
-      - /root
     security_opt:
       - no-new-privileges:true
     cap_drop:
