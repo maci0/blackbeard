@@ -1,9 +1,10 @@
-import { type ChangeEvent } from 'react'
-import { Save, Play, Loader2, FolderOpen, ChevronDown, Undo2, Redo2 } from 'lucide-react'
+import { useState, type ChangeEvent } from 'react'
+import { Save, Play, Loader2, FolderOpen, ChevronDown, Undo2, Redo2, Command } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { toResourceName } from '@/lib/utils'
 import { modKey } from '@/lib/platform'
 import { type RunStatus, RunStatusBadge } from './RunStatusBadge'
+import { KeyboardShortcuts } from './KeyboardShortcuts'
 
 export function Toolbar({
   crewName,
@@ -42,6 +43,8 @@ export function Toolbar({
   undo: () => void
   redo: () => void
 }) {
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-card px-2 sm:gap-3 sm:px-4">
       {/* Crew name + Load button */}
@@ -199,7 +202,19 @@ export function Toolbar({
           )}
           Run
         </button>
+
+        {/* Keyboard shortcuts */}
+        <button
+          onClick={() => setShortcutsOpen(true)}
+          aria-label="Keyboard shortcuts"
+          title={`Keyboard shortcuts (${modKey}+/)`}
+          className="rounded-lg border border-border p-1.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Command className="h-3.5 w-3.5" />
+        </button>
       </div>
+
+      <KeyboardShortcuts open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </header>
   )
 }

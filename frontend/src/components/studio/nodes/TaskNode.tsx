@@ -13,7 +13,7 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
     <div
       aria-label={`Task: ${name ?? 'Unnamed Task'}`}
       className={cn(
-        'w-[160px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
+        'w-[140px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
         selected
           ? 'border-blue-400 shadow-md shadow-blue-100 ring-2 ring-blue-300 ring-offset-1 dark:shadow-blue-950 dark:ring-offset-slate-900'
           : 'border-slate-200 hover:border-blue-200 hover:shadow-md dark:border-slate-700',
@@ -26,7 +26,7 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
       />
 
       {/* Header strip */}
-      <div className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 px-3 py-2">
+      <div className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 px-3 py-1.5">
         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 text-white">
           <ListChecks className="h-3 w-3" />
         </div>
@@ -34,9 +34,9 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
       </div>
 
       {/* Body */}
-      <div className="space-y-1.5 px-3 py-2.5">
+      <div className="space-y-1 px-2.5 py-2">
         <p
-          className="truncate text-sm font-semibold leading-tight text-foreground"
+          className="truncate text-xs font-semibold leading-tight text-foreground"
           title={name ?? 'Unnamed Task'}
         >
           {name ?? 'Unnamed Task'}

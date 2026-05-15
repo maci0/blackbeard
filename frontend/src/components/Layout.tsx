@@ -11,6 +11,9 @@ import {
   Anchor,
   PanelLeftClose,
   PanelLeftOpen,
+  Sun,
+  Moon,
+  Monitor,
 } from 'lucide-react'
 import { useDarkMode } from '@/lib/hooks'
 import WelcomeDialog from './onboarding/WelcomeDialog'
@@ -40,7 +43,7 @@ function BlackbeardLogo({ size = 28 }: { size?: number }) {
 export default function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
-  useDarkMode()
+  const { preference, cycle } = useDarkMode()
 
   const [showWelcome, setShowWelcome] = useState(false)
   const [showTour, setShowTour] = useState(false)
@@ -206,26 +209,42 @@ export default function Layout() {
         {/* Sidebar footer */}
         <div
           className={`flex items-center border-t p-2 ${
-            collapsed ? 'md:justify-center' : 'justify-between px-4 py-4'
+            collapsed ? 'md:flex-col md:justify-center md:gap-2' : 'justify-between px-4 py-4'
           }`}
         >
           <div className={collapsed ? 'md:hidden' : ''}>
             <HelpMenu onRestartTour={handleRestartTour} />
           </div>
-          <span className={`text-xs text-muted-foreground ${collapsed ? 'md:hidden' : ''}`}>
-            v0.1.0
-          </span>
-          <button
-            onClick={() => setCollapsed((v) => !v)}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="hidden rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="h-4 w-4" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" />
-            )}
-          </button>
+          <div className={`flex items-center gap-2 ${collapsed ? '' : ''}`}>
+            <span className={`text-xs text-muted-foreground ${collapsed ? 'md:hidden' : ''}`}>
+              v0.1.0
+            </span>
+            <button
+              onClick={cycle}
+              aria-label={`Theme: ${preference}. Click to cycle theme.`}
+              title={`Theme: ${preference}`}
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {preference === 'dark' ? (
+                <Moon className="h-4 w-4" />
+              ) : preference === 'light' ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Monitor className="h-4 w-4" />
+              )}
+            </button>
+            <button
+              onClick={() => setCollapsed((v) => !v)}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="hidden rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )}
+            </button>
+          </div>
         </div>
       </aside>
 

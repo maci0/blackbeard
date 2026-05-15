@@ -52,6 +52,11 @@ export default function Resources() {
     return result
   }, [resources])
 
+  const showNamespace = useMemo(
+    () => allResources.some((r) => r.metadata.namespace && r.metadata.namespace !== 'default'),
+    [allResources],
+  )
+
   const filtered = useMemo(() => {
     return allResources.filter((r) => {
       if (kindFilter && r.kindPlural !== kindFilter) return false
@@ -180,7 +185,15 @@ export default function Resources() {
               <table className="w-full text-sm" aria-label="Resources">
                 <thead>
                   <tr className="border-b bg-muted/60">
-                    {['Kind', 'Name', 'Namespace', 'Version', 'Updated'].map((h) => (
+                    {(
+                      [
+                        'Kind',
+                        'Name',
+                        ...(showNamespace ? ['Namespace'] : []),
+                        'Version',
+                        'Updated',
+                      ] as const
+                    ).map((h) => (
                       <th
                         key={h}
                         scope="col"
@@ -218,16 +231,21 @@ export default function Resources() {
                         <KindBadge kind={resource.kind} />
                       </td>
                       <td className="px-4 py-3 font-medium">{resource.metadata.name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {!resource.metadata.namespace ||
-                        resource.metadata.namespace === 'default' ? (
-                          <span className="text-muted-foreground/40" aria-label="default namespace">
-                            —
-                          </span>
-                        ) : (
-                          resource.metadata.namespace
-                        )}
-                      </td>
+                      {showNamespace && (
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {!resource.metadata.namespace ||
+                          resource.metadata.namespace === 'default' ? (
+                            <span
+                              className="text-muted-foreground/40"
+                              aria-label="default namespace"
+                            >
+                              —
+                            </span>
+                          ) : (
+                            resource.metadata.namespace
+                          )}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-muted-foreground">v{resource.version}</td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {formatDate(resource.updated_at)}

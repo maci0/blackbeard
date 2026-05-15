@@ -189,8 +189,10 @@ function CanvasInner() {
       />
       <MiniMap
         nodeColor={minimapNodeColor}
-        className="!rounded-lg !border !border-border !shadow-md"
-        maskColor={isDark ? 'rgba(15, 23, 42, 0.7)' : 'rgba(248, 250, 252, 0.7)'}
+        nodeStrokeWidth={1}
+        className="!rounded-lg !border !border-border opacity-50 !shadow-md transition-opacity duration-200 hover:opacity-100"
+        maskColor={isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(248, 250, 252, 0.85)'}
+        style={{ width: 140, height: 90 }}
         pannable
         zoomable
       />
