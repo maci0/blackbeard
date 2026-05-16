@@ -8,6 +8,7 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 10
+    labels: ["dependencies", "python"]
     groups:
       python-minor:
         update-types: [minor, patch]
@@ -19,6 +20,7 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 10
+    labels: ["dependencies", "javascript"]
     groups:
       js-minor:
         update-types: [minor, patch]
@@ -30,6 +32,7 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    labels: ["dependencies", "ci"]
 
   # Docker (Dockerfiles)
   - package-ecosystem: docker
@@ -38,3 +41,13 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    labels: ["dependencies", "docker"]
+
+  # Docker Compose (service images)
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "docker"]

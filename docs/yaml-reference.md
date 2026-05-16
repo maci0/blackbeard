@@ -71,6 +71,7 @@ spec:
 | `max_rpm` | integer ≥ 1 | — | Rate limit for LLM calls |
 | `memory` | boolean\|object | — | Enable cross-task memory; object form supports `enabled`, `recency_weight`, `semantic_weight`, `importance_weight` |
 | `cache` | boolean | — | Cache tool results |
+| `policy` | string | — | `ref:` to an AgentPolicy resource (stored but not yet enforced at runtime) |
 | `tool_discovery` | boolean | — | Allow JIT tool discovery via meta-tools (default `true`) |
 | `skills` | string[] | — | Directory paths with domain instruction files |
 | `knowledge_sources` | string[] | — | `ref:` KnowledgeSource resources for RAG |
@@ -107,13 +108,13 @@ spec:
   async_execution: false                   # Run task concurrently with others (default: false)
   human_input: false                       # Pause and wait for human review (default: false)
   output_file: "report.md"                 # Write task output to this file path
-  output_pydantic: "myapp.models.Report"  # Parse output into this Pydantic model class path
+  output_pydantic: "crewai.models.Report"  # Parse output into this Pydantic model class path
   output_json:                             # JSON schema the output must conform to
     type: object
     properties:
       summary:
         type: string
-  callback: "myapp.callbacks.on_complete"  # Python callable invoked after task finishes
+  callback: "crewai.callbacks.on_complete"  # Python callable invoked after task finishes
   guardrails:                              # Guardrails applied to task output
     - "ref:guardrails/no-pii"
 ```
@@ -124,13 +125,13 @@ spec:
 | `expected_output` | string | ✅ | Human-readable description of a correct result |
 | `agent` | string | ✅ | `ref:` to the responsible agent |
 | `context` | string[] | — | Tasks whose output is injected as additional context |
-| `tools` | string[] | — | Tool refs that override the agent's default tools |
+| `tools` | string[] | — | Tool refs that override the agent's default tools (stored but not yet passed to CrewAI at runtime) |
 | `async_execution` | boolean | — | Run concurrently (default `false`) |
 | `human_input` | boolean | — | Pause for human review (default `false`) |
 | `output_file` | string | — | Write output to a file (flat filename, no path separators) |
-| `output_pydantic` | string | — | Dotted class path to parse output into a Pydantic model |
-| `output_json` | object | — | JSON Schema for structured output |
-| `callback` | string | — | Dotted callable path invoked on completion |
+| `output_pydantic` | string | — | Dotted class path to parse output into a Pydantic model (stored but not yet passed to CrewAI at runtime) |
+| `output_json` | object | — | JSON Schema for structured output (stored but not yet passed to CrewAI at runtime) |
+| `callback` | string | — | Dotted callable path invoked on completion (stored but not yet passed to CrewAI at runtime) |
 | `guardrails` | string[] | — | `ref:` guardrail resources applied to output |
 
 ---
@@ -190,9 +191,9 @@ spec:
 | `cache` | boolean | — | Shared tool cache |
 | `max_rpm` | integer ≥ 1 | — | Crew-wide LLM rate limit |
 | `manager_llm` | string | — | LLM for the hierarchical manager |
-| `manager_agent` | string | — | Custom manager agent (hierarchical) |
-| `planning` | boolean | — | Pre-execution planning step |
-| `planning_llm` | string | — | LLM used during planning |
+| `manager_agent` | string | — | Custom manager agent (hierarchical; stored but not yet passed to CrewAI at runtime) |
+| `planning` | boolean | — | Pre-execution planning step (stored but not yet passed to CrewAI at runtime) |
+| `planning_llm` | string | — | LLM used during planning (stored but not yet passed to CrewAI at runtime) |
 | `tool_loading` | `jit`\|`eager`\|`hybrid` | — | Tool loading strategy (default `hybrid`) |
 | `default_agent_policy` | string | — | Default `AgentPolicy` ref for all agents |
 | `inputs` | object[] | — | Runtime input declarations |
@@ -209,6 +210,8 @@ spec:
 | `a2a.public` | boolean | — | Whether the crew is publicly discoverable (default `false`) |
 
 ### Inline Resources
+
+> **Note:** For MVP, inline resources are accepted by the schema and stored, but are **not yet expanded at runtime**. You must still create agents, tasks, and LLM connections as separate resources and reference them via `ref:` strings in the `agents` and `tasks` lists.
 
 For simple crews, you can embed agents, tasks, and LLM connections directly in the crew YAML using the `inline` field instead of separate resource files:
 
@@ -303,7 +306,7 @@ spec:
 | `env` | object | — | Environment variables for the MCP server process (`mcp-stdio`) |
 | `config` | object | — | Constructor kwargs passed to the tool |
 
-> **Note:** The `env` capability passes a safe default set of environment variables (PATH, HOME, USER, etc.). Granular per-variable access (`env:VAR_NAME`) is planned but not yet implemented.
+> **Note:** The `env` capability passes a fixed set of safe environment variables (`LANG`, `LC_ALL`, `TZ`, `TERM`). Granular per-variable access (`env:VAR_NAME`) is planned but not yet implemented.
 
 ---
 
@@ -354,9 +357,9 @@ spec:
 | `parameters.temperature` | number 0–2 | — | Sampling temperature |
 | `parameters.max_tokens` | integer ≥ 1 | — | Maximum response tokens |
 | `parameters.top_p` | number 0–1 | — | Nucleus sampling |
-| `parameters.frequency_penalty` | number | — | Frequency penalty (stored but not yet passed to LiteLLM) |
-| `parameters.presence_penalty` | number | — | Presence penalty (stored but not yet passed to LiteLLM) |
-| `parameters.stop` | string[] | — | Stop sequences (stored but not yet passed to LiteLLM) |
+| `parameters.frequency_penalty` | number | — | Frequency penalty |
+| `parameters.presence_penalty` | number | — | Presence penalty |
+| `parameters.stop` | string[] | — | Stop sequences |
 | `vertex.project` | string | — | GCP project (Vertex AI only) |
 | `vertex.location` | string | — | GCP region (Vertex AI only) |
 | `api_key_env` | string | — | Env var name holding the API key (must be uppercase, ending in `_API_KEY`, `_KEY`, or `_SECRET`) |
@@ -428,7 +431,7 @@ spec:
   on_fail: reject                          # "reject", "warn", or "log" (default: "reject")
 
   # For type: function
-  function_path: "myapp.guardrails.check_pii"  # Dotted path; receives output str, returns bool
+  function_path: "blackbeard.guardrails.check_pii"  # Dotted path; receives output str, returns bool
 
   # For type: llm
   # type: llm

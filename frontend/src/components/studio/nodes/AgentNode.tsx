@@ -12,7 +12,7 @@ export default memo(function AgentNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      aria-label={`Agent: ${role ?? 'Unnamed Agent'}`}
+      aria-label={`Agent: ${role || 'Unnamed Agent'}`}
       className={cn(
         'w-[140px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
         selected
@@ -38,9 +38,9 @@ export default memo(function AgentNode({ data, selected }: NodeProps) {
       <div className="space-y-1 px-2.5 py-2">
         <p
           className="truncate text-xs font-semibold leading-tight text-foreground"
-          title={role ?? 'Unnamed Agent'}
+          title={role || 'Unnamed Agent'}
         >
-          {role ?? 'Unnamed Agent'}
+          {role || 'Unnamed Agent'}
         </p>
         {goal ? (
           <p className="text-2xs line-clamp-2 leading-snug text-muted-foreground">{goal}</p>
@@ -51,7 +51,10 @@ export default memo(function AgentNode({ data, selected }: NodeProps) {
         {/* Badges */}
         <div className="flex flex-wrap gap-1 pt-0.5">
           {llmDisplay && (
-            <span className="text-2xs inline-flex items-center rounded-md border border-violet-100 bg-violet-50 px-1.5 py-0.5 font-semibold text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300">
+            <span
+              className="text-2xs inline-flex max-w-full items-center truncate rounded-md border border-violet-100 bg-violet-50 px-1.5 py-0.5 font-semibold text-violet-700 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-300"
+              title={llmDisplay}
+            >
               {llmDisplay}
             </span>
           )}

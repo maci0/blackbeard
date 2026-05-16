@@ -20,7 +20,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 from blackbeard.kinds import ALL_KINDS, KIND_TO_PLURAL, NAME_PATTERN
-from blackbeard.models.execution import TERMINAL_STATUSES
+from blackbeard.models import TERMINAL_STATUSES
 from blackbeard.resources import ValidationError, build_adjacency, detect_cycles, validate_resource
 
 # Rich consoles — stderr for errors/progress, stdout for data
@@ -50,9 +50,9 @@ def _require_api_key(ctx: click.Context) -> str:
 
 def _output_json(data: object, *, compact: bool = False) -> None:
     if compact:
-        out.print(json.dumps(data, default=str, separators=(",", ":")))
+        out.print(json.dumps(data, default=str, ensure_ascii=False, separators=(",", ":")))
     else:
-        out.print_json(json.dumps(data, default=str))
+        out.print_json(json.dumps(data, default=str, ensure_ascii=False))
 
 
 def _extract_detail(response: httpx.Response) -> str:
@@ -84,6 +84,8 @@ def _handle_http_error(response: httpx.Response) -> NoReturn:
     console.print(f"[red bold]Error:[/] HTTP {response.status_code}: {detail}")
     if response.status_code == 401:
         console.print("[dim]Hint: Check your API key (--api-key or BLACKBEARD_API_KEY)[/]")
+    elif response.status_code == 403:
+        console.print("[dim]Hint: API key valid but lacks permission for this action[/]")
     elif response.status_code == 404:
         console.print("[dim]Hint: Verify the resource name and namespace (-n)[/]")
     elif response.status_code == 409:
@@ -135,7 +137,24 @@ def validate_resources(
     for res in resources:
         kind = res.get("kind", "")
         spec = res.get("spec", {})
-        errors, _ = validate_resource(kind, spec)
+        errors: list[ValidationError] = []
+
+        meta = res.get("metadata")
+        if not isinstance(meta, dict) or not meta.get("name"):
+            errors.append(ValidationError("metadata.name", "Required field missing"))
+        else:
+            name = meta["name"]
+            if not re.fullmatch(NAME_PATTERN, name):
+                errors.append(
+                    ValidationError(
+                        "metadata.name",
+                        f"Invalid name '{name}':"
+                        " must match [a-z0-9][a-z0-9-]* (lowercase, hyphens only)",
+                    )
+                )
+
+        schema_errors, _ = validate_resource(kind, spec)
+        errors.extend(schema_errors)
         if errors:
             per_errors.append((res, errors))
 
@@ -144,7 +163,19 @@ def validate_resources(
     return per_errors, cycles
 
 
-@click.group()
+@click.group(
+    context_settings={"help_option_names": ["-h", "--help"]},
+    epilog="""\b
+Common workflows:
+  blackbeard validate -f crew.yaml            # check resources offline
+  blackbeard apply -f crew.yaml               # create/update resources
+  blackbeard list Agent                       # list all agents
+  blackbeard get Crew research-crew           # inspect a resource
+  blackbeard kickoff research-crew --wait     # run a crew and wait
+  blackbeard status <execution-id> -w         # watch execution progress
+  blackbeard delete Agent my-agent            # remove a resource
+"""
+)
 @click.version_option(version=pkg_version("blackbeard"))
 @click.option(
     "--server",
@@ -227,8 +258,10 @@ def health(ctx: click.Context, ready: bool, output_json: bool) -> None:
     try:
         data = response.json()
     except Exception:
+        body_preview = response.text[:200] if response.text else "(empty body)"
         console.print(
-            f"[red bold]Error:[/] Server returned non-JSON response (HTTP {response.status_code})"
+            f"[red bold]Error:[/] Server returned non-JSON response"
+            f" (HTTP {response.status_code})\n  [dim]{body_preview}[/]"
         )
         raise SystemExit(1) from None
 
@@ -419,10 +452,13 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
         raise SystemExit(1)
 
     if dry_run:
+        ns = ctx.obj["namespace"]
         if ctx.obj["json"]:
             _output_json(
                 {
                     "dry_run": True,
+                    "server": server,
+                    "namespace": ns,
                     "resources": [
                         {"kind": r.get("kind"), "name": r.get("metadata", {}).get("name")}
                         for r in resources
@@ -430,7 +466,13 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
                 }
             )
         else:
-            out.print(Panel("[cyan]Dry run — no changes applied[/]", border_style="cyan"))
+            out.print(
+                Panel(
+                    f"[cyan]Dry run — no changes applied[/]\n"
+                    f"[dim]Server: {server}  Namespace: {ns}[/]",
+                    border_style="cyan",
+                )
+            )
             for res in resources:
                 kind = res.get("kind", "")
                 name = res.get("metadata", {}).get("name", "?")
@@ -439,7 +481,8 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
 
     if not yes and not ctx.obj["json"]:
         console.print(
-            f"\n[bold]{len(resources)}[/] resource(s) will be applied to [bold]{server}[/]."
+            f"\n[bold]{len(resources)}[/] resource(s) will be applied to"
+            f" [bold]{server}[/] (namespace: [bold]{ctx.obj['namespace']}[/])."
         )
         if not click.confirm("Proceed?", default=True):
             console.print("[yellow]Aborted.[/]")
@@ -535,8 +578,10 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted.[/]")
 
+    interrupted = len(results) < len(resources)
+
     if ctx.obj["json"]:
-        _output_json({"results": results})
+        _output_json({"results": results, "interrupted": interrupted})
     else:
         table = Table(title="Apply Results")
         table.add_column("Status", width=3)
@@ -559,13 +604,17 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
 
         succeeded = sum(1 for r in results if r["status"] in ("created", "updated"))
         failed = sum(1 for r in results if r["status"] == "error")
-        out.print(
-            f"\n[bold]{len(results)}[/] resources:"
+        skipped = len(resources) - len(results)
+        summary = (
+            f"\n[bold]{len(resources)}[/] resources:"
             f" [green]{succeeded} succeeded[/],"
             f" [red]{failed} failed[/]"
         )
+        if skipped:
+            summary += f", [yellow]{skipped} skipped[/]"
+        out.print(summary)
 
-    if any(r["status"] == "error" for r in results):
+    if interrupted or any(r["status"] == "error" for r in results):
         raise SystemExit(1)
 
 
@@ -714,7 +763,10 @@ def list_resources_cmd(
 
     items = data.get("items", [])
     if not items:
-        out.print(f"[dim]No {kind} resources found in namespace '{namespace}'.[/]")
+        msg = f"No {kind} resources found in namespace '{namespace}'"
+        if labels:
+            msg += f" with labels: {', '.join(labels)}"
+        out.print(f"[dim]{msg}.[/]")
         return
 
     table = Table(title=f"{kind} Resources")
@@ -779,7 +831,9 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: boo
     if (
         not yes
         and not ctx.obj["json"]
-        and not click.confirm(f"Delete {kind}/{name} in namespace '{namespace}'?", default=False)
+        and not click.confirm(
+            f"Delete {kind}/{name} in namespace '{namespace}' on {server}?", default=False
+        )
     ):
         console.print("[yellow]Aborted.[/]")
         return
@@ -810,6 +864,7 @@ Examples:
   blackbeard kickoff research-crew --input topic="AI agents"
   blackbeard kickoff research-crew --input topic="AI agents" --input depth=3
   blackbeard kickoff research-crew --wait
+  blackbeard kickoff research-crew -w -i 5
   blackbeard -s http://prod:8000 -n prod kickoff research-crew --json
 """
 )
@@ -823,10 +878,20 @@ Examples:
 )
 @click.option(
     "--wait",
+    "--watch",
     "-w",
+    "watch",
     is_flag=True,
     default=False,
     help="Wait for execution to complete, polling status until done",
+)
+@click.option(
+    "--interval",
+    "-i",
+    default=2,
+    show_default=True,
+    type=click.IntRange(1, 60),
+    help="Polling interval in seconds (used with --wait)",
 )
 @click.option(
     "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
@@ -836,7 +901,8 @@ def kickoff(
     ctx: click.Context,
     crew_name: str,
     inputs: tuple[str, ...],
-    wait: bool,
+    watch: bool,
+    interval: int,
     output_json: bool,
 ) -> None:
     """Kick off a crew execution.
@@ -844,9 +910,6 @@ def kickoff(
     CREW_NAME is the name of the crew to run, e.g. research-crew.
     """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
-    server = ctx.obj["server"]
-    api_key = _require_api_key(ctx)
-    namespace = ctx.obj["namespace"]
 
     if not re.fullmatch(NAME_PATTERN, crew_name):
         console.print(
@@ -869,6 +932,19 @@ def kickoff(
             parsed_inputs[key] = json.loads(value)
         except (json.JSONDecodeError, ValueError):
             parsed_inputs[key] = value
+
+    server = ctx.obj["server"]
+    api_key = _require_api_key(ctx)
+    namespace = ctx.obj["namespace"]
+
+    interval_from_cli = (
+        ctx.get_parameter_source("interval") == click.core.ParameterSource.COMMANDLINE
+    )
+    if not watch and interval_from_cli:
+        console.print(
+            f"[yellow]Warning:[/] --interval/-i has no effect without --wait."
+            f" Try: [bold]blackbeard kickoff {crew_name} -w -i {interval}[/]"
+        )
 
     url = f"{server}/api/v1/crews/{crew_name}/kickoff"
     headers = {"X-API-Key": api_key}
@@ -894,48 +970,51 @@ def kickoff(
     status_val = data.get("status", "unknown")
     is_json = ctx.obj["json"]
 
-    if is_json and not wait:
+    if is_json and not watch:
         _output_json(data)
         return
 
     if not is_json:
         out.print(
             Panel.fit(
-                f"[bold]Execution ID:[/] {execution_id}\n[bold]Status:[/] {status_val}",
+                f"[bold]Crew:[/] {crew_name}\n"
+                f"[bold]Namespace:[/] {namespace}\n"
+                f"[bold]Execution ID:[/] {execution_id}\n"
+                f"[bold]Status:[/] {status_val}",
                 title="[green]Execution Submitted[/]",
                 border_style="green",
             )
         )
 
-    if wait:
-        # Delegate to the status command with --watch
+    if watch:
         ctx.invoke(
             status,
             execution_id=execution_id,
             watch=True,
-            interval=2,
+            interval=interval,
             output_json=is_json,
         )
     else:
         prog = ctx.find_root().info_name or "blackbeard"
-        ns_flag = f" -n {namespace}" if namespace != "default" else ""
-        console.print(f"\nTrack with: [bold]{prog} status {execution_id} -w{ns_flag}[/]")
+        console.print(f"\nTrack with: [bold]{prog} status {execution_id} -w[/]")
 
 
 @cli.command(
     epilog="""\b
 Examples:
   blackbeard status abc-123
-  blackbeard status abc-123 -w
+  blackbeard status abc-123 --wait
   blackbeard status abc-123 -w -i 5
   blackbeard status abc-123 --json
-  blackbeard status abc-123 --json -w    # one JSON object per poll (JSONL)
+  blackbeard status abc-123 --json --wait  # one JSON object per poll (JSONL)
 """
 )
 @click.argument("execution_id")
 @click.option(
+    "--wait",
     "--watch",
     "-w",
+    "watch",
     is_flag=True,
     default=False,
     help="Poll until execution completes, fails, or is cancelled (Ctrl-C to stop)",
@@ -946,7 +1025,7 @@ Examples:
     default=2,
     show_default=True,
     type=click.IntRange(1, 60),
-    help="Polling interval in seconds (used with --watch)",
+    help="Polling interval in seconds (used with --wait)",
 )
 @click.option(
     "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
@@ -966,8 +1045,8 @@ def status(
     )
     if not watch and interval_from_cli:
         console.print(
-            "[yellow]Warning:[/] --interval/-i has no effect without --watch (-w)."
-            " Add -w to enable polling."
+            f"[yellow]Warning:[/] --interval/-i has no effect without --wait."
+            f" Try: [bold]blackbeard status {execution_id} -w -i {interval}[/]"
         )
 
     terminal_states = {s.value for s in TERMINAL_STATUSES}
@@ -1067,17 +1146,28 @@ def status(
                 out.print(task_table)
 
         if is_json and not watch:
-            _output_json(fetch())
+            data = fetch()
+            _output_json(data)
+            if data.get("status") in ("failed", "cancelled"):
+                raise SystemExit(1)
             return
 
         if not watch:
-            render(fetch())
+            data = fetch()
+            render(data)
+            current = data.get("status", "")
+            if current and current not in terminal_states:
+                prog = ctx.find_root().info_name or "blackbeard"
+                console.print(f"\n[dim]Still running. Watch: {prog} status {execution_id} -w[/]")
+            elif current in ("failed", "cancelled"):
+                raise SystemExit(1)
             return
 
         console.print(
             f"[dim]Watching execution {execution_id}"
             f" (Ctrl-C to stop, polling every {interval}s)...[/]\n"
         )
+        current_status = ""
         try:
             first = True
             while True:

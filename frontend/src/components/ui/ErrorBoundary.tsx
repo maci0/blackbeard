@@ -6,16 +6,17 @@ interface Props {
 
 interface State {
   hasError: boolean
+  errorMessage: string
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props)
-    this.state = { hasError: false }
+    this.state = { hasError: false, errorMessage: '' }
   }
 
-  static getDerivedStateFromError(): State {
-    return { hasError: true }
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, errorMessage: error.message }
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
@@ -33,9 +34,14 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="max-w-md text-sm text-muted-foreground">
             An unexpected error occurred. Try reloading the page.
           </p>
+          {this.state.errorMessage && (
+            <p className="mt-2 max-w-md rounded border bg-muted px-3 py-2 font-mono text-xs text-muted-foreground">
+              {this.state.errorMessage}
+            </p>
+          )}
           <div className="flex gap-3">
             <button
-              onClick={() => this.setState({ hasError: false })}
+              onClick={() => this.setState({ hasError: false, errorMessage: '' })}
               className="rounded-md border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Try Again
@@ -46,6 +52,12 @@ export class ErrorBoundary extends Component<Props, State> {
             >
               Reload
             </button>
+            <a
+              href="/studio"
+              className="rounded-md border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Go to Studio
+            </a>
           </div>
         </div>
       )

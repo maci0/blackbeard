@@ -1,15 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react'
-
-/* ------------------------------------------------------------------ */
-/* Types                                                               */
-/* ------------------------------------------------------------------ */
-
-export type RunStatus = 'idle' | 'loading' | 'saving' | 'running' | 'success' | 'error'
-
-/* ------------------------------------------------------------------ */
-/* Component                                                           */
-/* ------------------------------------------------------------------ */
+import type { RunStatus } from '@/lib/types'
 
 const CONFIGS: Record<RunStatus, { icon: React.ReactNode; cls: string }> = {
   idle: { icon: null, cls: '' },
@@ -98,11 +89,7 @@ export function RunStatusBadge({
     </>
   )
 
-  const baseClass = `flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all duration-300 ${
-    animating
-      ? 'translate-x-0 opacity-100 motion-reduce:translate-x-0'
-      : 'translate-x-0 opacity-100'
-  } ${cfg.cls}`
+  const baseClass = `flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all duration-300 ${cfg.cls}`
 
   const slideClass = animating ? 'animate-in slide-in-from-right-4 fade-in duration-300' : ''
 

@@ -1,3 +1,12 @@
+import { MarkerType } from '@xyflow/react'
+
+export const DATAFLOW_MARKER_END = {
+  type: MarkerType.ArrowClosed,
+  width: 12,
+  height: 12,
+  color: '#94a3b8',
+} as const
+
 /** Default data for newly created studio nodes. */
 export function getDefaultNodeData(type: string): Record<string, unknown> {
   switch (type) {

@@ -5,9 +5,10 @@ from __future__ import annotations
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Canonical API version string — used by resource schemas and response serializers.
-# Must stay in sync with frontend/src/lib/kinds.ts and frontend/src/pages/Studio.tsx.
-API_VERSION = "blackbeard/v1"
+__all__ = [
+    "Settings",
+    "settings",
+]
 
 
 class Settings(BaseSettings):

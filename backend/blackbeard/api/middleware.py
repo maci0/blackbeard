@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import collections
+import heapq
 import hmac
 import logging
 import re
 import time
 import uuid
 from typing import TYPE_CHECKING
+from urllib.parse import parse_qsl, urlencode
 
 from starlette.responses import JSONResponse
 
@@ -31,7 +33,7 @@ _HEALTH_PATHS = {"/api/v1/health", "/api/v1/health/ready"}
 _DOCS_PATHS = {"/docs", "/openapi.json", "/redoc"}
 PUBLIC_PATHS = _HEALTH_PATHS | (_DOCS_PATHS if settings.debug else set())
 
-# Pre-extract API key once at import time to avoid SecretStr.get_secret_value() per request
+# Default API key from settings; may be replaced at runtime via set_api_key()
 _EXPECTED_API_KEY = settings.blackbeard_api_key.get_secret_value()
 
 
@@ -56,8 +58,9 @@ def _redact_query_string(query: str) -> str:
     """
     if not query:
         return query
-    from urllib.parse import parse_qsl, urlencode
-
+    query_lower = query.lower()
+    if not any(param in query_lower for param in _SENSITIVE_QS_PARAMS):
+        return query
     pairs = parse_qsl(query, keep_blank_values=True)
     redacted = [
         (k, "[REDACTED]") if k.lower() in _SENSITIVE_QS_PARAMS else (k, v) for k, v in pairs
@@ -110,10 +113,16 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         # Evict expired entries outside the window
         while ip_failures and ip_failures[0] < now - _AUTH_FAIL_WINDOW_S:
             ip_failures.popleft()
-        if len(ip_failures) >= _AUTH_FAIL_MAX:
+        if not ip_failures:
+            del _auth_failures[client_ip]
+            ip_failures = None
+        elif len(ip_failures) >= _AUTH_FAIL_MAX:
             response = JSONResponse(
                 status_code=429,
-                content={"detail": "Too many authentication failures. Try again later."},
+                content={
+                    "detail": "Too many authentication failures. Try again later.",
+                    "request_id": request_id,
+                },
                 headers={"Retry-After": "60"},
             )
             response.headers["X-Request-Id"] = request_id
@@ -142,25 +151,33 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     if not hmac.compare_digest(api_key, _EXPECTED_API_KEY):
         # Record the failure for rate limiting
         if client_ip not in _auth_failures:
-            _auth_failures[client_ip] = collections.deque()
+            _auth_failures[client_ip] = collections.deque(maxlen=_AUTH_FAIL_MAX + 10)
         _auth_failures[client_ip].append(now)
-        # Prevent unbounded memory growth: prune stale IPs periodically.
-        # Evict expired timestamps from ALL deques (not just the current IP),
-        # then remove any IPs with no remaining entries.
-        if len(_auth_failures) > 10_000:
+        # Prevent unbounded memory growth: prune stale IPs periodically,
+        # then enforce a hard cap to handle distributed attacks where many
+        # unique IPs have recent timestamps.
+        if len(_auth_failures) > 500:
             cutoff = now - _AUTH_FAIL_WINDOW_S
-            stale = []
-            for ip, dq in _auth_failures.items():
-                while dq and dq[0] < cutoff:
-                    dq.popleft()
-                if not dq:
-                    stale.append(ip)
+            stale = [ip for ip, dq in _auth_failures.items() if not dq or dq[-1] < cutoff]
             for ip in stale:
                 _auth_failures.pop(ip, None)
+            if len(_auth_failures) > 1_000:
+                to_evict = len(_auth_failures) - 500
+                oldest = heapq.nsmallest(
+                    to_evict,
+                    _auth_failures,
+                    key=lambda k: _auth_failures[k][-1] if _auth_failures[k] else 0,
+                )
+                for ip in oldest:
+                    _auth_failures.pop(ip, None)
 
         response = JSONResponse(
             status_code=401,
-            content={"detail": "Invalid or missing API key. Set X-API-Key header."},
+            content={
+                "detail": "Invalid or missing API key. Set X-API-Key header.",
+                "request_id": request_id,
+            },
+            headers={"WWW-Authenticate": "ApiKey"},
         )
         response.headers["X-Request-Id"] = request_id
         duration_ms = (time.monotonic() - start) * 1000
@@ -199,7 +216,6 @@ def _log_request(request: Request, response: Response, start: float) -> None:
     elif status >= 400:
         level = logging.WARNING
     elif path in _HEALTH_PATHS:
-        # DEBUG to avoid log noise from k8s/LB health polling
         level = logging.DEBUG
     else:
         level = logging.INFO
@@ -207,7 +223,29 @@ def _log_request(request: Request, response: Response, start: float) -> None:
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("User-Agent", "")
     content_length = request.headers.get("content-length")
+    resp_content_length = response.headers.get("content-length")
+    resp_content_type = response.headers.get("content-type", "")
     query_string = _redact_query_string(request.url.query) if request.url.query else None
+
+    extra: dict[str, object] = {
+        "event": "http_request",
+        "http_method": request.method,
+        "http_path": path,
+        "http_query": query_string,
+        "http_status": status,
+        "duration_ms": round(duration_ms, 1),
+        "client_ip": client_ip,
+        "user_agent": user_agent[:200] if user_agent else "",
+        "content_length": int(content_length)
+        if content_length and content_length.isdigit()
+        else None,
+        "response_content_length": int(resp_content_length)
+        if resp_content_length and resp_content_length.isdigit()
+        else None,
+        "request_id": request_id_var.get("-"),
+    }
+    if status >= 400:
+        extra["response_content_type"] = resp_content_type
 
     logger.log(
         level,
@@ -216,20 +254,7 @@ def _log_request(request: Request, response: Response, start: float) -> None:
         path,
         status,
         duration_ms,
-        extra={
-            "event": "http_request",
-            "http_method": request.method,
-            "http_path": path,
-            "http_query": query_string,
-            "http_status": status,
-            "duration_ms": round(duration_ms, 1),
-            "client_ip": client_ip,
-            "user_agent": user_agent[:200] if user_agent else "",
-            "content_length": int(content_length)
-            if content_length and content_length.isdigit()
-            else None,
-            "request_id": request_id_var.get("-"),
-        },
+        extra=extra,
     )
 
 
@@ -238,7 +263,10 @@ SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    "Content-Security-Policy": (
+        "default-src 'none'; frame-ancestors 'none'; "
+        "base-uri 'none'; form-action 'none'; object-src 'none'"
+    ),
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
     "Cache-Control": "no-store",
     "Cross-Origin-Opener-Policy": "same-origin",
@@ -254,8 +282,11 @@ async def security_headers_middleware(
 ) -> Response:
     """Add security headers to every response."""
     response = await call_next(request)
+    skip_csp = settings.debug and request.url.path in _DOCS_PATHS
     for name, value in SECURITY_HEADERS.items():
         if name not in response.headers:
+            if skip_csp and name == "Content-Security-Policy":
+                continue
             response.headers[name] = value
     return response
 
@@ -270,14 +301,12 @@ async def body_size_limiter(request: Request, call_next: RequestResponseEndpoint
     Checks both Content-Length header (fast reject) and actual body size
     (prevents bypass via chunked transfer encoding without Content-Length).
     """
-    # Reuse the request_id already set by api_key_middleware (runs before us in the stack)
-    # to keep response headers and log correlation consistent.
     rid = request_id_var.get("-")
 
     def _reject(status: int, detail: str) -> JSONResponse:
         return JSONResponse(
             status_code=status,
-            content={"detail": detail},
+            content={"detail": detail, "request_id": rid},
             headers={"X-Request-Id": rid},
         )
 
@@ -301,7 +330,22 @@ async def body_size_limiter(request: Request, call_next: RequestResponseEndpoint
                 },
             )
             return _reject(400, "Invalid Content-Length header")
-        if length < 0 or length > MAX_BODY_BYTES:
+        if length < 0:
+            logger.warning(
+                "Negative Content-Length header: %s %s content_length=%d",
+                request.method,
+                request.url.path,
+                length,
+                extra={
+                    "event": "invalid_content_length",
+                    "http_method": request.method,
+                    "http_path": request.url.path,
+                    "content_length": length,
+                    "request_id": rid,
+                },
+            )
+            return _reject(400, "Invalid Content-Length header")
+        if length > MAX_BODY_BYTES:
             logger.warning(
                 "Request body too large: %s %s content_length=%d",
                 request.method,
@@ -348,6 +392,19 @@ async def body_size_limiter(request: Request, call_next: RequestResponseEndpoint
         request._body = b"".join(chunks)
 
     return await call_next(request)
+
+
+async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Handle HTTPException with request_id in body for log correlation."""
+    rid = request_id_var.get("-")
+    status_code: int = getattr(exc, "status_code", 500)
+    detail: object = getattr(exc, "detail", str(exc))
+    exc_headers: dict[str, str] = getattr(exc, "headers", None) or {}
+    return JSONResponse(
+        status_code=status_code,
+        content={"detail": detail, "request_id": rid},
+        headers={"X-Request-Id": rid, **exc_headers},
+    )
 
 
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:

@@ -13,7 +13,7 @@ export default memo(function ToolNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      aria-label={`Tool: ${name ?? 'Unnamed Tool'}`}
+      aria-label={`Tool: ${name || 'Unnamed Tool'}`}
       className={cn(
         'w-[140px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
         selected
@@ -40,12 +40,19 @@ export default memo(function ToolNode({ data, selected }: NodeProps) {
       <div className="space-y-1 px-2.5 py-2">
         <p
           className="truncate text-xs font-semibold leading-tight text-foreground"
-          title={name ?? 'Unnamed Tool'}
+          title={name || 'Unnamed Tool'}
         >
-          {name ?? 'Unnamed Tool'}
+          {name || 'Unnamed Tool'}
         </p>
-        {description && (
-          <p className="text-2xs line-clamp-1 leading-snug text-muted-foreground">{description}</p>
+        {description ? (
+          <p
+            className="text-2xs line-clamp-1 leading-snug text-muted-foreground"
+            title={description}
+          >
+            {description}
+          </p>
+        ) : (
+          <p className="text-2xs italic text-muted-foreground/60">No description</p>
         )}
 
         {/* Badges */}

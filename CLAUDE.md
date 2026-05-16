@@ -46,7 +46,7 @@ bash deploy/seed.sh              # seed DB with example crew using Ollama (requi
 
 **Resource system**: All entities (Agent, Task, Crew, etc.) are stored as generic `Resource` rows with a JSONB `spec` column, validated against per-kind JSON schemas (`resources/spec_schemas.py`). Resources reference each other with strings like `ref:agents/researcher`, tracked in a `ResourceRef` table. `kinds.py` is the single source of truth for the kind registry and URL plural mapping.
 
-**Execution flow**: `POST /api/v1/crews/{name}/kickoff` → creates `Execution` record → submits to `ThreadPoolExecutor` → background thread builds CrewAI objects via `ResourceLoader` (resolves refs, builds LLM/Agent/Task/Crew) → calls `crew.kickoff(inputs=...)` → stores result + token usage. Each crew run gets its own thread with an isolated asyncio event loop to avoid blocking the FastAPI async loop.
+**Execution flow**: `POST /api/v1/crews/{crew_name}/kickoff` → creates `Execution` record → submits to `ThreadPoolExecutor` → background thread builds CrewAI objects via `ResourceLoader` (resolves refs, builds LLM/Agent/Task/Crew) → calls `crew.kickoff(inputs=...)` → stores result + token usage. Each crew run gets its own thread with an isolated asyncio event loop to avoid blocking the FastAPI async loop.
 
 **Middleware stack** (LIFO): security headers → API key auth (hmac.compare_digest) + request ID → body size limiter (10MB).
 

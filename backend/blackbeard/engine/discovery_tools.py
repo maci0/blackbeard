@@ -50,6 +50,16 @@ class SearchToolsTool(_DiscoveryBaseTool):
                 headers={"X-API-Key": self.api_key},
             )
             if resp.status_code != 200:
+                logger.warning(
+                    "search_tools API error: status=%d namespace=%s",
+                    resp.status_code,
+                    self.namespace,
+                    extra={
+                        "event": "search_tools_api_error",
+                        "http_status": resp.status_code,
+                        "namespace": self.namespace,
+                    },
+                )
                 return f"Error searching tools: HTTP {resp.status_code}"
 
             data = resp.json()
@@ -114,6 +124,18 @@ class GetToolTool(_DiscoveryBaseTool):
             if resp.status_code == 404:
                 return f"Tool '{tool_name}' not found in the registry."
             if resp.status_code != 200:
+                logger.warning(
+                    "get_tool API error: tool=%s status=%d namespace=%s",
+                    tool_name,
+                    resp.status_code,
+                    self.namespace,
+                    extra={
+                        "event": "get_tool_api_error",
+                        "tool_name": tool_name,
+                        "http_status": resp.status_code,
+                        "namespace": self.namespace,
+                    },
+                )
                 return f"Error fetching tool: HTTP {resp.status_code}"
 
             data = resp.json()

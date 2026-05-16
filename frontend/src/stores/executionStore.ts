@@ -1,46 +1,7 @@
 import { create } from 'zustand'
 import { api } from '@/api/client'
-
-export const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled'])
-
-export interface ExecutionTask {
-  id: string
-  task_name: string
-  agent_name: string | null
-  order: number
-  status: string
-  output: string | null
-  error: string | null
-  tokens_used: number
-  cost_usd: number
-  started_at: string | null
-  completed_at: string | null
-}
-
-export interface ExecutionEvent {
-  sequence: number
-  event_type: string
-  timestamp: string
-  data: Record<string, unknown>
-}
-
-export interface Execution {
-  id: string
-  crew_name: string
-  crew_namespace: string
-  status: string
-  inputs: Record<string, unknown>
-  outputs: Record<string, unknown> | null
-  error: string | null
-  total_tokens: number
-  prompt_tokens: number
-  completion_tokens: number
-  cost_usd: number
-  created_at: string
-  started_at: string | null
-  completed_at: string | null
-  tasks: ExecutionTask[]
-}
+import type { Execution, ExecutionEvent, ExecutionTask } from '@/lib/types'
+export type { Execution, ExecutionEvent, ExecutionTask }
 
 interface ExecutionState {
   executions: Execution[]
@@ -121,16 +82,44 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
 
   pollExecution: async (id: string) => {
     const execution = await api.get<Execution>(`/api/v1/executions/${id}`)
-    set((state) => ({
-      currentExecution: state.currentExecution?.id === id ? execution : state.currentExecution,
-      executions: state.executions.map((e) => (e.id === id ? execution : e)),
-    }))
+    set((state) => {
+      const prev = state.currentExecution
+      const unchanged =
+        prev?.id === id &&
+        prev.status === execution.status &&
+        prev.total_tokens === execution.total_tokens &&
+        prev.error === execution.error &&
+        prev.tasks.length === execution.tasks.length &&
+        prev.tasks.every((t, i) => t.status === execution.tasks[i]?.status)
+      return {
+        currentExecution: unchanged ? prev : execution,
+        executions: state.executions.map((e) => (e.id === id ? execution : e)),
+      }
+    })
   },
 
   pollExecutions: async (crewName?: string) => {
     try {
       const result = await api.get<{ items: Execution[]; total: number }>(executionsPath(crewName))
-      set({ executions: result.items })
+      set((state) => {
+        const prev = state.executions
+        if (prev.length === 0) return { executions: result.items }
+        const prevById = new Map(prev.map((e) => [e.id, e]))
+        let changed = prev.length !== result.items.length
+        const merged = result.items.map((item) => {
+          const existing = prevById.get(item.id)
+          if (
+            existing &&
+            existing.status === item.status &&
+            existing.total_tokens === item.total_tokens
+          ) {
+            return existing
+          }
+          changed = true
+          return item
+        })
+        return changed ? { executions: merged } : state
+      })
     } catch {
       // Silently ignore poll failures to avoid flashing errors
     }
@@ -139,7 +128,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
   addEvents: (newEvents: ExecutionEvent[]) => {
     set((state) => {
       if (newEvents.length === 0) return state
-      const lastSeq = state.events.length > 0 ? state.events[state.events.length - 1]!.sequence : -1
+      const lastSeq = state.events.at(-1)?.sequence ?? -1
       const unique = newEvents.filter((e) => e.sequence > lastSeq)
       if (unique.length === 0) return state
       return { events: state.events.concat(unique) }
@@ -151,13 +140,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
   },
 
   fetchEvents: async (id: string, after?: number) => {
-    // Default to the last known sequence to avoid re-fetching all events
-    const lastSeq =
-      after ??
-      (() => {
-        const evts = get().events
-        return evts.length > 0 ? evts[evts.length - 1]!.sequence : -1
-      })()
+    const evts = get().events
+    const lastSeq = after ?? evts.at(-1)?.sequence ?? -1
     try {
       const result = await api.get<{ events: ExecutionEvent[]; next_sequence: number }>(
         `/api/v1/executions/${id}/events?after=${lastSeq}&limit=200`,

@@ -12,9 +12,14 @@ coverage/
 *.spec.tsx
 __tests__/
 .eslintcache
-README.md
+*.md
 .DS_Store
 .prettierrc
 .prettierignore
 eslint.config.js
+vitest.config.ts
+tsconfig.tsbuildinfo
 Dockerfile*
+.claude/
+.sisyphus/
+.playwright-mcp/

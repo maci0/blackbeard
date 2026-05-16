@@ -10,7 +10,7 @@ import yaml
 from blackbeard.litellm.helpers import apply_model_params, apply_vertex_params, build_model_string
 
 if TYPE_CHECKING:
-    from blackbeard.models.resource import Resource
+    from blackbeard.models import Resource
 
 logger = logging.getLogger(__name__)
 

@@ -18,12 +18,11 @@ from pydantic import BaseModel, Field
 
 from blackbeard.config import settings
 from blackbeard.http_client import get_client
+from blackbeard.logging_config import request_id_var
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat"])
-
-_LITELLM_URL = settings.litellm_proxy_url
 
 
 def _get_litellm_client() -> httpx.AsyncClient:
@@ -32,19 +31,25 @@ def _get_litellm_client() -> httpx.AsyncClient:
     return get_client("litellm-chat", headers={"Authorization": f"Bearer {key}"})
 
 
-def _extract_content(data: dict[str, Any]) -> tuple[str, dict[str, int]]:
+def _extract_content(data: dict[str, Any]) -> tuple[str, TokenUsage]:
     """Extract content and usage from a LiteLLM chat completion response."""
     choices = data.get("choices") or []
     choice = choices[0] if choices else {}
     message = choice.get("message", {})
     usage = data.get("usage", {})
     content = message.get("content") or message.get("reasoning_content") or ""
-    tokens = {
-        "prompt": usage.get("prompt_tokens", 0),
-        "completion": usage.get("completion_tokens", 0),
-        "total": usage.get("total_tokens", 0),
-    }
+    tokens = TokenUsage(
+        prompt=usage.get("prompt_tokens", 0),
+        completion=usage.get("completion_tokens", 0),
+        total=usage.get("total_tokens", 0),
+    )
     return content, tokens
+
+
+class TokenUsage(BaseModel):
+    prompt: int = 0
+    completion: int = 0
+    total: int = 0
 
 
 class ChatMessage(BaseModel):
@@ -53,7 +58,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    model: str = Field(description="Model name from LiteLLM config", max_length=256)
+    model: str = Field(description="Model name from LiteLLM config", min_length=1, max_length=256)
     messages: list[ChatMessage] = Field(min_length=1, max_length=256)
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     max_tokens: int | None = Field(default=None, ge=1, le=128_000)
@@ -62,7 +67,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     model: str
     content: str
-    tokens: dict[str, int]
+    tokens: TokenUsage
     latency_ms: int
 
 
@@ -88,45 +93,55 @@ async def chat(body: ChatRequest = Body(...)) -> ChatResponse:
     try:
         client = _get_litellm_client()
         resp = await client.post(
-            f"{_LITELLM_URL}/chat/completions",
+            f"{settings.litellm_proxy_url}/chat/completions",
             json=payload,
+            headers={"X-Request-Id": request_id_var.get("-")},
             timeout=120,
         )
     except httpx.TransportError as e:
+        latency_ms = int((time.monotonic() - t0) * 1000)
         logger.warning(
-            "LiteLLM unreachable: model=%s %s: %s",
+            "LiteLLM unreachable: model=%s %s: %s (%.0fms)",
             body.model,
             type(e).__name__,
             e,
+            latency_ms,
+            exc_info=True,
             extra={
                 "event": "chat_litellm_unreachable",
                 "model": body.model,
                 "error_type": type(e).__name__,
-            },
-        )
-        raise HTTPException(
-            status_code=502,
-            detail="Model proxy is unreachable. Try again later.",
-        ) from e
-
-    latency_ms = int((time.monotonic() - t0) * 1000)
-
-    if resp.status_code != 200:
-        logger.warning(
-            "LiteLLM error: model=%s status=%d latency_ms=%d",
-            body.model,
-            resp.status_code,
-            latency_ms,
-            extra={
-                "event": "chat_litellm_error",
-                "model": body.model,
-                "http_status": resp.status_code,
                 "latency_ms": latency_ms,
             },
         )
         raise HTTPException(
             status_code=502,
+            detail="Model proxy is unreachable. Try again later.",
+            headers={"Retry-After": "30"},
+        ) from e
+
+    latency_ms = int((time.monotonic() - t0) * 1000)
+
+    if resp.status_code != 200:
+        error_body = resp.text[:500] if resp.text else ""
+        logger.warning(
+            "LiteLLM error: model=%s status=%d latency_ms=%d body=%s",
+            body.model,
+            resp.status_code,
+            latency_ms,
+            error_body[:200],
+            extra={
+                "event": "chat_litellm_error",
+                "model": body.model,
+                "http_status": resp.status_code,
+                "latency_ms": latency_ms,
+                "response_body_preview": error_body,
+            },
+        )
+        raise HTTPException(
+            status_code=502,
             detail=f"Model request failed with status {resp.status_code}.",
+            headers={"Retry-After": "30"},
         )
 
     try:
@@ -147,20 +162,21 @@ async def chat(body: ChatRequest = Body(...)) -> ChatResponse:
         raise HTTPException(
             status_code=502,
             detail="Model proxy returned an unparseable response.",
+            headers={"Retry-After": "30"},
         ) from None
     content, tokens = _extract_content(data)
 
     logger.info(
         "Chat completion: model=%s tokens=%d latency_ms=%d",
         body.model,
-        tokens["total"],
+        tokens.total,
         latency_ms,
         extra={
             "event": "chat_completion",
             "model": body.model,
-            "total_tokens": tokens["total"],
-            "prompt_tokens": tokens["prompt"],
-            "completion_tokens": tokens["completion"],
+            "total_tokens": tokens.total,
+            "prompt_tokens": tokens.prompt,
+            "completion_tokens": tokens.completion,
             "latency_ms": latency_ms,
         },
     )
@@ -178,7 +194,7 @@ class ModelTestResult(BaseModel):
     latency_ms: int | None = None
     error: str | None = None
     response_preview: str | None = None
-    tokens: dict[str, int] | None = None
+    tokens: TokenUsage | None = None
     context_length: int | None = None
     parameter_size: str | None = None
 
@@ -188,7 +204,7 @@ class ModelTestResult(BaseModel):
     response_model=ModelTestResult,
 )
 async def test_model(
-    model: str = Body(..., embed=True, max_length=256),  # noqa: PT028
+    model: str = Body(..., embed=True, min_length=1, max_length=256),  # noqa: PT028
 ) -> ModelTestResult:
     """Test connectivity and API key validity for a specific model.
 
@@ -198,26 +214,30 @@ async def test_model(
     try:
         client = _get_litellm_client()
         resp = await client.post(
-            f"{_LITELLM_URL}/chat/completions",
+            f"{settings.litellm_proxy_url}/chat/completions",
             json={
                 "model": model,
                 "messages": [{"role": "user", "content": "Say hi"}],
                 "max_tokens": 10,
             },
+            headers={"X-Request-Id": request_id_var.get("-")},
             timeout=30,
         )
 
         latency_ms = int((time.monotonic() - t0) * 1000)
 
         if resp.status_code != 200:
+            error_body = resp.text[:500] if resp.text else ""
             logger.warning(
-                "Model test failed: model=%s status=%d",
+                "Model test failed: model=%s status=%d body=%s",
                 model,
                 resp.status_code,
+                error_body[:200],
                 extra={
                     "event": "model_test_failed",
                     "model": model,
                     "http_status": resp.status_code,
+                    "response_body_preview": error_body,
                 },
             )
             return ModelTestResult(
@@ -253,6 +273,18 @@ async def test_model(
         except Exception:
             logger.debug("Could not fetch Ollama model info for %s", model, exc_info=True)
 
+        logger.info(
+            "Model test ok: model=%s tokens=%d latency_ms=%d",
+            model,
+            tokens.total,
+            latency_ms,
+            extra={
+                "event": "model_test_ok",
+                "model": model,
+                "total_tokens": tokens.total,
+                "latency_ms": latency_ms,
+            },
+        )
         return ModelTestResult(
             model=model,
             status="ok",
@@ -266,10 +298,16 @@ async def test_model(
     except (httpx.ConnectError, httpx.TimeoutException) as e:
         latency_ms = int((time.monotonic() - t0) * 1000)
         logger.warning(
-            "Model test connection failed: model=%s error=%s",
+            "Model test connection failed: model=%s error=%s latency_ms=%d",
             model,
             e,
-            extra={"event": "model_test_connect_failed", "model": model},
+            latency_ms,
+            extra={
+                "event": "model_test_connect_failed",
+                "model": model,
+                "error_type": type(e).__name__,
+                "latency_ms": latency_ms,
+            },
         )
         return ModelTestResult(
             model=model,
@@ -279,7 +317,7 @@ async def test_model(
         )
     except Exception as e:
         latency_ms = int((time.monotonic() - t0) * 1000)
-        logger.warning(
+        logger.error(
             "Model test unexpected error: model=%s error=%s",
             model,
             e,
@@ -288,6 +326,7 @@ async def test_model(
                 "event": "model_test_unexpected_error",
                 "model": model,
                 "error_type": type(e).__name__,
+                "latency_ms": latency_ms,
             },
         )
         return ModelTestResult(
@@ -316,14 +355,24 @@ async def list_available_models() -> list[ModelInfo]:
     try:
         client = _get_litellm_client()
         resp = await client.get(
-            f"{_LITELLM_URL}/models",
+            f"{settings.litellm_proxy_url}/models",
+            headers={"X-Request-Id": request_id_var.get("-")},
             timeout=10,
         )
 
         if resp.status_code != 200:
+            logger.warning(
+                "LiteLLM /models error: status=%d",
+                resp.status_code,
+                extra={
+                    "event": "models_litellm_error",
+                    "http_status": resp.status_code,
+                },
+            )
             raise HTTPException(
                 status_code=502,
-                detail=f"LiteLLM /models returned {resp.status_code}",
+                detail="Model proxy returned an error. Try again later.",
+                headers={"Retry-After": "30"},
             )
 
         try:
@@ -340,13 +389,14 @@ async def list_available_models() -> list[ModelInfo]:
             raise HTTPException(
                 status_code=502,
                 detail="Model proxy returned an unparseable response.",
+                headers={"Retry-After": "30"},
             ) from None
         models = data.get("data", [])
         return [
             ModelInfo(
                 name=m.get("id", "unknown"),
                 provider=m.get("owned_by"),
-                model_id=m.get("id"),
+                model_id=m.get("id", "unknown"),
             )
             for m in models
         ]
@@ -361,4 +411,5 @@ async def list_available_models() -> list[ModelInfo]:
         raise HTTPException(
             status_code=502,
             detail="Model proxy is unreachable. Try again later.",
+            headers={"Retry-After": "30"},
         ) from e

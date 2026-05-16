@@ -18,14 +18,14 @@ const STATUS_ICON: Record<string, React.ComponentType<{ className?: string }>> =
   queued: Clock,
 }
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status, live }: { status: string; live?: boolean }) {
   const classes =
     STATUS_CLASSES[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
   const label = statusLabel(status)
   const Icon = STATUS_ICON[status]
   return (
     <span
-      role="status"
+      role={live ? 'status' : undefined}
       className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${classes}`}
     >
       {status === 'running' ? (

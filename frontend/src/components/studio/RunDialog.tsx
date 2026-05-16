@@ -52,7 +52,7 @@ export function RunDialog({
               </Dialog.Description>
             </div>
             <Dialog.Close
-              className="rounded p-1 text-white/70 transition-colors hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+              className="flex h-11 w-11 items-center justify-center rounded text-white/70 transition-colors hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
               aria-label="Close"
             >
               <X className="h-4 w-4" />
@@ -73,11 +73,22 @@ export function RunDialog({
                 autoFocus
                 aria-describedby={error ? 'run-dialog-error' : 'run-dialog-hint'}
                 aria-invalid={error ? true : undefined}
-                className="h-32 w-full resize-none rounded-lg border border-border bg-muted/40 px-3 py-2.5 font-mono text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-32 w-full resize-none rounded-lg border border-border bg-muted/40 px-3 py-2.5 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 value={inputs}
                 onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
-                  setInputs(e.target.value)
-                  if (error) setError('')
+                  const val = e.target.value
+                  setInputs(val)
+                  if (val.trim()) {
+                    try {
+                      JSON.parse(val)
+                      setError('')
+                    } catch (err) {
+                      const detail = err instanceof SyntaxError ? err.message : 'Unknown error'
+                      setError(`Invalid JSON: ${detail}`)
+                    }
+                  } else {
+                    setError('')
+                  }
                 }}
                 onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
                   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -87,6 +98,9 @@ export function RunDialog({
                 }}
                 placeholder='{ "topic": "AI safety" }'
                 spellCheck={false}
+                autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
               />
               <p id="run-dialog-hint" className="mt-1 text-xs text-muted-foreground/70">
                 Press {modKey}+Enter to run
@@ -111,7 +125,8 @@ export function RunDialog({
               </Dialog.Close>
               <button
                 onClick={handleRun}
-                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                disabled={!!error}
+                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
                 <Play className="h-3.5 w-3.5" />
                 Run

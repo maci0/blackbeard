@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 import time
 from typing import Any
@@ -16,13 +15,17 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard import __version__
+from blackbeard.api.sse_state import get_status as get_sse_status
 from blackbeard.config import settings
+from blackbeard.engine import get_pool_status
 from blackbeard.http_client import get_client
 from blackbeard.models import get_session
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["health"])
+
+_start_time = time.monotonic()
 
 
 def _get_health_client() -> httpx.AsyncClient:
@@ -36,6 +39,7 @@ class HealthResponse(BaseModel):
     status: str
     service: str
     version: str
+    uptime_s: float | None = None
 
 
 class ComponentCheck(BaseModel):
@@ -43,19 +47,28 @@ class ComponentCheck(BaseModel):
     latency_ms: float | None = None
     reason: str | None = None
     http_status: int | None = None
+    active_threads: int | None = None
+    queued_tasks: int | None = None
+    max_workers: int | None = None
 
 
 class ReadinessResponse(BaseModel):
     status: str
     service: str
     version: str
+    uptime_s: float | None = None
     checks: dict[str, ComponentCheck]
 
 
 @router.get("/health", response_model=HealthResponse)
 async def health(response: Response) -> HealthResponse:
     response.headers["Cache-Control"] = _NO_CACHE
-    return HealthResponse(status="ok", service="blackbeard", version=__version__)
+    return HealthResponse(
+        status="ok",
+        service="blackbeard",
+        version=__version__,
+        uptime_s=round(time.monotonic() - _start_time, 1),
+    )
 
 
 _valkey_client: Any = None
@@ -80,8 +93,17 @@ async def _check_valkey() -> dict[str, object]:
         old_client = _valkey_client
         _valkey_client = None
         if old_client is not None:
-            with contextlib.suppress(Exception):
+            try:
                 await old_client.aclose()
+            except Exception as close_err:
+                logger.debug(
+                    "Error closing stale valkey client: %s",
+                    close_err,
+                    extra={
+                        "event": "valkey_stale_close_error",
+                        "error_type": type(close_err).__name__,
+                    },
+                )
         err = type(e).__name__
         logger.warning(
             "Health check: valkey is down: %s: %s (%.0fms)",
@@ -96,7 +118,7 @@ async def _check_valkey() -> dict[str, object]:
                 "latency_ms": latency_ms,
             },
         )
-        return {"status": "down", "reason": "connection_failed"}
+        return {"status": "down", "reason": "connection_failed", "latency_ms": latency_ms}
 
 
 async def _check_litellm() -> dict[str, object]:
@@ -108,6 +130,17 @@ async def _check_litellm() -> dict[str, object]:
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
         if resp.status_code == 200:
             return {"status": "up", "latency_ms": latency_ms}
+        logger.warning(
+            "Health check: litellm degraded: status=%d (%.0fms)",
+            resp.status_code,
+            latency_ms,
+            extra={
+                "event": "health_check_degraded",
+                "component": "litellm",
+                "http_status": resp.status_code,
+                "latency_ms": latency_ms,
+            },
+        )
         return {"status": "degraded", "http_status": resp.status_code, "latency_ms": latency_ms}
     except Exception as e:
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
@@ -125,7 +158,7 @@ async def _check_litellm() -> dict[str, object]:
                 "latency_ms": latency_ms,
             },
         )
-        return {"status": "down", "reason": "connection_failed"}
+        return {"status": "down", "reason": "connection_failed", "latency_ms": latency_ms}
 
 
 async def shutdown_health_clients() -> None:
@@ -146,6 +179,32 @@ async def shutdown_health_clients() -> None:
                 },
             )
         _valkey_client = None
+
+
+async def _check_database(session: AsyncSession) -> dict[str, object]:
+    """Ping the database and return status dict."""
+    t0 = time.monotonic()
+    try:
+        await session.execute(text("SELECT 1"))
+        latency_ms = round((time.monotonic() - t0) * 1000, 1)
+        return {"status": "up", "latency_ms": latency_ms}
+    except Exception as e:
+        latency_ms = round((time.monotonic() - t0) * 1000, 1)
+        err = type(e).__name__
+        logger.warning(
+            "Health check: database is down: %s: %s (%.0fms)",
+            err,
+            e,
+            latency_ms,
+            exc_info=True,
+            extra={
+                "event": "health_check_failed",
+                "component": "database",
+                "error_type": err,
+                "latency_ms": latency_ms,
+            },
+        )
+        return {"status": "down", "reason": "connection_failed", "latency_ms": latency_ms}
 
 
 @router.get(
@@ -171,32 +230,6 @@ async def readiness(
     overall = "healthy"
     t0_ready = time.monotonic()
 
-    async def _check_database() -> dict[str, object]:
-        try:
-            t0 = time.monotonic()
-            await session.execute(text("SELECT 1"))
-            latency_ms = round((time.monotonic() - t0) * 1000, 1)
-            return {"status": "up", "latency_ms": latency_ms}
-        except Exception as e:
-            latency_ms = round((time.monotonic() - t0) * 1000, 1)
-            err = type(e).__name__
-            logger.warning(
-                "Health check: database is down: %s: %s (%.0fms)",
-                err,
-                e,
-                latency_ms,
-                exc_info=True,
-                extra={
-                    "event": "health_check_failed",
-                    "component": "database",
-                    "error_type": err,
-                    "latency_ms": latency_ms,
-                },
-            )
-            return {"status": "down", "reason": "connection_failed"}
-
-    timeout_result: dict[str, object] = {"status": "down", "reason": "timeout"}
-
     async def _with_timeout(coro: Any, label: str) -> dict[str, object]:
         try:
             return await asyncio.wait_for(coro, timeout=10.0)
@@ -206,17 +239,26 @@ async def readiness(
                 label,
                 extra={"event": "health_check_timeout", "component": label},
             )
-            return dict(timeout_result)
+            return {"status": "down", "reason": "timeout"}
 
     db_result, valkey_result, litellm_result = await asyncio.gather(
-        _with_timeout(_check_database(), "database"),
+        _with_timeout(_check_database(session), "database"),
         _with_timeout(_check_valkey(), "valkey"),
         _with_timeout(_check_litellm(), "litellm"),
     )
+    pool = get_pool_status()
+    executor_status = "saturated" if pool["saturated"] else "up"
+    executor_result: dict[str, object] = {
+        "status": executor_status,
+        "active_threads": pool["active_threads"],
+        "queued_tasks": pool["queued_tasks"],
+        "max_workers": pool["max_workers"],
+    }
     checks: dict[str, dict[str, object]] = {
         "database": db_result,
         "valkey": valkey_result,
         "litellm": litellm_result,
+        "executor": executor_result,
     }
     # Database is a hard dependency — if it is down, the service is unhealthy.
     # Valkey (cache) and LiteLLM (model proxy) are soft dependencies — degraded
@@ -229,6 +271,7 @@ async def readiness(
                 break
             overall = "degraded"
 
+    sse = get_sse_status()
     total_ms = round((time.monotonic() - t0_ready) * 1000, 1)
     if overall == "unhealthy":
         response.status_code = 503
@@ -238,12 +281,14 @@ async def readiness(
     log_event = f"readiness_{overall}"
     logger.log(
         log_level,
-        "Readiness check %s (%.0fms): db=%s valkey=%s litellm=%s",
+        "Readiness check %s (%.0fms): db=%s valkey=%s litellm=%s sse=%d/%d",
         overall,
         total_ms,
         checks["database"]["status"],
         checks["valkey"]["status"],
         checks["litellm"]["status"],
+        sse["active"],
+        sse["max"],
         extra={
             "event": log_event,
             "total_ms": total_ms,
@@ -253,6 +298,12 @@ async def readiness(
             "valkey_latency_ms": checks["valkey"].get("latency_ms"),
             "litellm_status": checks["litellm"]["status"],
             "litellm_latency_ms": checks["litellm"].get("latency_ms"),
+            "executor_status": executor_status,
+            "executor_active": pool["active_threads"],
+            "executor_queued": pool["queued_tasks"],
+            "sse_active": sse["active"],
+            "sse_max": sse["max"],
+            "uptime_s": round(time.monotonic() - _start_time, 1),
         },
     )
     response.headers["Cache-Control"] = _NO_CACHE
@@ -260,5 +311,6 @@ async def readiness(
         status=overall,
         service="blackbeard",
         version=__version__,
+        uptime_s=round(time.monotonic() - _start_time, 1),
         checks={k: ComponentCheck(**v) for k, v in checks.items()},
     )

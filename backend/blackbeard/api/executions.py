@@ -6,22 +6,20 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Response
+from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
+from blackbeard.api import sse_state
 from blackbeard.config import settings
-from blackbeard.engine import ExecutionError
+from blackbeard.engine import ExecutionError, ExecutionNotFoundError
 from blackbeard.engine import executor as _executor_mod
-from blackbeard.engine.executor import ExecutionNotFoundError
 from blackbeard.http_client import get_client
 from blackbeard.kinds import NAME_PATTERN
+from blackbeard.logging_config import request_id_var
 from blackbeard.models import (
     TERMINAL_STATUSES,
     ExecutionStatus,
@@ -39,9 +37,6 @@ from blackbeard.models.execution_schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["executions"])
-
-_MAX_CONCURRENT_SSE = 20
-_sse_semaphore = asyncio.Semaphore(_MAX_CONCURRENT_SSE)
 
 
 def _get_spend_client() -> httpx.AsyncClient:
@@ -61,6 +56,7 @@ def _get_spend_client() -> httpx.AsyncClient:
     responses={
         404: {"description": "Crew not found in namespace"},
         422: {"description": "Invalid request body"},
+        500: {"description": "Internal execution error"},
     },
 )
 async def kickoff_crew(
@@ -91,10 +87,12 @@ async def kickoff_crew(
             crew_name,
             namespace,
             exc,
+            exc_info=True,
             extra={
                 "event": "kickoff_internal_error",
                 "crew_name": crew_name,
                 "namespace": namespace,
+                "error_type": type(exc).__name__,
             },
         )
         raise HTTPException(
@@ -120,7 +118,7 @@ async def list_executions(
         default=None,
         pattern=NAME_PATTERN,
         max_length=255,
-        description="Filter by namespace",
+        description="Filter by namespace (omit for all namespaces)",
     ),
     status: ExecutionStatus | None = Query(
         default=None,
@@ -187,6 +185,7 @@ async def get_execution_spend(
         resp = await client.get(
             f"{settings.litellm_proxy_url}/spend/logs",
             params={"request_id": str(execution_id)},
+            headers={"X-Request-Id": request_id_var.get("-")},
         )
         if resp.status_code == 200:
             return Response(content=resp.content, media_type="application/json")
@@ -203,6 +202,7 @@ async def get_execution_spend(
         raise HTTPException(
             status_code=502,
             detail=f"Spend service returned status {resp.status_code}",
+            headers={"Retry-After": "30"},
         )
     except HTTPException:
         raise
@@ -222,6 +222,7 @@ async def get_execution_spend(
         raise HTTPException(
             status_code=502,
             detail="Spend service is unavailable. Try again later.",
+            headers={"Retry-After": "30"},
         ) from e
 
 
@@ -255,7 +256,7 @@ async def list_execution_events(
             ExecutionEventItem(
                 sequence=e.sequence,
                 event_type=e.event_type,
-                timestamp=e.timestamp.isoformat(),
+                timestamp=e.timestamp,
                 data=e.data,
             )
             for e in items
@@ -269,6 +270,7 @@ async def list_execution_events(
     "/executions/{execution_id}/cancel",
     response_model=ExecutionResponse,
     responses={
+        200: {"description": "Execution cancelled successfully", "model": ExecutionResponse},
         404: {"description": "Execution not found"},
         409: {"description": "Execution already in terminal status"},
     },
@@ -299,14 +301,16 @@ async def stream_execution(
     execution_id: UUID = Path(..., description="Execution UUID"),
 ) -> EventSourceResponse:
     """SSE stream of execution status events."""
-    if _sse_semaphore.locked():
+    if sse_state.semaphore.locked():
         logger.warning(
-            "SSE stream rejected: max concurrent streams reached (%d)",
-            _MAX_CONCURRENT_SSE,
+            "SSE stream rejected: max concurrent streams reached (%d/%d)",
+            sse_state.MAX_CONCURRENT_SSE,
+            sse_state.MAX_CONCURRENT_SSE,
             extra={
                 "event": "sse_stream_rejected",
                 "execution_id": str(execution_id),
-                "max_concurrent_sse": _MAX_CONCURRENT_SSE,
+                "active_streams": sse_state.MAX_CONCURRENT_SSE,
+                "max_concurrent_sse": sse_state.MAX_CONCURRENT_SSE,
             },
         )
         raise HTTPException(
@@ -323,13 +327,15 @@ async def stream_execution(
 
     max_polls = 400  # ~32 min with progressive backoff (2s→3s→5s)
     logger.info(
-        "SSE stream opened: execution_id=%s max_streams=%d",
+        "SSE stream opened: execution_id=%s active=%d/%d",
         execution_id,
-        _MAX_CONCURRENT_SSE,
+        sse_state.active_count,
+        sse_state.MAX_CONCURRENT_SSE,
         extra={
             "event": "sse_stream_opened",
             "execution_id": str(execution_id),
-            "max_concurrent_sse": _MAX_CONCURRENT_SSE,
+            "active_streams": sse_state.active_count,
+            "max_concurrent_sse": sse_state.MAX_CONCURRENT_SSE,
         },
     )
 
@@ -339,8 +345,9 @@ async def stream_execution(
         # between that check and this acquire, other streams can start (TOCTOU).
         acquired = False
         try:
-            await asyncio.wait_for(_sse_semaphore.acquire(), timeout=0)
+            await asyncio.wait_for(sse_state.semaphore.acquire(), timeout=0)
             acquired = True
+            sse_state.active_count += 1
         except TimeoutError:
             msg = json.dumps({"detail": "Too many concurrent SSE streams"})
             yield {"event": "error", "data": msg}
@@ -353,13 +360,15 @@ async def stream_execution(
             try:
                 while polls < max_polls:
                     polls += 1
-
                     async with async_session() as session:
                         if last_status is None:
                             execution = await _executor_mod.get_execution(session, execution_id)
                             if not execution:
                                 msg = f"Execution '{execution_id}' not found"
-                                yield {"event": "error", "data": json.dumps({"detail": msg})}
+                                yield {
+                                    "event": "error",
+                                    "data": json.dumps({"detail": msg}),
+                                }
                                 break
                             current_status = execution.status
                             data = ExecutionResponse.from_db(execution).model_dump_json()
@@ -372,7 +381,10 @@ async def stream_execution(
 
                             if current_status is None:
                                 msg = f"Execution '{execution_id}' not found"
-                                yield {"event": "error", "data": json.dumps({"detail": msg})}
+                                yield {
+                                    "event": "error",
+                                    "data": json.dumps({"detail": msg}),
+                                }
                                 break
 
                             if current_status != last_status or current_status in TERMINAL_STATUSES:
@@ -383,7 +395,10 @@ async def stream_execution(
                                 last_status = current_status
                             else:
                                 heartbeat = {"status": current_status.value}
-                                yield {"event": "heartbeat", "data": json.dumps(heartbeat)}
+                                yield {
+                                    "event": "heartbeat",
+                                    "data": json.dumps(heartbeat),
+                                }
 
                         new_events = await _executor_mod.list_execution_events(
                             session, execution_id, after=last_event_seq, limit=50
@@ -401,20 +416,23 @@ async def stream_execution(
                             }
                             last_event_seq = ev.sequence
 
-                    if current_status is not None and current_status in TERMINAL_STATUSES:
-                        logger.info(
-                            "SSE stream closed: execution_id=%s status=%s polls=%d",
-                            execution_id,
-                            current_status.value,
-                            polls,
-                            extra={
-                                "event": "sse_stream_closed",
-                                "execution_id": str(execution_id),
-                                "final_status": current_status.value,
-                                "polls": polls,
-                            },
-                        )
-                        break
+                        if current_status in TERMINAL_STATUSES:
+                            logger.info(
+                                "SSE stream closed: id=%s status=%s polls=%d active=%d/%d",
+                                execution_id,
+                                current_status.value,
+                                polls,
+                                sse_state.active_count - 1,
+                                sse_state.MAX_CONCURRENT_SSE,
+                                extra={
+                                    "event": "sse_stream_closed",
+                                    "execution_id": str(execution_id),
+                                    "final_status": current_status.value,
+                                    "polls": polls,
+                                    "remaining_streams": sse_state.active_count - 1,
+                                },
+                            )
+                            break
 
                     await asyncio.sleep(2 if polls < 10 else 3 if polls < 30 else 5)
                 else:
@@ -453,12 +471,14 @@ async def stream_execution(
                         "execution_id": str(execution_id),
                         "polls": polls,
                         "error_type": type(e).__name__,
+                        "error_message": str(e)[:500],
                     },
                 )
                 yield {"event": "error", "data": json.dumps({"detail": "Internal stream error"})}
         finally:
             if acquired:
-                _sse_semaphore.release()
+                sse_state.active_count -= 1
+                sse_state.semaphore.release()
 
     return EventSourceResponse(
         event_generator(),

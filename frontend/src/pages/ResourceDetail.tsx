@@ -45,13 +45,19 @@ function SpecValue({ value }: { value: unknown }): React.ReactElement {
   }
   if (typeof value === 'boolean') {
     return (
-      <span className={value ? 'font-medium text-emerald-600' : 'font-medium text-red-500'}>
+      <span
+        className={
+          value
+            ? 'font-medium text-emerald-600 dark:text-emerald-400'
+            : 'font-medium text-red-500 dark:text-red-400'
+        }
+      >
         {String(value)}
       </span>
     )
   }
   if (typeof value === 'number') {
-    return <span className="font-mono text-xs text-blue-600">{value}</span>
+    return <span className="font-mono text-xs text-blue-600 dark:text-blue-400">{value}</span>
   }
   if (typeof value === 'string') {
     const refMatch = value.match(/^ref:([a-z-]+)\/([a-z0-9][a-z0-9-]*)$/)
@@ -102,7 +108,7 @@ function SpecValue({ value }: { value: unknown }): React.ReactElement {
       </div>
     )
   }
-  return <span>{typeof value === 'string' ? value : JSON.stringify(value)}</span>
+  return <span>{JSON.stringify(value)}</span>
 }
 
 function prettifyKey(key: string): string {
@@ -291,7 +297,7 @@ export default function ResourceDetail() {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div className="text-center">
-          <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" />
+          <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" aria-hidden="true" />
           <p className="font-medium">{error ?? 'Resource not found'}</p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <button
@@ -465,7 +471,7 @@ export default function ResourceDetail() {
             Saved successfully
             <button
               onClick={() => setSaveSuccess(false)}
-              className="ml-auto rounded p-2 transition-colors hover:bg-green-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-green-900"
+              className="ml-auto flex h-[44px] w-[44px] items-center justify-center rounded transition-colors hover:bg-green-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-green-900"
               aria-label="Dismiss success message"
             >
               <X className="h-3.5 w-3.5" />
@@ -502,7 +508,10 @@ export default function ResourceDetail() {
 
           <TabsPrimitive.Content value="yaml">
             {editMode && (
-              <div className="mb-3 flex items-center gap-2 rounded-md bg-blue-50 p-2 text-sm text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+              <div
+                id="yaml-edit-hint"
+                className="mb-3 flex items-center gap-2 rounded-md bg-blue-50 p-2 text-sm text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+              >
                 <Info className="h-4 w-4 shrink-0" />
                 <span>Editing in YAML mode. Changes will be validated on save ({modKey}+S).</span>
               </div>
@@ -516,9 +525,13 @@ export default function ResourceDetail() {
                 <textarea
                   value={yamlContent}
                   onChange={(e) => setYamlContent(e.target.value)}
-                  className="h-[500px] w-full resize-none bg-[#0d1117] p-4 font-mono text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
+                  className="h-[500px] w-full resize-none bg-[#0d1117] p-4 font-mono text-sm text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   spellCheck={false}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  autoCorrect="off"
                   aria-label="YAML editor"
+                  aria-describedby="yaml-edit-hint"
                 />
               ) : (
                 <CodeBlock code={yamlContent} language="yaml" className="max-h-[500px]" />
@@ -566,7 +579,7 @@ export default function ResourceDetail() {
           {deleteError}
           <button
             onClick={() => setDeleteError(null)}
-            className="ml-auto rounded p-2 transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="ml-auto flex h-[44px] w-[44px] items-center justify-center rounded transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Dismiss error"
           >
             <X className="h-3.5 w-3.5" />

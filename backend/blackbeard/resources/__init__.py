@@ -1,16 +1,24 @@
 """Resource system: validation, CRUD service, and reference management."""
 
+from __future__ import annotations
+
 from blackbeard.resources.exceptions import (
     ResourceConflictError,
     ResourceNotFoundError,
     ResourceValidationError,
     ValidationError,
 )
-from blackbeard.resources.refs import build_adjacency, detect_cycles
+from blackbeard.resources.refs import build_adjacency, detect_cycles, parse_ref
 from blackbeard.resources.service import ResourceService
-from blackbeard.resources.validator import validate_resource
+from blackbeard.resources.validator import (
+    ALLOWED_TOOL_MODULE_PREFIXES,
+    BLOCKED_TOOL_SUBMODULES,
+    validate_resource,
+)
 
 __all__ = [
+    "ALLOWED_TOOL_MODULE_PREFIXES",
+    "BLOCKED_TOOL_SUBMODULES",
     "ResourceConflictError",
     "ResourceNotFoundError",
     "ResourceService",
@@ -18,5 +26,6 @@ __all__ = [
     "ValidationError",
     "build_adjacency",
     "detect_cycles",
+    "parse_ref",
     "validate_resource",
 ]

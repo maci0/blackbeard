@@ -26,6 +26,7 @@ Targeted areas:
 
 import uuid
 from decimal import Decimal
+from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -51,7 +52,7 @@ from blackbeard.resources.exceptions import (
 from blackbeard.resources.exceptions import (
     ValidationError as ResValidationError,
 )
-from blackbeard.resources.refs import RefInfo, extract_refs
+from blackbeard.resources.refs import _MAX_REF_WALK_DEPTH, RefInfo, extract_refs
 from blackbeard.resources.service import _parse_kind
 from blackbeard.resources.validator import (
     _is_internal_host,
@@ -60,38 +61,7 @@ from blackbeard.resources.validator import (
     _validate_url_ssrf,
     validate_resource,
 )
-from tests.conftest import API_KEY_HEADER
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _agent_payload(name: str = "researcher") -> dict:
-    return {
-        "apiVersion": "blackbeard/v1",
-        "kind": "Agent",
-        "metadata": {"name": name, "namespace": "default"},
-        "spec": {
-            "role": "Research Analyst",
-            "goal": "Find and synthesise information",
-            "backstory": "Years of experience in research",
-        },
-    }
-
-
-def make_resource(kind: ResourceKind, name: str, spec: dict) -> Resource:
-    r = Resource()
-    r.kind = kind
-    r.name = name
-    r.namespace = "default"
-    r.spec = spec
-    return r
-
-
-def _resource_map(*resources: Resource) -> dict[str, Resource]:
-    return {f"{r.kind.value}/{r.name}": r for r in resources}
-
+from tests.conftest import API_KEY_HEADER, _agent_payload, _resource_map, make_resource
 
 # ---------------------------------------------------------------------------
 # _parse_kind: case-insensitive lookup
@@ -338,7 +308,7 @@ def test_resource_response_from_db_with_labels():
 
 def test_execution_response_from_db_no_tasks():
     """from_db with include_tasks=False should return empty tasks list."""
-    from blackbeard.models.execution import Execution
+    from blackbeard.models.execution import Execution, ExecutionTask
 
     e = Execution()
     e.id = uuid.uuid4()
@@ -355,7 +325,19 @@ def test_execution_response_from_db_no_tasks():
     e.created_at = None
     e.started_at = None
     e.completed_at = None
-    e.tasks = [MagicMock()]  # Has tasks, but we pass include_tasks=False
+    task = ExecutionTask()
+    task.id = uuid.uuid4()
+    task.task_name = "some-task"
+    task.agent_name = "some-agent"
+    task.order = 0
+    task.status = TaskStatus.PENDING
+    task.output = None
+    task.error = None
+    task.tokens_used = 0
+    task.cost_usd = Decimal("0")
+    task.started_at = None
+    task.completed_at = None
+    e.tasks = [task]
 
     resp = ExecutionResponse.from_db(e, include_tasks=False)
     assert resp.tasks == []
@@ -564,14 +546,8 @@ def test_is_internal_host_shared_address_space():
 
 
 def test_is_internal_host_just_outside_shared():
-    """100.128.0.1 is outside shared address space but still private."""
-    # 100.128.0.0 is in the 100.64.0.0/10 range? Let's check:
-    # 100.64.0.0/10 covers 100.64.0.0 - 100.127.255.255
-    # 100.128.0.1 is outside the shared address space
-    # But it's still a public IP, so should not be internal
-    result = _is_internal_host("100.128.0.1")
-    # This is a public IP and should NOT be internal
-    assert result is False
+    """100.128.0.1 is outside 100.64.0.0/10 shared address space — public IP."""
+    assert _is_internal_host("100.128.0.1") is False
 
 
 # ---------------------------------------------------------------------------
@@ -580,18 +556,15 @@ def test_is_internal_host_just_outside_shared():
 
 
 def test_extract_refs_max_depth_protection():
-    """extract_refs should stop recursing beyond _MAX_REF_WALK_DEPTH (20)."""
-    # Build a spec nested 25 levels deep
+    """extract_refs should stop recursing beyond _MAX_REF_WALK_DEPTH."""
     spec = {}
     current = spec
-    for i in range(25):
+    for i in range(_MAX_REF_WALK_DEPTH + 5):
         current[f"level{i}"] = {}
         current = current[f"level{i}"]
     current["agent"] = "ref:agents/deep"
 
-    # Should not crash, but the deeply nested ref may not be found
     refs = extract_refs(spec)
-    # At depth > 20, the ref should be skipped
     assert len(refs) == 0
 
 
@@ -638,10 +611,9 @@ def test_resource_metadata_accepts_valid_labels():
 
 
 @patch("blackbeard.engine.loader.importlib")
-def test_build_tool_caching(mock_importlib):
-    """build_tool called twice for same python tool should only import once."""
+def test_build_tool_caches_by_ref(mock_importlib):
+    """build_tool caches by ref string to avoid duplicate imports."""
     fake_cls = MagicMock(name="FakeTool")
-    from types import ModuleType
     fake_module = ModuleType("crewai_tools.cache_test")
     fake_module.CacheTool = fake_cls
     mock_importlib.import_module.return_value = fake_module
@@ -655,10 +627,11 @@ def test_build_tool_caching(mock_importlib):
     t1 = loader.build_tool("ref:tools/cache-tool")
     t2 = loader.build_tool("ref:tools/cache-tool")
 
-    # Both return non-None, but because build_tool doesn't cache,
-    # it should be called twice. Let's verify it works correctly.
     assert t1 is not None
     assert t2 is not None
+    assert t1 is t2
+    assert mock_importlib.import_module.call_count == 1
+    assert fake_cls.call_count == 1
 
 
 # ---------------------------------------------------------------------------
@@ -695,16 +668,10 @@ def test_build_crew_default_tool_loading_is_hybrid(
     )
     loader = ResourceLoader(_resource_map(agent_res, task_res, crew_res))
 
-    # Mock discovery tools injection to verify it's called
     with patch.object(loader, "_inject_discovery_tools") as mock_inject:
         loader.build_crew("default-crew")
-        # Should be called with tool_loading="hybrid"
-        if mock_inject.call_count > 0:
-            call_kwargs = mock_inject.call_args
-            assert (
-                call_kwargs[0][2] == "hybrid"
-                or call_kwargs.kwargs.get("tool_loading") == "hybrid"
-            )
+        mock_inject.assert_called_once()
+        assert mock_inject.call_args[0][2] == "hybrid"
 
 
 # ---------------------------------------------------------------------------
@@ -809,17 +776,16 @@ def test_get_client_returns_same_instance():
     from blackbeard.http_client import _clients, _lock, get_client
 
     name = "_test_async_dedup"
-    # Clean up from any prior test
     with _lock:
         _clients.pop(name, None)
 
-    c1 = get_client(name, timeout=5)
-    c2 = get_client(name, timeout=99)  # kwargs ignored on second call
-    assert c1 is c2
-
-    # Clean up
-    with _lock:
-        _clients.pop(name, None)
+    try:
+        c1 = get_client(name, timeout=5)
+        c2 = get_client(name, timeout=99)
+        assert c1 is c2
+    finally:
+        with _lock:
+            _clients.pop(name, None)
 
 
 def test_get_sync_client_returns_same_instance():
@@ -830,12 +796,13 @@ def test_get_sync_client_returns_same_instance():
     with _lock:
         _sync_clients.pop(name, None)
 
-    c1 = get_sync_client(name, timeout=5)
-    c2 = get_sync_client(name, timeout=99)
-    assert c1 is c2
-
-    with _lock:
-        _sync_clients.pop(name, None)
+    try:
+        c1 = get_sync_client(name, timeout=5)
+        c2 = get_sync_client(name, timeout=99)
+        assert c1 is c2
+    finally:
+        with _lock:
+            _sync_clients.pop(name, None)
 
 
 def test_get_client_different_names_different_instances():
@@ -848,13 +815,14 @@ def test_get_client_different_names_different_instances():
         _clients.pop(name_a, None)
         _clients.pop(name_b, None)
 
-    a = get_client(name_a)
-    b = get_client(name_b)
-    assert a is not b
-
-    with _lock:
-        _clients.pop(name_a, None)
-        _clients.pop(name_b, None)
+    try:
+        a = get_client(name_a)
+        b = get_client(name_b)
+        assert a is not b
+    finally:
+        with _lock:
+            _clients.pop(name_a, None)
+            _clients.pop(name_b, None)
 
 
 # ---------------------------------------------------------------------------
@@ -885,7 +853,8 @@ def test_get_tool_tool_rejects_uppercase_name():
         namespace="default",
     )
     result = tool._run("UpperCase")
-    assert "invalid" in result.lower() or "must be" in result.lower()
+    assert "Invalid tool name" in result
+    assert "lowercase" in result
 
 
 # ---------------------------------------------------------------------------
@@ -902,13 +871,14 @@ def test_log_task_exception_cancelled():
     mock_task = MagicMock(spec=asyncio.Task)
     mock_task.cancelled.return_value = True
 
-    # Should not raise
-    _log_task_exception(mock_task)
-    mock_task.exception.assert_not_called()
+    with patch("blackbeard.engine.executor.logger") as mock_logger:
+        _log_task_exception(mock_task)
+        mock_task.exception.assert_not_called()
+        mock_logger.error.assert_not_called()
 
 
 def test_log_task_exception_no_exception():
-    """_log_task_exception should do nothing when task has no exception."""
+    """_log_task_exception should not log when task has no exception."""
     import asyncio
 
     from blackbeard.engine.executor import _log_task_exception
@@ -917,23 +887,30 @@ def test_log_task_exception_no_exception():
     mock_task.cancelled.return_value = False
     mock_task.exception.return_value = None
 
-    # Should not raise or log errors
-    _log_task_exception(mock_task)
+    with patch("blackbeard.engine.executor.logger") as mock_logger:
+        _log_task_exception(mock_task)
+        mock_logger.error.assert_not_called()
 
 
 def test_log_task_exception_with_exception():
-    """_log_task_exception should log when task has an exception."""
+    """_log_task_exception should log an error when task has an exception."""
     import asyncio
 
     from blackbeard.engine.executor import _log_task_exception
 
     mock_task = MagicMock(spec=asyncio.Task)
     mock_task.cancelled.return_value = False
-    mock_task.exception.return_value = RuntimeError("boom")
+    exc = RuntimeError("boom")
+    mock_task.exception.return_value = exc
     mock_task.get_name.return_value = "test-task"
 
-    # Should not raise (just logs)
-    _log_task_exception(mock_task)
+    with patch("blackbeard.engine.executor.logger") as mock_logger:
+        _log_task_exception(mock_task)
+        mock_logger.error.assert_called_once()
+        args, kwargs = mock_logger.error.call_args
+        assert args[1] is exc
+        assert kwargs["extra"]["task_name"] == "test-task"
+        assert kwargs["extra"]["error_type"] == "RuntimeError"
 
 
 # ---------------------------------------------------------------------------

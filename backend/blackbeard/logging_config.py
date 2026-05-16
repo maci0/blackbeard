@@ -89,6 +89,7 @@ class _JsonFormatter(logging.Formatter):
         if record.exc_info and record.exc_info[1]:
             log_entry["exception"] = self.formatException(record.exc_info)
             log_entry["error.type"] = type(record.exc_info[1]).__name__
+            log_entry["error.message"] = str(record.exc_info[1])[:500]
         for key, val in record.__dict__.items():
             if key not in _LOG_RECORD_BUILTIN and key not in log_entry:
                 key_lower = key.lower()
@@ -98,7 +99,15 @@ class _JsonFormatter(logging.Formatter):
                     log_entry[key] = "[REDACTED]"
                 else:
                     log_entry[key] = val
-        return json.dumps(log_entry, default=str)
+        try:
+            return json.dumps(log_entry, default=str)
+        except (TypeError, ValueError, OverflowError):
+            _scalar = (str, int, float, bool, type(None))
+            safe = {
+                k: v for k, v in log_entry.items() if isinstance(v, _scalar)
+            }
+            safe["_serialization_error"] = True
+            return json.dumps(safe, default=str)
 
 
 def configure_logging(debug: bool = False, log_level: str = "") -> None:

@@ -25,13 +25,16 @@ logger = logging.getLogger(__name__)
 _APP_BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Safe environment variables to pass through to WASM tools (never leak secrets)
-_SAFE_ENV_VARS = ("PATH", "HOME", "USER", "LANG", "LC_ALL", "TZ", "TERM")
+_SAFE_ENV_VARS = ("LANG", "LC_ALL", "TZ", "TERM")
 
 # Default fuel limit (~100M instructions; actual wall-clock time varies by host CPU)
 DEFAULT_FUEL = 100_000_000
 
 # Default module cache size
 DEFAULT_CACHE_SIZE = 50
+
+# Maximum output size from a WASM tool (1 MB)
+MAX_OUTPUT_BYTES = 1_024 * 1_024
 
 
 def _log_extra(execution_id: str | None, **kwargs: Any) -> dict[str, Any]:
@@ -135,22 +138,28 @@ class WasmSandbox:
 
     def _load_module(self, wasm_path: str) -> wasmtime.Module:
         """Load and cache a WASM module."""
-        cached = self._cache.get(wasm_path)
-        if cached is not None:
-            return cached
-
         path = Path(wasm_path)
         resolved = path.resolve()
+        cache_key = str(resolved)
+
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            if not resolved.is_relative_to(_APP_BASE_DIR):
+                raise WasmExecutionError(
+                    "Invalid WASM module path: path must be within the application directory"
+                )
+            return cached
+
         if not resolved.is_relative_to(_APP_BASE_DIR):
             raise WasmExecutionError(
                 "Invalid WASM module path: path must be within the application directory"
             )
-        if not resolved.exists():
-            raise WasmExecutionError(f"WASM module not found: {wasm_path}")
+        if not resolved.is_file():
+            raise WasmExecutionError(f"WASM module not found or not a regular file: {wasm_path}")
 
         try:
-            module = wasmtime.Module.from_file(self._engine, str(path))
-            self._cache.put(wasm_path, module)
+            module = wasmtime.Module.from_file(self._engine, str(resolved))
+            self._cache.put(cache_key, module)
             return module
         except wasmtime.WasmtimeError as e:
             raise WasmExecutionError(f"Failed to compile WASM module: {e}") from e
@@ -255,13 +264,25 @@ class WasmSandbox:
                 ),
             )
 
+            raw = str(result) if not isinstance(result, str) else result
+            if len(raw) > MAX_OUTPUT_BYTES:
+                raise WasmExecutionError(
+                    f"WASM output exceeds size limit ({len(raw)} > {MAX_OUTPUT_BYTES} bytes)"
+                )
+
             if isinstance(result, str):
                 try:
                     parsed = json.loads(result)
+                    output = parsed.get("output", result)
+                    if not isinstance(output, str):
+                        output = json.dumps(output)
+                    error = parsed.get("error")
+                    if error is not None and not isinstance(error, str):
+                        error = str(error)
                     return WasmToolResult(
-                        output=parsed.get("output", result),
-                        success=parsed.get("success", True),
-                        error=parsed.get("error"),
+                        output=output,
+                        success=bool(parsed.get("success", True)),
+                        error=error,
                         duration_ms=duration_ms,
                     )
                 except json.JSONDecodeError:
@@ -272,7 +293,7 @@ class WasmSandbox:
                     )
             else:
                 return WasmToolResult(
-                    output=str(result),
+                    output=raw,
                     success=True,
                     duration_ms=duration_ms,
                 )

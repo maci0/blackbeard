@@ -89,6 +89,7 @@ function ToolCard({ resource }: { resource: Resource }) {
   return (
     <Link
       to={`/resources/tools/${resource.metadata.name}`}
+      aria-label={`Tool: ${resource.metadata.name}${spec.type ? ` (${TYPE_DISPLAY[spec.type] ?? spec.type})` : ''}`}
       className="flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {/* Header */}
@@ -99,7 +100,9 @@ function ToolCard({ resource }: { resource: Resource }) {
               <Wrench className="h-4 w-4 text-emerald-600" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{resource.metadata.name}</p>
+              <p className="truncate text-sm font-semibold" title={resource.metadata.name}>
+                {resource.metadata.name}
+              </p>
               {resource.metadata.namespace && resource.metadata.namespace !== 'default' && (
                 <p className="text-xs text-muted-foreground">{resource.metadata.namespace}</p>
               )}
@@ -238,12 +241,13 @@ export default function Tools() {
                 placeholder="Search tools…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                autoComplete="off"
+                className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>
             {search && (
               <>
-                <span className="text-sm text-muted-foreground">
+                <span role="status" aria-live="polite" className="text-sm text-muted-foreground">
                   {filtered.length} of {tools.length} tools
                 </span>
                 <button

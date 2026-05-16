@@ -108,12 +108,10 @@ export const useStudioStore = create<StudioState>()((set, get) => {
       pushHistory()
       set((state) => {
         const nodes = state.nodes.filter((n) => n.id !== id)
-        const edges = state.edges.some((e) => e.source === id || e.target === id)
-          ? state.edges.filter((e) => e.source !== id && e.target !== id)
-          : state.edges
+        const filteredEdges = state.edges.filter((e) => e.source !== id && e.target !== id)
         return {
           nodes,
-          edges,
+          edges: filteredEdges.length === state.edges.length ? state.edges : filteredEdges,
           selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
           dirty: true,
         }

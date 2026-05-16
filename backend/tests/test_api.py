@@ -14,24 +14,11 @@ SQLite-compatible types *before* this module is imported.
 import pytest
 from httpx import AsyncClient
 
-from tests.conftest import API_KEY_HEADER
+from tests.conftest import API_KEY_HEADER, _agent_payload
 
 # ---------------------------------------------------------------------------
 # Payload helpers
 # ---------------------------------------------------------------------------
-
-
-def _agent_payload(name: str = "researcher") -> dict:
-    return {
-        "apiVersion": "blackbeard/v1",
-        "kind": "Agent",
-        "metadata": {"name": name, "namespace": "default"},
-        "spec": {
-            "role": "Research Analyst",
-            "goal": "Find and synthesise information",
-            "backstory": "Years of experience in research",
-        },
-    }
 
 
 def _task_payload(name: str = "gather-data", agent_ref: str = "ref:agents/researcher") -> dict:

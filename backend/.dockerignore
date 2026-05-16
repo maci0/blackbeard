@@ -19,3 +19,6 @@ htmlcov/
 LICENSE*
 .DS_Store
 Dockerfile*
+.claude/
+.sisyphus/
+.playwright-mcp/

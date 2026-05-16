@@ -13,6 +13,17 @@ interface PaletteItem {
   borderColor: string
 }
 
+function addNodeFromPalette(type: string) {
+  const { addNode, nodes } = useStudioStore.getState()
+  const offset = nodes.length * 30
+  addNode({
+    id: `${type}-${crypto.randomUUID()}`,
+    type,
+    position: { x: 250 + offset, y: 150 + offset },
+    data: getDefaultNodeData(type),
+  })
+}
+
 const ITEMS: PaletteItem[] = [
   {
     type: 'agent',
@@ -57,14 +68,7 @@ function PaletteCard({ item }: { item: PaletteItem }) {
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
-      const { addNode } = useStudioStore.getState()
-      addNode({
-        id: `${item.type}-${Date.now()}`,
-        type: item.type,
-        // Stagger position slightly so multiple keyboard-added nodes don't stack exactly
-        position: { x: 220 + Math.random() * 120, y: 120 + Math.random() * 120 },
-        data: getDefaultNodeData(item.type),
-      })
+      addNodeFromPalette(item.type)
     }
   }
 
@@ -111,9 +115,34 @@ export default function Palette() {
       </div>
       <div className="p-2 pt-0">
         <p className="text-center text-[10px] leading-tight text-muted-foreground">
-          Drag onto canvas or press Enter to add
+          Drag onto canvas or press Enter/Space to add
         </p>
       </div>
     </aside>
+  )
+}
+
+export function MobilePalette() {
+  return (
+    <div
+      role="toolbar"
+      aria-label="Add nodes"
+      className="flex shrink-0 items-center justify-center gap-2 border-t bg-card px-3 py-2 sm:hidden"
+    >
+      {ITEMS.map((item) => {
+        const Icon = item.icon
+        return (
+          <button
+            key={item.type}
+            onClick={() => addNodeFromPalette(item.type)}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${item.headerBg}`}
+            aria-label={`Add ${item.label} node`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {item.label}
+          </button>
+        )
+      })}
+    </div>
   )
 }

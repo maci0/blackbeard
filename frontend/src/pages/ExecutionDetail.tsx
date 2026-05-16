@@ -15,11 +15,11 @@ import { useDocumentTitle, usePolling } from '@/lib/hooks'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import {
   useExecutionStore,
-  TERMINAL_STATUSES,
   type Execution,
   type ExecutionTask,
   type ExecutionEvent,
 } from '@/stores/executionStore'
+import { TERMINAL_STATUSES } from '@/lib/types'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { statusLabel } from '@/lib/formatters'
 import { Spinner } from '@/components/ui/Spinner'
@@ -37,12 +37,14 @@ function SummaryCard({
   icon: Icon,
   label,
   value,
+  valueLabel,
   sub,
   borderColor,
 }: {
   icon: React.ComponentType<{ className?: string }>
   label: string
   value: string
+  valueLabel?: string
   sub?: string
   borderColor?: string
 }) {
@@ -61,7 +63,16 @@ function SummaryCard({
         <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
           {label}
         </p>
-        <p className="mt-0.5 text-xl font-bold tabular-nums">{value}</p>
+        <p className="mt-0.5 text-xl font-bold tabular-nums">
+          {valueLabel ? (
+            <>
+              <span aria-hidden="true">{value}</span>
+              <span className="sr-only">{valueLabel}</span>
+            </>
+          ) : (
+            value
+          )}
+        </p>
         {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
       </div>
     </div>
@@ -220,7 +231,7 @@ function EventLog({ events }: { events: ExecutionEvent[] }) {
         <div className="space-y-0.5 font-mono text-xs leading-relaxed">
           {events.map((event) => (
             <div key={event.sequence} className="flex gap-2">
-              <span className="shrink-0 text-gray-500">[{formatEventTime(event.timestamp)}]</span>
+              <span className="shrink-0 text-gray-400">[{formatEventTime(event.timestamp)}]</span>
               <span className={cn('break-all', EVENT_COLORS[event.event_type] ?? 'text-gray-400')}>
                 {formatEventMessage(event)}
               </span>
@@ -315,7 +326,7 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
         </table>
       </div>
       <details className="mt-2">
-        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+        <summary className="cursor-pointer rounded text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           Raw JSON
         </summary>
         <div className="mt-2">
@@ -483,7 +494,7 @@ export default function ExecutionDetail() {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div className="text-center">
-          <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" />
+          <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" aria-hidden="true" />
           <p className="font-medium">{error ?? 'Execution not found'}</p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <button
@@ -530,7 +541,7 @@ export default function ExecutionDetail() {
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="mb-1.5 flex flex-wrap items-center gap-3">
-              <StatusBadge status={execution.status} />
+              <StatusBadge status={execution.status} live />
               <h1 className="text-2xl font-semibold tracking-tight">
                 <Link to={`/resources/crews/${execution.crew_name}`} className="hover:underline">
                   {execution.crew_name}
@@ -546,7 +557,7 @@ export default function ExecutionDetail() {
                 className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <XCircle className="h-3.5 w-3.5" />
-                Cancel
+                Cancel Execution
               </button>
             )}
           </div>
@@ -565,12 +576,14 @@ export default function ExecutionDetail() {
             icon={Coins}
             label="Total tokens"
             value={execution.total_tokens > 0 ? execution.total_tokens.toLocaleString() : '--'}
+            valueLabel={execution.total_tokens > 0 ? undefined : 'No tokens recorded'}
             borderColor="border-t-violet-500"
           />
           <SummaryCard
             icon={DollarSign}
             label="Cost"
             value={formatCost(execution.cost_usd)}
+            valueLabel={execution.cost_usd > 0 ? undefined : 'No cost recorded'}
             borderColor="border-t-emerald-500"
           />
           <SummaryCard
@@ -633,7 +646,10 @@ export default function ExecutionDetail() {
               ))}
             </div>
           ) : (
-            <div className="flex items-center justify-center rounded-lg border-2 border-dashed py-12 text-center">
+            <div
+              role="status"
+              className="flex items-center justify-center rounded-lg border-2 border-dashed py-12 text-center"
+            >
               <div>
                 <Clock
                   aria-hidden="true"
@@ -662,11 +678,7 @@ export default function ExecutionDetail() {
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
               Outputs
             </h2>
-            <div className="rounded-lg border bg-muted/20 p-4">
-              <pre className="whitespace-pre-wrap font-mono text-sm text-foreground">
-                {JSON.stringify(execution.outputs, null, 2)}
-              </pre>
-            </div>
+            <CodeBlock code={JSON.stringify(execution.outputs, null, 2)} language="json" />
           </div>
         )}
 

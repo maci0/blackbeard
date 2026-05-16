@@ -11,8 +11,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 if TYPE_CHECKING:
     from blackbeard.models.resource import Resource
 
-from blackbeard.config import API_VERSION
-from blackbeard.kinds import ALL_KINDS, NAME_PATTERN
+from blackbeard.kinds import ALL_KINDS, API_VERSION, NAME_PATTERN
 
 # Label key/value constraints (prevent abuse via oversized JSONB labels)
 _MAX_LABEL_KEY_LEN = 63

@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+from typing import NamedTuple
 
-class ValidationError:
+__all__ = [
+    "ResourceConflictError",
+    "ResourceNotFoundError",
+    "ResourceValidationError",
+    "ValidationError",
+]
+
+
+class ValidationError(NamedTuple):
     """A single validation error."""
 
-    __slots__ = ("field", "message")
-
-    def __init__(self, field: str, message: str) -> None:
-        self.field = field
-        self.message = message
-
-    def __repr__(self) -> str:
-        return f"ValidationError({self.field}: {self.message})"
+    field: str
+    message: str
 
     def to_dict(self) -> dict[str, str]:
         return {"field": self.field, "message": self.message}
@@ -33,6 +36,10 @@ class ResourceConflictError(Exception):
     """Raised on optimistic locking conflict."""
 
     def __init__(self, kind: str, name: str, expected: int, actual: int) -> None:
+        self.kind = kind
+        self.name = name
+        self.expected_version = expected
+        self.actual_version = actual
         super().__init__(
             f"Version conflict for {kind}/{name}: expected {expected}, actual {actual}"
         )

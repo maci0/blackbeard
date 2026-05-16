@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useDocumentTitle } from '@/lib/hooks'
 import { API_VERSION } from '@/lib/kinds'
 import * as Dialog from '@radix-ui/react-dialog'
@@ -68,7 +69,15 @@ function ProviderBadge({ provider }: { provider: string }) {
 /* Model card                                                          */
 /* ------------------------------------------------------------------ */
 
-function ModelCard({ resource, onDelete }: { resource: Resource; onDelete: () => void }) {
+function ModelCard({
+  resource,
+  onDelete,
+  onNavigate,
+}: {
+  resource: Resource
+  onDelete: () => void
+  onNavigate: () => void
+}) {
   const spec = resource.spec as {
     provider?: string
     model?: string
@@ -77,7 +86,19 @@ function ModelCard({ resource, onDelete }: { resource: Resource; onDelete: () =>
   }
 
   return (
-    <div className="group flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onNavigate}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onNavigate()
+        }
+      }}
+      aria-label={`LLM connection: ${resource.metadata.name}`}
+      className="group flex cursor-pointer flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       {/* Header */}
       <div className="border-b bg-muted/20 px-4 pb-3 pt-4">
         <div className="flex items-start justify-between gap-2">
@@ -86,7 +107,9 @@ function ModelCard({ resource, onDelete }: { resource: Resource; onDelete: () =>
               <Cpu className="h-4 w-4 text-amber-600" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{resource.metadata.name}</p>
+              <p className="truncate text-sm font-semibold" title={resource.metadata.name}>
+                {resource.metadata.name}
+              </p>
               {resource.metadata.namespace && resource.metadata.namespace !== 'default' && (
                 <p className="text-xs text-muted-foreground">{resource.metadata.namespace}</p>
               )}
@@ -97,9 +120,9 @@ function ModelCard({ resource, onDelete }: { resource: Resource; onDelete: () =>
               e.stopPropagation()
               onDelete()
             }}
-            className="shrink-0 rounded p-1.5 text-muted-foreground opacity-40 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
-            title="Delete connection"
-            aria-label="Delete connection"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-muted-foreground opacity-60 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+            title={`Delete ${resource.metadata.name}`}
+            aria-label={`Delete connection ${resource.metadata.name}`}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -244,7 +267,7 @@ function AddModelDialog({
               </Dialog.Description>
             </div>
             <Dialog.Close
-              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-11 w-11 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Close"
             >
               <X className="h-4 w-4" />
@@ -253,7 +276,11 @@ function AddModelDialog({
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4 p-5">
-            <fieldset disabled={submitting} className="grid grid-cols-2 gap-4">
+            <fieldset
+              disabled={submitting}
+              aria-busy={submitting}
+              className="grid grid-cols-2 gap-4"
+            >
               <div className="col-span-2">
                 <label htmlFor="model-name" className="mb-1.5 block text-xs font-medium">
                   Name <span className="text-destructive">*</span>
@@ -266,7 +293,10 @@ function AddModelDialog({
                   value={form.name}
                   onChange={set('name')}
                   placeholder="my-gpt4-connection"
-                  className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                  autoComplete="off"
+                  pattern="[a-z0-9][a-z0-9\-]*"
+                  title="Lowercase letters, numbers, and hyphens only (must start with a letter or number)"
+                  className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 />
               </div>
 
@@ -278,7 +308,7 @@ function AddModelDialog({
                   id="model-provider"
                   value={form.provider}
                   onChange={set('provider')}
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 >
                   {PROVIDER_OPTIONS.map((p) => (
                     <option key={p.value} value={p.value}>
@@ -300,7 +330,9 @@ function AddModelDialog({
                   value={form.model}
                   onChange={set('model')}
                   placeholder="gpt-4o"
-                  className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 />
               </div>
 
@@ -317,9 +349,9 @@ function AddModelDialog({
                   value={form.temperature}
                   onChange={set('temperature')}
                   aria-describedby="model-temperature-hint"
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 />
-                <p id="model-temperature-hint" className="mt-1 text-xs text-muted-foreground/70">
+                <p id="model-temperature-hint" className="mt-1 text-xs text-muted-foreground">
                   Range: 0.0 – 2.0
                 </p>
               </div>
@@ -335,9 +367,9 @@ function AddModelDialog({
                   value={form.max_tokens}
                   onChange={set('max_tokens')}
                   aria-describedby="model-max-tokens-hint"
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 />
-                <p id="model-max-tokens-hint" className="mt-1 text-xs text-muted-foreground/70">
+                <p id="model-max-tokens-hint" className="mt-1 text-xs text-muted-foreground">
                   Minimum 1
                 </p>
               </div>
@@ -357,7 +389,7 @@ function AddModelDialog({
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent"
+                  className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Cancel
                 </button>
@@ -365,7 +397,7 @@ function AddModelDialog({
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
                 {submitting && <Spinner size="sm" className="text-white" />}
                 Add connection
@@ -383,6 +415,7 @@ function AddModelDialog({
 /* ------------------------------------------------------------------ */
 
 export default function Models() {
+  const navigate = useNavigate()
   const { resources, loading, error, fetchResources, createResource, deleteResource } =
     useResourceStore()
 
@@ -503,7 +536,7 @@ export default function Models() {
             {successMessage}
             <button
               onClick={() => setSuccessMessage(null)}
-              className="ml-auto rounded p-2 transition-colors hover:bg-green-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-green-900"
+              className="ml-auto flex h-[44px] w-[44px] items-center justify-center rounded transition-colors hover:bg-green-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-green-900"
               aria-label="Dismiss success message"
             >
               <X className="h-3.5 w-3.5" />
@@ -554,6 +587,9 @@ export default function Models() {
                 key={resource.id}
                 resource={resource}
                 onDelete={() => setDeleteTarget(resource.metadata.name)}
+                onNavigate={() =>
+                  void navigate(`/resources/llm-connections/${resource.metadata.name}`)
+                }
               />
             ))}
           </div>

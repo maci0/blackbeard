@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 import blackbeard.models.execution  # register Execution/ExecutionTask tables
@@ -27,6 +27,7 @@ from blackbeard.api.middleware import (
     api_key_middleware,
     body_size_limiter,
     global_exception_handler,
+    http_exception_handler,
     security_headers_middleware,
     set_api_key,
 )
@@ -67,8 +68,11 @@ def _validate_startup_config() -> None:
             generated[-8:],
             extra={"event": "ephemeral_api_key_generated"},
         )
+        import sys
+
         print(  # noqa: T201
-            f"Ephemeral API key (not logged): {generated}",
+            f"Ephemeral API key (stderr only): {generated}",
+            file=sys.stderr,
             flush=True,
         )
     elif len(api_key) < 16:
@@ -120,19 +124,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     t0_startup = time.monotonic()
     _validate_startup_config()
     pool = cast("Any", engine.pool)
+    try:
+        from crewai import __version__ as crewai_version
+    except (ImportError, AttributeError):
+        crewai_version = "unknown"
     logger.info(
-        "Blackbeard %s starting: debug=%s, max_concurrent_executions=%d, litellm=%s",
+        "Blackbeard %s starting: debug=%s host=%s:%d crewai=%s",
         app.version,
         settings.debug,
-        settings.max_concurrent_executions,
-        settings.litellm_proxy_url,
+        settings.host,
+        settings.port,
+        crewai_version,
         extra={
             "event": "app_startup",
             "version": app.version,
+            "crewai_version": crewai_version,
             "python_version": platform.python_version(),
             "pid": os.getpid(),
             "debug": settings.debug,
             "log_level": settings.log_level or ("DEBUG" if settings.debug else "INFO"),
+            "host": settings.host,
+            "port": settings.port,
             "max_concurrent_executions": settings.max_concurrent_executions,
             "litellm_url": settings.litellm_proxy_url,
             "cors_origin_count": len(settings.cors_origins),
@@ -177,12 +189,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         finally:
             await engine.dispose()
             shutdown_ms = round((time.monotonic() - t0) * 1000, 1)
+            uptime_s = round(time.monotonic() - t0_startup, 1)
             logger.info(
-                "Shutdown complete in %.0fms",
+                "Shutdown complete in %.0fms (uptime %.1fs)",
                 shutdown_ms,
+                uptime_s,
                 extra={
                     "event": "app_shutdown_complete",
                     "shutdown_ms": shutdown_ms,
+                    "uptime_s": uptime_s,
                 },
             )
 
@@ -226,6 +241,7 @@ app.middleware("http")(body_size_limiter)
 app.middleware("http")(api_key_middleware)
 app.middleware("http")(security_headers_middleware)
 
+app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(Exception, global_exception_handler)
 
 app.include_router(health_router, prefix="/api/v1")

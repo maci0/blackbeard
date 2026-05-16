@@ -18,7 +18,7 @@ function App() {
       <Suspense
         fallback={
           <div className="flex h-screen items-center justify-center">
-            <Spinner size="lg" />
+            <Spinner size="lg" label="Loading page" />
           </div>
         }
       >

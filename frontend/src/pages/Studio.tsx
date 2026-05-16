@@ -1,20 +1,21 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { ReactFlowProvider, MarkerType } from '@xyflow/react'
+import { ReactFlowProvider } from '@xyflow/react'
 import { useNavigate } from 'react-router-dom'
 import { useStudioStore } from '@/stores/studioStore'
 import { api } from '@/api/client'
 import { capitalize, toResourceName, parseRef } from '@/lib/utils'
 import { useDocumentTitle } from '@/lib/hooks'
 import { API_VERSION, KIND_TO_PLURAL } from '@/lib/kinds'
-import Palette from '@/components/studio/Palette'
+import { DATAFLOW_MARKER_END } from '@/components/studio/defaults'
+import Palette, { MobilePalette } from '@/components/studio/Palette'
 import Canvas from '@/components/studio/Canvas'
 import PropertyPanel from '@/components/studio/PropertyPanel'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { type RunStatus } from '@/components/studio/RunStatusBadge'
+import type { RunStatus } from '@/lib/types'
 import { RunDialog } from '@/components/studio/RunDialog'
 import { Toolbar } from '@/components/studio/Toolbar'
 import type { Node, Edge } from '@xyflow/react'
-import type { Resource } from '@/stores/resourceStore'
+import type { Resource } from '@/lib/types'
 
 /* ------------------------------------------------------------------ */
 /* Resource body builder                                               */
@@ -162,12 +163,7 @@ function StudioInner() {
               source: `agent-${agentName}`,
               target: `task-${task.metadata.name}`,
               type: 'dataflow',
-              markerEnd: {
-                type: MarkerType.ArrowClosed,
-                width: 12,
-                height: 12,
-                color: '#94a3b8',
-              },
+              markerEnd: DATAFLOW_MARKER_END,
             } satisfies Edge
           })
 
@@ -338,21 +334,21 @@ function StudioInner() {
         source: 'agent-researcher',
         target: 'task-research',
         type: 'dataflow',
-        markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: '#94a3b8' },
+        markerEnd: DATAFLOW_MARKER_END,
       },
       {
         id: 'edge-writer-write',
         source: 'agent-writer',
         target: 'task-write',
         type: 'dataflow',
-        markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: '#94a3b8' },
+        markerEnd: DATAFLOW_MARKER_END,
       },
       {
         id: 'edge-research-write',
         source: 'task-research',
         target: 'task-write',
         type: 'dataflow',
-        markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: '#94a3b8' },
+        markerEnd: DATAFLOW_MARKER_END,
       },
     ]
     setNodes(exampleNodes)
@@ -392,6 +388,7 @@ function StudioInner() {
         <Canvas onLoadExample={handleLoadExample} />
         {selectedNodeId && <PropertyPanel />}
       </div>
+      <MobilePalette />
 
       <RunDialog
         open={runDialogOpen}

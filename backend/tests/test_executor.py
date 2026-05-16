@@ -119,6 +119,7 @@ async def test_kickoff_crew(client: AsyncClient):
     parsed_id = uuid.UUID(data["id"])
     assert isinstance(parsed_id, uuid.UUID)
     assert data["inputs"] == {"topic": "AI"}
+    assert data["created_at"] is not None
 
 
 async def test_kickoff_crew_has_tasks(client: AsyncClient):
@@ -135,6 +136,7 @@ async def test_kickoff_crew_has_tasks(client: AsyncClient):
     assert len(data["tasks"]) == 1
     assert data["tasks"][0]["task_name"] == "test-task"
     assert data["tasks"][0]["status"] == "pending"
+    assert data["tasks"][0]["order"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +203,10 @@ async def test_list_executions_filter_by_crew(client: AsyncClient):
     assert data["total"] == 1
     assert data["items"][0]["crew_name"] == "crew-alpha"
 
+    # Verify the other crew's execution exists but is filtered out
+    all_resp = await client.get("/api/v1/executions", headers=API_KEY_HEADER)
+    assert all_resp.json()["total"] == 2
+
 
 # ---------------------------------------------------------------------------
 # Tests — get execution
@@ -264,6 +270,7 @@ async def test_cancel_execution(client: AsyncClient):
     data = cancel_resp.json()
     assert data["status"] == "cancelled"
     assert data["completed_at"] is not None
+    assert data["error"] is None
 
 
 async def test_cancel_already_cancelled_returns_conflict(client: AsyncClient):
@@ -380,6 +387,23 @@ def test_sanitize_error_redacts_internal_details():
     msg = "sqlalchemy.exc.OperationalError: connection refused"
     result = _sanitize_error(msg)
     assert "sqlalchemy" not in result
+    assert result == "Execution failed — check server logs for details"
+
+
+def test_sanitize_error_redacts_traceback():
+    """Python traceback output should be redacted."""
+    msg = 'Traceback (most recent call last):\n  File "/app/engine.py", line 42'
+    result = _sanitize_error(msg)
+    assert "Traceback" not in result
+    assert "/app" not in result
+    assert result == "Execution failed — check server logs for details"
+
+
+def test_sanitize_error_redacts_file_path():
+    """Error starting with File path should be redacted."""
+    msg = 'File "/home/user/blackbeard/engine/loader.py", line 99, in build_crew'
+    result = _sanitize_error(msg)
+    assert "/home" not in result
     assert result == "Execution failed — check server logs for details"
 
 
@@ -692,6 +716,7 @@ async def test_list_executions_pagination(client: AsyncClient):
     assert response.status_code == 200
     data = response.json()
     assert len(data["items"]) == 1
+    assert data["has_more"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -727,7 +752,10 @@ async def test_execution_response_has_required_fields(client: AsyncClient):
     assert required_fields.issubset(data.keys()), (
         f"Missing fields: {required_fields - set(data.keys())}"
     )
-    # Verify types
+    # Verify types and zero-initialization for new executions
     assert isinstance(data["total_tokens"], int)
     assert isinstance(data["tasks"], list)
     assert data["crew_namespace"] == "default"
+    assert data["total_tokens"] == 0
+    assert data["prompt_tokens"] == 0
+    assert data["completion_tokens"] == 0

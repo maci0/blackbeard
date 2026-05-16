@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Play, ChevronRight, RefreshCw } from 'lucide-react'
 import { useDocumentTitle, usePolling } from '@/lib/hooks'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
-import { useExecutionStore, TERMINAL_STATUSES } from '@/stores/executionStore'
+import { useExecutionStore } from '@/stores/executionStore'
+import { TERMINAL_STATUSES } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -141,14 +142,20 @@ export default function Executions() {
                         {execution.total_tokens > 0 ? (
                           execution.total_tokens.toLocaleString()
                         ) : (
-                          <span aria-label="No tokens recorded">--</span>
+                          <>
+                            <span aria-hidden="true">--</span>
+                            <span className="sr-only">No tokens recorded</span>
+                          </>
                         )}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                         {execution.cost_usd > 0 ? (
                           formatCost(execution.cost_usd)
                         ) : (
-                          <span aria-label="No cost recorded">--</span>
+                          <>
+                            <span aria-hidden="true">--</span>
+                            <span className="sr-only">No cost recorded</span>
+                          </>
                         )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">

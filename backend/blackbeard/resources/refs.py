@@ -8,9 +8,19 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from typing import Any
+from typing import Any, NamedTuple
 
 from blackbeard.kinds import PLURAL_TO_KIND_ENUM, ResourceKind
+
+__all__ = [
+    "CycleError",
+    "RefInfo",
+    "RefParseError",
+    "build_adjacency",
+    "detect_cycles",
+    "extract_refs",
+    "parse_ref",
+]
 
 REF_PATTERN = re.compile(r"^ref:([a-z\-]+)/([a-z0-9][a-z0-9\-]*)$")
 
@@ -28,19 +38,13 @@ class CycleError(Exception):
         super().__init__(f"Dependency cycle detected: {path}")
 
 
-class RefInfo:
+class RefInfo(NamedTuple):
     """Parsed reference information."""
 
-    __slots__ = ("field", "kind", "name", "raw")
-
-    def __init__(self, kind: ResourceKind, name: str, raw: str, field: str) -> None:
-        self.kind = kind
-        self.name = name
-        self.raw = raw
-        self.field = field
-
-    def __repr__(self) -> str:
-        return f"RefInfo({self.kind.value}/{self.name} from {self.field})"
+    kind: ResourceKind
+    name: str
+    raw: str
+    field: str
 
 
 def parse_ref(value: str, field: str = "") -> RefInfo | None:

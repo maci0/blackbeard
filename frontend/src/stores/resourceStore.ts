@@ -31,13 +31,14 @@ interface ResourceState {
   deleteResource: (kindPlural: string, name: string) => Promise<void>
 }
 
-export const useResourceStore = create<ResourceState>((set) => ({
+export const useResourceStore = create<ResourceState>((set, get) => ({
   resources: {},
   loadingKinds: new Set<string>(),
   loading: false,
   error: null,
 
   fetchResources: async (kindPlural: string) => {
+    if (get().loadingKinds.has(kindPlural)) return
     set((state) => {
       const next = new Set(state.loadingKinds).add(kindPlural)
       return { loadingKinds: next, loading: next.size > 0, error: null }

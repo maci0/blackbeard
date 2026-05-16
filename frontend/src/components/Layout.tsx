@@ -186,6 +186,7 @@ export default function Layout() {
               key={to}
               to={to}
               title={collapsed ? label : undefined}
+              aria-label={label}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   collapsed ? 'md:justify-center md:px-0' : ''

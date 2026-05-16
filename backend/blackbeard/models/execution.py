@@ -119,7 +119,7 @@ class Execution(Base):
             "crew_namespace",
             created_at.desc(),
         ),
-        Index("ix_execution_namespace", "crew_namespace"),
+        Index("ix_execution_ns_status_created", "crew_namespace", "status", created_at.desc()),
         Index("ix_execution_status_created", "status", "created_at"),
         Index("ix_execution_created_at", "created_at"),
         CheckConstraint("total_tokens >= 0", name="ck_execution_total_tokens_nonneg"),
@@ -135,6 +135,14 @@ class Execution(Base):
         CheckConstraint(
             "status NOT IN ('completed', 'failed', 'cancelled') OR completed_at IS NOT NULL",
             name="ck_execution_terminal_has_completed_at",
+        ),
+        CheckConstraint(
+            "started_at IS NULL OR completed_at IS NULL OR started_at <= completed_at",
+            name="ck_execution_started_before_completed",
+        ),
+        CheckConstraint(
+            "error IS NULL OR status = 'failed'",
+            name="ck_execution_error_only_failed",
         ),
     )
 
@@ -191,12 +199,27 @@ class ExecutionTask(Base):
     )
 
     __table_args__ = (
-        Index("ix_exec_task_execution", "execution_id"),
         UniqueConstraint("execution_id", "order", name="uq_exec_task_execution_order"),
         CheckConstraint("tokens_used >= 0", name="ck_exec_task_tokens_nonneg"),
         CheckConstraint("cost_usd >= 0", name="ck_exec_task_cost_nonneg"),
         CheckConstraint('"order" >= 0', name="ck_exec_task_order_nonneg"),
         CheckConstraint("length(task_name) >= 1", name="ck_exec_task_name_nonempty"),
+        CheckConstraint(
+            "started_at IS NULL OR completed_at IS NULL OR started_at <= completed_at",
+            name="ck_exec_task_started_before_completed",
+        ),
+        CheckConstraint(
+            "status != 'running' OR started_at IS NOT NULL",
+            name="ck_exec_task_running_has_started_at",
+        ),
+        CheckConstraint(
+            "status NOT IN ('completed', 'failed') OR completed_at IS NOT NULL",
+            name="ck_exec_task_terminal_has_completed_at",
+        ),
+        CheckConstraint(
+            "error IS NULL OR status = 'failed'",
+            name="ck_exec_task_error_only_failed",
+        ),
     )
 
 
@@ -262,7 +285,6 @@ class ExecutionEvent(Base):
 
     __table_args__ = (
         UniqueConstraint("execution_id", "sequence", name="uq_exec_event_execution_seq"),
-        Index("ix_exec_event_exec_seq", "execution_id", "sequence"),
         CheckConstraint("sequence >= 0", name="ck_event_seq_nonneg"),
         CheckConstraint("length(event_type) >= 1", name="ck_event_type_nonempty"),
     )

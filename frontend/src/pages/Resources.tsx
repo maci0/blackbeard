@@ -129,7 +129,8 @@ export default function Resources() {
               placeholder="Search by name…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              autoComplete="off"
+              className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
           <label htmlFor="resources-kind-filter" className="sr-only">
@@ -139,7 +140,7 @@ export default function Resources() {
             id="resources-kind-filter"
             value={kindFilter}
             onChange={(e) => setKindFilter(e.target.value)}
-            className="rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {FILTER_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -147,7 +148,7 @@ export default function Resources() {
               </option>
             ))}
           </select>
-          <span className="text-sm text-muted-foreground">
+          <span role="status" aria-live="polite" className="text-sm text-muted-foreground">
             {filtered.length} {filtered.length === 1 ? 'result' : 'results'}
           </span>
           {(search || kindFilter) && (
@@ -235,12 +236,12 @@ export default function Resources() {
                         <td className="px-4 py-3 text-muted-foreground">
                           {!resource.metadata.namespace ||
                           resource.metadata.namespace === 'default' ? (
-                            <span
-                              className="text-muted-foreground/40"
-                              aria-label="default namespace"
-                            >
-                              —
-                            </span>
+                            <>
+                              <span className="text-muted-foreground/40" aria-hidden="true">
+                                —
+                              </span>
+                              <span className="sr-only">default namespace</span>
+                            </>
                           ) : (
                             resource.metadata.namespace
                           )}

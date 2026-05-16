@@ -8,6 +8,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+RUN adduser --disabled-password --gecos "" --shell /usr/sbin/nologin appuser
+
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-install-project --no-dev --frozen
@@ -16,12 +18,11 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-editable --no-dev --frozen \
     && rm /usr/local/bin/uv \
-    && chmod +x entrypoint.sh \
-    && adduser --disabled-password --gecos "" appuser
+    && chmod +x entrypoint.sh
 USER appuser
 ENV HOME=/home/appuser
 EXPOSE 8000
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=10s --timeout=5s --retries=10 --start-period=120s \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/ready')"
 CMD ["./entrypoint.sh"]

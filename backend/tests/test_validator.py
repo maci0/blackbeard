@@ -187,7 +187,7 @@ def test_crew_empty_agents_list():
 def test_valid_tool():
     spec = {
         "type": "python",
-        "class_path": "my_tools.SearchTool",
+        "class_path": "crewai_tools.SearchTool",
         "description": "Searches the web",
     }
     errors, _ = validate_resource("Tool", spec)

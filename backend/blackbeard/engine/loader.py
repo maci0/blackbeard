@@ -11,12 +11,17 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+__all__ = [
+    "LoaderError",
+    "ResourceLoader",
+]
+
 from crewai import LLM, Agent, Crew, Process, Task
 
 from blackbeard.config import settings
 from blackbeard.kinds import ResourceKind
 from blackbeard.litellm import apply_model_params, apply_vertex_params
-from blackbeard.resources.refs import parse_ref
+from blackbeard.resources import ALLOWED_TOOL_MODULE_PREFIXES, BLOCKED_TOOL_SUBMODULES, parse_ref
 
 if TYPE_CHECKING:
     from blackbeard.models import Resource
@@ -27,36 +32,39 @@ _SAFE_FILENAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
 _PATH_TRAVERSAL_INDICATORS = ("..", "~", "\\")
 _SENSITIVE_PATH_PREFIXES = ("/etc/", "/proc/", "/sys/", "/dev/", "/var/run/")
 
-# Builtin tool names must be PascalCase identifiers — no dunders, no dots
 _SAFE_BUILTIN_NAME = re.compile(r"^[A-Z][a-zA-Z0-9]+$")
 
-# Allowlist for dynamic tool imports — only these module prefixes are permitted
-# for type=python tools. Prevents arbitrary code execution via class_path.
-_ALLOWED_TOOL_MODULE_PREFIXES = (
-    "crewai_tools.",
-    "crewai.tools.",
-    "langchain_community.tools.",
-    "langchain.tools.",
-)
+_BLOCKED_BUILTIN_NAMES = frozenset({
+    "CodeInterpreterTool",
+    "CodeDocsSearchTool",
+})
 
-# Discovery tools call back to the API within the same container.
-# Uses configured host/port so it works regardless of deployment setup.
-_SELF_API_URL = f"http://localhost:{settings.port}"
+def _self_api_url() -> str:
+    """Resolve at call time so the module can be imported without reading settings."""
+    return f"http://localhost:{settings.port}"
 
 
 def _check_path_safety(path: str, context: str) -> None:
     """Raise LoaderError if path contains traversal characters or targets sensitive directories."""
     if any(ind in path for ind in _PATH_TRAVERSAL_INDICATORS):
         raise LoaderError(f"{context}: path traversal characters not allowed")
-    if any(path.startswith(p) for p in _SENSITIVE_PATH_PREFIXES):
+    if path.startswith(_SENSITIVE_PATH_PREFIXES):
         raise LoaderError(f"{context}: access to '{path}' is not allowed")
 
 
+_MAX_CONFIG_VALUE_LEN = 10_000
+
+
 def _validate_tool_config(config: dict[str, Any], tool_name: str) -> None:
-    """Reject tool config values containing path traversal or sensitive paths."""
+    """Reject tool config values containing path traversal, sensitive paths, or excessive size."""
     for key, val in config.items():
         if not isinstance(val, str):
             continue
+        if len(val) > _MAX_CONFIG_VALUE_LEN:
+            raise LoaderError(
+                f"Tool '{tool_name}' config.{key}: value too long "
+                f"({len(val)} > {_MAX_CONFIG_VALUE_LEN})"
+            )
         _check_path_safety(val, f"Tool '{tool_name}' config.{key}")
 
 
@@ -76,6 +84,7 @@ class ResourceLoader:
         self._llm_cache: dict[str, LLM] = {}
         self._agent_cache: dict[str, Agent] = {}
         self._task_cache: dict[str, Task] = {}
+        self._tool_cache: dict[str, Any] = {}
         self._tools_loaded = 0
         self._tools_skipped = 0
 
@@ -98,7 +107,8 @@ class ResourceLoader:
                 },
             )
             raise LoaderError(f"Referenced resource '{key}' not found")
-        logger.debug("Resolved ref: %s → %s/%s", ref_str, resource.kind.value, resource.name)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Resolved ref: %s → %s/%s", ref_str, resource.kind.value, resource.name)
         return resource
 
     def build_llm(self, ref_or_name: str) -> LLM:
@@ -129,6 +139,16 @@ class ResourceLoader:
 
         llm = LLM(**llm_kwargs)
         self._llm_cache[ref_or_name] = llm
+        logger.info(
+            "LLM built: %s model=%s",
+            resource.name,
+            model,
+            extra={
+                "event": "llm_built",
+                "llm_name": resource.name,
+                "model": model,
+            },
+        )
         return llm
 
     def _build_knowledge_source(self, ref_or_name: str) -> Any:
@@ -227,6 +247,9 @@ class ResourceLoader:
         (``wasm``, ``mcp-stdio``, ``mcp-http``) log a warning and return
         ``None``.
         """
+        if ref_or_name in self._tool_cache:
+            return self._tool_cache[ref_or_name]
+
         resource = self._resolve_ref(ref_or_name)
         if resource.kind != ResourceKind.TOOL:
             raise LoaderError(f"Expected Tool, got {resource.kind.value}")
@@ -238,21 +261,37 @@ class ResourceLoader:
             class_path = spec.get("class_path")
             if not class_path:
                 raise LoaderError(f"Tool '{resource.name}' has type=python but no class_path")
-            if not any(class_path.startswith(p) for p in _ALLOWED_TOOL_MODULE_PREFIXES):
+            if not class_path.startswith(ALLOWED_TOOL_MODULE_PREFIXES):
                 raise LoaderError(
                     f"Tool '{resource.name}': class_path '{class_path}' is not in the "
                     f"allowed module list. Permitted prefixes: "
-                    f"{', '.join(_ALLOWED_TOOL_MODULE_PREFIXES)}"
+                    f"{', '.join(ALLOWED_TOOL_MODULE_PREFIXES)}"
                 )
             module_path, class_name = class_path.rsplit(".", 1)
-            module = importlib.import_module(module_path)
-            tool_cls = getattr(module, class_name)
+            for blocked in BLOCKED_TOOL_SUBMODULES:
+                if module_path == blocked or module_path.startswith(blocked + "."):
+                    raise LoaderError(
+                        f"Tool '{resource.name}': class_path '{class_path}' references a "
+                        f"blocked module that can execute arbitrary code"
+                    )
+            try:
+                module = importlib.import_module(module_path)
+                tool_cls = getattr(module, class_name)
+            except Exception as exc:
+                raise LoaderError(
+                    f"Tool '{resource.name}': failed to import '{class_path}': {exc}"
+                ) from exc
 
         elif tool_type == "builtin":
             builtin_name = spec.get("class_path") or resource.name
             if not _SAFE_BUILTIN_NAME.match(builtin_name):
                 raise LoaderError(
                     f"Builtin tool name '{builtin_name}' is not a valid PascalCase identifier"
+                )
+            if builtin_name in _BLOCKED_BUILTIN_NAMES:
+                raise LoaderError(
+                    f"Builtin tool '{builtin_name}' is blocked because it can "
+                    f"execute arbitrary code"
                 )
             try:
                 import crewai_tools
@@ -279,18 +318,26 @@ class ResourceLoader:
 
         config = spec.get("config", {})
         _validate_tool_config(config, resource.name)
+        try:
+            tool_instance = tool_cls(**config)
+        except Exception as exc:
+            raise LoaderError(
+                f"Tool '{resource.name}': instantiation failed: {exc}"
+            ) from exc
+        self._tool_cache[ref_or_name] = tool_instance
         self._tools_loaded += 1
-        logger.debug(
-            "Tool loaded: %s type=%s",
-            resource.name,
-            tool_type,
-            extra={
-                "event": "tool_loaded",
-                "tool_name": resource.name,
-                "tool_type": tool_type,
-            },
-        )
-        return tool_cls(**config)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Tool loaded: %s type=%s",
+                resource.name,
+                tool_type,
+                extra={
+                    "event": "tool_loaded",
+                    "tool_name": resource.name,
+                    "tool_type": tool_type,
+                },
+            )
+        return tool_instance
 
     def build_agent(self, ref_or_name: str) -> Agent:
         """Build a CrewAI Agent from an Agent resource ref."""
@@ -339,12 +386,10 @@ class ResourceLoader:
             else:
                 agent_kwargs["memory"] = False
 
-        # Skills — directory paths with domain instruction files
         skills = spec.get("skills", [])
         if skills:
             agent_kwargs["skills"] = skills
 
-        # Knowledge sources — refs to KnowledgeSource resources
         ks_refs = spec.get("knowledge_sources", [])
         if ks_refs:
             knowledge = [
@@ -414,12 +459,12 @@ class ResourceLoader:
         api_key = settings.blackbeard_api_key.get_secret_value()
         return [
             SearchToolsTool(
-                api_url=_SELF_API_URL,
+                api_url=_self_api_url(),
                 api_key=api_key,
                 namespace=namespace,
             ),
             GetToolTool(
-                api_url=_SELF_API_URL,
+                api_url=_self_api_url(),
                 api_key=api_key,
                 namespace=namespace,
             ),
@@ -443,15 +488,16 @@ class ResourceLoader:
         discovery_tools = self._build_discovery_tools(namespace)
         existing = agent.tools or []
         agent.tools = list(existing) + discovery_tools
-        logger.debug(
-            "Injected discovery tools into agent '%s'",
-            agent_resource.name,
-            extra={
-                "event": "discovery_tools_injected",
-                "agent_name": agent_resource.name,
-                "tool_loading": tool_loading,
-            },
-        )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Injected discovery tools into agent '%s'",
+                agent_resource.name,
+                extra={
+                    "event": "discovery_tools_injected",
+                    "agent_name": agent_resource.name,
+                    "tool_loading": tool_loading,
+                },
+            )
 
     def build_crew(self, crew_name: str) -> Crew:
         """Build a complete CrewAI Crew from a Crew resource.

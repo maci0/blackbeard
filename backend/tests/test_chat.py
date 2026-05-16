@@ -12,7 +12,14 @@ import pytest
 from httpx import AsyncClient
 from pydantic import ValidationError
 
-from blackbeard.api.chat import ChatMessage, ChatRequest, ChatResponse, ModelInfo, ModelTestResult
+from blackbeard.api.chat import (
+    ChatMessage,
+    ChatRequest,
+    ChatResponse,
+    ModelInfo,
+    ModelTestResult,
+    TokenUsage,
+)
 
 # ---------------------------------------------------------------------------
 # Pydantic model unit tests
@@ -65,7 +72,7 @@ def test_chat_response_schema():
     )
     assert resp.model == "gpt-4o"
     assert resp.content == "Hello!"
-    assert resp.tokens["total"] == 7
+    assert resp.tokens.total == 7
 
 
 def test_model_test_result_ok():
@@ -83,6 +90,8 @@ def test_model_test_result_error():
 def test_model_info_schema():
     info = ModelInfo(name="gpt-4o", provider="openai", model_id="gpt-4o")
     assert info.name == "gpt-4o"
+    assert info.provider == "openai"
+    assert info.model_id == "gpt-4o"
 
 
 def test_model_info_optional_fields():
@@ -132,7 +141,7 @@ def test_extract_content_standard_response():
     }
     content, tokens = _extract_content(data)
     assert content == "Hello!"
-    assert tokens == {"prompt": 5, "completion": 2, "total": 7}
+    assert tokens == TokenUsage(prompt=5, completion=2, total=7)
 
 
 def test_extract_content_empty_choices():
@@ -140,7 +149,7 @@ def test_extract_content_empty_choices():
     data = {"choices": [], "usage": {}}
     content, tokens = _extract_content(data)
     assert content == ""
-    assert tokens == {"prompt": 0, "completion": 0, "total": 0}
+    assert tokens == TokenUsage(prompt=0, completion=0, total=0)
 
 
 def test_extract_content_missing_choices():
@@ -165,7 +174,7 @@ def test_extract_content_missing_usage():
     data = {"choices": [{"message": {"content": "Hi"}}]}
     content, tokens = _extract_content(data)
     assert content == "Hi"
-    assert tokens == {"prompt": 0, "completion": 0, "total": 0}
+    assert tokens == TokenUsage(prompt=0, completion=0, total=0)
 
 
 def test_extract_content_null_content():
@@ -173,6 +182,38 @@ def test_extract_content_null_content():
     data = {"choices": [{"message": {"content": None}}], "usage": {}}
     content, _tokens = _extract_content(data)
     assert content == ""
+
+
+def test_extract_content_prefers_content_over_reasoning():
+    """When both content and reasoning_content are present, content wins."""
+    data = {
+        "choices": [{"message": {"content": "Final answer", "reasoning_content": "Thinking..."}}],
+        "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
+    }
+    content, tokens = _extract_content(data)
+    assert content == "Final answer"
+    assert tokens.total == 8
+
+
+def test_extract_content_partial_usage_keys():
+    """Missing individual usage keys should default to 0."""
+    data = {
+        "choices": [{"message": {"content": "Hi"}}],
+        "usage": {"total_tokens": 10},
+    }
+    content, tokens = _extract_content(data)
+    assert content == "Hi"
+    assert tokens.prompt == 0
+    assert tokens.completion == 0
+    assert tokens.total == 10
+
+
+def test_extract_content_choice_without_message_key():
+    """Choice dict without 'message' key should return empty content."""
+    data = {"choices": [{"index": 0, "finish_reason": "stop"}], "usage": {}}
+    content, tokens = _extract_content(data)
+    assert content == ""
+    assert tokens == TokenUsage(prompt=0, completion=0, total=0)
 
 
 # ---------------------------------------------------------------------------

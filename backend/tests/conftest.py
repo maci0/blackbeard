@@ -60,10 +60,6 @@ _pg_dialect.JSONB = JSON  # type: ignore[attr-defined]
 _pg_dialect.UUID = _UUIDAsString  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
-# Import all models so their tables are registered with Base.metadata before
-# any test fixture calls Base.metadata.create_all().
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 # Standard fixtures (shared across all test modules)
 # ---------------------------------------------------------------------------
 import pytest
@@ -75,13 +71,15 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import StaticPool
 
-import blackbeard.models.execution
+import blackbeard.models.execution  # registers execution tables
 import blackbeard.models.resource  # noqa: F401 — registers resource tables
+from blackbeard.kinds import ResourceKind
 from blackbeard.main import app
 from blackbeard.models.database import (
     Base,
     get_session,
 )
+from blackbeard.models.resource import Resource
 
 API_KEY_HEADER = {"X-API-Key": "change-me-in-production"}
 
@@ -130,3 +128,35 @@ async def client(db_session: AsyncSession):
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Shared test helpers (used across multiple test modules)
+# ---------------------------------------------------------------------------
+
+
+def make_resource(kind: ResourceKind, name: str, spec: dict) -> Resource:
+    """Create a detached Resource ORM object without a database session."""
+    r = Resource()
+    r.kind = kind
+    r.name = name
+    r.namespace = "default"
+    r.spec = spec
+    return r
+
+
+def _resource_map(*resources: Resource) -> dict[str, Resource]:
+    return {f"{r.kind.value}/{r.name}": r for r in resources}
+
+
+def _agent_payload(name: str = "researcher") -> dict:
+    return {
+        "apiVersion": "blackbeard/v1",
+        "kind": "Agent",
+        "metadata": {"name": name, "namespace": "default"},
+        "spec": {
+            "role": "Research Analyst",
+            "goal": "Find and synthesise information",
+            "backstory": "Years of experience in research",
+        },
+    }

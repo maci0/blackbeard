@@ -1,6 +1,6 @@
 /** Resource kind registry — mirrors backend/blackbeard/kinds.py (keep in sync). */
 
-/** Canonical API version. Mirrors backend/blackbeard/config.py API_VERSION. */
+/** Canonical API version. Mirrors backend/blackbeard/kinds.py API_VERSION. */
 export const API_VERSION = 'blackbeard/v1'
 
 export const KIND_TO_PLURAL: Record<string, string> = {
@@ -19,5 +19,4 @@ export const PLURAL_TO_KIND: Record<string, string> = Object.fromEntries(
   Object.entries(KIND_TO_PLURAL).map(([k, v]) => [v, k]),
 )
 
-export const ALL_KINDS: string[] = Object.keys(KIND_TO_PLURAL)
 export const ALL_PLURALS: string[] = Object.values(KIND_TO_PLURAL)

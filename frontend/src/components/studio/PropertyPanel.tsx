@@ -45,7 +45,7 @@ function TextInput({
 }) {
   const fieldId = useContext(FieldIdContext)
   const cls =
-    'w-full text-xs text-foreground bg-background border border-border rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50 resize-none transition-colors'
+    'w-full text-xs text-foreground bg-background border border-border rounded-md px-2.5 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground/50 resize-none transition-colors'
 
   if (multiline) {
     return (
@@ -55,6 +55,7 @@ function TextInput({
         rows={3}
         value={value}
         placeholder={placeholder}
+        autoComplete="off"
         onChange={(e: ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)}
       />
     )
@@ -67,6 +68,7 @@ function TextInput({
       className={cls}
       value={value}
       placeholder={placeholder}
+      autoComplete="off"
       onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
     />
   )
@@ -85,7 +87,7 @@ function SelectInput({
   return (
     <select
       id={fieldId || undefined}
-      className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
+      className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       value={value}
       onChange={(e: ChangeEvent<HTMLSelectElement>) => onChange(e.target.value)}
     >
@@ -134,6 +136,10 @@ function FieldGroup({ label, children }: { label: string; children: React.ReactN
 
 const EMPTY_RESOURCES: Resource[] = []
 
+const str = (data: Record<string, unknown>, key: string) => (data[key] as string | undefined) ?? ''
+const bool = (data: Record<string, unknown>, key: string) =>
+  (data[key] as boolean | undefined) ?? false
+
 function AgentForm({
   data,
   onChange,
@@ -141,9 +147,6 @@ function AgentForm({
   data: Record<string, unknown>
   onChange: (field: string, value: unknown) => void
 }) {
-  const str = (key: string) => (data[key] as string | undefined) ?? ''
-  const bool = (key: string) => (data[key] as boolean | undefined) ?? false
-
   const llmConnections =
     useResourceStore((state) => state.resources['llm-connections']) ?? EMPTY_RESOURCES
   const hasLlmData = useResourceStore((state) => 'llm-connections' in state.resources)
@@ -157,14 +160,14 @@ function AgentForm({
     <div className="space-y-3">
       <FieldGroup label="Role">
         <TextInput
-          value={str('role')}
+          value={str(data, 'role')}
           onChange={(v) => onChange('role', v)}
           placeholder="Senior Researcher"
         />
       </FieldGroup>
       <FieldGroup label="Goal">
         <TextInput
-          value={str('goal')}
+          value={str(data, 'goal')}
           onChange={(v) => onChange('goal', v)}
           placeholder="What should this agent achieve?"
           multiline
@@ -172,7 +175,7 @@ function AgentForm({
       </FieldGroup>
       <FieldGroup label="Backstory">
         <TextInput
-          value={str('backstory')}
+          value={str(data, 'backstory')}
           onChange={(v) => onChange('backstory', v)}
           placeholder="Agent background and expertise..."
           multiline
@@ -188,7 +191,7 @@ function AgentForm({
           </p>
         ) : (
           <SelectInput
-            value={str('llm')}
+            value={str(data, 'llm')}
             onChange={(v) => onChange('llm', v)}
             options={[
               { value: '', label: 'Select LLM connection...' },
@@ -205,7 +208,7 @@ function AgentForm({
       </FieldGroup>
       <CheckboxInput
         label="Verbose"
-        checked={bool('verbose')}
+        checked={bool(data, 'verbose')}
         onChange={(v) => onChange('verbose', v)}
       />
     </div>
@@ -219,8 +222,6 @@ function TaskForm({
   data: Record<string, unknown>
   onChange: (field: string, value: unknown) => void
 }) {
-  const str = (key: string) => (data[key] as string | undefined) ?? ''
-
   const agentNodes = useStudioStore(
     useShallow((state) => state.nodes.filter((n) => n.type === 'agent')),
   )
@@ -229,14 +230,14 @@ function TaskForm({
     <div className="space-y-3">
       <FieldGroup label="Name">
         <TextInput
-          value={str('name')}
+          value={str(data, 'name')}
           onChange={(v) => onChange('name', v)}
           placeholder="research_topic"
         />
       </FieldGroup>
       <FieldGroup label="Description">
         <TextInput
-          value={str('description')}
+          value={str(data, 'description')}
           onChange={(v) => onChange('description', v)}
           placeholder="Describe what this task does..."
           multiline
@@ -244,7 +245,7 @@ function TaskForm({
       </FieldGroup>
       <FieldGroup label="Expected Output">
         <TextInput
-          value={str('expected_output')}
+          value={str(data, 'expected_output')}
           onChange={(v) => onChange('expected_output', v)}
           placeholder="A detailed report on..."
           multiline
@@ -252,7 +253,7 @@ function TaskForm({
       </FieldGroup>
       <FieldGroup label="Agent">
         <SelectInput
-          value={str('agent')}
+          value={str(data, 'agent')}
           onChange={(v) => onChange('agent', v)}
           options={[
             { value: '', label: 'Select agent...' },
@@ -284,20 +285,18 @@ function ToolForm({
   data: Record<string, unknown>
   onChange: (field: string, value: unknown) => void
 }) {
-  const str = (key: string) => (data[key] as string | undefined) ?? ''
-
   return (
     <div className="space-y-3">
       <FieldGroup label="Name">
         <TextInput
-          value={str('name')}
+          value={str(data, 'name')}
           onChange={(v) => onChange('name', v)}
           placeholder="web_search_tool"
         />
       </FieldGroup>
       <FieldGroup label="Type">
         <SelectInput
-          value={str('type') || 'python'}
+          value={str(data, 'type') || 'python'}
           onChange={(v) => onChange('type', v)}
           options={[
             { label: 'Python', value: 'python' },
@@ -308,14 +307,14 @@ function ToolForm({
       </FieldGroup>
       <FieldGroup label="Class Path">
         <TextInput
-          value={str('class_path')}
+          value={str(data, 'class_path')}
           onChange={(v) => onChange('class_path', v)}
           placeholder="my_module.MyTool"
         />
       </FieldGroup>
       <FieldGroup label="Description">
         <TextInput
-          value={str('description')}
+          value={str(data, 'description')}
           onChange={(v) => onChange('description', v)}
           placeholder="What does this tool do?"
           multiline
@@ -323,7 +322,7 @@ function ToolForm({
       </FieldGroup>
       <FieldGroup label="Sandbox">
         <SelectInput
-          value={str('sandbox') || 'none'}
+          value={str(data, 'sandbox') || 'none'}
           onChange={(v) => onChange('sandbox', v)}
           options={[
             { label: 'No sandbox', value: 'none' },
@@ -364,16 +363,16 @@ export default function PropertyPanel() {
     [selectedNodeId, updateNodeData],
   )
 
-  // Close panel on Escape key
+  // Close panel on Escape key (skip if delete confirm dialog is open — let Radix handle it)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && selectedNodeId) {
+      if (e.key === 'Escape' && selectedNodeId && !showDeleteConfirm) {
         setSelectedNode(null)
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [selectedNodeId, setSelectedNode])
+  }, [selectedNodeId, setSelectedNode, showDeleteConfirm])
 
   const nodeType = selectedNode?.type ?? 'agent'
   const data = selectedNode?.data
@@ -417,15 +416,15 @@ export default function PropertyPanel() {
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="rounded p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            title="Delete node"
-            aria-label="Delete node"
+            className="flex h-11 w-11 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title={`Delete ${meta.label.toLowerCase()}`}
+            aria-label={`Delete ${meta.label.toLowerCase()}: ${(data['role'] as string | undefined) ?? (data['name'] as string | undefined) ?? selectedNode.id}`}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={() => setSelectedNode(null)}
-            className="rounded p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-11 w-11 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             title="Close"
             aria-label="Close panel"
           >
@@ -436,7 +435,7 @@ export default function PropertyPanel() {
 
       {/* Tabs */}
       <Tabs.Root defaultValue="properties" className="flex min-h-0 flex-1 flex-col">
-        <Tabs.List className="flex shrink-0 border-b bg-muted/30">
+        <Tabs.List aria-label="View mode" className="flex shrink-0 border-b bg-muted/30">
           {['properties', 'yaml'].map((tab) => (
             <Tabs.Trigger
               key={tab}
@@ -482,6 +481,9 @@ export default function PropertyPanel() {
         onConfirm={() => {
           removeNode(selectedNode.id)
           setShowDeleteConfirm(false)
+          requestAnimationFrame(() => {
+            document.querySelector<HTMLElement>('[data-tour="canvas"]')?.focus()
+          })
         }}
       />
     </aside>

@@ -55,7 +55,7 @@ async def list_resources(
         default=None,
         pattern=NAME_PATTERN,
         max_length=255,
-        description="Filter by namespace",
+        description="Filter by namespace (omit for all namespaces)",
     ),
     label_selector: str | None = Query(
         default=None,
@@ -84,6 +84,11 @@ async def list_resources(
                 raise HTTPException(
                     status_code=400,
                     detail=f"Invalid label selector '{pair}': empty key",
+                )
+            if k in labels:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Duplicate label key '{k}' in selector",
                 )
             labels[k] = v.strip()
     service = ResourceService(session)
@@ -147,7 +152,10 @@ async def create_resource(
             status_code=422,
             detail=[e.to_dict() for e in exc.errors],
         ) from exc
-    if not created:
+    if created:
+        ns = data.metadata.namespace
+        response.headers["Location"] = f"/api/v1/{kind_plural}/{data.metadata.name}?namespace={ns}"
+    else:
         response.status_code = 200
     return ResourceResponse.from_db(resource)
 
@@ -237,6 +245,18 @@ async def update_resource(
     except ResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ResourceConflictError as exc:
+        logger.warning(
+            "Version conflict: %s/%s namespace=%s",
+            kind,
+            name,
+            namespace,
+            extra={
+                "event": "resource_version_conflict",
+                "resource_kind": kind,
+                "resource_name": name,
+                "namespace": namespace,
+            },
+        )
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ResourceValidationError as exc:
         logger.warning(

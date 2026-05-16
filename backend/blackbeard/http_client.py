@@ -1,7 +1,7 @@
 """Shared lazy-initialized httpx client factories (async + sync).
 
 Eliminates duplicated double-checked locking + shutdown boilerplate across
-chat, health, executions, litellm, and discovery_tools modules.
+chat, health, executions, and discovery_tools modules.
 """
 
 from __future__ import annotations
@@ -34,6 +34,11 @@ def get_client(name: str, **kwargs: Any) -> httpx.AsyncClient:
             return client
         client = httpx.AsyncClient(**kwargs)
         _clients[name] = client
+        logger.debug(
+            "HTTP client created: %s",
+            name,
+            extra={"event": "http_client_created", "client_name": name, "client_type": "async"},
+        )
         return client
 
 
@@ -52,6 +57,11 @@ def get_sync_client(name: str, **kwargs: Any) -> httpx.Client:
             return client
         client = httpx.Client(**kwargs)
         _sync_clients[name] = client
+        logger.debug(
+            "HTTP client created: %s",
+            name,
+            extra={"event": "http_client_created", "client_name": name, "client_type": "sync"},
+        )
         return client
 
 
@@ -70,6 +80,19 @@ async def close_all_clients() -> None:
         _clients.clear()
         sync_snapshot = dict(_sync_clients)
         _sync_clients.clear()
+    total = len(async_snapshot) + len(sync_snapshot)
+    if total:
+        logger.info(
+            "Closing %d HTTP clients (async=%d sync=%d)",
+            total,
+            len(async_snapshot),
+            len(sync_snapshot),
+            extra={
+                "event": "http_clients_closing",
+                "async_count": len(async_snapshot),
+                "sync_count": len(sync_snapshot),
+            },
+        )
     for name, client in async_snapshot.items():
         try:
             await client.aclose()

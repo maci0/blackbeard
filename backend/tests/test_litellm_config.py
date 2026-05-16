@@ -8,20 +8,15 @@ import yaml
 
 from blackbeard.kinds import ResourceKind
 from blackbeard.litellm.config_gen import generate_litellm_config
-from blackbeard.models.resource import Resource
+from tests.conftest import make_resource
 
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
 
 
-def make_llm_conn(name: str, spec: dict) -> Resource:
-    r = Resource()
-    r.kind = ResourceKind.LLM_CONNECTION
-    r.name = name
-    r.namespace = "default"
-    r.spec = spec
-    return r
+def make_llm_conn(name: str, spec: dict):
+    return make_resource(ResourceKind.LLM_CONNECTION, name, spec)
 
 
 # ---------------------------------------------------------------------------
@@ -273,8 +268,26 @@ def test_apply_vertex_params_explicit():
 
 
 def test_apply_vertex_params_empty():
-    """apply_vertex_params with empty dict should use global fallbacks (may be None)."""
-    target = {}
-    apply_vertex_params(target, {})
-    # If no global settings set, keys may not appear — but no KeyError should occur
-    # (just verifying it doesn't crash)
+    """apply_vertex_params with empty dict should fall back to global settings."""
+    from unittest.mock import patch
+
+    with patch("blackbeard.litellm.helpers.settings") as mock_settings:
+        mock_settings.cloud_ml_region = "europe-west1"
+        mock_settings.google_cloud_project = "test-project"
+        target = {}
+        apply_vertex_params(target, {})
+        assert target["vertex_location"] == "europe-west1"
+        assert target["vertex_project"] == "test-project"
+
+
+def test_apply_vertex_params_empty_no_project():
+    """apply_vertex_params with no project in settings should omit vertex_project."""
+    from unittest.mock import patch
+
+    with patch("blackbeard.litellm.helpers.settings") as mock_settings:
+        mock_settings.cloud_ml_region = "us-central1"
+        mock_settings.google_cloud_project = ""
+        target = {}
+        apply_vertex_params(target, {})
+        assert target["vertex_location"] == "us-central1"
+        assert "vertex_project" not in target

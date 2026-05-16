@@ -26,11 +26,27 @@ _REDACTED = "[REDACTED]"
 
 
 def _redact_sensitive_inputs(inputs: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of inputs with sensitive-looking values redacted."""
+    """Return a copy of inputs with sensitive-looking values redacted (recursively).
+
+    Returns the original dict unchanged when no keys match and no nested
+    structures need walking — avoids a copy on the common-case flat dict.
+    """
+    if not any(
+        _SENSITIVE_INPUT_KEYS.search(k) or isinstance(v, (dict, list))
+        for k, v in inputs.items()
+    ):
+        return inputs
     redacted: dict[str, Any] = {}
     for k, v in inputs.items():
         if _SENSITIVE_INPUT_KEYS.search(k):
             redacted[k] = _REDACTED
+        elif isinstance(v, dict):
+            redacted[k] = _redact_sensitive_inputs(v)
+        elif isinstance(v, list):
+            redacted[k] = [
+                _redact_sensitive_inputs(item) if isinstance(item, dict) else item
+                for item in v
+            ]
         else:
             redacted[k] = v
     return redacted
@@ -149,13 +165,14 @@ class ExecutionResponse(BaseModel):
                 )
                 for t in raw_tasks
             ]
+        raw_inputs = execution.__dict__.get('inputs')
         return cls.model_construct(
             id=execution.id,
             crew_name=execution.crew_name,
             crew_namespace=execution.crew_namespace,
             status=execution.status.value,
-            inputs=_redact_sensitive_inputs(execution.inputs) if execution.inputs else {},
-            outputs=execution.outputs,
+            inputs=_redact_sensitive_inputs(raw_inputs) if raw_inputs else {},
+            outputs=execution.__dict__.get('outputs'),
             error=execution.error,
             total_tokens=execution.total_tokens,
             prompt_tokens=execution.prompt_tokens,
@@ -183,7 +200,7 @@ class ExecutionEventItem(BaseModel):
 
     sequence: int
     event_type: str
-    timestamp: str
+    timestamp: datetime
     data: dict[str, Any]
 
 

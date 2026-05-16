@@ -11,7 +11,7 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      aria-label={`Task: ${name ?? 'Unnamed Task'}`}
+      aria-label={`Task: ${name || 'Unnamed Task'}`}
       className={cn(
         'w-[140px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
         selected
@@ -37,9 +37,9 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
       <div className="space-y-1 px-2.5 py-2">
         <p
           className="truncate text-xs font-semibold leading-tight text-foreground"
-          title={name ?? 'Unnamed Task'}
+          title={name || 'Unnamed Task'}
         >
-          {name ?? 'Unnamed Task'}
+          {name || 'Unnamed Task'}
         </p>
         {description ? (
           <p className="text-2xs line-clamp-2 leading-snug text-muted-foreground">{description}</p>
@@ -50,7 +50,10 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
         {/* Badges */}
         <div className="flex flex-wrap gap-1 pt-0.5">
           {agent && (
-            <span className="text-2xs inline-flex items-center rounded-md border border-blue-100 bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">
+            <span
+              className="text-2xs inline-flex max-w-full items-center truncate rounded-md border border-blue-100 bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300"
+              title={`Agent: ${parseRef(agent)}`}
+            >
               → {parseRef(agent)}
             </span>
           )}

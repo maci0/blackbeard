@@ -9,6 +9,8 @@ API schemas (Pydantic):
     execution_schemas — request/response models for execution endpoints
 """
 
+from __future__ import annotations
+
 from blackbeard.models.database import Base, async_session, get_session
 from blackbeard.models.execution import (
     TERMINAL_STATUSES,

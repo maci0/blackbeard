@@ -3,7 +3,8 @@ import { Save, Play, Loader2, FolderOpen, ChevronDown, Undo2, Redo2, Command } f
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { toResourceName } from '@/lib/utils'
 import { modKey } from '@/lib/platform'
-import { type RunStatus, RunStatusBadge } from './RunStatusBadge'
+import type { RunStatus } from '@/lib/types'
+import { RunStatusBadge } from './RunStatusBadge'
 import { KeyboardShortcuts } from './KeyboardShortcuts'
 
 export function Toolbar({
@@ -61,19 +62,28 @@ export function Toolbar({
           type="text"
           value={crewName}
           onChange={(e: ChangeEvent<HTMLInputElement>) => onCrewNameChange(e.target.value)}
-          className="w-44 min-w-0 border-b border-transparent bg-transparent text-sm font-semibold text-foreground transition-colors placeholder:text-muted-foreground hover:border-border focus:border-primary focus:outline-none"
+          className="w-44 min-w-0 border-b border-transparent bg-transparent text-sm font-semibold text-foreground transition-colors placeholder:text-muted-foreground invalid:border-destructive invalid:text-destructive hover:border-border focus-visible:border-primary focus-visible:outline-none"
           placeholder="crew-name"
           spellCheck={false}
+          autoComplete="off"
+          pattern="[a-z0-9][a-z0-9\-]*"
+          aria-describedby="crew-name-hint"
+          title="Lowercase letters, numbers, and hyphens"
         />
 
         {/* Normalized name preview */}
-        {crewName && toResourceName(crewName) !== crewName && (
+        {crewName && toResourceName(crewName) !== crewName ? (
           <span
+            id="crew-name-hint"
             className="hidden shrink-0 text-[10px] text-muted-foreground sm:inline"
             title="Resource name will be saved as this slug"
             aria-label={`Resource name will be saved as ${toResourceName(crewName)}`}
           >
             Saved as: {toResourceName(crewName)}
+          </span>
+        ) : (
+          <span id="crew-name-hint" className="sr-only">
+            Lowercase letters, numbers, and hyphens
           </span>
         )}
 
@@ -142,7 +152,7 @@ export function Toolbar({
         <button
           onClick={undo}
           disabled={!canUndo}
-          className="rounded-lg border border-border p-1.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
+          className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
           aria-label="Undo"
           title={`Undo (${modKey}+Z)`}
         >
@@ -151,7 +161,7 @@ export function Toolbar({
         <button
           onClick={redo}
           disabled={!canRedo}
-          className="rounded-lg border border-border p-1.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
+          className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
           aria-label="Redo"
           title={`Redo (${modKey}+Shift+Z)`}
         >
@@ -193,7 +203,7 @@ export function Toolbar({
                   ? 'Loading crew…'
                   : 'Run this crew'
           }
-          className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+          className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600"
         >
           {status === 'running' ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
@@ -208,7 +218,7 @@ export function Toolbar({
           onClick={() => setShortcutsOpen(true)}
           aria-label="Keyboard shortcuts"
           title={`Keyboard shortcuts (${modKey}+/)`}
-          className="rounded-lg border border-border p-1.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Command className="h-3.5 w-3.5" />
         </button>

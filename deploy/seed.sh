@@ -8,20 +8,19 @@ Usage: bash deploy/seed.sh [OPTIONS]
 Seed the Blackbeard database with an example research crew and common tools.
 Requires a running Blackbeard stack and Ollama with qwen3.6 pulled.
 
-Resources are created via POST — re-running will fail with 409 Conflict if
-resources already exist. Use the API or CLI to delete them first, or ignore
-the errors.
+Resources are created via POST — re-running will upsert (update existing
+resources and increment their version).
 
 Options:
   --help, -h    Show this help
 
 Environment:
-  BLACKBEARD_API       API base URL (default: http://localhost:8000)
+  BLACKBEARD_SERVER       API base URL (default: http://localhost:8000)
   BLACKBEARD_API_KEY   API key     (default: change-me-in-production)
 
 Examples:
   bash deploy/seed.sh
-  BLACKBEARD_API=http://prod:8000 BLACKBEARD_API_KEY=my-key bash deploy/seed.sh
+  BLACKBEARD_SERVER=http://prod:8000 BLACKBEARD_API_KEY=my-key bash deploy/seed.sh
 EOF
   exit 0
 }
@@ -32,12 +31,12 @@ for arg in "$@"; do
   esac
 done
 
-API="${BLACKBEARD_API:-http://localhost:8000}"
+API="${BLACKBEARD_SERVER:-http://localhost:8000}"
 KEY="${BLACKBEARD_API_KEY:-change-me-in-production}"
 H=(-H "X-API-Key: $KEY" -H "Content-Type: application/json")
 
 # Verify server is reachable before seeding
-if ! curl -sSf "$API/api/v1/health" > /dev/null 2>&1; then
+if ! curl -sSf --connect-timeout 5 "$API/api/v1/health" > /dev/null 2>&1; then
   echo "Error: Cannot reach Blackbeard API at $API" >&2
   echo "  Is the server running? Try: curl $API/api/v1/health" >&2
   exit 1
@@ -54,7 +53,7 @@ seed() {
     echo "  + $label"
     CREATED=$((CREATED + 1))
   else
-    echo "  x $label (failed — may already exist)" >&2
+    echo "  x $label (failed)" >&2
     # Show the API error response if non-empty, to aid debugging
     if [ -n "$body" ]; then
       echo "    $body" >&2
@@ -332,7 +331,7 @@ seed "Tool/mcp-sequentialthinking" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
 echo ""
 echo "Seed complete: $CREATED created, $ERRORS failed."
 if [ "$ERRORS" -gt 0 ]; then
-  echo "Some resources failed — they may already exist (409 Conflict)." >&2
+  echo "Some resources failed — check server logs for details." >&2
   exit 1
 fi
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from blackbeard.resources.refs import parse_ref
+from blackbeard.resources import parse_ref
 
 logger = logging.getLogger(__name__)
 

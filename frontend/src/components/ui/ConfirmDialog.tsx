@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
+import { Spinner } from './Spinner'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -61,14 +62,16 @@ export function ConfirmDialog({
             <button
               onClick={() => void handleConfirm()}
               disabled={busy}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${btnClass}`}
+              aria-busy={busy}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${btnClass}`}
             >
-              {busy ? 'Processing...' : confirmLabel}
+              {busy && <Spinner size="sm" className="text-current" />}
+              {confirmLabel}
             </button>
           </div>
           <Dialog.Close asChild>
             <button
-              className="absolute right-3 top-3 rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="absolute right-3 top-3 flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Close"
             >
               <X className="h-4 w-4" />

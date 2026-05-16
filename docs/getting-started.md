@@ -52,8 +52,9 @@ The `blackbeard` CLI can apply a directory of YAML files, creating or updating a
 cd backend
 uv sync
 
-# Apply the research-crew example
-blackbeard apply -f examples/research-crew/
+# Apply the research-crew example (path relative to repo root)
+cd ..
+uv run --project backend blackbeard apply -f examples/research-crew/
 
 # Verify resources were created (via API)
 curl -H "X-API-Key: $BLACKBEARD_API_KEY" http://localhost:8000/api/v1/agents
@@ -64,8 +65,8 @@ curl -H "X-API-Key: $BLACKBEARD_API_KEY" http://localhost:8000/api/v1/crews
 Validate YAML files without applying:
 
 ```bash
-blackbeard validate -f examples/research-crew/
-blackbeard apply -f examples/research-crew/ --dry-run  # validate without applying (no changes sent to server)
+uv run --project backend blackbeard validate -f examples/research-crew/
+uv run --project backend blackbeard apply -f examples/research-crew/ --dry-run
 ```
 
 ---
@@ -92,11 +93,11 @@ You can switch between the form view and a read-only YAML preview (Monaco) in th
 
 ```bash
 # Run a crew, passing inputs as key=value pairs
-blackbeard kickoff research-crew --input topic="The future of agentic AI"
+uv run --project backend blackbeard kickoff research-crew --input topic="The future of agentic AI"
 
 # Poll execution status
-blackbeard status <execution-id>
-blackbeard status <execution-id> --watch  # poll until execution reaches a terminal state
+uv run --project backend blackbeard status <execution-id>
+uv run --project backend blackbeard status <execution-id> --watch  # poll until terminal state
 ```
 
 ### Kick off via UI

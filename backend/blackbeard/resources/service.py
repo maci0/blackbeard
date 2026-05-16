@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, func, select
@@ -11,7 +13,7 @@ from sqlalchemy.orm import defer
 
 from blackbeard.kinds import ResourceKind
 from blackbeard.logging_config import request_id_var
-from blackbeard.models.resource import Resource, ResourceRef
+from blackbeard.models import Resource, ResourceRef
 from blackbeard.resources.exceptions import (
     ResourceConflictError,
     ResourceNotFoundError,
@@ -63,25 +65,13 @@ class ResourceService:
         (version incremented). Returns (resource, created) where created=True
         for new resources and created=False for upserted existing resources.
         """
+        t0 = time.monotonic()
         kind_enum = _parse_kind(data.kind)
 
-        errors, validated_refs = validate_resource(data.kind, data.spec)
+        errors, validated_refs = await asyncio.to_thread(
+            validate_resource, data.kind, data.spec
+        )
         if errors:
-            logger.warning(
-                "Resource validation failed: %s/%s namespace=%s errors=%d",
-                data.kind,
-                data.metadata.name,
-                data.metadata.namespace,
-                len(errors),
-                extra={
-                    "event": "resource_validation_failed",
-                    "resource_kind": data.kind,
-                    "resource_name": data.metadata.name,
-                    "namespace": data.metadata.namespace,
-                    "error_count": len(errors),
-                    "request_id": request_id_var.get("-"),
-                },
-            )
             raise ResourceValidationError(errors)
 
         result = await self.session.execute(
@@ -96,6 +86,24 @@ class ResourceService:
         existing = result.scalar_one_or_none()
         if existing:
             resource = await self._update_existing(existing, data, raw_yaml, validated_refs)
+            duration_ms = round((time.monotonic() - t0) * 1000, 1)
+            logger.info(
+                "Resource upsert (create path): %s/%s namespace=%s version=%d (%.0fms)",
+                kind_enum.value,
+                data.metadata.name,
+                data.metadata.namespace,
+                resource.version,
+                duration_ms,
+                extra={
+                    "event": "resource_upsert_via_create",
+                    "resource_kind": kind_enum.value,
+                    "resource_name": data.metadata.name,
+                    "namespace": data.metadata.namespace,
+                    "version": resource.version,
+                    "duration_ms": duration_ms,
+                    "request_id": request_id_var.get("-"),
+                },
+            )
             return resource, False
 
         resource = Resource(
@@ -141,16 +149,19 @@ class ResourceService:
             raise
         await self._sync_refs(resource, validated_refs)
 
+        duration_ms = round((time.monotonic() - t0) * 1000, 1)
         logger.info(
-            "Resource created: %s/%s namespace=%s",
+            "Resource created: %s/%s namespace=%s (%.0fms)",
             kind_enum.value,
             data.metadata.name,
             data.metadata.namespace,
+            duration_ms,
             extra={
                 "event": "resource_created",
                 "resource_kind": kind_enum.value,
                 "resource_name": data.metadata.name,
                 "namespace": data.metadata.namespace,
+                "duration_ms": duration_ms,
                 "request_id": request_id_var.get("-"),
             },
         )
@@ -192,8 +203,8 @@ class ResourceService:
         result = await self.session.execute(query)
         items = list(result.scalars().all())
 
-        if not offset and len(items) < limit:
-            total = len(items)
+        if len(items) < limit:
+            total = offset + len(items)
         else:
             total = (await self.session.execute(count_query)).scalar() or 0
 
@@ -208,6 +219,7 @@ class ResourceService:
         raw_yaml: str | None = None,
     ) -> Resource:
         """Update a resource with optimistic locking."""
+        t0 = time.monotonic()
         kind_enum = _parse_kind(kind)
 
         result = await self.session.execute(
@@ -229,7 +241,9 @@ class ResourceService:
         validated_refs = None
         has_changes = False
         if data.spec is not None:
-            errors, validated_refs = validate_resource(kind, data.spec)
+            errors, validated_refs = await asyncio.to_thread(
+                validate_resource, kind, data.spec
+            )
             if errors:
                 raise ResourceValidationError(errors)
             resource.spec = data.spec
@@ -251,18 +265,21 @@ class ResourceService:
         if data.spec is not None:
             await self._sync_refs(resource, validated_refs)
 
+        duration_ms = round((time.monotonic() - t0) * 1000, 1)
         logger.info(
-            "Resource updated: %s/%s namespace=%s version=%d",
+            "Resource updated: %s/%s namespace=%s version=%d (%.0fms)",
             kind,
             name,
             namespace,
             resource.version,
+            duration_ms,
             extra={
                 "event": "resource_updated",
                 "resource_kind": kind,
                 "resource_name": name,
                 "namespace": namespace,
                 "version": resource.version,
+                "duration_ms": duration_ms,
                 "request_id": request_id_var.get("-"),
             },
         )
@@ -270,19 +287,43 @@ class ResourceService:
 
     async def delete(self, kind: str, name: str, namespace: str = "default") -> None:
         """Delete a resource. Raises ResourceNotFoundError if not found."""
-        resource = await self.get(kind, name, namespace)
-        await self.session.delete(resource)
-        await self.session.flush()
+        t0 = time.monotonic()
+        kind_enum = _parse_kind(kind)
+        await self.session.execute(
+            delete(ResourceRef).where(
+                ResourceRef.source_id.in_(
+                    select(Resource.id).where(
+                        Resource.kind == kind_enum,
+                        Resource.name == name,
+                        Resource.namespace == namespace,
+                    )
+                )
+            )
+        )
+        result = await self.session.execute(
+            delete(Resource)
+            .where(
+                Resource.kind == kind_enum,
+                Resource.name == name,
+                Resource.namespace == namespace,
+            )
+            .returning(Resource.id)
+        )
+        if result.scalar_one_or_none() is None:
+            raise ResourceNotFoundError(kind, name, namespace)
+        duration_ms = round((time.monotonic() - t0) * 1000, 1)
         logger.info(
-            "Resource deleted: %s/%s namespace=%s",
+            "Resource deleted: %s/%s namespace=%s (%.0fms)",
             kind,
             name,
             namespace,
+            duration_ms,
             extra={
                 "event": "resource_deleted",
                 "resource_kind": kind,
                 "resource_name": name,
                 "namespace": namespace,
+                "duration_ms": duration_ms,
                 "request_id": request_id_var.get("-"),
             },
         )

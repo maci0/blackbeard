@@ -129,7 +129,7 @@ export default function WelcomeDialog({ open, onStartTour, onSkip }: WelcomeDial
               </button>
             </div>
 
-            <p className="text-2xs mt-3 text-center text-muted-foreground/60">
+            <p className="text-2xs mt-3 text-center text-muted-foreground">
               You can restart the tour anytime from the Help menu
             </p>
           </div>

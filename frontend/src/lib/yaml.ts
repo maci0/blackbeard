@@ -3,6 +3,8 @@
 import yaml from 'js-yaml'
 import type { Resource } from '@/lib/types'
 
+const YAML_SPECIAL_CHARS = /[:#{}[\],&*?|<>=!%@`]/
+
 export function serializeValue(value: unknown, indent: number): string {
   const pad = '  '.repeat(indent)
 
@@ -20,7 +22,7 @@ export function serializeValue(value: unknown, indent: number): string {
       return `|\n${indented}`
     }
     if (
-      /[:#{}[\],&*?|<>=!%@`]/.test(value) ||
+      YAML_SPECIAL_CHARS.test(value) ||
       value.startsWith(' ') ||
       value === 'true' ||
       value === 'false' ||
@@ -67,7 +69,7 @@ export function resourceToYaml(resource: Resource): string {
   if (Object.keys(labels).length > 0) {
     lines.push('  labels:')
     for (const [k, v] of Object.entries(labels)) {
-      lines.push(`    ${k}: ${v}`)
+      lines.push(`    ${serializeValue(k, 2)}: ${serializeValue(v, 2)}`)
     }
   }
   lines.push('spec:')

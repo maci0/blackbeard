@@ -13,6 +13,8 @@ services:
       dockerfile: ../deploy/docker/Dockerfile.api
     ports:
       - "127.0.0.1:8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     environment:
@@ -47,8 +49,9 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    read_only: true
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/ready')"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -65,8 +68,10 @@ services:
     environment:
       NGINX_API_KEY_FALLBACK: ${BLACKBEARD_API_KEY:-change-me-in-production}
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     restart: unless-stopped
+    init: true
     logging: *default-logging
     tmpfs:
       - /tmp
@@ -74,6 +79,7 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    read_only: true
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
       interval: 10s
@@ -173,10 +179,13 @@ services:
       retries: 10
       start_period: 10s
     restart: unless-stopped
+    stop_grace_period: 30s
     logging: *default-logging
     mem_limit: 512m
     cpus: 1
     pids_limit: 64
+    tmpfs:
+      - /tmp
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -184,6 +193,7 @@ services:
     cap_add:
       - SETGID
       - SETUID
+    read_only: true
     networks: [backend]
 
   # ── LiteLLM Proxy ─────────────────────────────────────────────────────────
@@ -191,7 +201,11 @@ services:
     image: ghcr.io/berriai/litellm:1.84.0
     ports:
       - "127.0.0.1:4000:4000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
+      PYTHONDONTWRITEBYTECODE: 1
+      PYTHONUNBUFFERED: 1
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master-key}
       DATABASE_URL: ${LITELLM_DATABASE_URL:-postgresql://blackbeard:blackbeard@postgres:5432/litellm}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
@@ -218,7 +232,7 @@ services:
     cap_drop:
       - ALL
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,os; r=urllib.request.Request('http://localhost:4000/health/liveliness'); urllib.request.urlopen(r)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')"]
       interval: 15s
       timeout: 10s
       retries: 20

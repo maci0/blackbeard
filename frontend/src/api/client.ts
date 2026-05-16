@@ -1,5 +1,5 @@
-// Use relative paths — Vite dev server proxies /api to the backend.
-// In production builds, set VITE_API_BASE_URL to the backend origin.
+// Relative paths work in both dev (Vite proxy) and Docker (nginx proxy).
+// Set VITE_API_BASE_URL only when hosting the frontend on a different origin.
 const API_BASE: string = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
 
 export class ApiError extends Error {
@@ -63,10 +63,15 @@ class ApiClient {
         detail?: unknown
       }
       const detail: unknown = error.detail
-      const message =
-        typeof detail === 'string'
-          ? detail
-          : ((detail as { message?: string } | null)?.message ?? `HTTP ${response.status}`)
+      let message: string
+      if (typeof detail === 'string') {
+        message = detail
+      } else if (Array.isArray(detail) && detail.length > 0) {
+        const first = detail[0] as { field?: string; message?: string; msg?: string }
+        message = first.message ?? first.msg ?? `HTTP ${response.status}`
+      } else {
+        message = (detail as { message?: string } | null)?.message ?? `HTTP ${response.status}`
+      }
       throw new ApiError(message, response.status, detail)
     }
 

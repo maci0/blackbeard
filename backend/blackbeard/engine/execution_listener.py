@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from sqlalchemy import Engine
 
 from blackbeard.logging_config import request_id_var
-from blackbeard.models.execution import ExecutionEvent, ExecutionTask, TaskStatus
+from blackbeard.models import ExecutionEvent, ExecutionTask, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,7 @@ def _get_sync_session_factory(db_url: str) -> sessionmaker[Session]:
             max_overflow=10,
             pool_pre_ping=True,
             pool_recycle=3600,
+            pool_timeout=30,
             connect_args={
                 "options": "-c statement_timeout=30000"
                 " -c idle_in_transaction_session_timeout=60000",
@@ -69,6 +70,10 @@ def _get_sync_session_factory(db_url: str) -> sessionmaker[Session]:
             },
         )
         _sync_session_factory = sessionmaker(_sync_engine, class_=Session, expire_on_commit=False)
+        logger.info(
+            "Sync DB engine created for execution events",
+            extra={"event": "sync_engine_created", "pool_size": 5, "max_overflow": 10},
+        )
         return _sync_session_factory
 
 
@@ -85,13 +90,26 @@ def dispose_sync_engine() -> None:
 class BlackbeardExecutionListener(BaseEventListener):
     """Writes CrewAI events to the execution_events table for real-time streaming."""
 
+    _FLUSH_INTERVAL = 0.5  # seconds between buffer flushes
+    _MAX_BUFFER = 20  # flush if buffer reaches this size
+
     def __init__(self, execution_id: UUID, db_url: str) -> None:
         self._execution_id = execution_id
         self._seq = 0
         self._task_order = 0  # tracks which task (by order) is currently running
-        self._lock = threading.Lock()  # guards _seq and _task_order
+        self._lock = threading.Lock()  # guards _seq, _task_order, and _buffer
         self._session_factory = _get_sync_session_factory(db_url)
+        self._buffer: list[ExecutionEvent] = []
+        self._flush_timer: threading.Timer | None = None
         super().__init__()
+        logger.info(
+            "Execution listener created: execution_id=%s",
+            execution_id,
+            extra={
+                "event": "execution_listener_created",
+                "execution_id": str(execution_id),
+            },
+        )
 
     def _next_seq(self) -> int:
         with self._lock:
@@ -108,44 +126,104 @@ class BlackbeardExecutionListener(BaseEventListener):
         if request_id_var.get("-") == "-":
             request_id_var.set(str(self._execution_id))
 
+    def _schedule_flush(self) -> None:
+        """Schedule a deferred flush if one isn't already pending."""
+        if self._flush_timer is None or not self._flush_timer.is_alive():
+            self._flush_timer = threading.Timer(self._FLUSH_INTERVAL, self._flush_buffer)
+            self._flush_timer.daemon = True
+            self._flush_timer.start()
+
+    def _flush_buffer(self) -> None:
+        """Flush buffered events to DB in a single transaction."""
+        with self._lock:
+            to_flush = list(self._buffer)
+            self._buffer.clear()
+        if not to_flush:
+            return
+        try:
+            with self._session_factory() as session:
+                session.add_all(to_flush)
+                session.commit()
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Events flushed: execution=%s count=%d",
+                    self._execution_id,
+                    len(to_flush),
+                    extra={
+                        "event": "events_flushed",
+                        "execution_id": str(self._execution_id),
+                        "count": len(to_flush),
+                    },
+                )
+        except Exception as exc:
+            logger.exception(
+                "Dropped %d events for %s (flush failed, not retried): %s",
+                len(to_flush),
+                self._execution_id,
+                exc,
+                extra={
+                    "event": "event_flush_failed",
+                    "execution_id": str(self._execution_id),
+                    "dropped_count": len(to_flush),
+                    "dropped_sequences": [e.sequence for e in to_flush],
+                    "dropped_event_types": [e.event_type for e in to_flush],
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc)[:500],
+                },
+            )
+
+    def flush(self) -> None:
+        """Force-flush any buffered events. Called at end of execution."""
+        if self._flush_timer is not None:
+            self._flush_timer.cancel()
+        self._flush_buffer()
+        logger.info(
+            "Execution listener flushed: execution_id=%s total_events=%d",
+            self._execution_id,
+            self._seq,
+            extra={
+                "event": "execution_listener_flushed",
+                "execution_id": str(self._execution_id),
+                "total_events": self._seq,
+            },
+        )
+
     def _write_event(self, event_type: str, data: dict[str, Any]) -> None:
         self._ensure_request_id()
-        try:
-            seq = self._next_seq()
-            with self._session_factory() as session:
-                event = ExecutionEvent(
-                    execution_id=self._execution_id,
-                    sequence=seq,
-                    event_type=event_type,
-                    timestamp=datetime.now(UTC),
-                    data=data,
-                )
-                session.add(event)
-                session.commit()
+        now = datetime.now(UTC)
+        flush_now = False
+        with self._lock:
+            seq = self._seq
+            self._seq += 1
+            event = ExecutionEvent(
+                execution_id=self._execution_id,
+                sequence=seq,
+                event_type=event_type,
+                timestamp=now,
+                data=data,
+            )
+            self._buffer.append(event)
+            if len(self._buffer) >= self._MAX_BUFFER:
+                flush_now = True
+        if flush_now:
+            self._flush_buffer()
+        else:
+            self._schedule_flush()
+        if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
-                "Event written: execution=%s type=%s seq=%d",
+                "Event buffered: execution=%s type=%s seq=%d buffer=%d/%d",
                 self._execution_id,
                 event_type,
                 seq,
+                len(self._buffer),
+                self._MAX_BUFFER,
                 extra={
-                    "event": "event_written",
+                    "event": "event_buffered",
                     "execution_id": str(self._execution_id),
                     "event_type": event_type,
                     "sequence": seq,
-                },
-            )
-        except Exception as exc:
-            logger.exception(
-                "Failed to write event for %s: type=%s",
-                self._execution_id,
-                event_type,
-                extra={
-                    "event": "event_write_failed",
-                    "execution_id": str(self._execution_id),
-                    "event_type": event_type,
-                    "event_data_keys": sorted(data.keys()),
-                    "error_type": type(exc).__name__,
-                    "error_message": str(exc)[:500],
+                    "buffer_size": len(self._buffer),
+                    "buffer_max": self._MAX_BUFFER,
                 },
             )
 
@@ -159,8 +237,13 @@ class BlackbeardExecutionListener(BaseEventListener):
         task_started_at: datetime | None = None,
         task_completed_at: datetime | None = None,
     ) -> None:
-        """Write an event and update a task in a single DB transaction."""
+        """Write an event and update a task in a single DB transaction.
+
+        Also flushes any buffered events to maintain ordering.
+        """
         self._ensure_request_id()
+        if self._buffer:
+            self._flush_buffer()
         try:
             now = datetime.now(UTC)
             with self._session_factory() as session:
@@ -190,15 +273,18 @@ class BlackbeardExecutionListener(BaseEventListener):
                 session.commit()
         except Exception as exc:
             logger.exception(
-                "Failed to write event+task for %s: type=%s order=%d",
+                "Failed to write event+task for %s: type=%s order=%d — "
+                "task status in DB may be stale (expected %s)",
                 self._execution_id,
                 event_type,
                 task_order,
+                task_status.value,
                 extra={
                     "event": "event_task_write_failed",
                     "execution_id": str(self._execution_id),
                     "event_type": event_type,
                     "task_order": task_order,
+                    "expected_task_status": task_status.value,
                     "error_type": type(exc).__name__,
                     "error_message": str(exc)[:500],
                 },
@@ -290,9 +376,18 @@ class BlackbeardExecutionListener(BaseEventListener):
         def on_llm_completed(source: Any, event: LLMCallCompletedEvent) -> None:
             usage = event.usage or {}
             response_preview = str(event.response)[:200] if event.response else None
-            data = {
+            duration_ms = None
+            started = getattr(event, "started_at", None)
+            finished = getattr(event, "finished_at", None)
+            if started and finished:
+                duration_ms = int(
+                    (finished - started).total_seconds() * 1000
+                )
+            data: dict[str, Any] = {
                 "model": event.model,
                 "tokens": usage.get("total_tokens", 0) if isinstance(usage, dict) else 0,
                 "response_preview": response_preview,
             }
+            if duration_ms is not None:
+                data["duration_ms"] = duration_ms
             self._write_event("llm_completed", data)

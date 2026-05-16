@@ -5,7 +5,6 @@ import {
   BackgroundVariant,
   Controls,
   MiniMap,
-  MarkerType,
   useReactFlow,
   type Node,
   type NodeTypes,
@@ -15,7 +14,7 @@ import {
 } from '@xyflow/react'
 import { User, ListChecks, Wrench, Sparkles } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
-import { getDefaultNodeData } from './defaults'
+import { DATAFLOW_MARKER_END, getDefaultNodeData } from './defaults'
 import AgentNode from './nodes/AgentNode'
 import TaskNode from './nodes/TaskNode'
 import ToolNode from './nodes/ToolNode'
@@ -41,6 +40,7 @@ const FIT_VIEW_OPTIONS = { padding: 0.2 } as const
 const SNAP_GRID: [number, number] = [20, 20]
 const PRO_OPTIONS = { hideAttribution: true } as const
 const DELETE_KEY_CODE = ['Delete', 'Backspace']
+const MINIMAP_STYLE = { width: 140, height: 90 } as const
 
 function pickEdgeType(nodeMap: Map<string, Node>, connection: Connection): string {
   const sourceNode = connection.source ? nodeMap.get(connection.source) : undefined
@@ -86,11 +86,17 @@ function CanvasInner() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName
+      const isEditable =
+        tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable
+
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        if (isEditable) return
         e.preventDefault()
         useStudioStore.getState().undo()
       }
       if ((e.metaKey || e.ctrlKey) && ((e.key === 'z' && e.shiftKey) || e.key === 'y')) {
+        if (isEditable) return
         e.preventDefault()
         useStudioStore.getState().redo()
       }
@@ -108,12 +114,9 @@ function CanvasInner() {
       const edgeType = pickEdgeType(nodeMapRef.current, connection)
       const enriched: Edge = {
         ...connection,
-        id: `${connection.source}-${connection.target}-${Date.now()}`,
+        id: `${connection.source}-${connection.target}-${crypto.randomUUID()}`,
         type: edgeType,
-        markerEnd:
-          edgeType === 'dataflow'
-            ? { type: MarkerType.ArrowClosed, width: 12, height: 12, color: '#94a3b8' }
-            : undefined,
+        markerEnd: edgeType === 'dataflow' ? DATAFLOW_MARKER_END : undefined,
       }
       onConnect(enriched as Connection)
     },
@@ -134,7 +137,7 @@ function CanvasInner() {
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY })
 
       const newNode: Node = {
-        id: `${type}-${Date.now()}`,
+        id: `${type}-${crypto.randomUUID()}`,
         type,
         position,
         data: getDefaultNodeData(type),
@@ -192,7 +195,7 @@ function CanvasInner() {
         nodeStrokeWidth={1}
         className="!rounded-lg !border !border-border opacity-50 !shadow-md transition-opacity duration-200 hover:opacity-100"
         maskColor={isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(248, 250, 252, 0.85)'}
-        style={{ width: 140, height: 90 }}
+        style={MINIMAP_STYLE}
         pannable
         zoomable
       />
@@ -216,9 +219,14 @@ function EmptyCanvasOverlay({ onLoadExample }: { onLoadExample?: () => void }) {
           </div>
         </div>
 
-        <p className="mb-1 text-sm font-medium text-foreground">Canvas is empty</p>
+        <h2 className="mb-1 text-sm font-medium text-foreground">Canvas is empty</h2>
         <p className="mb-5 max-w-[260px] text-xs leading-relaxed text-muted-foreground">
-          Drag agents and tasks from the palette, then connect them
+          <span className="hidden sm:inline">
+            Drag agents and tasks from the palette, then connect them
+          </span>
+          <span className="sm:hidden">
+            Tap the buttons below to add agents and tasks, then connect them
+          </span>
         </p>
 
         {onLoadExample && (
@@ -241,7 +249,10 @@ export default function Canvas({ onLoadExample }: { onLoadExample?: () => void }
   return (
     <div
       data-tour="canvas"
-      className="relative flex-1 overflow-hidden bg-slate-50 dark:bg-slate-900"
+      role="region"
+      aria-label="Studio canvas — drag agents, tasks, and tools to build a crew"
+      tabIndex={-1}
+      className="relative flex-1 overflow-hidden bg-slate-50 focus-visible:outline-none dark:bg-slate-900"
     >
       <CanvasInner />
       {isEmpty && <EmptyCanvasOverlay onLoadExample={onLoadExample} />}

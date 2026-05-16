@@ -12,26 +12,7 @@ import pytest
 
 from blackbeard.engine.loader import LoaderError, ResourceLoader
 from blackbeard.kinds import ResourceKind
-from blackbeard.models.resource import Resource
-
-# ---------------------------------------------------------------------------
-# Helper
-# ---------------------------------------------------------------------------
-
-
-def make_resource(kind: ResourceKind, name: str, spec: dict) -> Resource:
-    """Create a detached Resource ORM object without a database session."""
-    r = Resource()
-    r.kind = kind
-    r.name = name
-    r.namespace = "default"
-    r.spec = spec
-    return r
-
-
-def _resource_map(*resources: Resource) -> dict[str, Resource]:
-    return {f"{r.kind.value}/{r.name}": r for r in resources}
-
+from tests.conftest import _resource_map, make_resource
 
 # ---------------------------------------------------------------------------
 # LLM tests

@@ -23,10 +23,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from blackbeard.kinds import ResourceKind
+
 # ---------------------------------------------------------------------------
 # _redact_sensitive_inputs (security-critical — prevents secret leakage)
 # ---------------------------------------------------------------------------
 from blackbeard.models.execution_schemas import _redact_sensitive_inputs
+from blackbeard.resources.exceptions import ValidationError as ResValidationError
+from tests.conftest import make_resource
 
 
 def test_redact_sensitive_inputs_password():
@@ -77,7 +81,7 @@ def test_redact_sensitive_inputs_case_insensitive():
 
 
 def test_redact_sensitive_inputs_no_sensitive_keys():
-    """Non-sensitive keys should pass through unchanged."""
+    """Non-sensitive flat dict should pass through unchanged."""
     inputs = {"topic": "AI", "depth": "deep", "count": "3"}
     result = _redact_sensitive_inputs(inputs)
     assert result == inputs
@@ -93,6 +97,31 @@ def test_redact_sensitive_inputs_private_key():
     inputs = {"private_key": "-----BEGIN RSA KEY-----"}
     result = _redact_sensitive_inputs(inputs)
     assert result["private_key"] == "[REDACTED]"
+
+
+def test_redact_sensitive_inputs_nested_dict():
+    """Sensitive keys inside nested dicts should be redacted recursively."""
+    inputs = {"config": {"api_key": "sk-nested", "host": "example.com"}}
+    result = _redact_sensitive_inputs(inputs)
+    assert result["config"]["api_key"] == "[REDACTED]"
+    assert result["config"]["host"] == "example.com"
+
+
+def test_redact_sensitive_inputs_list_of_dicts():
+    """Sensitive keys inside dicts within lists should be redacted."""
+    inputs = {"accounts": [{"token": "tok-1", "name": "a"}, {"password": "pw", "name": "b"}]}
+    result = _redact_sensitive_inputs(inputs)
+    assert result["accounts"][0]["token"] == "[REDACTED]"
+    assert result["accounts"][0]["name"] == "a"
+    assert result["accounts"][1]["password"] == "[REDACTED]"
+    assert result["accounts"][1]["name"] == "b"
+
+
+def test_redact_sensitive_inputs_list_of_scalars_unchanged():
+    """Lists of non-dict values should pass through unchanged."""
+    inputs = {"tags": ["prod", "v2", 42]}
+    result = _redact_sensitive_inputs(inputs)
+    assert result["tags"] == ["prod", "v2", 42]
 
 
 # ---------------------------------------------------------------------------
@@ -116,15 +145,11 @@ def test_request_id_filter_injects_request_id():
 
 
 def test_request_id_filter_default_value():
-    """Filter should use '-' when no request_id is set."""
-    token = request_id_var.set("-")
-    try:
-        f = _RequestIdFilter()
-        record = logging.LogRecord("test", logging.INFO, "", 0, "msg", (), None)
-        f.filter(record)
-        assert record.request_id == "-"
-    finally:
-        request_id_var.reset(token)
+    """Filter should use '-' when no request_id is set in context."""
+    f = _RequestIdFilter()
+    record = logging.LogRecord("test", logging.INFO, "", 0, "msg", (), None)
+    f.filter(record)
+    assert record.request_id == "-"
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +263,18 @@ def test_json_formatter_exception_info():
 from blackbeard.logging_config import configure_logging
 
 
+@pytest.fixture(autouse=False)
+def _restore_logger_state():
+    """Save and restore the blackbeard logger state around configure_logging tests."""
+    logger = logging.getLogger("blackbeard")
+    original_level = logger.level
+    original_handlers = logger.handlers[:]
+    yield
+    logger.setLevel(original_level)
+    logger.handlers = original_handlers
+
+
+@pytest.mark.usefixtures("_restore_logger_state")
 def test_configure_logging_debug_mode():
     """configure_logging in debug mode should set DEBUG level."""
     configure_logging(debug=True)
@@ -245,6 +282,7 @@ def test_configure_logging_debug_mode():
     assert logger.level == logging.DEBUG
 
 
+@pytest.mark.usefixtures("_restore_logger_state")
 def test_configure_logging_production_mode():
     """configure_logging in production mode should set INFO level."""
     configure_logging(debug=False)
@@ -252,6 +290,7 @@ def test_configure_logging_production_mode():
     assert logger.level == logging.INFO
 
 
+@pytest.mark.usefixtures("_restore_logger_state")
 def test_configure_logging_explicit_log_level():
     """configure_logging with explicit log_level should use it."""
     configure_logging(debug=False, log_level="WARNING")
@@ -259,6 +298,7 @@ def test_configure_logging_explicit_log_level():
     assert logger.level == logging.WARNING
 
 
+@pytest.mark.usefixtures("_restore_logger_state")
 def test_configure_logging_invalid_log_level_fallback():
     """configure_logging with invalid log_level should fall back to default."""
     configure_logging(debug=True, log_level="NOTAVALIDLEVEL")
@@ -273,31 +313,28 @@ def test_configure_logging_invalid_log_level_fallback():
 from blackbeard.http_client import _clients, _lock, _sync_clients, close_all_clients, close_client
 
 
-@pytest.mark.asyncio
 async def test_close_client_removes_and_closes():
     """close_client should remove the named client and call aclose()."""
+    from unittest.mock import AsyncMock
+
     import httpx
 
     mock_client = MagicMock(spec=httpx.AsyncClient)
+    mock_client.aclose = AsyncMock()
 
-    async def _noop_close():
-        pass
-
-    mock_client.aclose = _noop_close
     with _lock:
         _clients["_test_close"] = mock_client
     await close_client("_test_close")
     assert "_test_close" not in _clients
+    mock_client.aclose.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_close_client_nonexistent_noop():
     """close_client for a nonexistent name should be a no-op."""
     await close_client("_nonexistent_client")
     # Should not raise
 
 
-@pytest.mark.asyncio
 async def test_close_all_clients_handles_errors():
     """close_all_clients should log but not raise on individual close errors."""
     import httpx
@@ -329,23 +366,12 @@ async def test_close_all_clients_handles_errors():
 
 import yaml
 
-from blackbeard.kinds import ResourceKind
 from blackbeard.litellm.config_gen import generate_litellm_config
-from blackbeard.models.resource import Resource
-
-
-def _make_llm_conn(name, spec):
-    r = Resource()
-    r.kind = ResourceKind.LLM_CONNECTION
-    r.name = name
-    r.namespace = "default"
-    r.spec = spec
-    return r
 
 
 def test_config_gen_skips_no_model():
     """Connections without a model field should be skipped."""
-    conn = _make_llm_conn("empty-conn", {"provider": "openai"})
+    conn = make_resource(ResourceKind.LLM_CONNECTION, "empty-conn", {"provider": "openai"})
     config_str = generate_litellm_config([conn])
     config = yaml.safe_load(config_str)
     assert config["model_list"] == []
@@ -353,7 +379,9 @@ def test_config_gen_skips_no_model():
 
 def test_config_gen_skips_empty_model():
     """Connections with empty string model should be skipped."""
-    conn = _make_llm_conn("empty-model", {"provider": "openai", "model": ""})
+    conn = make_resource(
+        ResourceKind.LLM_CONNECTION, "empty-model", {"provider": "openai", "model": ""}
+    )
     config_str = generate_litellm_config([conn])
     config = yaml.safe_load(config_str)
     assert config["model_list"] == []
@@ -362,8 +390,12 @@ def test_config_gen_skips_empty_model():
 def test_config_gen_mixed_valid_and_skipped():
     """Valid and invalid connections should produce correct count."""
     conns = [
-        _make_llm_conn("valid", {"provider": "openai", "model": "gpt-4o"}),
-        _make_llm_conn("invalid", {"provider": "openai"}),  # no model
+        make_resource(
+            ResourceKind.LLM_CONNECTION, "valid", {"provider": "openai", "model": "gpt-4o"}
+        ),
+        make_resource(
+            ResourceKind.LLM_CONNECTION, "invalid", {"provider": "openai"}
+        ),  # no model
     ]
     config_str = generate_litellm_config(conns)
     config = yaml.safe_load(config_str)
@@ -591,7 +623,7 @@ def test_tool_command_blocks_tilde():
     errors = []
     spec = {"type": "mcp-stdio", "command": "~/bin/evil"}
     _validate_tool_extra(spec, errors)
-    assert len(errors) > 0
+    assert any("traversal" in e.message.lower() or "path" in e.message.lower() for e in errors)
 
 
 # ---------------------------------------------------------------------------
@@ -684,8 +716,6 @@ def test_cycle_error_message():
 # ---------------------------------------------------------------------------
 # ValidationError.__repr__
 # ---------------------------------------------------------------------------
-
-from blackbeard.resources.exceptions import ValidationError as ResValidationError
 
 
 def test_validation_error_repr():
@@ -825,14 +855,13 @@ from blackbeard.litellm.helpers import apply_vertex_params
 
 def test_apply_vertex_params_fallback_to_global():
     """apply_vertex_params with empty vertex dict should use global config."""
-    from blackbeard.config import settings
-
-    target = {}
-    apply_vertex_params(target, {})
-    # With default config, cloud_ml_region is "us-east5"
-    if settings.google_cloud_project:
-        assert "vertex_project" in target
-    assert target.get("vertex_location") == settings.cloud_ml_region
+    with patch("blackbeard.litellm.helpers.settings") as mock_settings:
+        mock_settings.cloud_ml_region = "us-east1"
+        mock_settings.google_cloud_project = "test-proj"
+        target = {}
+        apply_vertex_params(target, {})
+        assert target["vertex_location"] == "us-east1"
+        assert target["vertex_project"] == "test-proj"
 
 
 # ---------------------------------------------------------------------------

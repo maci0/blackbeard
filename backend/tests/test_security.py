@@ -227,14 +227,14 @@ async def test_request_id_on_404(client):
 
 
 async def test_body_size_limit_negative_content_length(client):
-    """Request with negative Content-Length should be rejected with 413."""
+    """Request with negative Content-Length should be rejected with 400 (invalid header)."""
     headers = {**API_KEY_HEADER, "Content-Length": "-1"}
     response = await client.post(
         "/api/v1/agents",
         content=b"{}",
         headers=headers,
     )
-    assert response.status_code == 413
+    assert response.status_code == 400
 
 
 # ---------------------------------------------------------------------------

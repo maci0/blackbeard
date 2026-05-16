@@ -34,7 +34,6 @@ class Resource(Base):
     kind: Mapped[ResourceKind] = mapped_column(
         Enum(ResourceKind, create_type=False, values_callable=lambda e: [x.value for x in e]),
         nullable=False,
-        index=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     namespace: Mapped[str] = mapped_column(
@@ -116,7 +115,6 @@ class ResourceRef(Base):
     )
 
     __table_args__ = (
-        Index("ix_ref_source", "source_id"),
         Index("ix_ref_target", "target_kind", "target_name", "target_namespace"),
         UniqueConstraint("source_id", "ref_field", name="uq_ref_source_field"),
         CheckConstraint("length(target_name) >= 1", name="ck_ref_target_name_nonempty"),

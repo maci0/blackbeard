@@ -7,6 +7,20 @@ from __future__ import annotations
 
 import enum
 
+__all__ = [
+    "ALL_KINDS",
+    "API_VERSION",
+    "KIND_TO_PLURAL",
+    "NAME_PATTERN",
+    "PLURAL_TO_KIND",
+    "PLURAL_TO_KIND_ENUM",
+    "ResourceKind",
+]
+
+# Canonical API version string — used by resource schemas and response serializers.
+# Must stay in sync with frontend/src/lib/kinds.ts.
+API_VERSION = "blackbeard/v1"
+
 
 class ResourceKind(enum.StrEnum):
     """Supported resource kinds."""
