@@ -16,6 +16,7 @@ import { PLURAL_TO_KIND } from '@/lib/kinds'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { RunDialog } from '@/components/studio/RunDialog'
 import { Spinner } from '@/components/ui/Spinner'
+import { useToastStore } from '@/stores/toastStore'
 
 /* ------------------------------------------------------------------ */
 /* Shared primitives                                                   */
@@ -145,6 +146,7 @@ export default function ResourceDetail() {
   const { kindPlural = '', name = '' } = useParams<{ kindPlural: string; name: string }>()
   const navigate = useNavigate()
   const { deleteResource, updateResource } = useResourceStore()
+  const toasts = useToastStore()
 
   const [resource, setResource] = useState<Resource | null>(null)
   const [loading, setLoading] = useState(true)
@@ -226,10 +228,13 @@ export default function ResourceDetail() {
       setYamlContent(resourceToYaml(updated))
       setEditMode(false)
       setSaveSuccess(true)
+      toasts.success(`Resource "${name}" saved`)
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       saveTimerRef.current = setTimeout(() => setSaveSuccess(false), 5000)
     } catch (err) {
-      setSaveError((err as Error).message)
+      const message = (err as Error).message
+      setSaveError(message)
+      toasts.error(message)
     } finally {
       setSaving(false)
     }
@@ -255,9 +260,12 @@ export default function ResourceDetail() {
     setDeleteError(null)
     try {
       await deleteResource(kindPlural, name)
+      toasts.success(`Resource "${name}" deleted`)
       void navigate('/resources')
     } catch (err) {
-      setDeleteError((err as Error).message)
+      const message = (err as Error).message
+      setDeleteError(message)
+      toasts.error(message)
       setDeleteOpen(false)
       if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
       deleteErrorTimerRef.current = setTimeout(() => setDeleteError(null), 8000)

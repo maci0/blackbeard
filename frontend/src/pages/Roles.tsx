@@ -1,5 +1,14 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { Shield, Search, RefreshCw, Plus, X, Users as UsersIcon, ListChecks } from 'lucide-react'
+import {
+  Shield,
+  Search,
+  RefreshCw,
+  Plus,
+  X,
+  Users as UsersIcon,
+  ListChecks,
+  Trash2,
+} from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { api, ApiError } from '@/api/client'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -7,9 +16,11 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { RuleBuilder, type Rule } from '@/components/rbac/RuleBuilder'
 import { cn } from '@/lib/utils'
 import { useDocumentTitle } from '@/lib/hooks'
+import { useToastStore } from '@/stores/toastStore'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -95,7 +106,34 @@ function RoleCard({
 /* Role detail                                                         */
 /* ------------------------------------------------------------------ */
 
-function RoleDetail({ role, onClose }: { role: RoleRecord; onClose: () => void }) {
+function RoleDetail({
+  role,
+  onClose,
+  onDeleted,
+}: {
+  role: RoleRecord
+  onClose: () => void
+  onDeleted: () => void
+}) {
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const toasts = useToastStore()
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await api.delete(`/api/v1/roles/${role.name}`)
+      toasts.success(`Role "${role.name}" deleted`)
+      setDeleteOpen(false)
+      onDeleted()
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to delete role'
+      toasts.error(message)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="rounded-lg border bg-card p-5">
       <div className="mb-4 flex items-center justify-between">
@@ -105,13 +143,22 @@ function RoleDetail({ role, onClose }: { role: RoleRecord; onClose: () => void }
             <p className="mt-0.5 text-sm text-muted-foreground">{role.description}</p>
           )}
         </div>
-        <button
-          onClick={onClose}
-          aria-label="Close role details"
-          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setDeleteOpen(true)}
+            aria-label={`Delete role ${role.name}`}
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onClose}
+            aria-label="Close role details"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <h3 className="mb-2 text-sm font-semibold">Rules</h3>
@@ -160,6 +207,17 @@ function RoleDetail({ role, onClose }: { role: RoleRecord; onClose: () => void }
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete role"
+        description={`Are you sure you want to delete the role "${role.name}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        confirmVariant="destructive"
+        onConfirm={() => void handleDelete()}
+        loading={deleting}
+      />
     </div>
   )
 }
@@ -182,6 +240,7 @@ function CreateRoleDialog({
   const [rules, setRules] = useState<Rule[]>([{ resources: [], verbs: [], resourceNames: [] }])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const toasts = useToastStore()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -196,13 +255,16 @@ function CreateRoleDialog({
         metadata: { name: name.toLowerCase().replace(/\s+/g, '-') },
         spec: { description, rules: validRules },
       })
+      toasts.success(`Role "${name}" created`)
       setName('')
       setDescription('')
       setRules([{ resources: [], verbs: [], resourceNames: [] }])
       onOpenChange(false)
       onCreated()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to create role')
+      const message = err instanceof ApiError ? err.message : 'Failed to create role'
+      setError(message)
+      toasts.error(message)
     } finally {
       setSubmitting(false)
     }
@@ -441,7 +503,14 @@ export default function Roles() {
         {/* Selected role detail */}
         {selectedRole && (
           <div className="mb-4">
-            <RoleDetail role={selectedRole} onClose={() => setSelectedRole(null)} />
+            <RoleDetail
+              role={selectedRole}
+              onClose={() => setSelectedRole(null)}
+              onDeleted={() => {
+                setSelectedRole(null)
+                void fetchRoles()
+              }}
+            />
           </div>
         )}
 

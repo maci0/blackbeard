@@ -1,5 +1,13 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { Users as UsersIcon, Search, RefreshCw, UserPlus, ChevronRight, X } from 'lucide-react'
+import {
+  Users as UsersIcon,
+  Search,
+  RefreshCw,
+  UserPlus,
+  ChevronRight,
+  X,
+  UserMinus,
+} from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { api, ApiError } from '@/api/client'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -7,9 +15,11 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/formatters'
 import { useDocumentTitle } from '@/lib/hooks'
+import { useToastStore } from '@/stores/toastStore'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -94,6 +104,7 @@ function InviteDialog({
   const [role, setRole] = useState<string>('viewer')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const toasts = useToastStore()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -102,12 +113,15 @@ function InviteDialog({
     setError(null)
     try {
       await api.post('/api/v1/users/invite', { email, role })
+      toasts.success(`Invitation sent to ${email}`)
       setEmail('')
       setRole('viewer')
       onOpenChange(false)
       onInvited()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to invite user')
+      const message = err instanceof ApiError ? err.message : 'Failed to invite user'
+      setError(message)
+      toasts.error(message)
     } finally {
       setSubmitting(false)
     }
@@ -218,6 +232,9 @@ function UserDetailPanel({
   const [role, setRole] = useState(user.role)
   const [saving, setSaving] = useState(false)
   const [roleStatus, setRoleStatus] = useState<'idle' | 'saved' | 'error'>('idle')
+  const [deactivateOpen, setDeactivateOpen] = useState(false)
+  const [deactivating, setDeactivating] = useState(false)
+  const toasts = useToastStore()
 
   const handleRoleChange = async (newRole: string) => {
     setRole(newRole)
@@ -232,6 +249,21 @@ function UserDetailPanel({
       setRoleStatus('error')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDeactivate = async () => {
+    setDeactivating(true)
+    try {
+      await api.patch(`/api/v1/users/${user.id}`, { is_active: false })
+      toasts.success(`User ${user.display_name || user.email} deactivated`)
+      setDeactivateOpen(false)
+      onUpdated()
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to deactivate user'
+      toasts.error(message)
+    } finally {
+      setDeactivating(false)
     }
   }
 
@@ -300,6 +332,29 @@ function UserDetailPanel({
           <dd>{formatDate(user.created_at)}</dd>
         </div>
       </dl>
+
+      {user.is_active && (
+        <div className="mt-4 border-t pt-4">
+          <button
+            onClick={() => setDeactivateOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <UserMinus className="h-3.5 w-3.5" />
+            Deactivate User
+          </button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={deactivateOpen}
+        onOpenChange={setDeactivateOpen}
+        title="Deactivate user"
+        description={`Are you sure you want to deactivate "${user.display_name || user.email}"? They will lose access to the platform.`}
+        confirmLabel="Deactivate"
+        confirmVariant="destructive"
+        onConfirm={() => void handleDeactivate()}
+        loading={deactivating}
+      />
     </div>
   )
 }

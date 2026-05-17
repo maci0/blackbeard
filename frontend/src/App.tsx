@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import { ErrorBoundary } from './components/ui/ErrorBoundary'
 import { Spinner } from './components/ui/Spinner'
+import { ToastContainer } from './components/ui/Toast'
 import { useAuthStore } from './stores/authStore'
 
 const Studio = lazy(() => import('./pages/Studio'))
@@ -46,70 +47,73 @@ function App() {
   }, [token, fetchMe])
 
   return (
-    <ErrorBoundary>
-      <Suspense
-        fallback={
-          <div className="flex h-screen items-center justify-center">
-            <Spinner size="lg" label="Loading page" />
-          </div>
-        }
-      >
-        <AuthGuard>
-          <Routes>
-            {/* Public routes (no Layout) */}
-            <Route path="login" element={<Login />} />
-            <Route path="register" element={<Register />} />
+    <>
+      <ErrorBoundary>
+        <Suspense
+          fallback={
+            <div className="flex h-screen items-center justify-center">
+              <Spinner size="lg" label="Loading page" />
+            </div>
+          }
+        >
+          <AuthGuard>
+            <Routes>
+              {/* Public routes (no Layout) */}
+              <Route path="login" element={<Login />} />
+              <Route path="register" element={<Register />} />
 
-            {/* Authenticated routes (with Layout) */}
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Navigate to="/studio" replace />} />
-              <Route path="studio" element={<Studio />} />
-              <Route path="resources" element={<Resources />} />
-              <Route path="resources/:kindPlural/:name" element={<ResourceDetail />} />
-              <Route path="executions" element={<Executions />} />
-              <Route path="executions/:id" element={<ExecutionDetail />} />
-              <Route path="models" element={<Models />} />
-              <Route path="tools" element={<Tools />} />
-              <Route path="users" element={<Users />} />
-              <Route path="roles" element={<Roles />} />
-              <Route
-                path="*"
-                element={
-                  <div className="flex flex-1 items-center justify-center">
-                    <div className="text-center">
-                      <p
-                        className="mb-2 text-6xl font-bold text-muted-foreground/20"
-                        aria-hidden="true"
-                      >
-                        404
-                      </p>
-                      <h1 className="mb-1 text-lg font-semibold">Page not found</h1>
-                      <p className="mb-4 text-sm text-muted-foreground">
-                        The page you're looking for doesn't exist or may have been moved.
-                      </p>
-                      <div className="flex items-center justify-center gap-3">
-                        <Link
-                          to="/studio"
-                          className="inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              {/* Authenticated routes (with Layout) */}
+              <Route path="/" element={<Layout />}>
+                <Route index element={<Navigate to="/studio" replace />} />
+                <Route path="studio" element={<Studio />} />
+                <Route path="resources" element={<Resources />} />
+                <Route path="resources/:kindPlural/:name" element={<ResourceDetail />} />
+                <Route path="executions" element={<Executions />} />
+                <Route path="executions/:id" element={<ExecutionDetail />} />
+                <Route path="models" element={<Models />} />
+                <Route path="tools" element={<Tools />} />
+                <Route path="users" element={<Users />} />
+                <Route path="roles" element={<Roles />} />
+                <Route
+                  path="*"
+                  element={
+                    <div className="flex flex-1 items-center justify-center">
+                      <div className="text-center">
+                        <p
+                          className="mb-2 text-6xl font-bold text-muted-foreground/20"
+                          aria-hidden="true"
                         >
-                          Go to Studio
-                        </Link>
-                        <Link
-                          to="/resources"
-                          className="inline-flex rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        >
-                          Browse Resources
-                        </Link>
+                          404
+                        </p>
+                        <h1 className="mb-1 text-lg font-semibold">Page not found</h1>
+                        <p className="mb-4 text-sm text-muted-foreground">
+                          The page you're looking for doesn't exist or may have been moved.
+                        </p>
+                        <div className="flex items-center justify-center gap-3">
+                          <Link
+                            to="/studio"
+                            className="inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            Go to Studio
+                          </Link>
+                          <Link
+                            to="/resources"
+                            className="inline-flex rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            Browse Resources
+                          </Link>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                }
-              />
-            </Route>
-          </Routes>
-        </AuthGuard>
-      </Suspense>
-    </ErrorBoundary>
+                  }
+                />
+              </Route>
+            </Routes>
+          </AuthGuard>
+        </Suspense>
+      </ErrorBoundary>
+      <ToastContainer />
+    </>
   )
 }
 

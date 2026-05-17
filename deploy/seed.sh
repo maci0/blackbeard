@@ -174,9 +174,9 @@ if [ "${DEBUG:-false}" = "true" ]; then
   echo "  (DEBUG mode: creating default admin user)"
   admin_resp=$(curl -sSf -X POST "$API/api/v1/auth/register" \
     -H "Content-Type: application/json" \
-    -d '{"email": "admin@blackbeard.local", "password": "adminadmin", "display_name": "Admin"}' 2>&1) && \
-    echo "  + User/admin@blackbeard.local" || \
-    echo "  ~ User/admin@blackbeard.local (already exists or skipped)"
+    -d '{"email": "admin@blackbeard.sh", "password": "Adm1nP@ss!", "display_name": "Admin"}' 2>&1) && \
+    echo "  + User/admin@blackbeard.sh" || \
+    echo "  ~ User/admin@blackbeard.sh (already exists or skipped)"
 fi
 
 # ── LLM Connection: Ollama qwen3.6 ──────────────────────────────────

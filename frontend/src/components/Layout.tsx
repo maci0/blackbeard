@@ -16,8 +16,10 @@ import {
   Sun,
   Moon,
   Monitor,
+  LogOut,
 } from 'lucide-react'
 import { useDarkMode } from '@/lib/hooks'
+import { useAuthStore } from '@/stores/authStore'
 import WelcomeDialog from './onboarding/WelcomeDialog'
 import GuidedTour from './onboarding/GuidedTour'
 import HelpMenu from './onboarding/HelpMenu'
@@ -44,10 +46,25 @@ function BlackbeardLogo({ size = 28 }: { size?: number }) {
   )
 }
 
+function UserInitials({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
+  const initial = name.length > 0 ? name.charAt(0).toUpperCase() : '?'
+  const sizeClass = size === 'sm' ? 'h-7 w-7 text-xs' : 'h-8 w-8 text-sm'
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground ${sizeClass}`}
+      aria-hidden="true"
+    >
+      {initial}
+    </span>
+  )
+}
+
 export default function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
   const { preference, cycle } = useDarkMode()
+  const user = useAuthStore((s) => s.user)
+  const logout = useAuthStore((s) => s.logout)
 
   const [showWelcome, setShowWelcome] = useState(false)
   const [showTour, setShowTour] = useState(false)
@@ -210,6 +227,56 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
+
+        {/* User section */}
+        {user && (
+          <div
+            className={`border-t p-2 ${collapsed ? 'md:flex md:flex-col md:items-center md:gap-1 md:px-1' : 'px-3 py-3'}`}
+          >
+            {collapsed ? (
+              <button
+                onClick={() => {
+                  logout()
+                  void navigate('/login')
+                }}
+                title={`Sign out (${user.display_name || user.email})`}
+                aria-label={`Sign out as ${user.display_name || user.email}`}
+                className="hidden rounded-md p-1 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
+              >
+                <UserInitials name={user.display_name || user.email} size="sm" />
+              </button>
+            ) : null}
+            <div className={collapsed ? 'md:hidden' : ''}>
+              <div className="flex items-center gap-2.5">
+                <UserInitials name={user.display_name || user.email} />
+                <div className="min-w-0 flex-1">
+                  <p
+                    className="truncate text-sm font-medium"
+                    title={user.display_name || user.email}
+                  >
+                    {user.display_name || user.email}
+                  </p>
+                  {user.display_name && (
+                    <p className="truncate text-xs text-muted-foreground" title={user.email}>
+                      {user.email}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    logout()
+                    void navigate('/login')
+                  }}
+                  aria-label="Sign out"
+                  title="Sign out"
+                  className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Sidebar footer */}
         <div
