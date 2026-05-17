@@ -316,8 +316,25 @@ export default function Roles() {
     setLoading(true)
     setError(null)
     try {
-      const result = await api.get<{ items: RoleRecord[]; total: number }>('/api/v1/roles')
-      setRoles(result.items)
+      const result = await api.get<{
+        items: Array<{
+          id: string
+          metadata: { name: string }
+          spec: { description?: string; rules?: Rule[] }
+          created_at: string
+        }>
+        total: number
+      }>('/api/v1/roles')
+      setRoles(
+        result.items.map((r) => ({
+          id: r.id,
+          name: r.metadata.name,
+          description: r.spec.description ?? '',
+          rules: r.spec.rules ?? [],
+          bound_subjects: 0,
+          created_at: r.created_at,
+        })),
+      )
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load roles')
     } finally {
