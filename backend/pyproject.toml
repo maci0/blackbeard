@@ -26,6 +26,9 @@ dependencies = [
     "httpx>=0.28,<1",
     "jsonschema>=4.23,<5",
     "crewai-tools>=1.14.4,<2",
+    "pyjwt>=2.10,<3",
+    "bcrypt>=4.3,<5",
+    "email-validator>=2.2,<3",
 ]
 
 [tool.uv]
@@ -74,6 +77,7 @@ ignore = [
 "tests/**" = ["ANN", "E402"]
 "alembic/**" = ["ANN", "UP", "E501", "I", "F401"]
 "blackbeard/api/**" = ["B008", "TCH"]  # FastAPI needs types at runtime
+"blackbeard/auth/**" = ["B008", "TCH"]  # FastAPI dependencies need types at runtime
 "blackbeard/models/resource_schemas.py" = ["N815"]  # apiVersion is API contract
 "blackbeard/resources/refs.py" = ["N806"]  # WHITE/GRAY/BLACK graph constants
 

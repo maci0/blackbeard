@@ -409,6 +409,103 @@ KNOWLEDGE_SOURCE_SCHEMA = {
     "additionalProperties": False,
 }
 
+ROLE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["rules"],
+    "properties": {
+        "description": {"type": "string", "maxLength": 5000},
+        "rules": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["resources", "verbs"],
+                "properties": {
+                    "resources": {
+                        "type": "array",
+                        "items": {"type": "string", "maxLength": 255},
+                        "minItems": 1,
+                        "maxItems": 50,
+                    },
+                    "verbs": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "get",
+                                "list",
+                                "create",
+                                "update",
+                                "delete",
+                                "run",
+                                "invoke",
+                                "delegate",
+                                "*",
+                            ],
+                        },
+                        "minItems": 1,
+                        "maxItems": 20,
+                    },
+                    "resourceNames": {
+                        "type": "array",
+                        "items": {"type": "string", "maxLength": 255},
+                        "maxItems": 100,
+                    },
+                    "namespaces": {
+                        "type": "array",
+                        "items": {"type": "string", "maxLength": 255},
+                        "maxItems": 50,
+                    },
+                },
+                "additionalProperties": False,
+            },
+            "minItems": 1,
+            "maxItems": 50,
+        },
+        "subjectKinds": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "enum": ["User", "Group", "Agent", "Crew"],
+            },
+            "maxItems": 10,
+        },
+    },
+    "additionalProperties": False,
+}
+
+ROLE_BINDING_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["role", "subjects"],
+    "properties": {
+        "role": {"type": "string", "minLength": 1, "maxLength": 500},
+        "subjects": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["kind", "name"],
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": ["User", "Group", "Agent", "Crew"],
+                    },
+                    "name": {"type": "string", "minLength": 1, "maxLength": 255},
+                },
+                "additionalProperties": False,
+            },
+            "minItems": 1,
+            "maxItems": 100,
+        },
+        "scope": {
+            "type": "object",
+            "properties": {
+                "namespace": {"type": "string", "maxLength": 255},
+            },
+            "additionalProperties": False,
+        },
+    },
+    "additionalProperties": False,
+}
+
 KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "Agent": AGENT_SCHEMA,
     "Task": TASK_SCHEMA,
@@ -419,6 +516,8 @@ KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "Guardrail": GUARDRAIL_SCHEMA,
     "Flow": FLOW_SCHEMA,
     "KnowledgeSource": KNOWLEDGE_SOURCE_SCHEMA,
+    "Role": ROLE_SCHEMA,
+    "RoleBinding": ROLE_BINDING_SCHEMA,
 }
 
 # Verify all kinds have schemas — catches missing schemas at import time

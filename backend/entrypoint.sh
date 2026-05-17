@@ -9,6 +9,7 @@ from blackbeard.kinds import ResourceKind
 from blackbeard.models.execution import ExecutionStatus, TaskStatus
 import blackbeard.models.resource
 import blackbeard.models.execution
+import blackbeard.models.user
 
 def _create_enum_sql(type_name, enum_cls):
     values = ",".join(f"'"'"'{v.value}'"'"'" for v in enum_cls)

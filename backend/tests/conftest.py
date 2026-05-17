@@ -72,7 +72,8 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import StaticPool
 
 import blackbeard.models.execution  # registers execution tables
-import blackbeard.models.resource  # noqa: F401 — registers resource tables
+import blackbeard.models.resource  # registers resource tables
+import blackbeard.models.user  # noqa: F401 — registers user/group tables
 from blackbeard.kinds import ResourceKind
 from blackbeard.main import app
 from blackbeard.models.database import (

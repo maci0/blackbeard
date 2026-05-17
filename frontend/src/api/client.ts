@@ -21,6 +21,7 @@ interface RequestOptions {
 
 class ApiClient {
   private apiKey: string = ''
+  private token: string = ''
 
   setApiKey(key: string) {
     this.apiKey = key
@@ -30,8 +31,23 @@ class ApiClient {
     return this.apiKey
   }
 
+  setToken(token: string) {
+    this.token = token
+  }
+
+  getToken(): string {
+    return this.token
+  }
+
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const { method = 'GET', body, headers = {} } = options
+
+    const authHeaders: Record<string, string> = {}
+    if (this.token) {
+      authHeaders['Authorization'] = `Bearer ${this.token}`
+    } else if (this.apiKey) {
+      authHeaders['X-API-Key'] = this.apiKey
+    }
 
     let response: Response
     try {
@@ -39,7 +55,7 @@ class ApiClient {
         method,
         headers: {
           ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-          ...(this.apiKey ? { 'X-API-Key': this.apiKey } : {}),
+          ...authHeaders,
           ...headers,
         },
         signal: AbortSignal.timeout(30_000),

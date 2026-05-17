@@ -13,6 +13,8 @@ export const KIND_TO_PLURAL: Record<string, string> = {
   Guardrail: 'guardrails',
   Flow: 'flows',
   KnowledgeSource: 'knowledge-sources',
+  Role: 'roles',
+  RoleBinding: 'role-bindings',
 }
 
 export const PLURAL_TO_KIND: Record<string, string> = Object.fromEntries(

@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     cloud_ml_region: str = "us-east5"
     google_application_credentials: str = ""
 
+    jwt_secret: SecretStr = SecretStr("change-jwt-secret-in-production")
+    jwt_access_token_expire_minutes: int = 15
+    jwt_refresh_token_expire_days: int = 7
+
     max_concurrent_executions: int = 4
 
     host: str = "0.0.0.0"

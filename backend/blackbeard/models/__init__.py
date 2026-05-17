@@ -3,6 +3,7 @@
 ORM models:
     Resource, ResourceRef — generic resource storage (resource.py)
     Execution, ExecutionTask, ExecutionToolCall, ExecutionEvent — execution tracking (execution.py)
+    User, Group, GroupMember — authentication and group membership (user.py)
 
 API schemas (Pydantic):
     resource_schemas — request/response models for resource endpoints
@@ -22,6 +23,7 @@ from blackbeard.models.execution import (
     TaskStatus,
 )
 from blackbeard.models.resource import Resource, ResourceRef
+from blackbeard.models.user import Group, GroupMember, User
 
 __all__ = [
     "TERMINAL_STATUSES",
@@ -31,9 +33,12 @@ __all__ = [
     "ExecutionStatus",
     "ExecutionTask",
     "ExecutionToolCall",
+    "Group",
+    "GroupMember",
     "Resource",
     "ResourceRef",
     "TaskStatus",
+    "User",
     "async_session",
     "get_session",
 ]

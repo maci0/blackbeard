@@ -17,8 +17,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 import blackbeard.models.execution  # register Execution/ExecutionTask tables
-import blackbeard.models.resource  # noqa: F401 — register Resource/ResourceRef tables
+import blackbeard.models.resource  # register Resource/ResourceRef tables
+import blackbeard.models.user  # noqa: F401 — register User/Group/GroupMember tables
 from blackbeard import __version__
+from blackbeard.api.auth import router as auth_router
 from blackbeard.api.chat import router as chat_router
 from blackbeard.api.executions import router as executions_router
 from blackbeard.api.health import router as health_router
@@ -32,6 +34,7 @@ from blackbeard.api.middleware import (
     set_api_key,
 )
 from blackbeard.api.resources import router as resources_router
+from blackbeard.api.users import router as users_router
 from blackbeard.config import settings
 from blackbeard.engine import recover_stale_executions, shutdown_executor
 from blackbeard.http_client import close_all_clients
@@ -212,6 +215,8 @@ app = FastAPI(
     openapi_url="/openapi.json" if settings.debug else None,
     openapi_tags=[
         {"name": "health", "description": "Liveness and readiness probes"},
+        {"name": "auth", "description": "Authentication: register, login, refresh, profile"},
+        {"name": "users", "description": "User and group management"},
         {"name": "chat", "description": "Ad-hoc chat completions and model management"},
         {
             "name": "executions",
@@ -245,6 +250,8 @@ app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(Exception, global_exception_handler)
 
 app.include_router(health_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(users_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(executions_router, prefix="/api/v1")
 app.include_router(resources_router, prefix="/api/v1")

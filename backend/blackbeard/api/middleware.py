@@ -31,7 +31,8 @@ _auth_failures: dict[str, collections.deque[float]] = {}
 
 _HEALTH_PATHS = {"/api/v1/health", "/api/v1/health/ready"}
 _DOCS_PATHS = {"/docs", "/openapi.json", "/redoc"}
-PUBLIC_PATHS = _HEALTH_PATHS | (_DOCS_PATHS if settings.debug else set())
+_AUTH_PATHS = {"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh"}
+PUBLIC_PATHS = _HEALTH_PATHS | _AUTH_PATHS | (_DOCS_PATHS if settings.debug else set())
 
 # Default API key from settings; may be replaced at runtime via set_api_key()
 _EXPECTED_API_KEY = settings.blackbeard_api_key.get_secret_value()
@@ -142,6 +143,18 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
                 },
             )
             return response
+
+    # Check for JWT Bearer token — if present with valid structure, allow
+    # through without API key (user-level auth handled by dependencies).
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        # JWT validation is deferred to the auth dependency layer;
+        # the middleware only needs to recognize the token format to
+        # skip the API key check.
+        response = await call_next(request)
+        response.headers["X-Request-Id"] = request_id
+        _log_request(request, response, start)
+        return response
 
     # Check API key — always run hmac.compare_digest to prevent timing attacks
     # (even for missing/empty keys, so presence vs absence isn't distinguishable).

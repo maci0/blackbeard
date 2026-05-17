@@ -13,7 +13,9 @@ Both classes use the same primitives — Objects, Verbs, Roles, RoleBindings, Ru
 
 ## 1.1 MVP Scope
 
-**MVP implements only:** Single API key auth (`BLACKBEARD_API_KEY` env var), basic AgentPolicy resource (tool allowlists, LLM budget limits), and sandbox minimum tier enforcement. All other features in this PRD (users, groups, SSO, roles, role bindings, entity permissions, GUI RBAC editor, SpiceDB, OPA) are post-MVP. See MVP Implementation Plan and section 13 (Migration Path) for the phased rollout.
+**MVP implements:** Built-in email/password auth with JWT tokens, User and Group models, Role and RoleBinding resource kinds, predefined roles (owner/admin/developer/operator/viewer/policy-admin + agent roles), authorization enforcement middleware, AgentPolicy runtime constraints, sandbox tier enforcement, and a visual RBAC editor in the UI (Roles tab, Users/Groups tab, RoleBindings tab, AgentPolicy editor).
+
+**Deferred to post-MVP:** SSO/OIDC integration (Ory Kratos/Hydra), SpiceDB for relationship-based access control, OPA for policy-as-code, entity-level fine-grained permissions (`metadata.access`), and multi-organization support.
 
 ---
 
@@ -562,7 +564,7 @@ This ensures scheduled executions have a well-defined, auditable identity rather
 
 ---
 
-## 9. GUI RBAC Editor (Post-MVP)
+## 9. GUI RBAC Editor (MVP)
 
 ### 9.1 Roles Tab (Human Roles)
 - **Table view**: All roles (built-in + custom) with rule count, bound users, description.

@@ -64,6 +64,121 @@ seed() {
 
 echo "Seeding Blackbeard at $API ..."
 
+# ── RBAC Roles ──────────────────────────────────────────────────────
+
+seed "Role/owner" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Role",
+  "metadata": {"name": "owner"},
+  "spec": {
+    "description": "Full access to all resources and operations",
+    "rules": [{"resources": ["*"], "verbs": ["*"]}]
+  }
+}'
+
+seed "Role/admin" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Role",
+  "metadata": {"name": "admin"},
+  "spec": {
+    "description": "Administrative access to all resources",
+    "rules": [{"resources": ["*"], "verbs": ["get", "list", "create", "update", "delete", "run"]}]
+  }
+}'
+
+seed "Role/developer" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Role",
+  "metadata": {"name": "developer"},
+  "spec": {
+    "description": "Create and manage agents, tasks, crews, and tools",
+    "rules": [
+      {"resources": ["Agent", "Task", "Crew", "Tool", "LLMConnection", "Flow", "KnowledgeSource"], "verbs": ["get", "list", "create", "update", "delete"]},
+      {"resources": ["Crew"], "verbs": ["run"]},
+      {"resources": ["AgentPolicy", "Guardrail"], "verbs": ["get", "list"]}
+    ]
+  }
+}'
+
+seed "Role/operator" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Role",
+  "metadata": {"name": "operator"},
+  "spec": {
+    "description": "Run crews and manage executions",
+    "rules": [
+      {"resources": ["Agent", "Task", "Crew", "Tool", "LLMConnection", "Flow", "KnowledgeSource"], "verbs": ["get", "list"]},
+      {"resources": ["Crew"], "verbs": ["run"]},
+      {"resources": ["AgentPolicy", "Guardrail"], "verbs": ["get", "list"]}
+    ]
+  }
+}'
+
+seed "Role/viewer" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Role",
+  "metadata": {"name": "viewer"},
+  "spec": {
+    "description": "Read-only access to all resources",
+    "rules": [{"resources": ["*"], "verbs": ["get", "list"]}]
+  }
+}'
+
+seed "Role/policy-admin" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Role",
+  "metadata": {"name": "policy-admin"},
+  "spec": {
+    "description": "Manage agent policies, guardrails, roles, and role bindings",
+    "rules": [
+      {"resources": ["AgentPolicy", "Guardrail", "Role", "RoleBinding"], "verbs": ["get", "list", "create", "update", "delete"]}
+    ]
+  }
+}'
+
+seed "Role/agent-unrestricted" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Role",
+  "metadata": {"name": "agent-unrestricted"},
+  "spec": {
+    "description": "Unrestricted agent access — all tools and delegation",
+    "subjectKinds": ["Agent"],
+    "rules": [{"resources": ["Tool"], "verbs": ["invoke"]}, {"resources": ["Agent"], "verbs": ["delegate"]}]
+  }
+}'
+
+seed "Role/agent-standard" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Role",
+  "metadata": {"name": "agent-standard"},
+  "spec": {
+    "description": "Standard agent access — invoke tools but no delegation",
+    "subjectKinds": ["Agent"],
+    "rules": [{"resources": ["Tool"], "verbs": ["invoke"]}]
+  }
+}'
+
+seed "Role/agent-read-only" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Role",
+  "metadata": {"name": "agent-read-only"},
+  "spec": {
+    "description": "Read-only agent access — no tool invocation or delegation",
+    "subjectKinds": ["Agent"],
+    "rules": [{"resources": ["*"], "verbs": ["get", "list"]}]
+  }
+}'
+
+# ── Default admin user (DEBUG mode only) ────────────────────────────
+if [ "${DEBUG:-false}" = "true" ]; then
+  echo "  (DEBUG mode: creating default admin user)"
+  admin_resp=$(curl -sSf -X POST "$API/api/v1/auth/register" \
+    -H "Content-Type: application/json" \
+    -d '{"email": "admin@blackbeard.local", "password": "adminadmin", "display_name": "Admin"}' 2>&1) && \
+    echo "  + User/admin@blackbeard.local" || \
+    echo "  ~ User/admin@blackbeard.local (already exists or skipped)"
+fi
+
 # ── LLM Connection: Ollama qwen3.6 ──────────────────────────────────
 seed "LLMConnection/ollama-qwen" -X POST "$API/api/v1/llm-connections" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
