@@ -21,15 +21,18 @@ export function usePolling(
 
   useEffect(() => {
     if (!enabled) return
-    const mountedRef = { current: true }
-    const id = setInterval(() => {
-      if (mountedRef.current) {
-        void savedCallback.current()
-      }
-    }, intervalMs)
+    let active = true
+    let timeoutId: ReturnType<typeof setTimeout>
+    const tick = () => {
+      if (!active) return
+      void savedCallback.current().finally(() => {
+        if (active) timeoutId = setTimeout(tick, intervalMs)
+      })
+    }
+    timeoutId = setTimeout(tick, intervalMs)
     return () => {
-      mountedRef.current = false
-      clearInterval(id)
+      active = false
+      clearTimeout(timeoutId)
     }
   }, [intervalMs, enabled])
 }

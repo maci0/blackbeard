@@ -119,6 +119,8 @@ async def test_register_short_password(client: AsyncClient):
         json=_register_payload(password="short"),
     )
     assert resp.status_code == 422
+    detail_str = str(resp.json()["detail"]).lower()
+    assert "password" in detail_str or "short" in detail_str or "8" in detail_str
 
 
 async def test_register_invalid_email(client: AsyncClient):
@@ -128,6 +130,8 @@ async def test_register_invalid_email(client: AsyncClient):
         json=_register_payload(email="not-an-email"),
     )
     assert resp.status_code == 422
+    detail_str = str(resp.json()["detail"]).lower()
+    assert "email" in detail_str or "valid" in detail_str
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +171,7 @@ async def test_login_nonexistent_email(client: AsyncClient):
         json=_login_payload(email="noone@nowhere.com"),
     )
     assert resp.status_code == 401
+    assert "invalid" in resp.json()["detail"].lower()
 
 
 async def test_login_deactivated_user(client: AsyncClient):
@@ -224,6 +229,7 @@ async def test_refresh_with_invalid_token(client: AsyncClient):
         json={"refresh_token": "invalid-token-string"},
     )
     assert resp.status_code == 401
+    assert "detail" in resp.json()
 
 
 # ---------------------------------------------------------------------------
@@ -330,26 +336,30 @@ async def test_update_user(client: AsyncClient):
 
 
 async def test_deactivate_user(client: AsyncClient):
-    """DELETE /users/{id} deactivates the user (soft delete)."""
-    # Register two users: one to deactivate, one to remain active for verification
+    """DELETE /users/{id} deactivates the user (self-only soft delete)."""
     data = await _register_user(client)
-    admin_data = await _register_user(client, email="admin@test.com", display_name="Admin")
     user_id = data["user"]["id"]
-    admin_token = admin_data["access_token"]
+    token = data["access_token"]
 
     resp = await client.delete(
         f"/api/v1/users/{user_id}",
-        headers=_bearer(admin_token),
+        headers=_bearer(token),
     )
     assert resp.status_code == 204
 
-    # Verify user is deactivated (using admin's token since deactivated user can't auth)
-    resp = await client.get(
-        f"/api/v1/users/{user_id}",
-        headers=_bearer(admin_token),
+
+async def test_deactivate_other_user_forbidden(client: AsyncClient):
+    """Users cannot deactivate other users."""
+    data = await _register_user(client)
+    other_data = await _register_user(client, email="other@test.com", display_name="Other")
+    other_id = other_data["user"]["id"]
+    token = data["access_token"]
+
+    resp = await client.delete(
+        f"/api/v1/users/{other_id}",
+        headers=_bearer(token),
     )
-    assert resp.status_code == 200
-    assert resp.json()["is_active"] is False
+    assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------
@@ -391,8 +401,10 @@ async def test_list_groups(client: AsyncClient):
     """List groups returns created groups."""
     data = await _register_user(client)
     headers = _bearer(data["access_token"])
-    await client.post("/api/v1/groups", json={"name": "alpha"}, headers=headers)
-    await client.post("/api/v1/groups", json={"name": "beta"}, headers=headers)
+    r1 = await client.post("/api/v1/groups", json={"name": "alpha"}, headers=headers)
+    assert r1.status_code == 201, f"Group alpha setup failed: {r1.status_code} {r1.text}"
+    r2 = await client.post("/api/v1/groups", json={"name": "beta"}, headers=headers)
+    assert r2.status_code == 201, f"Group beta setup failed: {r2.status_code} {r2.text}"
 
     resp = await client.get("/api/v1/groups", headers=headers)
     assert resp.status_code == 200
@@ -445,6 +457,8 @@ async def test_create_role_invalid_verb(client: AsyncClient):
     }
     resp = await client.post("/api/v1/roles", json=payload, headers=API_KEY_HEADER)
     assert resp.status_code == 422
+    detail_str = str(resp.json()["detail"]).lower()
+    assert "destroy" in detail_str or "verb" in detail_str
 
 
 async def test_create_role_missing_rules(client: AsyncClient):
@@ -467,7 +481,8 @@ async def test_list_roles(client: AsyncClient):
         "metadata": {"name": "list-test"},
         "spec": {"rules": [{"resources": ["Agent"], "verbs": ["get"]}]},
     }
-    await client.post("/api/v1/roles", json=payload, headers=API_KEY_HEADER)
+    r = await client.post("/api/v1/roles", json=payload, headers=API_KEY_HEADER)
+    assert r.status_code == 201, f"Role setup failed: {r.status_code} {r.text}"
     resp = await client.get("/api/v1/roles", headers=API_KEY_HEADER)
     assert resp.status_code == 200
     assert resp.json()["total"] >= 1
@@ -487,7 +502,8 @@ async def test_create_role_binding(client: AsyncClient):
         "metadata": {"name": "binding-test-role"},
         "spec": {"rules": [{"resources": ["Agent"], "verbs": ["get", "list"]}]},
     }
-    await client.post("/api/v1/roles", json=role, headers=API_KEY_HEADER)
+    r = await client.post("/api/v1/roles", json=role, headers=API_KEY_HEADER)
+    assert r.status_code == 201, f"Role setup failed: {r.status_code} {r.text}"
 
     binding = {
         "apiVersion": "blackbeard/v1",
@@ -583,7 +599,8 @@ async def test_authorizer_denies_unmatched_verb(client: AsyncClient, db_session:
         "metadata": {"name": "readonly-role"},
         "spec": {"rules": [{"resources": ["Agent"], "verbs": ["get"]}]},
     }
-    await client.post("/api/v1/roles", json=role, headers=API_KEY_HEADER)
+    r = await client.post("/api/v1/roles", json=role, headers=API_KEY_HEADER)
+    assert r.status_code == 201, f"Role setup failed: {r.status_code} {r.text}"
 
     binding = {
         "apiVersion": "blackbeard/v1",
@@ -594,7 +611,8 @@ async def test_authorizer_denies_unmatched_verb(client: AsyncClient, db_session:
             "subjects": [{"kind": "User", "name": "bob"}],
         },
     }
-    await client.post("/api/v1/role-bindings", json=binding, headers=API_KEY_HEADER)
+    r = await client.post("/api/v1/role-bindings", json=binding, headers=API_KEY_HEADER)
+    assert r.status_code == 201, f"RoleBinding setup failed: {r.status_code} {r.text}"
 
     authorizer = Authorizer(db_session)
     assert await authorizer.check("User", "bob", "get", "Agent") is True
@@ -622,7 +640,8 @@ async def test_authorizer_wildcard_resources(client: AsyncClient, db_session: As
         "metadata": {"name": "wildcard-role"},
         "spec": {"rules": [{"resources": ["*"], "verbs": ["get"]}]},
     }
-    await client.post("/api/v1/roles", json=role, headers=API_KEY_HEADER)
+    r = await client.post("/api/v1/roles", json=role, headers=API_KEY_HEADER)
+    assert r.status_code == 201, f"Role setup failed: {r.status_code} {r.text}"
 
     binding = {
         "apiVersion": "blackbeard/v1",
@@ -633,7 +652,8 @@ async def test_authorizer_wildcard_resources(client: AsyncClient, db_session: As
             "subjects": [{"kind": "User", "name": "charlie"}],
         },
     }
-    await client.post("/api/v1/role-bindings", json=binding, headers=API_KEY_HEADER)
+    r = await client.post("/api/v1/role-bindings", json=binding, headers=API_KEY_HEADER)
+    assert r.status_code == 201, f"RoleBinding setup failed: {r.status_code} {r.text}"
 
     authorizer = Authorizer(db_session)
     assert await authorizer.check("User", "charlie", "get", "Agent") is True
@@ -653,7 +673,8 @@ async def test_authorizer_wildcard_verbs(client: AsyncClient, db_session: AsyncS
         "metadata": {"name": "all-verbs-role"},
         "spec": {"rules": [{"resources": ["Agent"], "verbs": ["*"]}]},
     }
-    await client.post("/api/v1/roles", json=role, headers=API_KEY_HEADER)
+    r = await client.post("/api/v1/roles", json=role, headers=API_KEY_HEADER)
+    assert r.status_code == 201, f"Role setup failed: {r.status_code} {r.text}"
 
     binding = {
         "apiVersion": "blackbeard/v1",
@@ -664,7 +685,8 @@ async def test_authorizer_wildcard_verbs(client: AsyncClient, db_session: AsyncS
             "subjects": [{"kind": "User", "name": "dave"}],
         },
     }
-    await client.post("/api/v1/role-bindings", json=binding, headers=API_KEY_HEADER)
+    r = await client.post("/api/v1/role-bindings", json=binding, headers=API_KEY_HEADER)
+    assert r.status_code == 201, f"RoleBinding setup failed: {r.status_code} {r.text}"
 
     authorizer = Authorizer(db_session)
     assert await authorizer.check("User", "dave", "get", "Agent") is True

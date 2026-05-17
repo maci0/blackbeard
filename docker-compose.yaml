@@ -23,6 +23,7 @@ services:
       LITELLM_PROXY_URL: ${LITELLM_PROXY_URL:-http://litellm:4000}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master-key}
       BLACKBEARD_API_KEY: ${BLACKBEARD_API_KEY:-change-me-in-production}
+      JWT_SECRET: ${JWT_SECRET:-change-jwt-secret-in-production}
       DEBUG: ${DEBUG:-false}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
       CLOUD_ML_REGION: ${CLOUD_ML_REGION:-us-east5}

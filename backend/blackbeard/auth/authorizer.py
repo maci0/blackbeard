@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.kinds import ResourceKind
-from blackbeard.models.resource import Resource
+from blackbeard.models import Resource
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +37,7 @@ def _get_cached(key: str) -> bool | None:
 
 def _set_cached(key: str, result: bool) -> None:
     if len(_cache) >= _CACHE_MAX_SIZE:
-        # Evict oldest entries
-        cutoff = time.monotonic() - _CACHE_TTL_S
-        stale = [k for k, (_, ts) in _cache.items() if ts < cutoff]
-        for k in stale:
-            _cache.pop(k, None)
-        # If still too large, clear entirely
-        if len(_cache) >= _CACHE_MAX_SIZE:
-            _cache.clear()
+        _cache.clear()
     _cache[key] = (result, time.monotonic())
 
 
@@ -92,29 +85,68 @@ class Authorizer:
         resource_kind: str,
     ) -> bool:
         """Perform the actual authorization check against the database."""
-        # 1. Find RoleBindings that match the subject
         bindings = await self._find_bindings(subject_kind, subject_name)
+        if not bindings:
+            logger.warning(
+                "Authorization denied: %s/%s verb=%s resource=%s bindings=0",
+                subject_kind,
+                subject_name,
+                verb,
+                resource_kind,
+                extra={
+                    "event": "authz_denied",
+                    "subject_kind": subject_kind,
+                    "subject_name": subject_name,
+                    "verb": verb,
+                    "resource_kind": resource_kind,
+                    "bindings_checked": 0,
+                },
+            )
+            return False
+
+        role_names: set[str] = set()
+        for binding_spec in bindings:
+            role_ref = binding_spec.get("role", "")
+            if role_ref:
+                rn = role_ref.removeprefix("ref:roles/")
+                role_names.add(rn)
+
+        roles = await self._load_roles_batch(role_names) if role_names else {}
 
         for binding_spec in bindings:
             role_ref = binding_spec.get("role", "")
-            # 2. Load the Role referenced by the binding
-            role_spec = await self._load_role(role_ref)
+            role_name = role_ref.removeprefix("ref:roles/")
+            role_spec = roles.get(role_name)
             if role_spec is None:
                 continue
 
-            # 3. Check if any rule in the role grants the verb on the resource_kind
             rules: list[dict[str, Any]] = role_spec.get("rules", [])
             for rule in rules:
                 rule_resources: list[str] = rule.get("resources", [])
                 rule_verbs: list[str] = rule.get("verbs", [])
 
-                # Wildcard support
                 resource_match = "*" in rule_resources or resource_kind in rule_resources
                 verb_match = "*" in rule_verbs or verb in rule_verbs
 
                 if resource_match and verb_match:
                     return True
 
+        logger.warning(
+            "Authorization denied: %s/%s verb=%s resource=%s bindings=%d",
+            subject_kind,
+            subject_name,
+            verb,
+            resource_kind,
+            len(bindings),
+            extra={
+                "event": "authz_denied",
+                "subject_kind": subject_kind,
+                "subject_name": subject_name,
+                "verb": verb,
+                "resource_kind": resource_kind,
+                "bindings_checked": len(bindings),
+            },
+        )
         return False
 
     async def _find_bindings(
@@ -138,17 +170,12 @@ class Authorizer:
                     break
         return matching
 
-    async def _load_role(self, role_ref: str) -> dict[str, Any] | None:
-        """Load a Role spec by ref string (e.g. 'ref:roles/admin') or name."""
-        # Handle both ref format and plain name
-        role_name = role_ref
-        if role_ref.startswith("ref:roles/"):
-            role_name = role_ref[len("ref:roles/"):]
-
+    async def _load_roles_batch(self, role_names: set[str]) -> dict[str, dict[str, Any]]:
+        """Load multiple Role specs by name in a single query."""
         result = await self._session.execute(
-            select(Resource.spec).where(
+            select(Resource.name, Resource.spec).where(
                 Resource.kind == ResourceKind.ROLE,
-                Resource.name == role_name,
+                Resource.name.in_(role_names),
             )
         )
-        return result.scalar_one_or_none()
+        return {row.name: row.spec for row in result.all()}

@@ -75,7 +75,7 @@ export function Toolbar({
         {crewName && toResourceName(crewName) !== crewName ? (
           <span
             id="crew-name-hint"
-            className="hidden shrink-0 text-[10px] text-muted-foreground sm:inline"
+            className="shrink-0 text-[10px] text-muted-foreground"
             title="Resource name will be saved as this slug"
             aria-label={`Resource name will be saved as ${toResourceName(crewName)}`}
           >

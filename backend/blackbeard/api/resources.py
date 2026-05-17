@@ -155,8 +155,32 @@ async def create_resource(
     if created:
         ns = data.metadata.namespace
         response.headers["Location"] = f"/api/v1/{kind_plural}/{data.metadata.name}?namespace={ns}"
+        logger.info(
+            "Resource created: %s/%s namespace=%s",
+            data.kind,
+            data.metadata.name,
+            data.metadata.namespace,
+            extra={
+                "event": "resource_created",
+                "resource_kind": data.kind,
+                "resource_name": data.metadata.name,
+                "namespace": data.metadata.namespace,
+            },
+        )
     else:
         response.status_code = 200
+        logger.info(
+            "Resource upserted: %s/%s namespace=%s",
+            data.kind,
+            data.metadata.name,
+            data.metadata.namespace,
+            extra={
+                "event": "resource_upserted",
+                "resource_kind": data.kind,
+                "resource_name": data.metadata.name,
+                "namespace": data.metadata.namespace,
+            },
+        )
     return ResourceResponse.from_db(resource)
 
 
@@ -276,6 +300,18 @@ async def update_resource(
             status_code=422,
             detail=[e.to_dict() for e in exc.errors],
         ) from exc
+    logger.info(
+        "Resource updated: %s/%s namespace=%s",
+        kind,
+        name,
+        namespace,
+        extra={
+            "event": "resource_updated",
+            "resource_kind": kind,
+            "resource_name": name,
+            "namespace": namespace,
+        },
+    )
     return ResourceResponse.from_db(resource)
 
 
@@ -306,6 +342,18 @@ async def delete_resource(
     try:
         await service.delete(kind, name, namespace)
         await session.commit()
+        logger.info(
+            "Resource deleted: %s/%s namespace=%s",
+            kind,
+            name,
+            namespace,
+            extra={
+                "event": "resource_deleted",
+                "resource_kind": kind,
+                "resource_name": name,
+                "namespace": namespace,
+            },
+        )
     except ResourceNotFoundError:
         logger.debug(
             "Delete no-op: %s/%s not found in namespace=%s",

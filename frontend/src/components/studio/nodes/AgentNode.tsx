@@ -40,7 +40,9 @@ export default memo(function AgentNode({ data, selected }: NodeProps) {
           {role || 'Unnamed Agent'}
         </p>
         {goal ? (
-          <p className="line-clamp-2 text-[10px] leading-snug text-muted-foreground">{goal}</p>
+          <p className="line-clamp-2 text-[10px] leading-snug text-muted-foreground" title={goal}>
+            {goal}
+          </p>
         ) : (
           <p className="text-2xs italic text-muted-foreground/60">No goal set</p>
         )}

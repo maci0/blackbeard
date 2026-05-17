@@ -48,9 +48,32 @@ def _require_api_key(ctx: click.Context) -> str:
     return cast("str", key)
 
 
+def _validate_name(name: str) -> None:
+    """Exit with code 2 if *name* doesn't match the resource naming rules."""
+    if not re.fullmatch(NAME_PATTERN, name):
+        console.print(
+            f"[red bold]Error:[/] Invalid resource name {name!r}."
+            " Names must be lowercase alphanumeric with hyphens."
+        )
+        raise SystemExit(2)
+
+
+def _warn_unused_interval(ctx: click.Context, watch: bool, interval: int, cmd_hint: str) -> None:
+    """Warn when --interval is passed without --wait."""
+    from_cli = ctx.get_parameter_source("interval") == click.core.ParameterSource.COMMANDLINE
+    if not watch and from_cli:
+        console.print(
+            f"[yellow]Warning:[/] --interval/-i has no effect without --wait."
+            f" Try: [bold]{cmd_hint} -w -i {interval}[/]"
+        )
+
+
 def _output_json(data: object, *, compact: bool = False) -> None:
     if compact:
-        out.print(json.dumps(data, default=str, ensure_ascii=False, separators=(",", ":")))
+        out.print(
+            json.dumps(data, default=str, ensure_ascii=False, separators=(",", ":")),
+            highlight=False,
+        )
     else:
         out.print_json(json.dumps(data, default=str, ensure_ascii=False))
 
@@ -92,8 +115,20 @@ def _handle_http_error(response: httpx.Response) -> NoReturn:
         console.print("[dim]Hint: Resource version conflict — re-fetch and retry[/]")
     elif response.status_code == 422:
         console.print("[dim]Hint: Check your resource spec against the expected schema[/]")
+    elif response.status_code == 429:
+        retry = response.headers.get("Retry-After")
+        hint = "Too many requests — wait and retry"
+        if retry:
+            hint += f" (Retry-After: {retry}s)"
+        console.print(f"[dim]Hint: {hint}[/]")
     elif response.status_code >= 500:
         console.print("[dim]Hint: Server error — check server logs for details[/]")
+    try:
+        body = response.json()
+        if isinstance(body, dict) and "request_id" in body:
+            console.print(f"[dim]Request ID: {body['request_id']}[/]")
+    except Exception:
+        pass
     raise SystemExit(1)
 
 
@@ -111,7 +146,7 @@ def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
     resources: list[dict[str, Any]] = []
     for f in files:
         try:
-            with open(f, encoding="utf-8") as fh:
+            with f.open(encoding="utf-8") as fh:
                 for doc in yaml.safe_load_all(fh):
                     if not doc or not isinstance(doc, dict):
                         continue
@@ -205,7 +240,7 @@ Common workflows:
     "output_json",
     is_flag=True,
     default=False,
-    help="Output as JSON for scripting (skips interactive prompts)",
+    help="Output as JSON for scripting",
 )
 @click.pass_context
 def cli(
@@ -243,7 +278,7 @@ Examples:
 )
 @click.pass_context
 def health(ctx: click.Context, ready: bool, output_json: bool) -> None:
-    """Check server health and component readiness."""
+    """Check server health and component readiness (no API key required)."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     endpoint = "/api/v1/health/ready" if ready else "/api/v1/health"
@@ -320,7 +355,7 @@ Examples:
 )
 @click.pass_context
 def validate(ctx: click.Context, path: str, output_json: bool) -> None:
-    """Validate YAML resource files without applying them."""
+    """Validate YAML resource files offline (no server connection needed)."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     resources = load_yaml_resources(Path(path))
 
@@ -635,12 +670,7 @@ Examples:
 def get(ctx: click.Context, kind: str, name: str, output_json: bool) -> None:
     """Get a single resource by kind and name."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
-    if not re.fullmatch(NAME_PATTERN, name):
-        console.print(
-            f"[red bold]Error:[/] Invalid resource name {name!r}."
-            " Names must be lowercase alphanumeric with hyphens."
-        )
-        raise SystemExit(2)
+    _validate_name(name)
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
     namespace = ctx.obj["namespace"]
@@ -817,12 +847,7 @@ Examples:
 def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: bool) -> None:
     """Delete a resource by kind and name."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
-    if not re.fullmatch(NAME_PATTERN, name):
-        console.print(
-            f"[red bold]Error:[/] Invalid resource name {name!r}."
-            " Names must be lowercase alphanumeric with hyphens."
-        )
-        raise SystemExit(2)
+    _validate_name(name)
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
     namespace = ctx.obj["namespace"]
@@ -910,13 +935,7 @@ def kickoff(
     CREW_NAME is the name of the crew to run, e.g. research-crew.
     """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
-
-    if not re.fullmatch(NAME_PATTERN, crew_name):
-        console.print(
-            f"[red bold]Error:[/] Invalid crew name {crew_name!r}."
-            " Names must be lowercase alphanumeric with hyphens."
-        )
-        raise SystemExit(2)
+    _validate_name(crew_name)
 
     parsed_inputs: dict[str, Any] = {}
     for item in inputs:
@@ -937,14 +956,8 @@ def kickoff(
     api_key = _require_api_key(ctx)
     namespace = ctx.obj["namespace"]
 
-    interval_from_cli = (
-        ctx.get_parameter_source("interval") == click.core.ParameterSource.COMMANDLINE
-    )
-    if not watch and interval_from_cli:
-        console.print(
-            f"[yellow]Warning:[/] --interval/-i has no effect without --wait."
-            f" Try: [bold]blackbeard kickoff {crew_name} -w -i {interval}[/]"
-        )
+    prog = ctx.find_root().info_name or "blackbeard"
+    _warn_unused_interval(ctx, watch, interval, f"{prog} kickoff {crew_name}")
 
     url = f"{server}/api/v1/crews/{crew_name}/kickoff"
     headers = {"X-API-Key": api_key}
@@ -1040,14 +1053,8 @@ def status(
     api_key = _require_api_key(ctx)
     is_json = ctx.obj["json"]
 
-    interval_from_cli = (
-        ctx.get_parameter_source("interval") == click.core.ParameterSource.COMMANDLINE
-    )
-    if not watch and interval_from_cli:
-        console.print(
-            f"[yellow]Warning:[/] --interval/-i has no effect without --wait."
-            f" Try: [bold]blackbeard status {execution_id} -w -i {interval}[/]"
-        )
+    prog = ctx.find_root().info_name or "blackbeard"
+    _warn_unused_interval(ctx, watch, interval, f"{prog} status {execution_id}")
 
     terminal_states = {s.value for s in TERMINAL_STATUSES}
     url = f"{server}/api/v1/executions/{execution_id}"

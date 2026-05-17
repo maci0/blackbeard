@@ -34,10 +34,13 @@ _SENSITIVE_PATH_PREFIXES = ("/etc/", "/proc/", "/sys/", "/dev/", "/var/run/")
 
 _SAFE_BUILTIN_NAME = re.compile(r"^[A-Z][a-zA-Z0-9]+$")
 
-_BLOCKED_BUILTIN_NAMES = frozenset({
-    "CodeInterpreterTool",
-    "CodeDocsSearchTool",
-})
+_BLOCKED_BUILTIN_NAMES = frozenset(
+    {
+        "CodeInterpreterTool",
+        "CodeDocsSearchTool",
+    }
+)
+
 
 def _self_api_url() -> str:
     """Resolve at call time so the module can be imported without reading settings."""
@@ -321,9 +324,7 @@ class ResourceLoader:
         try:
             tool_instance = tool_cls(**config)
         except Exception as exc:
-            raise LoaderError(
-                f"Tool '{resource.name}': instantiation failed: {exc}"
-            ) from exc
+            raise LoaderError(f"Tool '{resource.name}': instantiation failed: {exc}") from exc
         self._tool_cache[ref_or_name] = tool_instance
         self._tools_loaded += 1
         if logger.isEnabledFor(logging.DEBUG):

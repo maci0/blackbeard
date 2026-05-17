@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import logging
 
-import jwt
+import jwt as pyjwt
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.auth.jwt import decode_token
-from blackbeard.models.database import get_session
-from blackbeard.models.user import User
+from blackbeard.models import User, get_session
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +22,9 @@ async def get_current_user(
     """Extract authenticated user from JWT Bearer token or API key.
 
     Returns the User if authentication succeeds, None if no credentials
-    are present. The middleware layer handles X-API-Key auth for backward
-    compatibility; this dependency handles JWT-based user identity.
+    are present. The middleware layer handles X-API-Key auth for
+    system-level access; this dependency resolves user identity from
+    JWT tokens or per-user API keys.
     """
     # Try Authorization: Bearer <token>
     auth_header = request.headers.get("Authorization", "")
@@ -32,27 +32,54 @@ async def get_current_user(
         token = auth_header[7:]
         try:
             payload = decode_token(token)
-        except jwt.ExpiredSignatureError:
+        except pyjwt.ExpiredSignatureError:
+            logger.info(
+                "JWT expired",
+                extra={"event": "jwt_expired"},
+            )
             raise HTTPException(status_code=401, detail="Token has expired") from None
-        except jwt.InvalidTokenError:
+        except pyjwt.InvalidTokenError:
+            logger.warning(
+                "JWT invalid",
+                extra={"event": "jwt_invalid"},
+            )
             raise HTTPException(status_code=401, detail="Invalid token") from None
 
         if payload.get("type") != "access":
+            logger.warning(
+                "JWT wrong type: %s",
+                payload.get("type"),
+                extra={"event": "jwt_wrong_type", "token_type": payload.get("type")},
+            )
             raise HTTPException(status_code=401, detail="Invalid token type")
 
         user_id = payload.get("sub")
         if not user_id:
+            logger.warning(
+                "JWT missing sub claim",
+                extra={"event": "jwt_missing_sub"},
+            )
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
         result = await session.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if user is None or not user.is_active:
+            logger.warning(
+                "JWT user not found or inactive: sub=%s",
+                user_id,
+                extra={"event": "jwt_user_invalid", "user_id": str(user_id)},
+            )
             raise HTTPException(status_code=401, detail="User not found or inactive")
         return user
 
     # Try resolving the X-API-Key to a user (optional — API key may belong to
-    # the global system key rather than a user-specific key)
-    api_key = request.headers.get("X-API-Key", "") or request.query_params.get("api_key", "")
+    # the global system key rather than a user-specific key).
+    # Only accept query-string keys on SSE/stream endpoints where EventSource
+    # cannot set custom headers — query-string credentials leak via proxy logs,
+    # browser history, and Referer headers (CWE-598).
+    api_key = request.headers.get("X-API-Key", "")
+    if not api_key and request.url.path.endswith("/stream"):
+        api_key = request.query_params.get("api_key", "")
     if api_key:
         result = await session.execute(select(User).where(User.api_key == api_key))
         user = result.scalar_one_or_none()

@@ -45,6 +45,7 @@ from blackbeard.models import (
     TaskStatus,
     async_session,
 )
+from blackbeard.models.database import CONNECT_ARGS
 from blackbeard.resources import parse_ref
 
 if TYPE_CHECKING:
@@ -125,7 +126,7 @@ def get_pool_status() -> dict[str, object]:
 
 
 def shutdown_executor(wait: bool = False) -> None:
-    """Shutdown the thread pool executor, cancelling pending futures."""
+    """Shutdown the thread pool executor and dispose the sync DB engine."""
     global _executor
     if _executor is not None:
         _executor.shutdown(wait=wait, cancel_futures=True)
@@ -295,6 +296,7 @@ async def kickoff(
                     "execution_id": str(execution_id),
                     "crew_name": crew_name,
                     "error_type": type(exc).__name__,
+                    "error_message": str(exc)[:500],
                 },
             )
             error_msg = _sanitize_error(str(exc))
@@ -344,7 +346,7 @@ def _snapshot_resource(resource: Resource) -> dict[str, Any]:
         "kind": resource.kind.value,
         "name": resource.name,
         "namespace": resource.namespace,
-        "spec": dict(resource.spec) if resource.spec else {},
+        "spec": dict(resource.spec or {}),
     }
 
 
@@ -417,13 +419,7 @@ def _thread_session_factory() -> tuple[async_sessionmaker[AsyncSession], AsyncEn
         pool_pre_ping=True,
         pool_timeout=30,
         pool_recycle=3600,
-        connect_args={
-            "server_settings": {
-                "statement_timeout": "30000",
-                "idle_in_transaction_session_timeout": "60000",
-            },
-            "command_timeout": 10,
-        },
+        connect_args=CONNECT_ARGS,
     )
     factory = async_sessionmaker(thread_engine, class_=_AsyncSession, expire_on_commit=False)
     return factory, thread_engine
@@ -675,9 +671,7 @@ async def list_executions(
         query = query.options(defer(Execution.outputs), defer(Execution.inputs))
 
     query = (
-        query.order_by(Execution.created_at.desc(), Execution.id.desc())
-        .limit(limit)
-        .offset(offset)
+        query.order_by(Execution.created_at.desc(), Execution.id.desc()).limit(limit).offset(offset)
     )
     result = await session.execute(query)
     items = list(result.scalars().all())

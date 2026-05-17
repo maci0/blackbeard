@@ -57,7 +57,7 @@ export default function WelcomeDialog({ open, onStartTour, onSkip }: WelcomeDial
           className="fixed left-1/2 top-1/2 z-50 w-[560px] max-w-[92vw] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-border bg-card shadow-2xl focus:outline-none"
           // Prevent closing by clicking outside — user must choose a button
           onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
+          onEscapeKeyDown={handleSkip}
           aria-describedby="welcome-description"
         >
           {/* ── Hero header ── */}
@@ -119,7 +119,7 @@ export default function WelcomeDialog({ open, onStartTour, onSkip }: WelcomeDial
                 onClick={handleStartTour}
                 className="flex-1 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                Get Started →
+                Take the Tour →
               </button>
               <button
                 onClick={handleSkip}

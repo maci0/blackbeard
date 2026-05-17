@@ -63,7 +63,7 @@ export function ConfirmDialog({
               onClick={() => void handleConfirm()}
               disabled={busy}
               aria-busy={busy}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${btnClass}`}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${btnClass}`}
             >
               {busy && <Spinner size="sm" className="text-current" />}
               {confirmLabel}

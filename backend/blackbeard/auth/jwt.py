@@ -9,6 +9,9 @@ import jwt
 
 from blackbeard.config import settings
 
+_ALGORITHM = "HS256"
+_ISSUER = "blackbeard"
+
 
 def create_access_token(user_id: str, email: str) -> str:
     """Create a short-lived JWT access token (default 15 minutes)."""
@@ -17,13 +20,14 @@ def create_access_token(user_id: str, email: str) -> str:
         "sub": user_id,
         "email": email,
         "type": "access",
+        "iss": _ISSUER,
         "iat": now,
         "exp": now + timedelta(minutes=settings.jwt_access_token_expire_minutes),
     }
     return jwt.encode(
         payload,
         settings.jwt_secret.get_secret_value(),
-        algorithm="HS256",
+        algorithm=_ALGORITHM,
     )
 
 
@@ -33,13 +37,14 @@ def create_refresh_token(user_id: str) -> str:
     payload: dict[str, Any] = {
         "sub": user_id,
         "type": "refresh",
+        "iss": _ISSUER,
         "iat": now,
         "exp": now + timedelta(days=settings.jwt_refresh_token_expire_days),
     }
     return jwt.encode(
         payload,
         settings.jwt_secret.get_secret_value(),
-        algorithm="HS256",
+        algorithm=_ALGORITHM,
     )
 
 
@@ -48,10 +53,12 @@ def decode_token(token: str) -> dict[str, Any]:
 
     Returns the decoded payload dict.
     Raises jwt.ExpiredSignatureError if the token has expired.
-    Raises jwt.InvalidTokenError for any other validation failure.
+    Raises jwt.InvalidTokenError for any other validation failure
+    (including issuer mismatch).
     """
     return jwt.decode(
         token,
         settings.jwt_secret.get_secret_value(),
-        algorithms=["HS256"],
+        algorithms=[_ALGORITHM],
+        issuer=_ISSUER,
     )

@@ -151,16 +151,18 @@ async def test_list_executions_empty(client: AsyncClient):
     data = response.json()
     assert data["items"] == []
     assert data["total"] == 0
+    assert data["has_more"] is False
 
 
 async def test_list_executions_after_kickoff(client: AsyncClient):
     """After kicking off, list executions should include the new execution."""
     await _create_full_crew(client)
-    await client.post(
+    r = await client.post(
         "/api/v1/crews/test-crew/kickoff",
         json={"inputs": {}},
         headers=API_KEY_HEADER,
     )
+    assert r.status_code == 202, f"Kickoff setup failed: {r.status_code} {r.text}"
 
     response = await client.get("/api/v1/executions", headers=API_KEY_HEADER)
     assert response.status_code == 200
@@ -168,6 +170,7 @@ async def test_list_executions_after_kickoff(client: AsyncClient):
     assert data["total"] == 1
     assert len(data["items"]) == 1
     assert data["items"][0]["crew_name"] == "test-crew"
+    assert data["has_more"] is False
 
 
 async def test_list_executions_filter_by_crew(client: AsyncClient):
@@ -175,7 +178,7 @@ async def test_list_executions_filter_by_crew(client: AsyncClient):
     # Create two crews
     await _create_full_crew(client, crew_name="crew-alpha")
     # Reuse same agents/tasks for crew-beta
-    await client.post(
+    r = await client.post(
         "/api/v1/crews",
         json={
             "apiVersion": "blackbeard/v1",
@@ -189,13 +192,16 @@ async def test_list_executions_filter_by_crew(client: AsyncClient):
         },
         headers=API_KEY_HEADER,
     )
+    assert r.status_code in (200, 201), f"crew-beta setup failed: {r.status_code} {r.text}"
 
-    await client.post(
+    r = await client.post(
         "/api/v1/crews/crew-alpha/kickoff", json={"inputs": {}}, headers=API_KEY_HEADER
     )
-    await client.post(
+    assert r.status_code == 202, f"crew-alpha kickoff failed: {r.status_code} {r.text}"
+    r = await client.post(
         "/api/v1/crews/crew-beta/kickoff", json={"inputs": {}}, headers=API_KEY_HEADER
     )
+    assert r.status_code == 202, f"crew-beta kickoff failed: {r.status_code} {r.text}"
 
     response = await client.get("/api/v1/executions?crew_name=crew-alpha", headers=API_KEY_HEADER)
     assert response.status_code == 200
@@ -305,11 +311,12 @@ async def test_cancel_already_cancelled_returns_conflict(client: AsyncClient):
 async def test_list_executions_filter_by_status(client: AsyncClient):
     """Filter by status=queued should return only queued executions."""
     await _create_full_crew(client)
-    await client.post(
+    r = await client.post(
         "/api/v1/crews/test-crew/kickoff",
         json={"inputs": {}},
         headers=API_KEY_HEADER,
     )
+    assert r.status_code == 202, f"Kickoff setup failed: {r.status_code} {r.text}"
 
     response = await client.get("/api/v1/executions?status=queued", headers=API_KEY_HEADER)
     assert response.status_code == 200

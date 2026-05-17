@@ -66,8 +66,15 @@ _SENSITIVE_KEYS = frozenset(
         "secret_key",
         "access_key",
         "master_key",
+        "database_url",
+        "dsn",
+        "connection_string",
+        "jwt_secret",
+        "passphrase",
     }
 )
+
+_SENSITIVE_SUFFIXES = tuple(f"_{s}" for s in _SENSITIVE_KEYS)
 
 
 class _JsonFormatter(logging.Formatter):
@@ -93,8 +100,8 @@ class _JsonFormatter(logging.Formatter):
         for key, val in record.__dict__.items():
             if key not in _LOG_RECORD_BUILTIN and key not in log_entry:
                 key_lower = key.lower()
-                if key_lower in _SENSITIVE_KEYS or any(
-                    key_lower.endswith(f"_{s}") for s in _SENSITIVE_KEYS
+                if key_lower in _SENSITIVE_KEYS or key_lower.endswith(
+                    _SENSITIVE_SUFFIXES
                 ):
                     log_entry[key] = "[REDACTED]"
                 else:
@@ -153,6 +160,14 @@ def configure_logging(debug: bool = False, log_level: str = "") -> None:
 
     for noisy in ("httpx", "httpcore", "sqlalchemy.engine", "urllib3"):
         logging.getLogger(noisy).setLevel(max(level, logging.WARNING))
+
+    # Route uvicorn logs through the same handler so production output is
+    # uniformly structured JSON instead of a mix of plain-text and JSON lines.
+    for uvi in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        uvi_logger = logging.getLogger(uvi)
+        uvi_logger.handlers.clear()
+        uvi_logger.addHandler(handler)
+        uvi_logger.propagate = False
 
     app_logger.info(
         "Logging configured: level=%s format=%s",

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Blackbeard
 
-Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource) with a visual graph editor, async execution engine, and LiteLLM proxy for model routing (with built-in spend/token/latency tracking).
+Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding) with a visual graph editor, async execution engine, RBAC, and LiteLLM proxy for model routing (with built-in spend/token/latency tracking).
 
 ## Commands
 
@@ -48,7 +48,7 @@ bash deploy/seed.sh              # seed DB with example crew using Ollama (requi
 
 **Execution flow**: `POST /api/v1/crews/{crew_name}/kickoff` → creates `Execution` record → submits to `ThreadPoolExecutor` → background thread builds CrewAI objects via `ResourceLoader` (resolves refs, builds LLM/Agent/Task/Crew) → calls `crew.kickoff(inputs=...)` → stores result + token usage. Each crew run gets its own thread with an isolated asyncio event loop to avoid blocking the FastAPI async loop.
 
-**Middleware stack** (LIFO): security headers → API key auth (hmac.compare_digest) + request ID → body size limiter (10MB).
+**Middleware stack** (LIFO): security headers → API key auth (hmac.compare_digest or JWT Bearer) + request ID → body size limiter (10MB). Auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`) and health checks are public (no auth required).
 
 **External services**: PostgreSQL (resources + executions), Valkey (cache), LiteLLM proxy (model routing to Vertex AI / OpenAI, with built-in spend/token/latency tracking).
 

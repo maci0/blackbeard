@@ -230,7 +230,7 @@ function CreateRoleDialog({
           <form onSubmit={(e) => void handleSubmit(e)} className="mt-4 space-y-4">
             <div>
               <label htmlFor="role-name" className="mb-1.5 block text-sm font-medium">
-                Name
+                Name <span className="text-destructive">*</span>
               </label>
               <input
                 id="role-name"
@@ -276,7 +276,7 @@ function CreateRoleDialog({
                 type="submit"
                 disabled={submitting}
                 aria-busy={submitting}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting && <Spinner size="sm" className="text-current" />}
                 Create Role

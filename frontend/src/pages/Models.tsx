@@ -397,7 +397,7 @@ function AddModelDialog({
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting && <Spinner size="sm" className="text-white" />}
                 Add connection
@@ -425,11 +425,14 @@ export default function Models() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const deleteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     return () => {
       if (successTimerRef.current) clearTimeout(successTimerRef.current)
+      if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
     }
   }, [])
 
@@ -480,8 +483,11 @@ export default function Models() {
       setSuccessMessage(`Connection "${name}" deleted`)
       if (successTimerRef.current) clearTimeout(successTimerRef.current)
       successTimerRef.current = setTimeout(() => setSuccessMessage(null), 5000)
-    } catch {
-      // error already in store
+    } catch (err) {
+      setDeleteTarget(null)
+      setDeleteError((err as Error).message)
+      if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
+      deleteErrorTimerRef.current = setTimeout(() => setDeleteError(null), 8000)
     } finally {
       setDeleting(false)
     }
@@ -540,6 +546,27 @@ export default function Models() {
               aria-label="Dismiss success message"
             >
               <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Delete error */}
+        {deleteError && (
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="mb-4 flex items-center justify-between rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            <span className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {deleteError}
+            </span>
+            <button
+              onClick={() => setDeleteError(null)}
+              className="flex h-[44px] shrink-0 items-center rounded px-3 text-xs font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Dismiss error"
+            >
+              Dismiss
             </button>
           </div>
         )}

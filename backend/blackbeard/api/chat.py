@@ -24,6 +24,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat"])
 
+_RETRY_HEADERS = {"Retry-After": "30"}
+
+
+class TokenUsage(BaseModel):
+    prompt: int = 0
+    completion: int = 0
+    total: int = 0
+
 
 def _get_litellm_client() -> httpx.AsyncClient:
     """Return a shared httpx client for LiteLLM requests."""
@@ -44,12 +52,6 @@ def _extract_content(data: dict[str, Any]) -> tuple[str, TokenUsage]:
         total=usage.get("total_tokens", 0),
     )
     return content, tokens
-
-
-class TokenUsage(BaseModel):
-    prompt: int = 0
-    completion: int = 0
-    total: int = 0
 
 
 class ChatMessage(BaseModel):
@@ -117,7 +119,7 @@ async def chat(body: ChatRequest = Body(...)) -> ChatResponse:
         raise HTTPException(
             status_code=502,
             detail="Model proxy is unreachable. Try again later.",
-            headers={"Retry-After": "30"},
+            headers=_RETRY_HEADERS,
         ) from e
 
     latency_ms = int((time.monotonic() - t0) * 1000)
@@ -141,7 +143,7 @@ async def chat(body: ChatRequest = Body(...)) -> ChatResponse:
         raise HTTPException(
             status_code=502,
             detail=f"Model request failed with status {resp.status_code}.",
-            headers={"Retry-After": "30"},
+            headers=_RETRY_HEADERS,
         )
 
     try:
@@ -152,17 +154,19 @@ async def chat(body: ChatRequest = Body(...)) -> ChatResponse:
             body.model,
             resp.status_code,
             resp.headers.get("content-type", "unknown"),
+            exc_info=True,
             extra={
                 "event": "chat_litellm_unparseable",
                 "model": body.model,
                 "http_status": resp.status_code,
                 "latency_ms": latency_ms,
+                "response_body_preview": resp.text[:200] if resp.text else "",
             },
         )
         raise HTTPException(
             status_code=502,
             detail="Model proxy returned an unparseable response.",
-            headers={"Retry-After": "30"},
+            headers=_RETRY_HEADERS,
         ) from None
     content, tokens = _extract_content(data)
 
@@ -372,33 +376,35 @@ async def list_available_models() -> list[ModelInfo]:
             raise HTTPException(
                 status_code=502,
                 detail="Model proxy returned an error. Try again later.",
-                headers={"Retry-After": "30"},
+                headers=_RETRY_HEADERS,
             )
 
         try:
             data = resp.json()
         except ValueError:
             logger.error(
-                "Unparseable LiteLLM /models response: status=%d",
+                "Unparseable LiteLLM /models response: status=%d content_type=%s",
                 resp.status_code,
+                resp.headers.get("content-type", "unknown"),
+                exc_info=True,
                 extra={
                     "event": "models_litellm_unparseable",
                     "http_status": resp.status_code,
+                    "response_body_preview": resp.text[:200] if resp.text else "",
                 },
             )
             raise HTTPException(
                 status_code=502,
                 detail="Model proxy returned an unparseable response.",
-                headers={"Retry-After": "30"},
+                headers=_RETRY_HEADERS,
             ) from None
-        models = data.get("data", [])
         return [
             ModelInfo(
                 name=m.get("id", "unknown"),
                 provider=m.get("owned_by"),
                 model_id=m.get("id", "unknown"),
             )
-            for m in models
+            for m in data.get("data", [])
         ]
 
     except httpx.TransportError as e:
@@ -411,5 +417,5 @@ async def list_available_models() -> list[ModelInfo]:
         raise HTTPException(
             status_code=502,
             detail="Model proxy is unreachable. Try again later.",
-            headers={"Retry-After": "30"},
+            headers=_RETRY_HEADERS,
         ) from e

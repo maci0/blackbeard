@@ -60,52 +60,54 @@ export default function Login() {
 
         {/* Form */}
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-          <div>
-            <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium">
-              Email
-            </label>
-            <input
-              id="login-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              autoFocus
-              required
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder="you@example.com"
-            />
-          </div>
+          <fieldset disabled={loading} className="space-y-4">
+            <div>
+              <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium">
+                Email
+              </label>
+              <input
+                id="login-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                autoFocus
+                required
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                placeholder="you@example.com"
+              />
+            </div>
 
-          <div>
-            <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium">
-              Password
-            </label>
-            <input
-              id="login-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder="Enter your password"
-            />
-          </div>
+            <div>
+              <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium">
+                Password
+              </label>
+              <input
+                id="login-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                placeholder="Enter your password"
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            aria-busy={loading}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          >
-            {loading ? (
-              <Spinner size="sm" className="text-current" />
-            ) : (
-              <LogIn className="h-4 w-4" />
-            )}
-            Sign in
-          </button>
+            <button
+              type="submit"
+              disabled={loading}
+              aria-busy={loading}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? (
+                <Spinner size="sm" className="text-current" />
+              ) : (
+                <LogIn className="h-4 w-4" />
+              )}
+              Sign in
+            </button>
+          </fieldset>
         </form>
 
         {/* Register link */}

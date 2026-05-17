@@ -1,13 +1,16 @@
 import { useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
-import { modKey } from '@/lib/platform'
+import { isMac, modKey } from '@/lib/platform'
+
+const shiftKey = isMac ? '⇧' : 'Shift'
+const deleteKey = isMac ? '⌫' : 'Delete'
 
 const SHORTCUTS = [
   { keys: [modKey, 'S'], description: 'Save crew' },
   { keys: [modKey, 'Z'], description: 'Undo' },
-  { keys: [modKey, '⇧', 'Z'], description: 'Redo' },
-  { keys: ['⌫'], description: 'Delete selected node' },
+  { keys: [modKey, shiftKey, 'Z'], description: 'Redo' },
+  { keys: [deleteKey], description: 'Delete selected node' },
   { keys: ['Double-click'], description: 'Fit view (on empty area)' },
   { keys: [modKey, '/'], description: 'Show this help' },
 ]

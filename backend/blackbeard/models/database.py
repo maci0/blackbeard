@@ -20,6 +20,14 @@ logger = logging.getLogger(__name__)
 
 _SLOW_QUERY_THRESHOLD_S = 1.0
 
+CONNECT_ARGS: dict[str, object] = {
+    "server_settings": {
+        "statement_timeout": "30000",
+        "idle_in_transaction_session_timeout": "60000",
+    },
+    "command_timeout": 10,
+}
+
 engine = create_async_engine(
     settings.database_url.get_secret_value(),
     echo=False,
@@ -28,13 +36,7 @@ engine = create_async_engine(
     pool_pre_ping=True,
     pool_recycle=3600,
     pool_timeout=30,
-    connect_args={
-        "server_settings": {
-            "statement_timeout": "30000",
-            "idle_in_transaction_session_timeout": "60000",
-        },
-        "command_timeout": 10,
-    },
+    connect_args=CONNECT_ARGS,
 )
 
 
@@ -77,8 +79,12 @@ def _after_cursor_execute(
         )
 
 
+_LONG_CHECKOUT_THRESHOLD_S = 5.0
+
+
 @event.listens_for(engine.sync_engine, "checkout")
-def _on_checkout(_dbapi_conn: Any, _connection_rec: Any, _connection_proxy: Any) -> None:
+def _on_checkout(_dbapi_conn: Any, connection_rec: Any, _connection_proxy: Any) -> None:
+    connection_rec.info["_bb_checkout_time"] = time.monotonic()
     pool = cast("Any", engine.sync_engine.pool)
     checked_out = pool.checkedout()
     pool_size = pool.size()
@@ -129,9 +135,6 @@ def _on_checkout(_dbapi_conn: Any, _connection_rec: Any, _connection_proxy: Any)
         )
 
 
-_LONG_CHECKOUT_THRESHOLD_S = 5.0
-
-
 @event.listens_for(engine.sync_engine, "checkin")
 def _on_checkin(_dbapi_conn: Any, connection_rec: Any) -> None:
     start = connection_rec.info.pop("_bb_checkout_time", None)
@@ -148,11 +151,6 @@ def _on_checkin(_dbapi_conn: Any, connection_rec: Any) -> None:
                     "threshold_s": _LONG_CHECKOUT_THRESHOLD_S,
                 },
             )
-
-
-@event.listens_for(engine.sync_engine, "checkout")
-def _stamp_checkout_time(_dbapi_conn: Any, connection_rec: Any, _connection_proxy: Any) -> None:
-    connection_rec.info["_bb_checkout_time"] = time.monotonic()
 
 
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

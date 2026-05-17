@@ -91,8 +91,9 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         prev.error === execution.error &&
         prev.tasks.length === execution.tasks.length &&
         prev.tasks.every((t, i) => t.status === execution.tasks[i]?.status)
+      if (unchanged) return state
       return {
-        currentExecution: unchanged ? prev : execution,
+        currentExecution: execution,
         executions: state.executions.map((e) => (e.id === id ? execution : e)),
       }
     })

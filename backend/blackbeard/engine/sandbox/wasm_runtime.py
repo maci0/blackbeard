@@ -140,20 +140,17 @@ class WasmSandbox:
         """Load and cache a WASM module."""
         path = Path(wasm_path)
         resolved = path.resolve()
-        cache_key = str(resolved)
-
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            if not resolved.is_relative_to(_APP_BASE_DIR):
-                raise WasmExecutionError(
-                    "Invalid WASM module path: path must be within the application directory"
-                )
-            return cached
 
         if not resolved.is_relative_to(_APP_BASE_DIR):
             raise WasmExecutionError(
                 "Invalid WASM module path: path must be within the application directory"
             )
+
+        cache_key = str(resolved)
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         if not resolved.is_file():
             raise WasmExecutionError(f"WASM module not found or not a regular file: {wasm_path}")
 
@@ -307,6 +304,7 @@ class WasmSandbox:
                 wasm_path,
                 duration_ms,
                 error_msg,
+                exc_info=True,
                 extra=_log_extra(
                     execution_id,
                     event="wasm_failed",

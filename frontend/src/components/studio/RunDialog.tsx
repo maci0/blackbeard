@@ -26,9 +26,8 @@ export function RunDialog({
       JSON.parse(inputs)
       setError('')
       onRun(inputs)
-    } catch (e) {
-      const detail = e instanceof SyntaxError ? e.message : 'Unknown error'
-      setError(`Invalid JSON: ${detail}`)
+    } catch {
+      setError('Invalid JSON — check for missing quotes, commas, or brackets')
     }
   }
 
@@ -82,9 +81,8 @@ export function RunDialog({
                     try {
                       JSON.parse(val)
                       setError('')
-                    } catch (err) {
-                      const detail = err instanceof SyntaxError ? err.message : 'Unknown error'
-                      setError(`Invalid JSON: ${detail}`)
+                    } catch {
+                      setError('Invalid JSON — check for missing quotes, commas, or brackets')
                     }
                   } else {
                     setError('')
@@ -126,7 +124,7 @@ export function RunDialog({
               <button
                 onClick={handleRun}
                 disabled={!!error}
-                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Play className="h-3.5 w-3.5" />
                 Run

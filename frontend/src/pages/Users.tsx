@@ -135,7 +135,7 @@ function InviteDialog({
           <form onSubmit={(e) => void handleSubmit(e)} className="mt-4 space-y-4">
             <div>
               <label htmlFor="invite-email" className="mb-1.5 block text-sm font-medium">
-                Email address
+                Email address <span className="text-destructive">*</span>
               </label>
               <input
                 id="invite-email"
@@ -180,7 +180,7 @@ function InviteDialog({
                 type="submit"
                 disabled={submitting}
                 aria-busy={submitting}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting && <Spinner size="sm" className="text-current" />}
                 Send Invite
@@ -217,15 +217,19 @@ function UserDetailPanel({
 }) {
   const [role, setRole] = useState(user.role)
   const [saving, setSaving] = useState(false)
+  const [roleStatus, setRoleStatus] = useState<'idle' | 'saved' | 'error'>('idle')
 
   const handleRoleChange = async (newRole: string) => {
     setRole(newRole)
     setSaving(true)
+    setRoleStatus('idle')
     try {
       await api.patch(`/api/v1/users/${user.id}`, { role: newRole })
+      setRoleStatus('saved')
       onUpdated()
     } catch {
       setRole(user.role)
+      setRoleStatus('error')
     } finally {
       setSaving(false)
     }
@@ -275,6 +279,16 @@ function UserDetailPanel({
               ))}
             </select>
             {saving && <Spinner size="sm" />}
+            {roleStatus === 'saved' && (
+              <span role="status" className="text-xs text-green-600 dark:text-green-400">
+                Saved
+              </span>
+            )}
+            {roleStatus === 'error' && (
+              <span role="alert" className="text-xs text-destructive">
+                Failed
+              </span>
+            )}
           </dd>
         </div>
         <div className="flex justify-between">

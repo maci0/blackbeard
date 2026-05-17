@@ -1,6 +1,6 @@
 # Blackbeard
 
-Open, self-hosted **Agent Management Platform** wrapping [CrewAI](https://crewai.com) with enterprise features: visual crew editor, LLM routing via LiteLLM (with built-in spend/token/latency tracking), WASM tool sandboxing, and agent policies.
+Open, self-hosted **Agent Management Platform** wrapping [CrewAI](https://crewai.com) with enterprise features: visual crew editor, LLM routing via LiteLLM (with built-in spend/token/latency tracking), WASM tool sandboxing, agent policies, and RBAC.
 
 ## Quickstart
 
@@ -77,6 +77,7 @@ blackbeard/
 ├── backend/                    # Python FastAPI backend
 │   ├── blackbeard/
 │   │   ├── api/                # REST endpoints
+│   │   ├── auth/               # JWT auth, passwords, RBAC authorizer
 │   │   ├── engine/             # Execution engine + WASM sandbox
 │   │   ├── litellm/            # LiteLLM config + key management
 │   │   ├── models/             # SQLAlchemy + Pydantic models
@@ -106,10 +107,12 @@ blackbeard/
 | `Guardrail` | Task-level safety checks (function or LLM-based) |
 | `Flow` | Multi-step pipeline orchestrating crews and functions |
 | `KnowledgeSource` | RAG-accessible content for agent knowledge |
+| `Role` | RBAC role defining resource/verb permissions |
+| `RoleBinding` | Binds roles to subjects (User, Group, Agent, Crew) |
 
 ## API
 
-All endpoints require `X-API-Key` header (set via `BLACKBEARD_API_KEY` env var), except health checks (`/api/v1/health*`) and API docs (`/docs`, `/redoc` — debug mode only).
+Endpoints accept either `X-API-Key` header (set via `BLACKBEARD_API_KEY` env var) or `Authorization: Bearer <JWT>` for user-level auth. Public endpoints (no auth required): health checks (`/api/v1/health`, `/api/v1/health/ready`), auth (`/api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/refresh`), and API docs (`/docs`, `/redoc` — debug mode only). Note: `/api/v1/auth/me` requires authentication.
 
 All API responses include an `X-Request-Id` header for tracing. Pass your own via the request header, or one is auto-generated.
 
@@ -146,7 +149,20 @@ curl -X PATCH http://localhost:8000/api/v1/executions/{id}/cancel \
 
 | Method | Path | Description |
 |--------|------|-------------|
+| `POST` | `/api/v1/auth/register` | Register a new user (public) |
+| `POST` | `/api/v1/auth/login` | Login and receive JWT tokens (public) |
+| `POST` | `/api/v1/auth/refresh` | Refresh JWT access token (public) |
+| `GET` | `/api/v1/auth/me` | Get current user profile |
+| `GET/PUT/DELETE` | `/api/v1/users/{id}` | User profile (self-only update, soft delete) |
+| `GET` | `/api/v1/users` | List users (paginated) |
+| `GET/POST` | `/api/v1/groups` | List / create groups |
+| `GET/PUT/DELETE` | `/api/v1/groups/{id}` | Group CRUD |
+| `POST` | `/api/v1/chat` | Ad-hoc chat completion through LiteLLM |
+| `GET` | `/api/v1/models/available` | List models configured in LiteLLM |
+| `POST` | `/api/v1/models/test` | Test model connectivity |
+| `GET` | `/api/v1/executions/{id}/events` | Execution events (for replay/streaming) |
 | `GET` | `/api/v1/executions/{id}/stream` | SSE stream of execution status events |
+| `GET` | `/api/v1/executions/{id}/spend` | LiteLLM spend data for an execution |
 | `GET` | `/api/v1/health` | Liveness check |
 | `GET` | `/api/v1/health/ready` | Readiness check (probes database, Valkey, and LiteLLM) |
 

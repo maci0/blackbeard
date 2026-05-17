@@ -69,74 +69,76 @@ export default function Register() {
 
         {/* Form */}
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-          <div>
-            <label htmlFor="register-display-name" className="mb-1.5 block text-sm font-medium">
-              Display name
-            </label>
-            <input
-              id="register-display-name"
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              autoComplete="name"
-              autoFocus
-              required
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder="Your name"
-            />
-          </div>
+          <fieldset disabled={loading} className="space-y-4">
+            <div>
+              <label htmlFor="register-display-name" className="mb-1.5 block text-sm font-medium">
+                Display name
+              </label>
+              <input
+                id="register-display-name"
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                autoComplete="name"
+                autoFocus
+                required
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                placeholder="Your name"
+              />
+            </div>
 
-          <div>
-            <label htmlFor="register-email" className="mb-1.5 block text-sm font-medium">
-              Email
-            </label>
-            <input
-              id="register-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder="you@example.com"
-            />
-          </div>
+            <div>
+              <label htmlFor="register-email" className="mb-1.5 block text-sm font-medium">
+                Email
+              </label>
+              <input
+                id="register-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                required
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                placeholder="you@example.com"
+              />
+            </div>
 
-          <div>
-            <label htmlFor="register-password" className="mb-1.5 block text-sm font-medium">
-              Password
-            </label>
-            <input
-              id="register-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
-              required
-              minLength={8}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder="Min 8 characters"
-            />
-            {password.length > 0 && password.length < 8 && (
-              <p className="mt-1 text-xs text-muted-foreground" aria-live="polite">
-                {8 - password.length} more character{password.length === 7 ? '' : 's'} needed
-              </p>
-            )}
-          </div>
+            <div>
+              <label htmlFor="register-password" className="mb-1.5 block text-sm font-medium">
+                Password
+              </label>
+              <input
+                id="register-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                required
+                minLength={8}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                placeholder="Min 8 characters"
+              />
+              {password.length > 0 && password.length < 8 && (
+                <p className="mt-1 text-xs text-muted-foreground" aria-live="polite">
+                  {8 - password.length} more character{password.length === 7 ? '' : 's'} needed
+                </p>
+              )}
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            aria-busy={loading}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          >
-            {loading ? (
-              <Spinner size="sm" className="text-current" />
-            ) : (
-              <UserPlus className="h-4 w-4" />
-            )}
-            Create account
-          </button>
+            <button
+              type="submit"
+              disabled={loading}
+              aria-busy={loading}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? (
+                <Spinner size="sm" className="text-current" />
+              ) : (
+                <UserPlus className="h-4 w-4" />
+              )}
+              Create account
+            </button>
+          </fieldset>
         </form>
 
         {/* Login link */}

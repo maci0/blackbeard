@@ -12,12 +12,14 @@ import uuid
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode
 
+import jwt as pyjwt
 from starlette.responses import JSONResponse
 
 if TYPE_CHECKING:
     from fastapi import Request, Response
     from starlette.middleware.base import RequestResponseEndpoint
 
+from blackbeard.auth.jwt import decode_token as _decode_jwt
 from blackbeard.config import settings
 from blackbeard.logging_config import request_id_var
 
@@ -69,6 +71,69 @@ def _redact_query_string(query: str) -> str:
     return urlencode(redacted)
 
 
+def _check_rate_limit(request: Request, request_id: str, client_ip: str) -> JSONResponse | None:
+    """Return a 429 response if client_ip exceeds the auth failure threshold, else None."""
+    now = time.monotonic()
+    ip_failures = _auth_failures.get(client_ip)
+    if ip_failures is None:
+        return None
+    while ip_failures and ip_failures[0] < now - _AUTH_FAIL_WINDOW_S:
+        ip_failures.popleft()
+    if not ip_failures:
+        del _auth_failures[client_ip]
+        return None
+    if len(ip_failures) < _AUTH_FAIL_MAX:
+        return None
+    path = request.url.path
+    response = JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Too many authentication failures. Try again later.",
+            "request_id": request_id,
+        },
+        headers={"Retry-After": "60"},
+    )
+    response.headers["X-Request-Id"] = request_id
+    logger.warning(
+        "Auth rate limited: %s %s from %s (failures=%d)",
+        request.method,
+        path,
+        client_ip,
+        len(ip_failures),
+        extra={
+            "event": "auth_rate_limited",
+            "http_method": request.method,
+            "http_path": path,
+            "client_ip": client_ip,
+            "failure_count": len(ip_failures),
+            "request_id": request_id,
+        },
+    )
+    return response
+
+
+def _record_auth_failure(client_ip: str) -> None:
+    """Record an authentication failure for rate limiting and prune stale entries."""
+    now = time.monotonic()
+    if client_ip not in _auth_failures:
+        _auth_failures[client_ip] = collections.deque(maxlen=_AUTH_FAIL_MAX + 10)
+    _auth_failures[client_ip].append(now)
+    if len(_auth_failures) > 500:
+        cutoff = now - _AUTH_FAIL_WINDOW_S
+        stale = [ip for ip, dq in _auth_failures.items() if not dq or dq[-1] < cutoff]
+        for ip in stale:
+            _auth_failures.pop(ip, None)
+        if len(_auth_failures) > 1_000:
+            to_evict = len(_auth_failures) - 500
+            oldest = heapq.nsmallest(
+                to_evict,
+                _auth_failures,
+                key=lambda k: _auth_failures[k][-1] if _auth_failures[k] else 0,
+            )
+            for ip in oldest:
+                _auth_failures.pop(ip, None)
+
+
 def get_request_id(request: Request) -> str:
     """Return a validated client-supplied X-Request-Id or a fresh UUID."""
     client_id = request.headers.get("X-Request-Id")
@@ -85,8 +150,19 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     path = request.url.path
 
     if path in PUBLIC_PATHS:
+        if path in _AUTH_PATHS:
+            client_ip = request.client.host if request.client else "unknown"
+            rate_limited = _check_rate_limit(request, request_id, client_ip)
+            if rate_limited is not None:
+                return rate_limited
+
         response = await call_next(request)
         response.headers["X-Request-Id"] = request_id
+
+        if path in _AUTH_PATHS and response.status_code in (401, 403, 409):
+            client_ip = request.client.host if request.client else "unknown"
+            _record_auth_failure(client_ip)
+
         _log_request(request, response, start)
         return response
 
@@ -106,51 +182,49 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         )
         return response
 
-    # Rate-limit auth failures per client IP to slow brute-force attacks
     client_ip = request.client.host if request.client else "unknown"
-    now = time.monotonic()
-    ip_failures = _auth_failures.get(client_ip)
-    if ip_failures is not None:
-        # Evict expired entries outside the window
-        while ip_failures and ip_failures[0] < now - _AUTH_FAIL_WINDOW_S:
-            ip_failures.popleft()
-        if not ip_failures:
-            del _auth_failures[client_ip]
-            ip_failures = None
-        elif len(ip_failures) >= _AUTH_FAIL_MAX:
-            response = JSONResponse(
-                status_code=429,
-                content={
-                    "detail": "Too many authentication failures. Try again later.",
-                    "request_id": request_id,
-                },
-                headers={"Retry-After": "60"},
-            )
-            response.headers["X-Request-Id"] = request_id
+    rate_limited = _check_rate_limit(request, request_id, client_ip)
+    if rate_limited is not None:
+        return rate_limited
+
+    # Check for JWT Bearer token — validate signature and expiry before
+    # allowing through.  Endpoints without a require_user dependency
+    # would otherwise be unprotected if we only checked the header format.
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        try:
+            payload = _decode_jwt(token)
+            if payload.get("type") != "access":
+                raise pyjwt.InvalidTokenError("Not an access token")
+        except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError):
+            _record_auth_failure(client_ip)
+            duration_ms = (time.monotonic() - start) * 1000
             logger.warning(
-                "Auth rate limited: %s %s from %s (failures=%d)",
+                "JWT auth failed: %s %s from %s (%.0fms)",
                 request.method,
                 path,
                 client_ip,
-                len(ip_failures),
+                duration_ms,
                 extra={
-                    "event": "auth_rate_limited",
+                    "event": "jwt_auth_failure",
                     "http_method": request.method,
                     "http_path": path,
                     "client_ip": client_ip,
-                    "failure_count": len(ip_failures),
+                    "duration_ms": round(duration_ms, 1),
                     "request_id": request_id,
                 },
             )
+            response = JSONResponse(
+                status_code=401,
+                content={
+                    "detail": "Invalid or expired Bearer token.",
+                    "request_id": request_id,
+                },
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            response.headers["X-Request-Id"] = request_id
             return response
-
-    # Check for JWT Bearer token — if present with valid structure, allow
-    # through without API key (user-level auth handled by dependencies).
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        # JWT validation is deferred to the auth dependency layer;
-        # the middleware only needs to recognize the token format to
-        # skip the API key check.
         response = await call_next(request)
         response.headers["X-Request-Id"] = request_id
         _log_request(request, response, start)
@@ -158,31 +232,14 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
 
     # Check API key — always run hmac.compare_digest to prevent timing attacks
     # (even for missing/empty keys, so presence vs absence isn't distinguishable).
-    # Fall back to ?api_key= query parameter for SSE endpoints where EventSource
-    # cannot set custom headers.
-    api_key = request.headers.get("X-API-Key", "") or request.query_params.get("api_key", "")
+    # Fall back to ?api_key= query parameter ONLY for SSE/stream endpoints where
+    # EventSource cannot set custom headers.  Query-string credentials leak via
+    # proxy logs, browser history, and Referer headers (CWE-598).
+    api_key = request.headers.get("X-API-Key", "")
+    if not api_key and path.endswith("/stream"):
+        api_key = request.query_params.get("api_key", "")
     if not hmac.compare_digest(api_key, _EXPECTED_API_KEY):
-        # Record the failure for rate limiting
-        if client_ip not in _auth_failures:
-            _auth_failures[client_ip] = collections.deque(maxlen=_AUTH_FAIL_MAX + 10)
-        _auth_failures[client_ip].append(now)
-        # Prevent unbounded memory growth: prune stale IPs periodically,
-        # then enforce a hard cap to handle distributed attacks where many
-        # unique IPs have recent timestamps.
-        if len(_auth_failures) > 500:
-            cutoff = now - _AUTH_FAIL_WINDOW_S
-            stale = [ip for ip, dq in _auth_failures.items() if not dq or dq[-1] < cutoff]
-            for ip in stale:
-                _auth_failures.pop(ip, None)
-            if len(_auth_failures) > 1_000:
-                to_evict = len(_auth_failures) - 500
-                oldest = heapq.nsmallest(
-                    to_evict,
-                    _auth_failures,
-                    key=lambda k: _auth_failures[k][-1] if _auth_failures[k] else 0,
-                )
-                for ip in oldest:
-                    _auth_failures.pop(ip, None)
+        _record_auth_failure(client_ip)
 
         response = JSONResponse(
             status_code=401,
@@ -232,6 +289,9 @@ def _log_request(request: Request, response: Response, start: float) -> None:
         level = logging.DEBUG
     else:
         level = logging.INFO
+
+    if not logger.isEnabledFor(level):
+        return
 
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("User-Agent", "")
@@ -407,7 +467,7 @@ async def body_size_limiter(request: Request, call_next: RequestResponseEndpoint
     return await call_next(request)
 
 
-async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+async def http_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
     """Handle HTTPException with request_id in body for log correlation."""
     rid = request_id_var.get("-")
     status_code: int = getattr(exc, "status_code", 500)

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-import blackbeard.models.execution  # register Execution/ExecutionTask tables
+import blackbeard.models.execution  # register execution-related tables
 import blackbeard.models.resource  # register Resource/ResourceRef tables
 import blackbeard.models.user  # noqa: F401 — register User/Group/GroupMember tables
 from blackbeard import __version__
@@ -81,6 +81,24 @@ def _validate_startup_config() -> None:
     elif len(api_key) < 16:
         raise _fatal(
             "Refusing to start: BLACKBEARD_API_KEY is too short (minimum 16 characters). "
+            'Generate a strong key with: python -c "import secrets; '
+            'print(secrets.token_urlsafe(32))"'
+        )
+    jwt_secret = settings.jwt_secret.get_secret_value()
+    if jwt_secret == "change-jwt-secret-in-production":
+        if not settings.debug:
+            raise _fatal(
+                "Refusing to start: JWT_SECRET is set to the insecure default. "
+                "Set a strong random value via environment variable, "
+                "or set DEBUG=true for local development."
+            )
+        logger.warning(
+            "SECURITY: Using default JWT secret — set JWT_SECRET",
+            extra={"event": "insecure_default_jwt_secret"},
+        )
+    elif len(jwt_secret) < 16:
+        raise _fatal(
+            "Refusing to start: JWT_SECRET is too short (minimum 16 characters). "
             'Generate a strong key with: python -c "import secrets; '
             'print(secrets.token_urlsafe(32))"'
         )

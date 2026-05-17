@@ -37,7 +37,10 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
           {name || 'Unnamed Task'}
         </p>
         {description ? (
-          <p className="line-clamp-2 text-[10px] leading-snug text-muted-foreground">
+          <p
+            className="line-clamp-2 text-[10px] leading-snug text-muted-foreground"
+            title={description}
+          >
             {description}
           </p>
         ) : (

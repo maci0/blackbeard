@@ -149,7 +149,8 @@ async def test_get_agent_not_found(client: AsyncClient):
     """GET /agents/{name} for a non-existent agent should return 404."""
     response = await client.get("/api/v1/agents/nonexistent", headers=API_KEY_HEADER)
     assert response.status_code == 404
-    assert "detail" in response.json()
+    detail = response.json()["detail"].lower()
+    assert "not found" in detail or "nonexistent" in detail
 
 
 async def test_update_agent(client: AsyncClient):
@@ -239,6 +240,7 @@ async def test_create_agent_upsert(client: AsyncClient):
     r2 = await client.post("/api/v1/agents", json=payload, headers=API_KEY_HEADER)
     assert r2.status_code == 200  # 200 on upsert (update), 201 on create
     assert r2.json()["version"] == 2  # version bumped on upsert
+    assert r2.json()["spec"]["role"] == payload["spec"]["role"]
 
 
 # ---------------------------------------------------------------------------

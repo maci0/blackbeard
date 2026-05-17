@@ -7,12 +7,12 @@ from datetime import UTC, datetime
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
     String,
     Text,
-    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -50,8 +50,9 @@ class User(Base):
     )
 
     __table_args__ = (
-        Index("ix_users_email", "email"),
         Index("ix_users_api_key", "api_key", postgresql_where=text("api_key IS NOT NULL")),
+        CheckConstraint("length(email) >= 1", name="ck_user_email_nonempty"),
+        CheckConstraint("length(display_name) >= 1", name="ck_user_display_name_nonempty"),
     )
 
     def __repr__(self) -> str:
@@ -80,6 +81,10 @@ class Group(Base):
         lazy="raise",
     )
 
+    __table_args__ = (
+        CheckConstraint("length(name) >= 1", name="ck_group_name_nonempty"),
+    )
+
     def __repr__(self) -> str:
         return f"<Group {self.name}>"
 
@@ -104,7 +109,7 @@ class GroupMember(Base):
     user: Mapped[User] = relationship("User", back_populates="group_memberships", lazy="raise")
 
     __table_args__ = (
-        UniqueConstraint("group_id", "user_id", name="uq_group_member"),
+        Index("ix_group_members_user_id", "user_id"),
     )
 
     def __repr__(self) -> str:

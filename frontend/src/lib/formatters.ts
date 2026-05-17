@@ -22,7 +22,10 @@ export function getDuration(
   if (sec < 60) return `${sec}s`
   const min = Math.floor(sec / 60)
   const rem = sec % 60
-  return `${min}m ${rem}s`
+  if (min < 60) return `${min}m ${rem}s`
+  const hrs = Math.floor(min / 60)
+  const remMin = min % 60
+  return `${hrs}h ${remMin}m`
 }
 
 export function formatCost(cost: number | string | null | undefined): string {
