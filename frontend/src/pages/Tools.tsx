@@ -84,6 +84,9 @@ function ToolCard({ resource }: { resource: Resource }) {
     description?: string
     sandbox?: string
     entrypoint?: string
+    command?: string
+    args?: string[]
+    url?: string
   }
 
   return (
@@ -125,6 +128,25 @@ function ToolCard({ resource }: { resource: Resource }) {
             <p className="mb-0.5 text-xs text-muted-foreground/70">Class path</p>
             <p className="truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs text-foreground/80">
               {spec.class_path}
+            </p>
+          </div>
+        )}
+
+        {spec.command && (
+          <div>
+            <p className="mb-0.5 text-xs text-muted-foreground/70">Command</p>
+            <p className="truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs text-foreground/80">
+              {spec.command}
+              {spec.args && spec.args.length > 0 ? ` ${spec.args.join(' ')}` : ''}
+            </p>
+          </div>
+        )}
+
+        {spec.url && (
+          <div>
+            <p className="mb-0.5 text-xs text-muted-foreground/70">URL</p>
+            <p className="truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs text-foreground/80">
+              {spec.url}
             </p>
           </div>
         )}
