@@ -34,6 +34,8 @@ from blackbeard.models.execution_schemas import (
     ExecutionListResponse,
     ExecutionResponse,
     KickoffRequest,
+    TestRequest,
+    TrainRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,6 +64,7 @@ def _get_spend_client() -> httpx.AsyncClient:
     },
 )
 async def kickoff_crew(
+    response: Response,
     crew_name: str = Path(
         ...,
         pattern=NAME_PATTERN,
@@ -104,6 +107,132 @@ async def kickoff_crew(
             status_code=500,
             detail="Execution could not be created. Check server logs.",
         ) from exc
+    response.headers["Location"] = f"/api/v1/executions/{execution.id}"
+    return ExecutionResponse.from_db(execution)
+
+
+@router.post(
+    "/crews/{crew_name}/train",
+    response_model=ExecutionResponse,
+    status_code=202,
+    responses={
+        404: {"description": "Crew not found in namespace"},
+        422: {"description": "Invalid request body"},
+        500: {"description": "Internal execution error"},
+    },
+)
+async def train_crew_endpoint(
+    response: Response,
+    crew_name: str = Path(
+        ...,
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Name of the crew to train",
+    ),
+    body: TrainRequest = Body(...),
+    namespace: str = Query(
+        default="default",
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Namespace containing the crew",
+    ),
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_current_user),
+) -> ExecutionResponse:
+    """Start a crew training run. Returns immediately with status=queued."""
+    try:
+        execution = await _executor_mod.train_crew(
+            session,
+            crew_name,
+            body.inputs,
+            body.n_iterations,
+            body.filename,
+            namespace,
+            user=user,
+        )
+    except ExecutionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ExecutionError as exc:
+        logger.error(
+            "Train internal error: crew=%s namespace=%s: %s",
+            crew_name,
+            namespace,
+            exc,
+            exc_info=True,
+            extra={
+                "event": "train_internal_error",
+                "crew_name": crew_name,
+                "namespace": namespace,
+                "error_type": type(exc).__name__,
+            },
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Training execution could not be created. Check server logs.",
+        ) from exc
+    response.headers["Location"] = f"/api/v1/executions/{execution.id}"
+    return ExecutionResponse.from_db(execution)
+
+
+@router.post(
+    "/crews/{crew_name}/test",
+    response_model=ExecutionResponse,
+    status_code=202,
+    responses={
+        404: {"description": "Crew not found in namespace"},
+        422: {"description": "Invalid request body"},
+        500: {"description": "Internal execution error"},
+    },
+)
+async def test_crew_endpoint(
+    response: Response,
+    crew_name: str = Path(
+        ...,
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Name of the crew to test",
+    ),
+    body: TestRequest = Body(...),
+    namespace: str = Query(
+        default="default",
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Namespace containing the crew",
+    ),
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_current_user),
+) -> ExecutionResponse:
+    """Start a crew test run. Returns immediately with status=queued."""
+    try:
+        execution = await _executor_mod.test_crew(
+            session,
+            crew_name,
+            body.inputs,
+            body.n_iterations,
+            namespace,
+            user=user,
+        )
+    except ExecutionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ExecutionError as exc:
+        logger.error(
+            "Test internal error: crew=%s namespace=%s: %s",
+            crew_name,
+            namespace,
+            exc,
+            exc_info=True,
+            extra={
+                "event": "test_internal_error",
+                "crew_name": crew_name,
+                "namespace": namespace,
+                "error_type": type(exc).__name__,
+            },
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Test execution could not be created. Check server logs.",
+        ) from exc
+    response.headers["Location"] = f"/api/v1/executions/{execution.id}"
     return ExecutionResponse.from_db(execution)
 
 
@@ -287,6 +416,8 @@ async def cancel_execution(
     """Cancel a queued or running execution."""
     try:
         execution = await _executor_mod.cancel_execution(session, execution_id)
+    except ExecutionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ExecutionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not execution:

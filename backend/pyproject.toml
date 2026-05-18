@@ -76,9 +76,10 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ANN", "E402"]
 "alembic/**" = ["ANN", "UP", "E501", "I", "F401"]
-"blackbeard/api/**" = ["B008", "TCH"]  # FastAPI needs types at runtime
+"blackbeard/api/**" = ["B008", "TCH", "PT"]  # FastAPI needs types at runtime; test_crew endpoint is not a pytest test
 "blackbeard/auth/**" = ["B008", "TCH"]  # FastAPI dependencies need types at runtime
 "blackbeard/models/resource_schemas.py" = ["N815"]  # apiVersion is API contract
+"blackbeard/engine/executor.py" = ["PT"]  # test_crew is not a pytest test
 "blackbeard/resources/refs.py" = ["N806"]  # WHITE/GRAY/BLACK graph constants
 
 [tool.ruff.lint.flake8-type-checking]

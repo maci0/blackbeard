@@ -36,7 +36,7 @@ from pydantic import ValidationError
 from blackbeard.engine.loader import LoaderError, ResourceLoader, _check_path_safety
 from blackbeard.engine.policy import _extract_name
 from blackbeard.kinds import ResourceKind
-from blackbeard.models.execution import ExecutionStatus, TaskStatus
+from blackbeard.models.execution import TaskStatus
 from blackbeard.models.execution_schemas import (
     ExecutionResponse,
     KickoffRequest,
@@ -61,7 +61,13 @@ from blackbeard.resources.validator import (
     _validate_url_ssrf,
     validate_resource,
 )
-from tests.conftest import API_KEY_HEADER, _agent_payload, _resource_map, make_resource
+from tests.conftest import (
+    API_KEY_HEADER,
+    _agent_payload,
+    _make_execution,
+    _resource_map,
+    make_resource,
+)
 
 # ---------------------------------------------------------------------------
 # _parse_kind: case-insensitive lookup
@@ -306,29 +312,14 @@ def test_resource_response_from_db_with_labels():
 # ---------------------------------------------------------------------------
 
 
-def test_execution_response_from_db_no_tasks():
-    """from_db with include_tasks=False should return empty tasks list."""
-    from blackbeard.models.execution import Execution, ExecutionTask
+def _make_exec_task(task_name: str = "some-task", agent_name: str = "some-agent"):
+    """Build a detached ExecutionTask for unit tests."""
+    from blackbeard.models.execution import ExecutionTask
 
-    e = Execution()
-    e.id = uuid.uuid4()
-    e.crew_name = "test-crew"
-    e.crew_namespace = "default"
-    e.status = ExecutionStatus.QUEUED
-    e.inputs = {"topic": "AI"}
-    e.outputs = None
-    e.error = None
-    e.total_tokens = 0
-    e.prompt_tokens = 0
-    e.completion_tokens = 0
-    e.cost_usd = Decimal("0")
-    e.created_at = None
-    e.started_at = None
-    e.completed_at = None
     task = ExecutionTask()
     task.id = uuid.uuid4()
-    task.task_name = "some-task"
-    task.agent_name = "some-agent"
+    task.task_name = task_name
+    task.agent_name = agent_name
     task.order = 0
     task.status = TaskStatus.PENDING
     task.output = None
@@ -337,7 +328,12 @@ def test_execution_response_from_db_no_tasks():
     task.cost_usd = Decimal("0")
     task.started_at = None
     task.completed_at = None
-    e.tasks = [task]
+    return task
+
+
+def test_execution_response_from_db_no_tasks():
+    """from_db with include_tasks=False should return empty tasks list."""
+    e = _make_execution(inputs={"topic": "AI"}, tasks=[_make_exec_task()])
 
     resp = ExecutionResponse.from_db(e, include_tasks=False)
     assert resp.tasks == []
@@ -346,37 +342,16 @@ def test_execution_response_from_db_no_tasks():
 
 def test_execution_response_from_db_with_tasks():
     """from_db with include_tasks=True should include task data."""
-    from blackbeard.models.execution import Execution, ExecutionTask
-
-    e = Execution()
-    e.id = uuid.uuid4()
-    e.crew_name = "test-crew"
-    e.crew_namespace = "default"
-    e.status = ExecutionStatus.RUNNING
-    e.inputs = {}
-    e.outputs = None
-    e.error = None
-    e.total_tokens = 100
-    e.prompt_tokens = 80
-    e.completion_tokens = 20
-    e.cost_usd = Decimal("0.01")
-    e.created_at = None
-    e.started_at = None
-    e.completed_at = None
-
-    task = ExecutionTask()
-    task.id = uuid.uuid4()
-    task.task_name = "research"
-    task.agent_name = "researcher"
-    task.order = 0
-    task.status = TaskStatus.PENDING
-    task.output = None
-    task.error = None
-    task.tokens_used = 0
-    task.cost_usd = Decimal("0")
-    task.started_at = None
-    task.completed_at = None
-    e.tasks = [task]
+    task = _make_exec_task(task_name="research", agent_name="researcher")
+    e = _make_execution(
+        status="running",
+        inputs={},
+        total_tokens=100,
+        prompt_tokens=80,
+        completion_tokens=20,
+        cost_usd="0.01",
+        tasks=[task],
+    )
 
     resp = ExecutionResponse.from_db(e, include_tasks=True)
     assert len(resp.tasks) == 1

@@ -14,8 +14,13 @@ from httpx import AsyncClient
 from pydantic import ValidationError
 
 from blackbeard.engine.executor import _sanitize_error
-from blackbeard.models.execution import TERMINAL_STATUSES, ExecutionStatus
-from blackbeard.models.execution_schemas import KickoffRequest, _exceeds_depth
+from blackbeard.models.execution import TERMINAL_STATUSES, ExecutionStatus, ExecutionType
+from blackbeard.models.execution_schemas import (
+    KickoffRequest,
+    TestRequest,
+    TrainRequest,
+    _exceeds_depth,
+)
 from tests.conftest import API_KEY_HEADER
 
 # ---------------------------------------------------------------------------
@@ -1054,3 +1059,303 @@ async def test_list_executions_includes_identity_fields(client: AsyncClient):
     assert len(items) == 1
     assert "initiated_by" in items[0]
     assert "principal_chain" in items[0]
+
+
+# ---------------------------------------------------------------------------
+# Tests — execution_type field on kickoff
+# ---------------------------------------------------------------------------
+
+
+async def test_kickoff_has_execution_type_kickoff(client: AsyncClient):
+    """Kickoff executions should have execution_type='kickoff'."""
+    await _create_full_crew(client)
+    response = await client.post(
+        "/api/v1/crews/test-crew/kickoff",
+        json={"inputs": {}},
+        headers=API_KEY_HEADER,
+    )
+    assert response.status_code == 202
+    data = response.json()
+    assert data["execution_type"] == "kickoff"
+    assert data["n_iterations"] is None
+    assert data["training_file"] is None
+
+
+# ---------------------------------------------------------------------------
+# Tests — train endpoint
+# ---------------------------------------------------------------------------
+
+
+async def test_train_crew_not_found(client: AsyncClient):
+    """POST /crews/{name}/train for an unknown crew returns 404."""
+    response = await client.post(
+        "/api/v1/crews/nonexistent/train",
+        json={"inputs": {}, "n_iterations": 3},
+        headers=API_KEY_HEADER,
+    )
+    assert response.status_code == 404
+
+
+async def test_train_crew(client: AsyncClient):
+    """Training an existing crew returns 202 with execution_type=train."""
+    await _create_full_crew(client)
+
+    response = await client.post(
+        "/api/v1/crews/test-crew/train",
+        json={"inputs": {"topic": "AI"}, "n_iterations": 5, "filename": "custom.pkl"},
+        headers=API_KEY_HEADER,
+    )
+    assert response.status_code == 202
+    data = response.json()
+    assert data["status"] == "queued"
+    assert data["crew_name"] == "test-crew"
+    assert data["execution_type"] == "train"
+    assert data["n_iterations"] == 5
+    assert data["training_file"] == "custom.pkl"
+    assert data["inputs"] == {"topic": "AI"}
+    assert "id" in data
+    parsed_id = uuid.UUID(data["id"])
+    assert isinstance(parsed_id, uuid.UUID)
+
+
+async def test_train_crew_default_values(client: AsyncClient):
+    """Train with default n_iterations and filename."""
+    await _create_full_crew(client)
+
+    response = await client.post(
+        "/api/v1/crews/test-crew/train",
+        json={"inputs": {}},
+        headers=API_KEY_HEADER,
+    )
+    assert response.status_code == 202
+    data = response.json()
+    assert data["execution_type"] == "train"
+    assert data["n_iterations"] == 3
+    assert data["training_file"] == "training_data.pkl"
+
+
+async def test_train_crew_has_tasks(client: AsyncClient):
+    """Trained execution should have task records matching the crew's tasks."""
+    await _create_full_crew(client)
+
+    response = await client.post(
+        "/api/v1/crews/test-crew/train",
+        json={"inputs": {}},
+        headers=API_KEY_HEADER,
+    )
+    assert response.status_code == 202
+    data = response.json()
+    assert len(data["tasks"]) == 1
+    assert data["tasks"][0]["task_name"] == "test-task"
+    assert data["tasks"][0]["status"] == "pending"
+
+
+async def test_train_crew_requires_auth(client: AsyncClient):
+    """Train endpoint should reject requests without API key."""
+    response = await client.post(
+        "/api/v1/crews/test-crew/train",
+        json={"inputs": {}},
+    )
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Tests — test endpoint
+# ---------------------------------------------------------------------------
+
+
+async def test_test_crew_not_found(client: AsyncClient):
+    """POST /crews/{name}/test for an unknown crew returns 404."""
+    response = await client.post(
+        "/api/v1/crews/nonexistent/test",
+        json={"inputs": {}, "n_iterations": 3},
+        headers=API_KEY_HEADER,
+    )
+    assert response.status_code == 404
+
+
+async def test_test_crew(client: AsyncClient):
+    """Testing an existing crew returns 202 with execution_type=test."""
+    await _create_full_crew(client)
+
+    response = await client.post(
+        "/api/v1/crews/test-crew/test",
+        json={"inputs": {"topic": "AI"}, "n_iterations": 2},
+        headers=API_KEY_HEADER,
+    )
+    assert response.status_code == 202
+    data = response.json()
+    assert data["status"] == "queued"
+    assert data["crew_name"] == "test-crew"
+    assert data["execution_type"] == "test"
+    assert data["n_iterations"] == 2
+    assert data["training_file"] is None
+    assert data["inputs"] == {"topic": "AI"}
+    assert "id" in data
+
+
+async def test_test_crew_default_iterations(client: AsyncClient):
+    """Test with default n_iterations."""
+    await _create_full_crew(client)
+
+    response = await client.post(
+        "/api/v1/crews/test-crew/test",
+        json={"inputs": {}},
+        headers=API_KEY_HEADER,
+    )
+    assert response.status_code == 202
+    data = response.json()
+    assert data["execution_type"] == "test"
+    assert data["n_iterations"] == 3
+
+
+async def test_test_crew_requires_auth(client: AsyncClient):
+    """Test endpoint should reject requests without API key."""
+    response = await client.post(
+        "/api/v1/crews/test-crew/test",
+        json={"inputs": {}},
+    )
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Tests — train/test execution visible in list and get
+# ---------------------------------------------------------------------------
+
+
+async def test_train_execution_visible_in_list(client: AsyncClient):
+    """Train executions should appear in the executions list."""
+    await _create_full_crew(client)
+    r = await client.post(
+        "/api/v1/crews/test-crew/train",
+        json={"inputs": {}},
+        headers=API_KEY_HEADER,
+    )
+    assert r.status_code == 202
+
+    response = await client.get("/api/v1/executions", headers=API_KEY_HEADER)
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["execution_type"] == "train"
+
+
+async def test_test_execution_visible_via_get(client: AsyncClient):
+    """Test executions should be retrievable via GET /executions/{id}."""
+    await _create_full_crew(client)
+    r = await client.post(
+        "/api/v1/crews/test-crew/test",
+        json={"inputs": {}},
+        headers=API_KEY_HEADER,
+    )
+    assert r.status_code == 202
+    execution_id = r.json()["id"]
+
+    response = await client.get(f"/api/v1/executions/{execution_id}", headers=API_KEY_HEADER)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["execution_type"] == "test"
+    assert data["id"] == execution_id
+
+
+# ---------------------------------------------------------------------------
+# Tests — TrainRequest / TestRequest validation
+# ---------------------------------------------------------------------------
+
+
+def test_train_request_valid():
+    req = TrainRequest(inputs={"topic": "AI"}, n_iterations=5, filename="data.pkl")
+    assert req.n_iterations == 5
+    assert req.filename == "data.pkl"
+
+
+def test_train_request_defaults():
+    req = TrainRequest()
+    assert req.inputs == {}
+    assert req.n_iterations == 3
+    assert req.filename == "training_data.pkl"
+
+
+def test_train_request_rejects_bad_filename():
+    with pytest.raises(ValidationError, match="filename"):
+        TrainRequest(filename="../escape.pkl")
+
+
+def test_train_request_rejects_non_pkl_filename():
+    with pytest.raises(ValidationError, match="pkl"):
+        TrainRequest(filename="data.json")
+
+
+def test_train_request_rejects_zero_iterations():
+    with pytest.raises(ValidationError):
+        TrainRequest(n_iterations=0)
+
+
+def test_train_request_rejects_excessive_iterations():
+    with pytest.raises(ValidationError):
+        TrainRequest(n_iterations=101)
+
+
+def test_train_request_validates_inputs():
+    """TrainRequest should validate inputs the same way KickoffRequest does."""
+    with pytest.raises(ValidationError, match="invalid"):
+        TrainRequest(inputs={"key with spaces": "val"})
+
+
+def test_test_request_valid():
+    req = TestRequest(inputs={"topic": "AI"}, n_iterations=5)
+    assert req.n_iterations == 5
+
+
+def test_test_request_defaults():
+    req = TestRequest()
+    assert req.inputs == {}
+    assert req.n_iterations == 3
+
+
+def test_test_request_rejects_zero_iterations():
+    with pytest.raises(ValidationError):
+        TestRequest(n_iterations=0)
+
+
+def test_test_request_validates_inputs():
+    with pytest.raises(ValidationError, match="invalid"):
+        TestRequest(inputs={"123abc": "val"})
+
+
+# ---------------------------------------------------------------------------
+# Tests — ExecutionType enum
+# ---------------------------------------------------------------------------
+
+
+def test_execution_type_values():
+    """ExecutionType enum should have exactly kickoff, train, test."""
+    assert set(ExecutionType) == {ExecutionType.KICKOFF, ExecutionType.TRAIN, ExecutionType.TEST}
+    assert ExecutionType.KICKOFF.value == "kickoff"
+    assert ExecutionType.TRAIN.value == "train"
+    assert ExecutionType.TEST.value == "test"
+
+
+# ---------------------------------------------------------------------------
+# Tests — train/test cancel
+# ---------------------------------------------------------------------------
+
+
+async def test_cancel_train_execution(client: AsyncClient):
+    """Cancel a queued training execution -> status becomes 'cancelled'."""
+    await _create_full_crew(client)
+    r = await client.post(
+        "/api/v1/crews/test-crew/train",
+        json={"inputs": {}},
+        headers=API_KEY_HEADER,
+    )
+    assert r.status_code == 202
+    execution_id = r.json()["id"]
+
+    cancel_resp = await client.patch(
+        f"/api/v1/executions/{execution_id}/cancel", headers=API_KEY_HEADER
+    )
+    assert cancel_resp.status_code == 200
+    data = cancel_resp.json()
+    assert data["status"] == "cancelled"
+    assert data["execution_type"] == "train"

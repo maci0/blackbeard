@@ -159,7 +159,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         response = await call_next(request)
         response.headers["X-Request-Id"] = request_id
 
-        if path in _AUTH_PATHS and response.status_code in (401, 403, 409):
+        if path in _AUTH_PATHS and response.status_code in (401, 403):
             _record_auth_failure(client_ip)
 
         _log_request(request, response, start)

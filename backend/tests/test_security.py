@@ -102,9 +102,12 @@ async def test_redoc_no_auth(client):
 
 
 async def test_openapi_json_no_auth(client):
-    """OpenAPI JSON schema should not require auth."""
+    """OpenAPI JSON schema should not require auth and be valid OpenAPI."""
     response = await client.get("/openapi.json")
     assert response.status_code == 200
+    data = response.json()
+    assert "openapi" in data, "Response must be a valid OpenAPI document"
+    assert "paths" in data, "OpenAPI document must contain paths"
 
 
 # ---------------------------------------------------------------------------

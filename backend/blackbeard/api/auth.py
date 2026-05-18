@@ -23,6 +23,26 @@ from blackbeard.models.user_schemas import UserResponse, user_response
 
 logger = logging.getLogger(__name__)
 
+
+def _register_litellm_user(user_id: str, email: str) -> None:
+    """Register user in LiteLLM for per-user spend tracking (best-effort)."""
+    import httpx
+
+    try:
+        from blackbeard.config import settings
+
+        url = f"{settings.litellm_proxy_url}/user/new"
+        master_key = settings.litellm_master_key.get_secret_value()
+        with httpx.Client(timeout=5.0) as client:
+            client.post(
+                url,
+                json={"user_id": user_id, "user_email": email},
+                headers={"Authorization": f"Bearer {master_key}"},
+            )
+    except Exception:
+        logger.debug("Could not register user in LiteLLM (proxy may not be running)")
+
+
 # Pre-computed bcrypt hash used to equalize timing when a login attempt
 # targets a non-existent user (prevents email enumeration via timing).
 _DUMMY_HASH = hash_password("timing-equalization-dummy")
@@ -130,6 +150,8 @@ async def register(
             "request_id": request_id_var.get("-"),
         },
     )
+
+    _register_litellm_user(str(user.id), user.email)
 
     response.headers["Location"] = f"/api/v1/users/{user.id}"
     return _auth_response(user)

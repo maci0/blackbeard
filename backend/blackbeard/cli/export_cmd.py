@@ -15,10 +15,8 @@ from blackbeard.cli.helpers import (
     handle_request_error,
     json_opt,
     out,
+    print_json,
     require_auth,
-)
-from blackbeard.cli.helpers import (
-    output_json as _print_json,
 )
 from blackbeard.kinds import ALL_KINDS, KIND_TO_PLURAL
 
@@ -131,7 +129,7 @@ def export_cmd(
         return
 
     if ctx.obj["json"]:
-        _print_json(resources)
+        print_json(resources)
         return
 
     yaml_str = _resources_to_yaml(resources)

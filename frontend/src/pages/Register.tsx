@@ -116,13 +116,19 @@ export default function Register() {
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="Min 8 characters"
               />
-              {password.length > 0 && password.length < 8 && (
+              {password.length > 0 && password.length < 8 ? (
                 <p
                   id="register-password-hint"
                   className="mt-1 text-xs text-muted-foreground"
                   aria-live="polite"
                 >
                   {8 - password.length} more character{password.length === 7 ? '' : 's'} needed
+                </p>
+              ) : (
+                <p id="register-password-hint" className="sr-only" aria-live="polite">
+                  {password.length >= 8
+                    ? 'Password meets minimum length'
+                    : 'Must be at least 8 characters'}
                 </p>
               )}
             </div>
@@ -138,7 +144,7 @@ export default function Register() {
               ) : (
                 <UserPlus className="h-4 w-4" />
               )}
-              Create account
+              {loading ? 'Creating account…' : 'Create account'}
             </button>
           </fieldset>
         </form>

@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from 'react'
-import { Save, Play, Loader2, FolderOpen, ChevronDown, Undo2, Redo2, Command } from 'lucide-react'
+import { Save, Play, Loader2, FolderOpen, ChevronDown, Undo2, Redo2, Keyboard } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { toResourceName } from '@/lib/utils'
 import { modKey } from '@/lib/platform'
@@ -220,7 +220,7 @@ export function Toolbar({
           title={`Keyboard shortcuts (${modKey}+/)`}
           className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Command className="h-3.5 w-3.5" />
+          <Keyboard className="h-3.5 w-3.5" />
         </button>
       </div>
 

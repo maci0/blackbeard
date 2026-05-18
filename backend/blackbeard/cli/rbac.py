@@ -15,10 +15,8 @@ from blackbeard.cli.helpers import (
     handle_request_error,
     json_opt,
     out,
+    print_json,
     require_auth,
-)
-from blackbeard.cli.helpers import (
-    output_json as _print_json,
 )
 
 ALL_VERBS = ["get", "list", "create", "update", "delete", "run", "invoke", "delegate"]
@@ -67,7 +65,7 @@ def role_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
     data = resp.json()
 
     if ctx.obj["json"]:
-        _print_json(data)
+        print_json(data)
         return
 
     items = data if isinstance(data, list) else data.get("items", [])
@@ -113,7 +111,7 @@ def role_describe(ctx: click.Context, name: str, output_json: bool = False) -> N
     data = resp.json()
 
     if ctx.obj["json"]:
-        _print_json(data)
+        print_json(data)
         return
 
     spec = data.get("spec", {})
@@ -202,7 +200,7 @@ def rolebinding_list(ctx: click.Context, limit: int, output_json: bool = False) 
     data = resp.json()
 
     if ctx.obj["json"]:
-        _print_json(data)
+        print_json(data)
         return
 
     items = data if isinstance(data, list) else data.get("items", [])
@@ -292,7 +290,7 @@ def rolebinding_create(
     data = resp.json()
 
     if ctx.obj["json"]:
-        _print_json(data)
+        print_json(data)
         return
 
     subj_display = ", ".join(f"{s['kind']}:{s['name']}" for s in parsed_subjects)

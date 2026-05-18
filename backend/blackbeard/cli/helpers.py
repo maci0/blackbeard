@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import NoReturn, cast
+from typing import NoReturn
 
 import click
 import httpx
@@ -26,7 +26,7 @@ json_opt = click.option(
 )
 
 
-def output_json(data: object, *, compact: bool = False) -> None:
+def print_json(data: object, *, compact: bool = False) -> None:
     """Print data as JSON to stdout."""
     if compact:
         out.print(
@@ -171,4 +171,4 @@ def warn_unused_interval(
 
 def make_client(ctx: click.Context) -> httpx.Client:
     """Create an httpx client with the configured timeout."""
-    return httpx.Client(timeout=cast("float", ctx.obj["timeout"]))
+    return httpx.Client(timeout=ctx.obj["timeout"])

@@ -104,7 +104,7 @@ export default function Login() {
               ) : (
                 <LogIn className="h-4 w-4" />
               )}
-              Sign in
+              {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </fieldset>
         </form>

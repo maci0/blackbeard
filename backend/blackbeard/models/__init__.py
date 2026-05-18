@@ -21,6 +21,7 @@ from blackbeard.models.execution import (
     ExecutionStatus,
     ExecutionTask,
     ExecutionToolCall,
+    ExecutionType,
     TaskStatus,
 )
 from blackbeard.models.resource import Resource, ResourceRef
@@ -34,6 +35,7 @@ __all__ = [
     "ExecutionStatus",
     "ExecutionTask",
     "ExecutionToolCall",
+    "ExecutionType",
     "Group",
     "GroupMember",
     "Resource",

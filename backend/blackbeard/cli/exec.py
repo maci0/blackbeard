@@ -17,11 +17,9 @@ from blackbeard.cli.helpers import (
     handle_request_error,
     json_opt,
     out,
+    print_json,
     require_auth,
     warn_unused_interval,
-)
-from blackbeard.cli.helpers import (
-    output_json as _print_json,
 )
 
 
@@ -74,7 +72,7 @@ def executions_list(
     data = resp.json()
 
     if ctx.obj["json"]:
-        _print_json(data)
+        print_json(data)
         return
 
     items = data.get("items", [])
@@ -173,7 +171,7 @@ def events(
                         after = seq
 
                     if is_json:
-                        _print_json(ev, compact=True)
+                        print_json(ev, compact=True)
                     else:
                         ts = str(ev.get("timestamp", ""))[:23]
                         etype = ev.get("event_type", "unknown")
@@ -267,7 +265,7 @@ def cancel(ctx: click.Context, execution_id: str, yes: bool, output_json: bool =
     data = resp.json()
 
     if ctx.obj["json"]:
-        _print_json(data)
+        print_json(data)
         return
 
     out.print(f"[green]Cancelled[/] execution [bold]{execution_id[:8]}...[/]")

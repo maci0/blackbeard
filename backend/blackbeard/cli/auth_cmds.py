@@ -15,10 +15,8 @@ from blackbeard.cli.helpers import (
     handle_request_error,
     json_opt,
     out,
+    print_json,
     require_auth,
-)
-from blackbeard.cli.helpers import (
-    output_json as _print_json,
 )
 
 
@@ -56,7 +54,7 @@ def login(ctx: click.Context, email: str, password: str, output_json: bool = Fal
     )
 
     if ctx.obj["json"]:
-        _print_json({"status": "logged_in", "email": email, "server": server})
+        print_json({"status": "logged_in", "email": email, "server": server})
         return
 
     user = data.get("user", {})
@@ -99,7 +97,7 @@ def whoami(ctx: click.Context, output_json: bool = False) -> None:
     data = resp.json()
 
     if ctx.obj["json"]:
-        _print_json(data)
+        print_json(data)
         return
 
     creds = load_credentials()
@@ -166,7 +164,7 @@ def register(
     )
 
     if ctx.obj["json"]:
-        _print_json(data)
+        print_json(data)
         return
 
     out.print(f"[green]Account created[/] and logged in as [bold]{display_name}[/] ({email})")

@@ -13,10 +13,8 @@ from blackbeard.cli.helpers import (
     handle_request_error,
     json_opt,
     out,
+    print_json,
     require_auth,
-)
-from blackbeard.cli.helpers import (
-    output_json as _print_json,
 )
 
 # ── User subgroup ────────────────────────────────────────────────────────────
@@ -58,7 +56,7 @@ def user_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
     data = resp.json()
 
     if ctx.obj["json"]:
-        _print_json(data)
+        print_json(data)
         return
 
     items = data.get("items", [])
@@ -133,7 +131,7 @@ def user_invite(
     data = resp.json()
 
     if ctx.obj["json"]:
-        _print_json(data)
+        print_json(data)
         return
 
     out.print(f"[green]Invited[/] [bold]{display_name}[/] ({email})")
@@ -178,7 +176,7 @@ def group_list(ctx: click.Context, limit: int, output_json: bool = False) -> Non
     data = resp.json()
 
     if ctx.obj["json"]:
-        _print_json(data)
+        print_json(data)
         return
 
     items = data.get("items", [])
@@ -234,7 +232,7 @@ def group_create(
     data = resp.json()
 
     if ctx.obj["json"]:
-        _print_json(data)
+        print_json(data)
         return
 
     out.print(f"[green]Created[/] group [bold]{name}[/]")
@@ -269,7 +267,7 @@ def group_delete(ctx: click.Context, group_id: str, yes: bool, output_json: bool
         handle_http_error(resp)
 
     if ctx.obj["json"]:
-        _print_json({"deleted": group_id, "status": "deleted"})
+        print_json({"deleted": group_id, "status": "deleted"})
         return
 
     out.print(f"[green]Deleted[/] group [bold]{group_id}[/]")

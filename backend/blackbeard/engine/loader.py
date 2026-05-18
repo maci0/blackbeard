@@ -79,12 +79,24 @@ class LoaderError(Exception):
 class ResourceLoader:
     """Converts pre-loaded resources into CrewAI objects."""
 
-    def __init__(self, resources: dict[str, Resource]) -> None:
+    def __init__(
+        self,
+        resources: dict[str, Resource],
+        api_key: str | None = None,
+    ) -> None:
         """Initialize with a dict of resources keyed by 'Kind/name'.
+
+        Args:
+            resources: Dict of resources keyed by ``Kind/name``.
+            api_key: Optional API key override for LLM connections.
+                When provided, ``build_llm()`` uses this key instead of
+                the global ``litellm_master_key``.  Used by the executor
+                to inject per-execution virtual keys with budget limits.
 
         Example: {"Agent/researcher": <Resource>, "Task/research-topic": <Resource>}
         """
         self._resources = resources
+        self._api_key = api_key
         self._llm_cache: dict[str, LLM] = {}
         self._agent_cache: dict[str, Agent] = {}
         self._task_cache: dict[str, Task] = {}
@@ -130,12 +142,15 @@ class ResourceLoader:
         params = spec.get("parameters", {})
         vertex = spec.get("vertex", {})
 
-        # All LLM traffic routes through the LiteLLM proxy
+        # All LLM traffic routes through the LiteLLM proxy.
+        # Use the per-execution virtual key when available, falling back
+        # to the global master key.
+        effective_key = self._api_key or settings.litellm_master_key.get_secret_value()
         llm_kwargs: dict[str, Any] = {
             "model": model,
             "base_url": settings.litellm_proxy_url,
             "api_base": settings.litellm_proxy_url,
-            "api_key": settings.litellm_master_key.get_secret_value(),
+            "api_key": effective_key,
         }
 
         apply_model_params(llm_kwargs, params)
@@ -432,6 +447,49 @@ class ResourceLoader:
         )
         return agent
 
+    @staticmethod
+    def _import_callable(dotted_path: str) -> Any | None:
+        """Import a callable by dotted Python path (e.g. 'mymodule.my_func')."""
+        if "." not in dotted_path:
+            return None
+        module_path, attr_name = dotted_path.rsplit(".", 1)
+        try:
+            module = importlib.import_module(module_path)
+            return getattr(module, attr_name)
+        except Exception:
+            logger.warning("Failed to import callable: %s", dotted_path)
+            return None
+
+    def _build_guardrails(self, refs: list[str]) -> list[Any]:
+        """Build guardrail callables from refs or inline strings.
+
+        Each item can be:
+        - ref:guardrails/<name> → loads Guardrail resource, resolves function_path or llm_prompt
+        - dotted.python.path → imports as callable
+        - free-text string → returned as-is (CrewAI treats strings as LLM guardrails)
+        """
+        result: list[Any] = []
+        for ref_str in refs:
+            if ref_str.startswith("ref:"):
+                try:
+                    resource = self._resolve_ref(ref_str)
+                    gspec = resource.spec
+                    if gspec.get("type") == "function" and gspec.get("function_path"):
+                        fn = self._import_callable(gspec["function_path"])
+                        if fn:
+                            result.append(fn)
+                    elif gspec.get("type") == "llm" and gspec.get("llm_prompt"):
+                        result.append(gspec["llm_prompt"])
+                except LoaderError:
+                    logger.warning("Failed to resolve guardrail ref: %s", ref_str)
+            elif "." in ref_str and " " not in ref_str:
+                fn = self._import_callable(ref_str)
+                if fn:
+                    result.append(fn)
+            else:
+                result.append(ref_str)
+        return result
+
     def build_task(self, ref_or_name: str) -> Task:
         """Build a CrewAI Task from a Task resource ref."""
         if ref_or_name in self._task_cache:
@@ -463,6 +521,19 @@ class ResourceLoader:
             if not _SAFE_FILENAME.match(output_file) or len(output_file) > 255:
                 raise LoaderError(f"output_file must be a plain filename, got '{output_file}'")
             task_kwargs["output_file"] = output_file
+
+        if spec.get("output_pydantic"):
+            pydantic_cls = self._import_callable(spec["output_pydantic"])
+            if pydantic_cls:
+                task_kwargs["output_pydantic"] = pydantic_cls
+        elif spec.get("output_json"):
+            task_kwargs["output_json"] = spec["output_json"]
+
+        guardrail_refs = spec.get("guardrails", [])
+        if guardrail_refs:
+            guardrails = self._build_guardrails(guardrail_refs)
+            if guardrails:
+                task_kwargs["guardrail"] = guardrails
 
         task = Task(**task_kwargs)
         self._task_cache[ref_or_name] = task
@@ -552,7 +623,11 @@ class ResourceLoader:
         tasks = [self.build_task(ref) for ref in task_refs]
 
         process_str = spec.get("process", "sequential")
-        process = Process.sequential if process_str == "sequential" else Process.hierarchical
+        process_map = {
+            "sequential": Process.sequential,
+            "hierarchical": Process.hierarchical,
+        }
+        process = process_map.get(process_str, Process.sequential)
 
         crew_kwargs: dict[str, Any] = {
             "agents": agents,

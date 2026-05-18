@@ -19,33 +19,17 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 from blackbeard.cli.helpers import (
-    STATUS_COLORS as _STATUS_COLORS,
-)
-from blackbeard.cli.helpers import (
+    STATUS_COLORS,
     console,
+    extract_detail,
+    handle_http_error,
+    handle_request_error,
+    json_opt,
     out,
+    print_json,
     require_auth,
-)
-from blackbeard.cli.helpers import (
-    extract_detail as _extract_detail,
-)
-from blackbeard.cli.helpers import (
-    handle_http_error as _handle_http_error,
-)
-from blackbeard.cli.helpers import (
-    handle_request_error as _handle_request_error,
-)
-from blackbeard.cli.helpers import (
-    json_opt as _json_opt,
-)
-from blackbeard.cli.helpers import (
-    output_json as _output_json,
-)
-from blackbeard.cli.helpers import (
-    validate_name as _validate_name,
-)
-from blackbeard.cli.helpers import (
-    warn_unused_interval as _warn_unused_interval,
+    validate_name,
+    warn_unused_interval,
 )
 from blackbeard.kinds import ALL_KINDS, KIND_TO_PLURAL, NAME_PATTERN
 from blackbeard.models import TERMINAL_STATUSES
@@ -170,7 +154,7 @@ Common workflows:
     metavar="SECONDS",
     help="HTTP request timeout in seconds (env: BLACKBEARD_TIMEOUT)",
 )
-@_json_opt
+@json_opt
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -204,7 +188,7 @@ Examples:
     default=False,
     help="Run full readiness check (database, cache, LiteLLM) instead of liveness",
 )
-@_json_opt
+@json_opt
 @click.pass_context
 def health(ctx: click.Context, ready: bool, output_json: bool) -> None:
     """Check server health and component readiness (no API key required)."""
@@ -217,7 +201,7 @@ def health(ctx: click.Context, ready: bool, output_json: bool) -> None:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             response = client.get(url)
     except httpx.RequestError as exc:
-        _handle_request_error(server, exc)
+        handle_request_error(server, exc)
 
     try:
         data = response.json()
@@ -230,7 +214,7 @@ def health(ctx: click.Context, ready: bool, output_json: bool) -> None:
         raise SystemExit(1) from None
 
     if ctx.obj["json"]:
-        _output_json(data)
+        print_json(data)
         if response.status_code != 200:
             raise SystemExit(1)
         return
@@ -279,7 +263,7 @@ Examples:
     type=click.Path(exists=True),
     help="File or directory of YAML resources",
 )
-@_json_opt
+@json_opt
 @click.pass_context
 def validate(ctx: click.Context, path: str, output_json: bool) -> None:
     """Validate YAML resource files offline (no server connection needed)."""
@@ -308,7 +292,7 @@ def validate(ctx: click.Context, path: str, output_json: bool) -> None:
             ],
             "cycles": cycles,
         }
-        _output_json(result)
+        print_json(result)
         if not all_valid:
             raise SystemExit(1)
         return
@@ -415,7 +399,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
     if dry_run:
         ns = ctx.obj["namespace"]
         if ctx.obj["json"]:
-            _output_json(
+            print_json(
                 {
                     "dry_run": True,
                     "server": server,
@@ -516,7 +500,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
                             action = "created" if response.status_code == 201 else "updated"
                             results.append({"resource": label, "status": action})
                         else:
-                            detail = _extract_detail(response)
+                            detail = extract_detail(response)
                             results.append(
                                 {
                                     "resource": label,
@@ -542,7 +526,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
     interrupted = len(results) < len(resources)
 
     if ctx.obj["json"]:
-        _output_json({"results": results, "total": len(resources), "interrupted": interrupted})
+        print_json({"results": results, "total": len(resources), "interrupted": interrupted})
     else:
         table = Table(title="Apply Results")
         table.add_column("Status", width=3)
@@ -591,7 +575,7 @@ Examples:
 )
 @click.argument("kind", type=click.Choice(sorted(ALL_KINDS), case_sensitive=False))
 @click.argument("name")
-@_json_opt
+@json_opt
 @click.pass_context
 def get(ctx: click.Context, kind: str, name: str, output_json: bool) -> None:
     """Get a single resource by kind and name.
@@ -600,7 +584,7 @@ def get(ctx: click.Context, kind: str, name: str, output_json: bool) -> None:
     NAME is the resource name (e.g. my-agent).
     """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
-    _validate_name(name)
+    validate_name(name)
     server = ctx.obj["server"]
 
     namespace = ctx.obj["namespace"]
@@ -613,15 +597,15 @@ def get(ctx: click.Context, kind: str, name: str, output_json: bool) -> None:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             response = client.get(url, headers=headers, params={"namespace": namespace})
     except httpx.RequestError as exc:
-        _handle_request_error(server, exc)
+        handle_request_error(server, exc)
 
     if response.status_code != 200:
-        _handle_http_error(response)
+        handle_http_error(response)
 
     data = response.json()
 
     if ctx.obj["json"]:
-        _output_json(data)
+        print_json(data)
         return
 
     meta = data.get("metadata", {})
@@ -671,7 +655,7 @@ Examples:
     metavar="N",
     help="Maximum number of results",
 )
-@_json_opt
+@json_opt
 @click.pass_context
 def list_resources_cmd(
     ctx: click.Context, kind: str, labels: tuple[str, ...], limit: int, output_json: bool
@@ -712,15 +696,15 @@ def list_resources_cmd(
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             response = client.get(url, headers=headers, params=params)
     except httpx.RequestError as exc:
-        _handle_request_error(server, exc)
+        handle_request_error(server, exc)
 
     if response.status_code != 200:
-        _handle_http_error(response)
+        handle_http_error(response)
 
     data = response.json()
 
     if ctx.obj["json"]:
-        _output_json(data)
+        print_json(data)
         return
 
     items = data.get("items", [])
@@ -783,7 +767,7 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: boo
     NAME is the resource name (e.g. my-agent).
     """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
-    _validate_name(name)
+    validate_name(name)
     server = ctx.obj["server"]
 
     namespace = ctx.obj["namespace"]
@@ -806,13 +790,13 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: boo
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             response = client.delete(url, headers=headers, params={"namespace": namespace})
     except httpx.RequestError as exc:
-        _handle_request_error(server, exc)
+        handle_request_error(server, exc)
 
     if response.status_code not in (200, 204):
-        _handle_http_error(response)
+        handle_http_error(response)
 
     if ctx.obj["json"]:
-        _output_json({"deleted": f"{kind}/{name}", "namespace": namespace, "status": "deleted"})
+        print_json({"deleted": f"{kind}/{name}", "namespace": namespace, "status": "deleted"})
         return
 
     out.print(f"[green]✓[/] Deleted [bold]{kind}/{name}[/] from namespace '{namespace}'")
@@ -855,7 +839,7 @@ Examples:
     metavar="SECONDS",
     help="Polling interval in seconds (used with --wait)",
 )
-@_json_opt
+@json_opt
 @click.pass_context
 def kickoff(
     ctx: click.Context,
@@ -870,7 +854,7 @@ def kickoff(
     CREW_NAME is the name of the crew to run, e.g. research-crew.
     """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
-    _validate_name(crew_name)
+    validate_name(crew_name)
 
     parsed_inputs: dict[str, Any] = {}
     for item in inputs:
@@ -892,7 +876,7 @@ def kickoff(
     namespace = ctx.obj["namespace"]
     prog = ctx.find_root().info_name or "blackbeard"
 
-    _warn_unused_interval(ctx, watch, interval, f"{prog} kickoff {crew_name}")
+    warn_unused_interval(ctx, watch, interval, f"{prog} kickoff {crew_name}")
 
     url = f"{server}/api/v1/crews/{crew_name}/kickoff"
     headers = require_auth(ctx)
@@ -908,10 +892,10 @@ def kickoff(
                     params={"namespace": namespace},
                 )
         except httpx.RequestError as exc:
-            _handle_request_error(server, exc)
+            handle_request_error(server, exc)
 
     if response.status_code not in (200, 201, 202):
-        _handle_http_error(response)
+        handle_http_error(response)
 
     data = response.json()
     execution_id = data.get("id", "unknown")
@@ -919,7 +903,7 @@ def kickoff(
     is_json = ctx.obj["json"]
 
     if is_json and not watch:
-        _output_json(data)
+        print_json(data)
         return
 
     if not is_json:
@@ -930,6 +914,286 @@ def kickoff(
                 f"[bold]Execution ID:[/] {execution_id}\n"
                 f"[bold]Status:[/] {status_val}",
                 title="[green]Execution Submitted[/]",
+                border_style="green",
+            )
+        )
+
+    if watch:
+        ctx.invoke(
+            status,
+            execution_id=execution_id,
+            watch=True,
+            interval=interval,
+            output_json=is_json,
+        )
+    else:
+        console.print(f"\nTrack with: [bold]{prog} status {execution_id} -w[/]")
+
+
+@cli.command(
+    epilog="""\b
+Examples:
+  blackbeard train research-crew --input topic="AI agents" --iterations 3
+  blackbeard train research-crew -w --filename my-training.pkl
+  blackbeard train research-crew --json
+"""
+)
+@click.argument("crew_name")
+@click.option(
+    "--input",
+    "inputs",
+    multiple=True,
+    metavar="KEY=VALUE",
+    help="Input key=value pairs; values are parsed as JSON if valid (repeatable)",
+)
+@click.option(
+    "--iterations",
+    default=3,
+    show_default=True,
+    type=click.IntRange(1, 100),
+    metavar="N",
+    help="Number of training iterations",
+)
+@click.option(
+    "--filename",
+    default="training_data.pkl",
+    show_default=True,
+    metavar="FILE",
+    help="Filename for training data output (must end with .pkl)",
+)
+@click.option(
+    "--wait",
+    "--watch",
+    "-w",
+    "watch",
+    is_flag=True,
+    default=False,
+    help="Poll until execution completes, fails, or is cancelled (Ctrl-C to stop)",
+)
+@click.option(
+    "--interval",
+    "-i",
+    default=2,
+    show_default=True,
+    type=click.IntRange(1, 60),
+    metavar="SECONDS",
+    help="Polling interval in seconds (used with --wait)",
+)
+@json_opt
+@click.pass_context
+def train(
+    ctx: click.Context,
+    crew_name: str,
+    inputs: tuple[str, ...],
+    iterations: int,
+    filename: str,
+    watch: bool,
+    interval: int,
+    output_json: bool,
+) -> None:
+    """Train a crew with iterative learning.
+
+    CREW_NAME is the name of the crew to train, e.g. research-crew.
+    """
+    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
+    validate_name(crew_name)
+
+    parsed_inputs: dict[str, Any] = {}
+    for item in inputs:
+        if "=" not in item:
+            console.print(f"[red bold]Error:[/] Invalid --input: expected KEY=VALUE, got: {item!r}")
+            console.print('[dim]Example: --input topic="AI agents"[/]')
+            raise SystemExit(2)
+        key, _, value = item.partition("=")
+        if not key:
+            console.print(f"[red bold]Error:[/] Invalid --input: key cannot be empty in {item!r}")
+            raise SystemExit(2)
+        try:
+            parsed_inputs[key] = json.loads(value)
+        except (json.JSONDecodeError, ValueError):
+            parsed_inputs[key] = value
+
+    server = ctx.obj["server"]
+    namespace = ctx.obj["namespace"]
+    prog = ctx.find_root().info_name or "blackbeard"
+
+    warn_unused_interval(ctx, watch, interval, f"{prog} train {crew_name}")
+
+    url = f"{server}/api/v1/crews/{crew_name}/train"
+    headers = require_auth(ctx)
+    body = {"inputs": parsed_inputs, "n_iterations": iterations, "filename": filename}
+
+    with console.status("Submitting training execution..."):
+        try:
+            with httpx.Client(timeout=ctx.obj["timeout"]) as client:
+                response = client.post(
+                    url,
+                    json=body,
+                    headers=headers,
+                    params={"namespace": namespace},
+                )
+        except httpx.RequestError as exc:
+            handle_request_error(server, exc)
+
+    if response.status_code not in (200, 201, 202):
+        handle_http_error(response)
+
+    data = response.json()
+    execution_id = data.get("id", "unknown")
+    status_val = data.get("status", "unknown")
+    is_json = ctx.obj["json"]
+
+    if is_json and not watch:
+        print_json(data)
+        return
+
+    if not is_json:
+        out.print(
+            Panel.fit(
+                f"[bold]Crew:[/] {crew_name}\n"
+                f"[bold]Namespace:[/] {namespace}\n"
+                f"[bold]Mode:[/] train\n"
+                f"[bold]Iterations:[/] {iterations}\n"
+                f"[bold]Filename:[/] {filename}\n"
+                f"[bold]Execution ID:[/] {execution_id}\n"
+                f"[bold]Status:[/] {status_val}",
+                title="[green]Training Submitted[/]",
+                border_style="green",
+            )
+        )
+
+    if watch:
+        ctx.invoke(
+            status,
+            execution_id=execution_id,
+            watch=True,
+            interval=interval,
+            output_json=is_json,
+        )
+    else:
+        console.print(f"\nTrack with: [bold]{prog} status {execution_id} -w[/]")
+
+
+@cli.command(
+    "test-crew",
+    epilog="""\b
+Examples:
+  blackbeard test-crew research-crew --input topic="AI agents" --iterations 3
+  blackbeard test-crew research-crew -w
+  blackbeard test-crew research-crew --json
+""",
+)
+@click.argument("crew_name")
+@click.option(
+    "--input",
+    "inputs",
+    multiple=True,
+    metavar="KEY=VALUE",
+    help="Input key=value pairs; values are parsed as JSON if valid (repeatable)",
+)
+@click.option(
+    "--iterations",
+    default=3,
+    show_default=True,
+    type=click.IntRange(1, 100),
+    metavar="N",
+    help="Number of test iterations",
+)
+@click.option(
+    "--wait",
+    "--watch",
+    "-w",
+    "watch",
+    is_flag=True,
+    default=False,
+    help="Poll until execution completes, fails, or is cancelled (Ctrl-C to stop)",
+)
+@click.option(
+    "--interval",
+    "-i",
+    default=2,
+    show_default=True,
+    type=click.IntRange(1, 60),
+    metavar="SECONDS",
+    help="Polling interval in seconds (used with --wait)",
+)
+@json_opt
+@click.pass_context
+def test_crew_cmd(
+    ctx: click.Context,
+    crew_name: str,
+    inputs: tuple[str, ...],
+    iterations: int,
+    watch: bool,
+    interval: int,
+    output_json: bool,
+) -> None:
+    """Test a crew and collect performance metrics.
+
+    CREW_NAME is the name of the crew to test, e.g. research-crew.
+    """
+    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
+    validate_name(crew_name)
+
+    parsed_inputs: dict[str, Any] = {}
+    for item in inputs:
+        if "=" not in item:
+            console.print(f"[red bold]Error:[/] Invalid --input: expected KEY=VALUE, got: {item!r}")
+            console.print('[dim]Example: --input topic="AI agents"[/]')
+            raise SystemExit(2)
+        key, _, value = item.partition("=")
+        if not key:
+            console.print(f"[red bold]Error:[/] Invalid --input: key cannot be empty in {item!r}")
+            raise SystemExit(2)
+        try:
+            parsed_inputs[key] = json.loads(value)
+        except (json.JSONDecodeError, ValueError):
+            parsed_inputs[key] = value
+
+    server = ctx.obj["server"]
+    namespace = ctx.obj["namespace"]
+    prog = ctx.find_root().info_name or "blackbeard"
+
+    warn_unused_interval(ctx, watch, interval, f"{prog} test-crew {crew_name}")
+
+    url = f"{server}/api/v1/crews/{crew_name}/test"
+    headers = require_auth(ctx)
+    body = {"inputs": parsed_inputs, "n_iterations": iterations}
+
+    with console.status("Submitting test execution..."):
+        try:
+            with httpx.Client(timeout=ctx.obj["timeout"]) as client:
+                response = client.post(
+                    url,
+                    json=body,
+                    headers=headers,
+                    params={"namespace": namespace},
+                )
+        except httpx.RequestError as exc:
+            handle_request_error(server, exc)
+
+    if response.status_code not in (200, 201, 202):
+        handle_http_error(response)
+
+    data = response.json()
+    execution_id = data.get("id", "unknown")
+    status_val = data.get("status", "unknown")
+    is_json = ctx.obj["json"]
+
+    if is_json and not watch:
+        print_json(data)
+        return
+
+    if not is_json:
+        out.print(
+            Panel.fit(
+                f"[bold]Crew:[/] {crew_name}\n"
+                f"[bold]Namespace:[/] {namespace}\n"
+                f"[bold]Mode:[/] test\n"
+                f"[bold]Iterations:[/] {iterations}\n"
+                f"[bold]Execution ID:[/] {execution_id}\n"
+                f"[bold]Status:[/] {status_val}",
+                title="[green]Test Submitted[/]",
                 border_style="green",
             )
         )
@@ -975,7 +1239,7 @@ Examples:
     metavar="SECONDS",
     help="Polling interval in seconds (used with --wait)",
 )
-@_json_opt
+@json_opt
 @click.pass_context
 def status(
     ctx: click.Context, execution_id: str, watch: bool, interval: int, output_json: bool
@@ -990,14 +1254,14 @@ def status(
     is_json = ctx.obj["json"]
 
     prog = ctx.find_root().info_name or "blackbeard"
-    _warn_unused_interval(ctx, watch, interval, f"{prog} status {execution_id}")
+    warn_unused_interval(ctx, watch, interval, f"{prog} status {execution_id}")
 
     terminal_states = {s.value for s in TERMINAL_STATUSES}
     url = f"{server}/api/v1/executions/{execution_id}"
     headers = require_auth(ctx)
 
     def _status_color(s: str) -> str:
-        return _STATUS_COLORS.get(s, "dim")
+        return STATUS_COLORS.get(s, "dim")
 
     with httpx.Client(timeout=ctx.obj["timeout"]) as client:
 
@@ -1005,10 +1269,10 @@ def status(
             try:
                 response = client.get(url, headers=headers)
             except httpx.RequestError as exc:
-                _handle_request_error(server, exc)
+                handle_request_error(server, exc)
 
             if response.status_code != 200:
-                _handle_http_error(response)
+                handle_http_error(response)
 
             return cast("dict[str, Any]", response.json())
 
@@ -1090,7 +1354,7 @@ def status(
 
         if is_json and not watch:
             data = fetch()
-            _output_json(data)
+            print_json(data)
             if data.get("status") in ("failed", "cancelled"):
                 raise SystemExit(1)
             return
@@ -1116,7 +1380,7 @@ def status(
                 data = fetch()
 
                 if is_json:
-                    _output_json(data, compact=True)
+                    print_json(data, compact=True)
                 else:
                     if not first:
                         console.print("\n[dim]─── refreshed ───[/]\n")

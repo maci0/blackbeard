@@ -28,6 +28,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from blackbeard.models.database import Base
 
 
+class ExecutionType(enum.StrEnum):
+    """Execution mode: kickoff, train, or test."""
+
+    KICKOFF = "kickoff"
+    TRAIN = "train"
+    TEST = "test"
+
+
 class ExecutionStatus(enum.StrEnum):
     """Execution lifecycle states."""
 
@@ -69,12 +77,20 @@ class Execution(Base):
         default="default",
         server_default=text("'default'"),
     )
+    execution_type: Mapped[ExecutionType] = mapped_column(
+        Enum(ExecutionType, create_type=False, values_callable=lambda e: [x.value for x in e]),
+        nullable=False,
+        default=ExecutionType.KICKOFF,
+        server_default=text("'kickoff'"),
+    )
     status: Mapped[ExecutionStatus] = mapped_column(
         Enum(ExecutionStatus, create_type=False, values_callable=lambda e: [x.value for x in e]),
         nullable=False,
         default=ExecutionStatus.QUEUED,
         server_default=text("'queued'"),
     )
+    n_iterations: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    training_file: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     inputs: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'")
     )
@@ -162,7 +178,10 @@ class Execution(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Execution {self.id} crew={self.crew_name} status={self.status.value}>"
+        return (
+            f"<Execution {self.id} crew={self.crew_name} "
+            f"type={self.execution_type.value} status={self.status.value}>"
+        )
 
 
 class ExecutionTask(Base):

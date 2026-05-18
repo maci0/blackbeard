@@ -62,6 +62,24 @@ def _exceeds_depth(obj: object, limit: int = 10, current: int = 0) -> bool:
     return False
 
 
+def _validate_inputs(inputs: dict[str, Any]) -> None:
+    """Shared input validation for kickoff, train, and test requests."""
+    max_entries = 100
+    max_key_len = 256
+    max_val_len = 50_000
+    if len(inputs) > max_entries:
+        raise ValueError(f"Too many input entries ({len(inputs)}), maximum is {max_entries}")
+    for k, v in inputs.items():
+        if not isinstance(k, str) or len(k) > max_key_len:
+            raise ValueError(f"Input key must be a string of at most {max_key_len} chars")
+        if not _SAFE_INPUT_KEY.match(k):
+            raise ValueError(f"Input key '{k}' is invalid: must match [a-zA-Z_][a-zA-Z0-9_]*")
+        if isinstance(v, str) and len(v) > max_val_len:
+            raise ValueError(f"Input value for '{k}' exceeds {max_val_len} chars")
+    if _exceeds_depth(inputs):
+        raise ValueError("Input nesting exceeds maximum depth of 10 levels")
+
+
 class KickoffRequest(BaseModel):
     """Request to kick off a crew execution."""
 
@@ -72,22 +90,63 @@ class KickoffRequest(BaseModel):
 
     @model_validator(mode="after")
     def _validate_input_sizes(self) -> KickoffRequest:
-        max_entries = 100
-        max_key_len = 256
-        max_val_len = 50_000
-        if len(self.inputs) > max_entries:
+        _validate_inputs(self.inputs)
+        return self
+
+
+_SAFE_FILENAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+
+
+class TrainRequest(BaseModel):
+    """Request to train a crew."""
+
+    inputs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Key-value inputs passed to the crew (max 100 entries)",
+    )
+    n_iterations: int = Field(
+        default=3,
+        ge=1,
+        le=100,
+        description="Number of training iterations",
+    )
+    filename: str = Field(
+        default="training_data.pkl",
+        max_length=255,
+        description="Filename for training data output",
+    )
+
+    @model_validator(mode="after")
+    def _validate_train_request(self) -> TrainRequest:
+        _validate_inputs(self.inputs)
+        if not _SAFE_FILENAME.match(self.filename):
             raise ValueError(
-                f"Too many input entries ({len(self.inputs)}), maximum is {max_entries}"
+                f"filename '{self.filename}' is invalid: "
+                "must be a plain filename starting with alphanumeric, "
+                "containing only letters, digits, dots, hyphens, and underscores"
             )
-        for k, v in self.inputs.items():
-            if not isinstance(k, str) or len(k) > max_key_len:
-                raise ValueError(f"Input key must be a string of at most {max_key_len} chars")
-            if not _SAFE_INPUT_KEY.match(k):
-                raise ValueError(f"Input key '{k}' is invalid: must match [a-zA-Z_][a-zA-Z0-9_]*")
-            if isinstance(v, str) and len(v) > max_val_len:
-                raise ValueError(f"Input value for '{k}' exceeds {max_val_len} chars")
-        if _exceeds_depth(self.inputs):
-            raise ValueError("Input nesting exceeds maximum depth of 10 levels")
+        if not self.filename.endswith(".pkl"):
+            raise ValueError("filename must end with .pkl")
+        return self
+
+
+class TestRequest(BaseModel):
+    """Request to test a crew."""
+
+    inputs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Key-value inputs passed to the crew (max 100 entries)",
+    )
+    n_iterations: int = Field(
+        default=3,
+        ge=1,
+        le=100,
+        description="Number of test iterations",
+    )
+
+    @model_validator(mode="after")
+    def _validate_test_request(self) -> TestRequest:
+        _validate_inputs(self.inputs)
         return self
 
 
@@ -117,9 +176,15 @@ class ExecutionResponse(BaseModel):
     id: UUID
     crew_name: str
     crew_namespace: str
+    execution_type: Literal["kickoff", "train", "test"] = Field(
+        default="kickoff",
+        description="Execution mode: kickoff, train, or test",
+    )
     status: Literal["queued", "running", "completed", "failed", "cancelled"] = Field(
         description="Execution status",
     )
+    n_iterations: int | None = None
+    training_file: str | None = None
     inputs: dict[str, Any]
     outputs: dict[str, Any] | None = None
     error: str | None = None
@@ -173,7 +238,12 @@ class ExecutionResponse(BaseModel):
             id=execution.id,
             crew_name=execution.crew_name,
             crew_namespace=execution.crew_namespace,
+            execution_type=(
+                execution.execution_type.value if execution.execution_type else "kickoff"
+            ),
             status=execution.status.value,
+            n_iterations=execution.n_iterations,
+            training_file=execution.training_file,
             inputs=_redact_sensitive_inputs(raw_inputs) if raw_inputs else {},
             outputs=execution.__dict__.get('outputs'),
             error=execution.error,

@@ -175,3 +175,47 @@ def _agent_payload(name: str = "researcher") -> dict:
             "backstory": "Years of experience in research",
         },
     }
+
+
+def _make_execution(
+    *,
+    crew_name: str = "test-crew",
+    execution_type: str = "kickoff",
+    status: str = "queued",
+    inputs: dict | None = None,
+    outputs: dict | None = None,
+    error: str | None = None,
+    total_tokens: int = 0,
+    prompt_tokens: int = 0,
+    completion_tokens: int = 0,
+    cost_usd: str = "0",
+    n_iterations: int | None = None,
+    training_file: str | None = None,
+    tasks: list | None = None,
+):
+    """Build a detached Execution ORM object for unit tests (no DB needed)."""
+    import uuid as _uuid
+    from decimal import Decimal as _Decimal
+
+    from blackbeard.models.execution import Execution, ExecutionStatus, ExecutionType
+
+    e = Execution()
+    e.id = _uuid.uuid4()
+    e.crew_name = crew_name
+    e.crew_namespace = "default"
+    e.execution_type = ExecutionType(execution_type)
+    e.status = ExecutionStatus(status)
+    e.inputs = inputs
+    e.outputs = outputs
+    e.error = error
+    e.total_tokens = total_tokens
+    e.prompt_tokens = prompt_tokens
+    e.completion_tokens = completion_tokens
+    e.cost_usd = _Decimal(cost_usd)
+    e.n_iterations = n_iterations
+    e.training_file = training_file
+    e.created_at = None
+    e.started_at = None
+    e.completed_at = None
+    e.tasks = tasks if tasks is not None else []
+    return e

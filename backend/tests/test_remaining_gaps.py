@@ -18,7 +18,6 @@ Targeted areas:
 import json
 import logging
 import uuid
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -30,7 +29,7 @@ from blackbeard.kinds import ResourceKind
 # ---------------------------------------------------------------------------
 from blackbeard.models.execution_schemas import _redact_sensitive_inputs
 from blackbeard.resources.exceptions import ValidationError as ResValidationError
-from tests.conftest import make_resource
+from tests.conftest import _make_execution, make_resource
 
 
 def test_redact_sensitive_inputs_password():
@@ -331,8 +330,12 @@ async def test_close_client_removes_and_closes():
 
 async def test_close_client_nonexistent_noop():
     """close_client for a nonexistent name should be a no-op."""
+    with _lock:
+        before = set(_clients.keys())
     await close_client("_nonexistent_client")
-    # Should not raise
+    with _lock:
+        after = set(_clients.keys())
+    assert before == after, "close_client must not modify the client dict for unknown names"
 
 
 async def test_close_all_clients_handles_errors():
@@ -792,27 +795,9 @@ def test_llm_connection_allows_custom_env_var():
 
 def test_execution_response_redacts_sensitive_inputs():
     """ExecutionResponse.from_db should redact sensitive input keys."""
-    from blackbeard.models.execution import Execution, ExecutionStatus
-
-    e = Execution()
-    e.id = uuid.uuid4()
-    e.crew_name = "test-crew"
-    e.crew_namespace = "default"
-    e.status = ExecutionStatus.QUEUED
-    e.inputs = {"topic": "AI", "api_key": "sk-secret-123", "password": "hunter2"}
-    e.outputs = None
-    e.error = None
-    e.total_tokens = 0
-    e.prompt_tokens = 0
-    e.completion_tokens = 0
-    e.cost_usd = Decimal("0")
-    e.created_at = None
-    e.started_at = None
-    e.completed_at = None
-    e.tasks = []
-
     from blackbeard.models.execution_schemas import ExecutionResponse
 
+    e = _make_execution(inputs={"topic": "AI", "api_key": "sk-secret-123", "password": "hunter2"})
     resp = ExecutionResponse.from_db(e)
     assert resp.inputs["topic"] == "AI"
     assert resp.inputs["api_key"] == "[REDACTED]"
@@ -821,27 +806,9 @@ def test_execution_response_redacts_sensitive_inputs():
 
 def test_execution_response_empty_inputs():
     """ExecutionResponse.from_db with None inputs should return empty dict."""
-    from blackbeard.models.execution import Execution, ExecutionStatus
-
-    e = Execution()
-    e.id = uuid.uuid4()
-    e.crew_name = "test-crew"
-    e.crew_namespace = "default"
-    e.status = ExecutionStatus.QUEUED
-    e.inputs = None
-    e.outputs = None
-    e.error = None
-    e.total_tokens = 0
-    e.prompt_tokens = 0
-    e.completion_tokens = 0
-    e.cost_usd = Decimal("0")
-    e.created_at = None
-    e.started_at = None
-    e.completed_at = None
-    e.tasks = []
-
     from blackbeard.models.execution_schemas import ExecutionResponse
 
+    e = _make_execution(inputs=None)
     resp = ExecutionResponse.from_db(e)
     assert resp.inputs == {}
 

@@ -7,6 +7,7 @@ export class ApiError extends Error {
     message: string,
     public status: number,
     public detail: unknown,
+    public requestId?: string,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -42,7 +43,8 @@ class ApiClient {
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const { method = 'GET', body, headers = {} } = options
 
-    const authHeaders: Record<string, string> = {}
+    const requestId = crypto.randomUUID()
+    const authHeaders: Record<string, string> = { 'X-Request-Id': requestId }
     if (this.token) {
       authHeaders['Authorization'] = `Bearer ${this.token}`
     } else if (this.apiKey) {
@@ -62,19 +64,25 @@ class ApiClient {
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       })
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'TimeoutError') {
-        throw new ApiError('Request timed out. Please try again.', 0, null)
-      }
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new ApiError('Request was cancelled.', 0, null)
-      }
-      if (err instanceof TypeError) {
-        throw new ApiError('Network error — check your connection and try again.', 0, null)
-      }
-      throw new ApiError('An unexpected error occurred.', 0, null)
+      const apiErr =
+        err instanceof DOMException && err.name === 'TimeoutError'
+          ? new ApiError('Request timed out. Please try again.', 0, null, requestId)
+          : err instanceof DOMException && err.name === 'AbortError'
+            ? new ApiError('Request was cancelled.', 0, null, requestId)
+            : err instanceof TypeError
+              ? new ApiError(
+                  'Network error — check your connection and try again.',
+                  0,
+                  null,
+                  requestId,
+                )
+              : new ApiError('An unexpected error occurred.', 0, null, requestId)
+      console.error(`[API] ${method} ${path} failed (rid=${requestId}):`, apiErr.message)
+      throw apiErr
     }
 
     if (!response.ok) {
+      const serverRequestId = response.headers.get('X-Request-Id') ?? requestId
       const error = (await response.json().catch(() => ({ detail: response.statusText }))) as {
         detail?: unknown
       }
@@ -88,7 +96,11 @@ class ApiClient {
       } else {
         message = (detail as { message?: string } | null)?.message ?? `HTTP ${response.status}`
       }
-      throw new ApiError(message, response.status, detail)
+      console.error(
+        `[API] ${method} ${path} → ${response.status} (rid=${serverRequestId}):`,
+        message,
+      )
+      throw new ApiError(message, response.status, detail, serverRequestId)
     }
 
     if (response.status === 204 || !response.headers.get('content-type')?.includes('json')) {

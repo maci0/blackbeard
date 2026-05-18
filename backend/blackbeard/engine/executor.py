@@ -24,6 +24,8 @@ __all__ = [
     "list_executions",
     "recover_stale_executions",
     "shutdown_executor",
+    "test_crew",
+    "train_crew",
 ]
 
 from crewai.crews.crew_output import CrewOutput
@@ -41,6 +43,7 @@ from blackbeard.models import (
     ExecutionEvent,
     ExecutionStatus,
     ExecutionTask,
+    ExecutionType,
     Resource,
     TaskStatus,
     async_session,
@@ -71,6 +74,7 @@ _CREW_RELEVANT_KINDS = (
     ResourceKind.LLM_CONNECTION,
     ResourceKind.TOOL,
     ResourceKind.KNOWLEDGE_SOURCE,
+    ResourceKind.AGENT_POLICY,
 )
 
 _NAMESPACE_RESOURCE_LIMIT = 500
@@ -83,6 +87,71 @@ def _sanitize_error(error_msg: str) -> str:
             return error_msg[:500] + "..."
         return error_msg
     return "Execution failed — check server logs for details"
+
+
+def _derive_budget_limits(
+    resource_snapshot: dict[str, dict[str, Any]],
+    crew_name: str,
+) -> tuple[float | None, int | None]:
+    """Derive the most restrictive budget limits from applicable policies.
+
+    Scans the crew's agents for policy refs (agent-level then crew-level
+    default) and returns the minimum ``max_usd`` and ``max_tokens`` across
+    all resolved policies.
+
+    Returns:
+        ``(max_budget_usd, max_tokens)`` — either may be ``None`` if no
+        policy defines that limit.
+    """
+    from blackbeard.engine.policy import resolve_policy
+
+    crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
+    crew_spec = crew_snap.get("spec", {})
+
+    # Build a dict of policy name → spec for lookup
+    policy_specs: dict[str, dict[str, Any]] = {}
+    for _key, snap in resource_snapshot.items():
+        if snap.get("kind") == "AgentPolicy":
+            policy_specs[snap["name"]] = snap.get("spec", {})
+
+    budgets: list[float] = []
+    token_limits: list[int] = []
+
+    # Resolve policy for each agent referenced by the crew
+    agent_refs = crew_spec.get("agents", [])
+    for agent_ref in agent_refs:
+        ref = parse_ref(agent_ref)
+        if not ref:
+            continue
+        agent_snap = resource_snapshot.get(f"Agent/{ref.name}", {})
+        agent_spec = agent_snap.get("spec", {})
+
+        policy = resolve_policy(agent_spec, crew_spec, policy_specs)
+        if policy.max_budget_usd is not None:
+            budgets.append(policy.max_budget_usd)
+        if policy.max_tokens is not None:
+            token_limits.append(policy.max_tokens)
+
+    max_budget = min(budgets) if budgets else None
+    max_tokens = min(token_limits) if token_limits else None
+
+    if max_budget is not None or max_tokens is not None:
+        logger.info(
+            "Budget limits derived for crew '%s': max_usd=%s max_tokens=%s",
+            crew_name,
+            max_budget,
+            max_tokens,
+            extra={
+                "event": "budget_limits_derived",
+                "crew_name": crew_name,
+                "max_budget_usd": max_budget,
+                "max_tokens": max_tokens,
+                "agent_count": len(agent_refs),
+                "policy_count": len(budgets) + len(token_limits),
+            },
+        )
+
+    return max_budget, max_tokens
 
 
 _executor: ThreadPoolExecutor | None = None
@@ -352,6 +421,176 @@ async def kickoff(
     return loaded
 
 
+
+async def _submit_execution(
+    session: AsyncSession,
+    crew_name: str,
+    inputs: dict[str, Any],
+    namespace: str,
+    user: User | None,
+    execution_type: ExecutionType,
+    n_iterations: int | None = None,
+    training_file: str | None = None,
+) -> Execution:
+    """Shared logic for creating and submitting train/test executions."""
+    resources = await _load_crew_resources(session, crew_name, namespace)
+    crew_key = f"Crew/{crew_name}"
+    crew_resource = resources[crew_key]
+    principal_chain = _build_principal_chain(user, crew_name, resources)
+
+    execution = Execution(
+        crew_name=crew_name,
+        crew_namespace=namespace,
+        execution_type=execution_type,
+        status=ExecutionStatus.QUEUED,
+        inputs=inputs,
+        n_iterations=n_iterations,
+        training_file=training_file,
+        initiated_by=user.id if user is not None else None,
+        principal_chain=principal_chain,
+    )
+    session.add(execution)
+    await session.flush()
+
+    task_refs = crew_resource.spec.get("tasks", [])
+    pool = get_pool_status()
+    pool_saturated = pool["saturated"]
+    logger.log(
+        logging.WARNING if pool_saturated else logging.INFO,
+        "%s: execution_id=%s crew=%s namespace=%s n_iterations=%s pool=%d/%d queued=%d",
+        execution_type.value.capitalize(),
+        execution.id,
+        crew_name,
+        namespace,
+        n_iterations,
+        pool["active_threads"],
+        pool["max_workers"],
+        pool["queued_tasks"],
+        extra={
+            "event": f"execution_{execution_type.value}",
+            "execution_id": str(execution.id),
+            "execution_type": execution_type.value,
+            "crew_name": crew_name,
+            "namespace": namespace,
+            "n_iterations": n_iterations,
+            "pool_active_threads": pool["active_threads"],
+            "pool_max_workers": pool["max_workers"],
+            "pool_queued_tasks": pool["queued_tasks"],
+            "pool_saturated": pool_saturated,
+        },
+    )
+    if task_refs:
+        session.add_all(
+            [
+                ExecutionTask(
+                    execution_id=execution.id,
+                    task_name=(ref.name if (ref := parse_ref(task_ref)) else task_ref),
+                    order=i,
+                    status=TaskStatus.PENDING,
+                )
+                for i, task_ref in enumerate(task_refs)
+            ]
+        )
+
+    await session.commit()
+
+    resource_snapshot = {key: _snapshot_resource(r) for key, r in resources.items()}
+
+    execution_id = execution.id
+    loop = asyncio.get_running_loop()
+    future = loop.run_in_executor(
+        _get_executor(),
+        _run_crew_sync,
+        execution_id,
+        resource_snapshot,
+        crew_name,
+        inputs,
+        execution_type,
+        n_iterations or 1,
+        training_file or "training_data.pkl",
+    )
+
+    def _on_thread_error(fut: asyncio.Future) -> None:  # type: ignore[type-arg]
+        exc = fut.exception()
+        if exc is not None:
+            logger.error(
+                "Execution %s thread failed: %s",
+                execution_id,
+                exc,
+                exc_info=True,
+                extra={
+                    "event": "execution_thread_failed",
+                    "execution_id": str(execution_id),
+                    "crew_name": crew_name,
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc)[:500],
+                },
+            )
+            error_msg = _sanitize_error(str(exc))
+            task = loop.create_task(_mark_failed_async(execution_id, error_msg))
+            task.add_done_callback(_log_task_exception)
+
+    future.add_done_callback(_on_thread_error)
+
+    loaded = await get_execution(session, execution_id)
+    if loaded is None:
+        raise ExecutionError(
+            f"Execution {execution_id} not found after {execution_type.value}"
+        )
+    return loaded
+
+
+async def train_crew(
+    session: AsyncSession,
+    crew_name: str,
+    inputs: dict[str, Any] | None = None,
+    n_iterations: int = 3,
+    filename: str = "training_data.pkl",
+    namespace: str = "default",
+    user: User | None = None,
+) -> Execution:
+    """Start a crew training run.
+
+    Creates an execution record with type=train, then runs crew.train()
+    in a background thread. Returns the execution record immediately (status=queued).
+    """
+    return await _submit_execution(
+        session,
+        crew_name,
+        inputs or {},
+        namespace,
+        user,
+        ExecutionType.TRAIN,
+        n_iterations=n_iterations,
+        training_file=filename,
+    )
+
+
+async def test_crew(
+    session: AsyncSession,
+    crew_name: str,
+    inputs: dict[str, Any] | None = None,
+    n_iterations: int = 3,
+    namespace: str = "default",
+    user: User | None = None,
+) -> Execution:
+    """Start a crew test run.
+
+    Creates an execution record with type=test, then runs crew.test()
+    in a background thread. Returns the execution record immediately (status=queued).
+    """
+    return await _submit_execution(
+        session,
+        crew_name,
+        inputs or {},
+        namespace,
+        user,
+        ExecutionType.TEST,
+        n_iterations=n_iterations,
+    )
+
+
+
 async def _mark_failed_async(execution_id: UUID, error: str) -> None:
     """Mark an execution as failed."""
     async with async_session() as session:
@@ -394,18 +633,23 @@ def _run_crew_sync(
     resource_snapshot: dict[str, dict[str, Any]],
     crew_name: str,
     inputs: dict[str, Any],
+    execution_type: ExecutionType = ExecutionType.KICKOFF,
+    n_iterations: int = 1,
+    training_file: str = "training_data.pkl",
 ) -> None:
     """Run a crew in a dedicated event loop, blocking until completion (for ThreadPoolExecutor)."""
     request_id_var.set(str(execution_id))
     logger.info(
-        "Crew thread started: execution_id=%s crew=%s thread=%s",
+        "Crew thread started: execution_id=%s crew=%s type=%s thread=%s",
         execution_id,
         crew_name,
+        execution_type.value,
         threading.current_thread().name,
         extra={
             "event": "crew_thread_started",
             "execution_id": str(execution_id),
             "crew_name": crew_name,
+            "execution_type": execution_type.value,
             "thread_name": threading.current_thread().name,
         },
     )
@@ -414,7 +658,16 @@ def _run_crew_sync(
     thread_session, thread_engine = _thread_session_factory()
     try:
         loop.run_until_complete(
-            _run_crew_async(execution_id, resource_snapshot, crew_name, inputs, thread_session)
+            _run_crew_async(
+                execution_id,
+                resource_snapshot,
+                crew_name,
+                inputs,
+                thread_session,
+                execution_type=execution_type,
+                n_iterations=n_iterations,
+                training_file=training_file,
+            )
         )
     except Exception as exc:
         logger.exception(
@@ -480,6 +733,9 @@ async def _run_crew_async(
     crew_name: str,
     inputs: dict[str, Any],
     thread_session: async_sessionmaker[AsyncSession],
+    execution_type: ExecutionType = ExecutionType.KICKOFF,
+    n_iterations: int = 1,
+    training_file: str = "training_data.pkl",
 ) -> None:
     """Run a crew and update the execution record with results."""
     async with thread_session() as session:
@@ -528,6 +784,7 @@ async def _run_crew_async(
         )
 
         listener: BlackbeardExecutionListener | None = None
+        virtual_key: str | None = None
         try:
             mock_resources = {
                 key: Resource(
@@ -539,7 +796,58 @@ async def _run_crew_async(
                 for key, snap in resource_snapshot.items()
             }
 
-            loader = ResourceLoader(mock_resources)
+            # --- Budget enforcement via LiteLLM virtual keys ---
+            virtual_api_key: str | None = None
+            max_budget, max_tokens = _derive_budget_limits(
+                resource_snapshot, crew_name
+            )
+            has_budget = max_budget is not None or max_tokens is not None
+
+            if has_budget:
+                from blackbeard.litellm.key_manager import (
+                    VirtualKeyError,
+                    VirtualKeyManager,
+                )
+
+                key_mgr = VirtualKeyManager(
+                    proxy_url=settings.litellm_proxy_url,
+                    master_key=settings.litellm_master_key.get_secret_value(),
+                )
+                try:
+                    key_info = await key_mgr.create_key(
+                        name=f"exec-{execution_id}",
+                        max_budget=max_budget,
+                        max_tokens=max_tokens,
+                        metadata={
+                            "execution_id": str(execution_id),
+                            "crew_name": crew_name,
+                        },
+                    )
+                    virtual_api_key = key_info["key"]
+                    virtual_key = virtual_api_key  # for cleanup in finally
+
+                    # Persist the key reference on the execution row
+                    execution = await _get_execution_for_update(
+                        session, execution_id
+                    )
+                    if execution:
+                        execution.litellm_key = virtual_api_key
+                        await session.commit()
+                except VirtualKeyError:
+                    logger.warning(
+                        "Failed to create virtual key for execution %s — "
+                        "proceeding without budget enforcement",
+                        execution_id,
+                        exc_info=True,
+                        extra={
+                            "event": "virtual_key_creation_failed",
+                            "execution_id": str(execution_id),
+                            "crew_name": crew_name,
+                        },
+                    )
+                    virtual_api_key = None
+
+            loader = ResourceLoader(mock_resources, api_key=virtual_api_key)
             crew = loader.build_crew(crew_name)
 
             # Wire up execution event listener for real-time streaming.
@@ -548,7 +856,19 @@ async def _run_crew_async(
                 db_url=settings.database_url.get_secret_value(),
             )
 
-            result = crew.kickoff(inputs=inputs)
+            if execution_type == ExecutionType.TRAIN:
+                result = crew.train(
+                    n_iterations=n_iterations,
+                    inputs=inputs,
+                    filename=training_file,
+                )
+            elif execution_type == ExecutionType.TEST:
+                result = crew.test(
+                    n_iterations=n_iterations,
+                    inputs=inputs,
+                )
+            else:
+                result = crew.kickoff(inputs=inputs)
             listener.flush()
 
             execution = await _get_execution_for_update(session, execution_id)
@@ -585,6 +905,29 @@ async def _run_crew_async(
                 execution.total_tokens = usage.total_tokens
                 execution.prompt_tokens = usage.prompt_tokens
                 execution.completion_tokens = usage.completion_tokens
+            elif execution_type == ExecutionType.TRAIN:
+                execution.outputs = {
+                    "execution_type": "train",
+                    "n_iterations": n_iterations,
+                    "filename": training_file,
+                    "raw": repr(result) if result is not None else None,
+                    "result_type": type(result).__name__ if result is not None else "None",
+                }
+            elif execution_type == ExecutionType.TEST:
+                # crew.test() returns test metrics; store them in outputs
+                if isinstance(result, dict):
+                    execution.outputs = {
+                        "execution_type": "test",
+                        "n_iterations": n_iterations,
+                        "metrics": result,
+                    }
+                else:
+                    execution.outputs = {
+                        "execution_type": "test",
+                        "n_iterations": n_iterations,
+                        "raw": repr(result) if result is not None else None,
+                        "result_type": type(result).__name__ if result is not None else "None",
+                    }
             else:
                 execution.outputs = {"raw": repr(result), "result_type": type(result).__name__}
 
@@ -668,6 +1011,26 @@ async def _run_crew_async(
                     },
                 )
                 raise
+        finally:
+            # --- Virtual key cleanup ---
+            if virtual_key is not None:
+                from blackbeard.litellm.key_manager import VirtualKeyManager
+
+                key_mgr = VirtualKeyManager(
+                    proxy_url=settings.litellm_proxy_url,
+                    master_key=settings.litellm_master_key.get_secret_value(),
+                )
+                deleted = await key_mgr.delete_key(virtual_key)
+                if not deleted:
+                    logger.warning(
+                        "Virtual key cleanup failed for execution %s",
+                        execution_id,
+                        extra={
+                            "event": "virtual_key_cleanup_failed",
+                            "execution_id": str(execution_id),
+                            "crew_name": crew_name,
+                        },
+                    )
 
 
 async def _get_execution_for_update(session: AsyncSession, execution_id: UUID) -> Execution | None:
@@ -724,7 +1087,10 @@ async def list_executions(
                 Execution.id,
                 Execution.crew_name,
                 Execution.crew_namespace,
+                Execution.execution_type,
                 Execution.status,
+                Execution.n_iterations,
+                Execution.training_file,
                 Execution.error,
                 Execution.total_tokens,
                 Execution.prompt_tokens,

@@ -122,8 +122,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         })
         return changed ? { executions: merged } : state
       })
-    } catch {
-      // Silently ignore poll failures to avoid flashing errors
+    } catch (err) {
+      console.warn('[poll] executions fetch failed:', (err as Error).message)
     }
   },
 
@@ -153,8 +153,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         `/api/v1/executions/${id}/events?after=${lastSeq}&limit=200`,
       )
       get().addEvents(result.events)
-    } catch {
-      // Silently ignore — events are supplementary
+    } catch (err) {
+      console.warn('[poll] events fetch failed:', (err as Error).message)
     }
   },
 
@@ -162,8 +162,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     try {
       const result = await api.get<Record<string, unknown>>(`/api/v1/executions/${id}/spend`)
       set({ spendData: result })
-    } catch {
-      // Silently ignore — spend data is optional (LiteLLM may not be tracking)
+    } catch (err) {
+      console.warn('[poll] spend fetch failed:', (err as Error).message)
       set({ spendData: null })
     }
   },

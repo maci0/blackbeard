@@ -294,7 +294,7 @@ export default function Tools() {
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<Wrench />}
-            title={search ? 'No tools match your search' : 'No tools found'}
+            title={search ? 'No tools match your search' : 'No tools yet'}
             description={search ? 'Try a different search term' : 'Create tools in the Studio'}
             action={!search ? { label: 'Go to Studio', href: '/studio' } : undefined}
           />

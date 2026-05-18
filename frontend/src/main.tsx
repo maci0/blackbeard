@@ -13,6 +13,10 @@ if (import.meta.env.VITE_API_KEY) {
   api.setApiKey(import.meta.env.VITE_API_KEY as string)
 }
 
+window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+  console.error('[Unhandled Rejection]', event.reason)
+})
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>

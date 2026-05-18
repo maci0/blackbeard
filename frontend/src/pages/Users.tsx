@@ -503,7 +503,7 @@ export default function Users() {
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<UsersIcon />}
-            title={search ? 'No users match your search' : 'No users found'}
+            title={search ? 'No users match your search' : 'No users yet'}
             description={search ? 'Try a different search term' : 'Invite users to get started'}
           />
         ) : (

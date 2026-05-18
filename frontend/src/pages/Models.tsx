@@ -557,7 +557,7 @@ export default function Models() {
         ) : models.length === 0 ? (
           <EmptyState
             icon={<Settings />}
-            title="No LLM connections"
+            title="No LLM connections yet"
             description="Add an LLM connection to get started"
             action={{
               label: 'Add Connection',

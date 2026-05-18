@@ -79,6 +79,7 @@ class ChatResponse(BaseModel):
     "/chat",
     response_model=ChatResponse,
     responses={
+        429: {"description": "Model rate limit exceeded"},
         502: {"description": "LiteLLM proxy unreachable or model error"},
     },
 )
@@ -142,6 +143,13 @@ async def chat(body: ChatRequest = Body(...)) -> ChatResponse:
                 "response_body_preview": error_body,
             },
         )
+        if resp.status_code == 429:
+            retry_after = resp.headers.get("retry-after", "30")
+            raise HTTPException(
+                status_code=429,
+                detail="Model rate limit exceeded. Try again later.",
+                headers={"Retry-After": retry_after},
+            )
         raise HTTPException(
             status_code=502,
             detail=f"Model request failed with status {resp.status_code}.",
@@ -208,9 +216,12 @@ class ModelTestResult(BaseModel):
 @router.post(
     "/models/test",
     response_model=ModelTestResult,
+    responses={
+        502: {"description": "LiteLLM proxy unreachable or model error"},
+    },
 )
 async def test_model(
-    model: str = Body(..., embed=True, min_length=1, max_length=256),  # noqa: PT028
+    model: str = Body(..., embed=True, min_length=1, max_length=256),
 ) -> ModelTestResult:
     """Test connectivity and API key validity for a specific model.
 
@@ -353,6 +364,7 @@ class ModelInfo(BaseModel):
     "/models/available",
     response_model=list[ModelInfo],
     responses={
+        429: {"description": "Model proxy rate limit exceeded"},
         502: {"description": "LiteLLM proxy unreachable"},
     },
 )
@@ -375,6 +387,13 @@ async def list_available_models() -> list[ModelInfo]:
                     "http_status": resp.status_code,
                 },
             )
+            if resp.status_code == 429:
+                retry_after = resp.headers.get("retry-after", "30")
+                raise HTTPException(
+                    status_code=429,
+                    detail="Model proxy rate limit exceeded. Try again later.",
+                    headers={"Retry-After": retry_after},
+                )
             raise HTTPException(
                 status_code=502,
                 detail="Model proxy returned an error. Try again later.",
