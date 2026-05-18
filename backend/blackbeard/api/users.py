@@ -149,6 +149,7 @@ async def get_user(
 async def update_user(
     user_id: uuid.UUID,
     data: UserUpdateRequest,
+    request: Request,
     current_user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ) -> UserResponse:
@@ -176,6 +177,13 @@ async def update_user(
     if data.display_name is not None:
         user.display_name = data.display_name
 
+    await log_audit(
+        session,
+        action="user_updated",
+        resource_type="User",
+        resource_id=str(user.id),
+        **audit_from_request(request, current_user),
+    )
     await session.commit()
     await session.refresh(user)
 
@@ -353,6 +361,7 @@ async def get_group(
 async def update_group(
     group_id: uuid.UUID,
     data: GroupUpdateRequest,
+    request: Request,
     current_user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ) -> GroupResponse:
@@ -365,6 +374,13 @@ async def update_group(
     if "description" in data.model_fields_set:
         group.description = data.description
 
+    await log_audit(
+        session,
+        action="group_updated",
+        resource_type="Group",
+        resource_id=group.name,
+        **audit_from_request(request, current_user),
+    )
     await session.commit()
     await session.refresh(group)
 

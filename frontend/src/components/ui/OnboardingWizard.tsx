@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import * as Dialog from '@radix-ui/react-dialog'
 import {
   LayoutGrid,
   Boxes,
@@ -77,95 +78,111 @@ export function OnboardingWizard({ onDismiss }: { onDismiss: () => void }) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Welcome to Blackbeard"
+    <Dialog.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) onDismiss()
+      }}
     >
-      <div className="relative mx-4 w-full max-w-lg rounded-xl border bg-card p-8 shadow-2xl">
-        {/* Close button */}
-        <button
-          onClick={onDismiss}
-          className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground hover:text-foreground"
-          aria-label="Skip onboarding"
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+        <Dialog.Content
+          className="fixed left-1/2 top-1/2 z-50 mx-4 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-card p-8 shadow-2xl focus:outline-none"
+          aria-describedby="onboarding-step-description"
+          onInteractOutside={(e) => e.preventDefault()}
         >
-          <X className="h-4 w-4" />
-        </button>
+          <Dialog.Title className="sr-only">Welcome to Blackbeard</Dialog.Title>
+          <Dialog.Description id="onboarding-step-description" className="sr-only">
+            Step {step + 1} of {STEPS.length}: {current.title}
+          </Dialog.Description>
 
-        {/* Header */}
-        {step === 0 && (
-          <div className="mb-6 flex items-center gap-2 text-primary">
-            <Sparkles className="h-5 w-5" />
-            <span className="text-sm font-medium">Welcome to Blackbeard</span>
-          </div>
-        )}
-
-        {/* Step content */}
-        <div className="mb-8">
-          <div className="mb-4">{current.icon}</div>
-          <h2 className="mb-2 text-xl font-semibold">{current.title}</h2>
-          <p className="text-sm leading-relaxed text-muted-foreground">{current.description}</p>
-        </div>
-
-        {/* Progress dots */}
-        <div className="mb-6 flex justify-center gap-1.5" aria-label="Step progress">
-          {STEPS.map((_, i) => (
+          {/* Close button */}
+          <Dialog.Close asChild>
             <button
-              key={i}
-              onClick={() => setStep(i)}
-              className={`h-1.5 rounded-full transition-all ${
-                i === step
-                  ? 'w-6 bg-primary'
-                  : 'w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50'
-              }`}
-              aria-label={`Go to step ${i + 1}`}
-              aria-current={i === step ? 'step' : undefined}
-            />
-          ))}
-        </div>
+              className="absolute right-3 top-3 flex h-[44px] w-[44px] items-center justify-center rounded-md p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Skip onboarding"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </Dialog.Close>
 
-        {/* Actions */}
-        <div className="flex items-center justify-between">
-          <div>
-            {step > 0 && (
-              <button
-                onClick={() => setStep(step - 1)}
-                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back
-              </button>
-            )}
+          {/* Header */}
+          {step === 0 && (
+            <div className="mb-6 flex items-center gap-2 text-primary">
+              <Sparkles className="h-5 w-5" />
+              <span className="text-sm font-medium">Welcome to Blackbeard</span>
+            </div>
+          )}
+
+          {/* Step content */}
+          <div className="mb-8">
+            <div className="mb-4">{current.icon}</div>
+            <h2 className="mb-2 text-xl font-semibold">{current.title}</h2>
+            <p className="text-sm leading-relaxed text-muted-foreground">{current.description}</p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {current.action && (
-              <button onClick={handleAction} className="text-sm text-primary hover:underline">
-                {current.action.label}
-              </button>
-            )}
-
-            {isLast ? (
+          {/* Progress dots */}
+          <div className="mb-6 flex justify-center gap-1.5" aria-label="Step progress">
+            {STEPS.map((_, i) => (
               <button
-                onClick={handleFinish}
-                className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-              >
-                Get Started
-                <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            ) : (
-              <button
-                onClick={() => setStep(step + 1)}
-                className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-              >
-                Next
-                <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            )}
+                key={i}
+                onClick={() => setStep(i)}
+                className={`h-1.5 rounded-full transition-all ${
+                  i === step
+                    ? 'w-6 bg-primary'
+                    : 'w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50'
+                }`}
+                aria-label={`Go to step ${i + 1}`}
+                aria-current={i === step ? 'step' : undefined}
+              />
+            ))}
           </div>
-        </div>
-      </div>
-    </div>
+
+          {/* Actions */}
+          <div className="flex items-center justify-between">
+            <div>
+              {step > 0 && (
+                <button
+                  onClick={() => setStep(step - 1)}
+                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Back
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              {current.action && (
+                <button
+                  onClick={handleAction}
+                  className="text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {current.action.label}
+                </button>
+              )}
+
+              {isLast ? (
+                <button
+                  onClick={handleFinish}
+                  className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Get Started
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setStep(step + 1)}
+                  className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Next
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }

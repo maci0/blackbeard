@@ -8,12 +8,15 @@ const KIND_BADGE_CLASSES: Record<string, string> = {
   Guardrail: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
   Flow: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
   KnowledgeSource: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',
+  Role: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+  RoleBinding: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
 }
 
 const KIND_DISPLAY: Record<string, string> = {
   LLMConnection: 'LLM Connection',
   AgentPolicy: 'Agent Policy',
   KnowledgeSource: 'Knowledge Source',
+  RoleBinding: 'Role Binding',
 }
 
 export function KindBadge({ kind }: { kind: string }) {

@@ -80,7 +80,7 @@ class LoginRequest(BaseModel):
 class RefreshRequest(BaseModel):
     """Token refresh request."""
 
-    refresh_token: str = Field(..., min_length=1)
+    refresh_token: str = Field(..., min_length=1, max_length=4096)
 
 
 class AuthResponse(BaseModel):

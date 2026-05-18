@@ -157,16 +157,19 @@ def _derive_budget_limits(
 
 
 _executor: ThreadPoolExecutor | None = None
+_executor_lock = threading.Lock()
 
 
 def _get_executor() -> ThreadPoolExecutor:
-    """Return the shared executor, creating it on first use."""
+    """Return the shared executor, creating it on first use (thread-safe)."""
     global _executor
     if _executor is None:
-        _executor = ThreadPoolExecutor(
-            max_workers=settings.max_concurrent_executions,
-            thread_name_prefix="crew-exec",
-        )
+        with _executor_lock:
+            if _executor is None:
+                _executor = ThreadPoolExecutor(
+                    max_workers=settings.max_concurrent_executions,
+                    thread_name_prefix="crew-exec",
+                )
     return _executor
 
 
@@ -202,9 +205,10 @@ def get_pool_status() -> dict[str, object]:
 def shutdown_executor(wait: bool = False) -> None:
     """Shutdown the thread pool executor and dispose the sync DB engine."""
     global _executor
-    if _executor is not None:
-        _executor.shutdown(wait=wait, cancel_futures=True)
-        _executor = None
+    with _executor_lock:
+        if _executor is not None:
+            _executor.shutdown(wait=wait, cancel_futures=True)
+            _executor = None
     logger.info("Execution thread pool shut down", extra={"event": "executor_shutdown"})
     from blackbeard.engine.execution_listener import dispose_sync_engine
 

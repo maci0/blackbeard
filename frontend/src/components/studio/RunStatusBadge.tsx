@@ -46,28 +46,33 @@ export function RunStatusBadge({
     if (status === 'idle') {
       setVisible(false)
       setAnimating(false)
+      prevStatusRef.current = status
       return
     }
+
+    let animTimer: ReturnType<typeof setTimeout> | undefined
 
     // Trigger slide-in animation when status changes
     if (status !== prevStatusRef.current) {
       setAnimating(true)
       setVisible(true)
       // Reset animation trigger after transition completes
-      const animTimer = setTimeout(() => setAnimating(false), 300)
+      animTimer = setTimeout(() => setAnimating(false), 300)
 
       // Auto-dismiss success after 3 seconds
       if (timerRef.current) clearTimeout(timerRef.current)
       if (status === 'success') {
         timerRef.current = setTimeout(() => setVisible(false), 3000)
       }
-
-      prevStatusRef.current = status
-      return () => clearTimeout(animTimer)
+    } else {
+      setVisible(true)
     }
 
-    setVisible(true)
     prevStatusRef.current = status
+
+    return () => {
+      if (animTimer) clearTimeout(animTimer)
+    }
   }, [status])
 
   useEffect(() => {

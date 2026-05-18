@@ -752,7 +752,38 @@ async def ws_execution(
     websocket: WebSocket,
     execution_id: UUID,
 ) -> None:
-    """WebSocket stream of execution events. Sends JSON frames."""
+    """WebSocket stream of execution events. Sends JSON frames.
+
+    Authentication: Accepts either ``token`` query parameter (JWT) or
+    ``api_key`` query parameter (system API key).  WebSocket connections
+    cannot set custom headers, so credentials must be passed via query
+    string.
+    """
+    import hmac
+
+    import jwt as pyjwt
+
+    from blackbeard.api.middleware import _EXPECTED_API_KEY
+    from blackbeard.auth.jwt import decode_token
+
+    token = websocket.query_params.get("token", "")
+    api_key = websocket.query_params.get("api_key", "")
+
+    authenticated = False
+    if token:
+        try:
+            payload = decode_token(token)
+            if payload.get("type") == "access":
+                authenticated = True
+        except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError):
+            pass
+    if not authenticated and api_key and hmac.compare_digest(api_key, _EXPECTED_API_KEY):
+        authenticated = True
+
+    if not authenticated:
+        await websocket.close(code=4401, reason="Authentication required")
+        return
+
     await websocket.accept()
 
     async with async_session() as check_session:

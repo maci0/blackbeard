@@ -69,11 +69,20 @@ class ImportResponse(BaseModel):
 
 
 def _find_yaml_files(directory: Path) -> list[Path]:
-    """Recursively find YAML files in a directory, respecting safety limits."""
+    """Recursively find YAML files in a directory, respecting safety limits.
+
+    Skips symlinks to prevent symlink-based directory traversal attacks
+    where a malicious repo could link to files outside the clone directory.
+    """
+    resolved_root = directory.resolve()
     files: list[Path] = []
     for ext in ("*.yaml", "*.yml"):
-        files.extend(directory.rglob(ext))
-    # Sort for deterministic import order
+        for f in directory.rglob(ext):
+            if f.is_symlink():
+                continue
+            if not f.resolve().is_relative_to(resolved_root):
+                continue
+            files.append(f)
     files.sort()
     return files[:_MAX_YAML_FILES]
 
@@ -122,15 +131,27 @@ async def _clone_repo(url: str, target: Path) -> None:
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_MAX_CLONE_TIMEOUT_S)
     except TimeoutError:
         proc.kill()
+        await proc.wait()
         raise HTTPException(
             status_code=408,
             detail=f"Git clone timed out after {_MAX_CLONE_TIMEOUT_S}s",
         ) from None
     if proc.returncode != 0:
-        msg = stderr.decode(errors="replace").strip()[:500]
+        raw_msg = stderr.decode(errors="replace").strip()[:500]
+        logger.warning(
+            "Git clone failed for URL %s: %s",
+            url[:200],
+            raw_msg,
+            extra={
+                "event": "marketplace_git_clone_failed",
+                "url": url[:200],
+                "exit_code": proc.returncode,
+                "stderr_preview": raw_msg[:200],
+            },
+        )
         raise HTTPException(
             status_code=422,
-            detail=f"Git clone failed: {msg}",
+            detail="Git clone failed. Verify the URL is a valid, accessible HTTPS git repository.",
         )
 
 
@@ -176,6 +197,9 @@ async def import_from_url(
         tmpdir = Path(tempfile.mkdtemp(prefix="bb-marketplace-"))
         try:
             await _clone_repo(url, tmpdir)
+            git_dir = tmpdir / ".git"
+            if git_dir.is_dir():
+                shutil.rmtree(git_dir, ignore_errors=True)
             search_dir = tmpdir / body.path if body.path else tmpdir
             # Prevent path traversal: ensure resolved search_dir stays inside tmpdir
             if not search_dir.resolve().is_relative_to(tmpdir.resolve()):
@@ -202,7 +226,9 @@ async def import_from_url(
         except Exception as exc:
             kind_str = raw.get("kind", "Unknown")
             name_str = raw.get("metadata", {}).get("name", "unknown")
-            error_details.append(f"Validation error for {kind_str}/{name_str}: {exc}")
+            error_details.append(
+                f"Validation error for {kind_str}/{name_str}: {type(exc).__name__}"
+            )
             continue
         try:
             _resource, created = await service.create(data)
@@ -223,7 +249,18 @@ async def import_from_url(
             error_details.append(f"Resource validation failed for {label}: {msgs}")
         except Exception as exc:
             label = f"{data.kind}/{data.metadata.name}"
-            error_details.append(f"Import failed for {label}: {exc}")
+            logger.warning(
+                "Marketplace import failed for %s: %s",
+                label,
+                exc,
+                exc_info=True,
+                extra={
+                    "event": "marketplace_import_resource_failed",
+                    "resource_label": label,
+                    "error_type": type(exc).__name__,
+                },
+            )
+            error_details.append(f"Import failed for {label}")
 
     if imported_names:
         await session.commit()
