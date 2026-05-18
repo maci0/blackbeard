@@ -852,16 +852,37 @@ def _run_flow_steps(
             fn_path = step.get("function_path", "")
             if fn_path and ":" in fn_path:
                 module_path, fn_name = fn_path.rsplit(":", 1)
-                try:
-                    import importlib
+                from blackbeard.resources.validator import (
+                    _ALLOWED_FUNCTION_MODULE_PREFIXES,
+                    _BLOCKED_FUNCTION_MODULES,
+                )
 
-                    mod = importlib.import_module(module_path)
-                    fn = getattr(mod, fn_name)
-                    step_result = fn({**inputs, **step_outputs})
-                    step_outputs[step_name] = step_result
-                except Exception as exc:
-                    logger.warning("Flow function step '%s' failed: %s", step_name, exc)
-                    step_outputs[step_name] = f"error: {exc}"
+                top_module = module_path.split(".")[0]
+                if top_module in _BLOCKED_FUNCTION_MODULES:
+                    logger.warning(
+                        "Flow step '%s' blocked: module '%s' is not allowed",
+                        step_name,
+                        top_module,
+                    )
+                    step_outputs[step_name] = "error: blocked module"
+                elif not fn_path.startswith(_ALLOWED_FUNCTION_MODULE_PREFIXES):
+                    logger.warning(
+                        "Flow step '%s' blocked: function_path '%s' not in allowlist",
+                        step_name,
+                        fn_path,
+                    )
+                    step_outputs[step_name] = "error: function not in allowlist"
+                else:
+                    try:
+                        import importlib
+
+                        mod = importlib.import_module(module_path)
+                        fn = getattr(mod, fn_name)
+                        step_result = fn({**inputs, **step_outputs})
+                        step_outputs[step_name] = step_result
+                    except Exception as exc:
+                        logger.warning("Flow function step '%s' failed: %s", step_name, exc)
+                        step_outputs[step_name] = "error: step execution failed"
 
         elif step_type in ("router", "condition"):
             logger.info(
