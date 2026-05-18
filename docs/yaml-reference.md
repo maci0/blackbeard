@@ -306,7 +306,7 @@ spec:
 | `env` | object | — | Environment variables for the MCP server process (`mcp-stdio`) |
 | `config` | object | — | Constructor kwargs passed to the tool |
 
-> **Note:** The `env` capability passes a fixed set of safe environment variables (`LANG`, `LC_ALL`, `TZ`, `TERM`). Granular per-variable access (`env:VAR_NAME`) is planned but not yet implemented.
+> **Note:** The `env` capability passes a fixed set of safe environment variables (`LANG`, `LC_ALL`, `TZ`, `TERM`). Granular per-variable access is not supported.
 
 ---
 
@@ -545,3 +545,70 @@ spec:
 | `chunk_overlap` | integer 0–1000 | — | Overlap between chunks (default `200`) |
 
 > **Note:** For MVP, only `text`, `pdf`, `csv`, `json`, and `string` types are supported at runtime. `excel` and `url` are accepted by the schema but not yet handled by the resource loader.
+
+---
+
+## Role
+
+A Role defines a set of permissions (resource/verb pairs) for RBAC. Bind roles to subjects via RoleBindings.
+
+```yaml
+apiVersion: blackbeard/v1
+kind: Role
+metadata:
+  name: developer
+  namespace: default
+spec:
+  description: "Create and manage agents, tasks, crews, and tools"
+  rules:
+    - resources: ["Agent", "Task", "Crew", "Tool", "LLMConnection"]
+      verbs: ["get", "list", "create", "update", "delete"]
+    - resources: ["Crew"]
+      verbs: ["run"]
+    - resources: ["AgentPolicy", "Guardrail"]
+      verbs: ["get", "list"]
+  subjectKinds: ["User"]                  # Restrict which subject types can use this role (optional)
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string | — | Human-readable description |
+| `rules` | object[] (≥1) | ✅ | Permission rules |
+| `rules[].resources` | string[] (≥1) | ✅ | Resource kind names (e.g. `"Agent"`, `"Crew"`) or `"*"` for all |
+| `rules[].verbs` | string[] (≥1) | ✅ | Allowed operations: `get`, `list`, `create`, `update`, `delete`, `run`, `invoke`, `delegate`, or `*` |
+| `rules[].resourceNames` | string[] | — | Restrict rule to specific resource names |
+| `rules[].namespaces` | string[] | — | Restrict rule to specific namespaces |
+| `subjectKinds` | string[] | — | Restrict which subject types can use this role: `User`, `Group`, `Agent`, `Crew` |
+
+---
+
+## RoleBinding
+
+A RoleBinding binds a Role to one or more subjects (users, groups, agents, or crews), granting them the role's permissions.
+
+```yaml
+apiVersion: blackbeard/v1
+kind: RoleBinding
+metadata:
+  name: dev-team-binding
+  namespace: default
+spec:
+  role: "ref:roles/developer"
+  subjects:
+    - kind: User
+      name: alice@example.com
+    - kind: Group
+      name: engineering
+    - kind: Agent
+      name: researcher
+  scope:
+    namespace: default                    # Limit permissions to this namespace (optional)
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `role` | string | ✅ | `ref:` to the Role resource to bind |
+| `subjects` | object[] (≥1) | ✅ | Subjects receiving the role's permissions |
+| `subjects[].kind` | `User`\|`Group`\|`Agent`\|`Crew` | ✅ | Subject type |
+| `subjects[].name` | string | ✅ | Subject identifier (email for users, resource name for agents/crews) |
+| `scope.namespace` | string | — | Limit the binding to a specific namespace |

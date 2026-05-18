@@ -283,7 +283,13 @@ def test_valid_tool_mcp_stdio():
     assert errors == []
 
 
-def test_valid_tool_mcp_http():
+def test_valid_tool_mcp_http(monkeypatch):
+    import socket
+
+    def _fake_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo)
     spec = {"type": "mcp-http", "url": "http://example.com/mcp"}
     errors, _ = validate_resource("Tool", spec)
     assert errors == []

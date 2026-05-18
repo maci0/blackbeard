@@ -151,7 +151,7 @@ export default function Layout() {
       </a>
 
       {/* ── Mobile header ── */}
-      <div className="fixed left-0 right-0 top-0 z-40 flex h-12 items-center gap-3 border-b bg-card px-3 md:hidden">
+      <header className="fixed left-0 right-0 top-0 z-40 flex h-12 items-center gap-3 border-b bg-card px-3 md:hidden">
         <button
           ref={menuButtonRef}
           onClick={() => setSidebarOpen((v) => !v)}
@@ -163,7 +163,7 @@ export default function Layout() {
         </button>
         <BlackbeardLogo size={22} />
         <span className="text-sm font-bold tracking-tight">Blackbeard</span>
-      </div>
+      </header>
 
       {/* ── Mobile backdrop ── */}
       {sidebarOpen && (

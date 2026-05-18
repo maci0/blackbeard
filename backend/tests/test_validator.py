@@ -320,8 +320,14 @@ def test_llm_connection_blocks_database_env_var():
     assert _has_error(errors, field_contains="api_key_env", msg_contains="internal")
 
 
-def test_llm_connection_allows_external_base_url():
+def test_llm_connection_allows_external_base_url(monkeypatch):
     """base_url pointing to a public host should pass with zero validation errors."""
+    import socket
+
+    def _fake_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("104.18.7.145", 0))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo)
     spec = {
         "provider": "openai",
         "model": "gpt-4o",
@@ -404,8 +410,14 @@ def test_tool_blocks_internal_env_var():
     assert _has_error(errors, field_contains="env", msg_contains="restricted")
 
 
-def test_tool_allows_external_url():
+def test_tool_allows_external_url(monkeypatch):
     """Tool with external URL should pass validation."""
+    import socket
+
+    def _fake_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 0))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo)
     spec = {"type": "mcp-http", "url": "https://api.example.com/mcp"}
     errors, _ = validate_resource("Tool", spec)
     assert errors == []

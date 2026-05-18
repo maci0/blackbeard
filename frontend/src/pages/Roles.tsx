@@ -147,14 +147,14 @@ function RoleDetail({
           <button
             onClick={() => setDeleteOpen(true)}
             aria-label={`Delete role ${role.name}`}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Trash2 className="h-4 w-4" />
           </button>
           <button
             onClick={onClose}
             aria-label="Close role details"
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X className="h-4 w-4" />
           </button>
@@ -283,6 +283,7 @@ function CreateRoleDialog({
           {error && (
             <div
               role="alert"
+              aria-live="assertive"
               className="mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
             >
               {error}
@@ -475,7 +476,7 @@ export default function Roles() {
               <input
                 id="roles-search"
                 type="search"
-                placeholder="Search roles..."
+                placeholder="Search roles…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 autoComplete="off"

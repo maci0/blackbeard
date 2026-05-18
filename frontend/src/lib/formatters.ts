@@ -3,12 +3,17 @@ import { capitalize } from './utils'
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
   const d = new Date(dateStr)
-  return d.toLocaleString(undefined, {
+  const now = new Date()
+  const options: Intl.DateTimeFormatOptions = {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  })
+  }
+  if (d.getFullYear() !== now.getFullYear()) {
+    options.year = 'numeric'
+  }
+  return d.toLocaleString(undefined, options)
 }
 
 export function getDuration(

@@ -36,6 +36,10 @@ _STATUS_COLORS: dict[str, str] = {
     "pending": "cyan",
 }
 
+_json_opt = click.option(
+    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
+)
+
 
 def _require_api_key(ctx: click.Context) -> str:
     """Get API key from context, raising if not set."""
@@ -52,8 +56,9 @@ def _validate_name(name: str) -> None:
     """Exit with code 2 if *name* doesn't match the resource naming rules."""
     if not re.fullmatch(NAME_PATTERN, name):
         console.print(
-            f"[red bold]Error:[/] Invalid resource name {name!r}."
-            " Names must be lowercase alphanumeric with hyphens."
+            f"[red bold]Error:[/] Invalid resource name {name!r}.\n"
+            "  Names must start with a lowercase letter or digit and"
+            " contain only lowercase letters, digits, and hyphens."
         )
         raise SystemExit(2)
 
@@ -63,7 +68,7 @@ def _warn_unused_interval(ctx: click.Context, watch: bool, interval: int, cmd_hi
     from_cli = ctx.get_parameter_source("interval") == click.core.ParameterSource.COMMANDLINE
     if not watch and from_cli:
         console.print(
-            f"[yellow]Warning:[/] --interval/-i has no effect without --wait."
+            f"[yellow]Warning:[/] --interval/-i has no effect without --wait/--watch/-w."
             f" Try: [bold]{cmd_hint} -w -i {interval}[/]"
         )
 
@@ -202,6 +207,8 @@ def validate_resources(
     context_settings={"help_option_names": ["-h", "--help"]},
     epilog="""\b
 Common workflows:
+  blackbeard health                           # liveness check (no auth)
+  blackbeard health --ready                   # full readiness check
   blackbeard validate -f crew.yaml            # check resources offline
   blackbeard apply -f crew.yaml               # create/update resources
   blackbeard list Agent                       # list all agents
@@ -209,7 +216,7 @@ Common workflows:
   blackbeard kickoff research-crew --wait     # run a crew and wait
   blackbeard status <execution-id> -w         # watch execution progress
   blackbeard delete Agent my-agent            # remove a resource
-"""
+""",
 )
 @click.version_option(version=pkg_version("blackbeard"))
 @click.option(
@@ -218,6 +225,7 @@ Common workflows:
     default="http://localhost:8000",
     envvar="BLACKBEARD_SERVER",
     show_default=True,
+    metavar="URL",
     help="Blackbeard API server URL (env: BLACKBEARD_SERVER)",
 )
 @click.option(
@@ -225,6 +233,7 @@ Common workflows:
     "-k",
     envvar="BLACKBEARD_API_KEY",
     required=False,
+    metavar="KEY",
     help="API key (env: BLACKBEARD_API_KEY)",
 )
 @click.option(
@@ -233,21 +242,27 @@ Common workflows:
     default="default",
     envvar="BLACKBEARD_NAMESPACE",
     show_default=True,
+    metavar="NAME",
     help="Resource namespace (env: BLACKBEARD_NAMESPACE)",
 )
 @click.option(
-    "--json",
-    "output_json",
-    is_flag=True,
-    default=False,
-    help="Output as JSON for scripting",
+    "--timeout",
+    "-t",
+    default=30,
+    show_default=True,
+    type=click.IntRange(1, 300),
+    envvar="BLACKBEARD_TIMEOUT",
+    metavar="SECONDS",
+    help="HTTP request timeout in seconds (env: BLACKBEARD_TIMEOUT)",
 )
+@_json_opt
 @click.pass_context
 def cli(
     ctx: click.Context,
     server: str,
     api_key: str | None,
     namespace: str,
+    timeout: int,
     output_json: bool,
 ) -> None:
     """Blackbeard — Agent Management Platform CLI."""
@@ -255,6 +270,7 @@ def cli(
     ctx.obj["server"] = server.rstrip("/")
     ctx.obj["api_key"] = api_key
     ctx.obj["namespace"] = namespace
+    ctx.obj["timeout"] = float(timeout)
     ctx.obj["json"] = output_json
 
 
@@ -273,9 +289,7 @@ Examples:
     default=False,
     help="Run full readiness check (database, cache, LiteLLM) instead of liveness",
 )
-@click.option(
-    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
-)
+@_json_opt
 @click.pass_context
 def health(ctx: click.Context, ready: bool, output_json: bool) -> None:
     """Check server health and component readiness (no API key required)."""
@@ -285,7 +299,7 @@ def health(ctx: click.Context, ready: bool, output_json: bool) -> None:
     url = f"{server}{endpoint}"
 
     try:
-        with httpx.Client(timeout=10.0) as client:
+        with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             response = client.get(url)
     except httpx.RequestError as exc:
         _handle_request_error(server, exc)
@@ -350,9 +364,7 @@ Examples:
     type=click.Path(exists=True),
     help="File or directory of YAML resources",
 )
-@click.option(
-    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
-)
+@_json_opt
 @click.pass_context
 def validate(ctx: click.Context, path: str, output_json: bool) -> None:
     """Validate YAML resource files offline (no server connection needed)."""
@@ -560,7 +572,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
             task = progress.add_task("Applying resources...", total=len(resources))
 
             total = len(resources)
-            with httpx.Client(timeout=30.0) as client:
+            with httpx.Client(timeout=ctx.obj["timeout"]) as client:
                 for idx, res in enumerate(resources, 1):
                     kind = res.get("kind", "")
                     name = res.get("metadata", {}).get("name", "?")
@@ -616,7 +628,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
     interrupted = len(results) < len(resources)
 
     if ctx.obj["json"]:
-        _output_json({"results": results, "interrupted": interrupted})
+        _output_json({"results": results, "total": len(resources), "interrupted": interrupted})
     else:
         table = Table(title="Apply Results")
         table.add_column("Status", width=3)
@@ -649,7 +661,9 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
             summary += f", [yellow]{skipped} skipped[/]"
         out.print(summary)
 
-    if interrupted or any(r["status"] == "error" for r in results):
+    if interrupted:
+        raise SystemExit(130)
+    if any(r["status"] == "error" for r in results):
         raise SystemExit(1)
 
 
@@ -663,12 +677,14 @@ Examples:
 )
 @click.argument("kind", type=click.Choice(sorted(ALL_KINDS), case_sensitive=False))
 @click.argument("name")
-@click.option(
-    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
-)
+@_json_opt
 @click.pass_context
 def get(ctx: click.Context, kind: str, name: str, output_json: bool) -> None:
-    """Get a single resource by kind and name."""
+    """Get a single resource by kind and name.
+
+    KIND is the resource type (e.g. Agent, Crew, Task).
+    NAME is the resource name (e.g. my-agent).
+    """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     _validate_name(name)
     server = ctx.obj["server"]
@@ -680,7 +696,7 @@ def get(ctx: click.Context, kind: str, name: str, output_json: bool) -> None:
     headers = {"X-API-Key": api_key}
 
     try:
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             response = client.get(url, headers=headers, params={"namespace": namespace})
     except httpx.RequestError as exc:
         _handle_request_error(server, exc)
@@ -738,16 +754,18 @@ Examples:
     default=100,
     show_default=True,
     type=click.IntRange(1, 1000),
+    metavar="N",
     help="Maximum number of results",
 )
-@click.option(
-    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
-)
+@_json_opt
 @click.pass_context
 def list_resources_cmd(
     ctx: click.Context, kind: str, labels: tuple[str, ...], limit: int, output_json: bool
 ) -> None:
-    """List resources of a given kind."""
+    """List resources of a given kind.
+
+    KIND is the resource type (e.g. Agent, Crew, Task).
+    """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
@@ -777,7 +795,7 @@ def list_resources_cmd(
     headers = {"X-API-Key": api_key}
 
     try:
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             response = client.get(url, headers=headers, params=params)
     except httpx.RequestError as exc:
         _handle_request_error(server, exc)
@@ -810,9 +828,9 @@ def list_resources_cmd(
         item_labels = meta.get("labels", {})
         label_str = ", ".join(f"{k}={v}" for k, v in item_labels.items()) if item_labels else "—"
         table.add_row(
-            meta.get("name", "?"),
-            meta.get("namespace", "?"),
-            str(item.get("version", "?")),
+            meta.get("name", "—"),
+            meta.get("namespace", "—"),
+            str(item.get("version", "—")),
             label_str,
         )
 
@@ -845,7 +863,11 @@ Examples:
 )
 @click.pass_context
 def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: bool) -> None:
-    """Delete a resource by kind and name."""
+    """Delete a resource by kind and name.
+
+    KIND is the resource type (e.g. Agent, Crew, Task).
+    NAME is the resource name (e.g. my-agent).
+    """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     _validate_name(name)
     server = ctx.obj["server"]
@@ -867,7 +889,7 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: boo
     headers = {"X-API-Key": api_key}
 
     try:
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             response = client.delete(url, headers=headers, params={"namespace": namespace})
     except httpx.RequestError as exc:
         _handle_request_error(server, exc)
@@ -908,7 +930,7 @@ Examples:
     "watch",
     is_flag=True,
     default=False,
-    help="Wait for execution to complete, polling status until done",
+    help="Poll until execution completes, fails, or is cancelled (Ctrl-C to stop)",
 )
 @click.option(
     "--interval",
@@ -916,11 +938,10 @@ Examples:
     default=2,
     show_default=True,
     type=click.IntRange(1, 60),
+    metavar="SECONDS",
     help="Polling interval in seconds (used with --wait)",
 )
-@click.option(
-    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
-)
+@_json_opt
 @click.pass_context
 def kickoff(
     ctx: click.Context,
@@ -955,8 +976,8 @@ def kickoff(
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
     namespace = ctx.obj["namespace"]
-
     prog = ctx.find_root().info_name or "blackbeard"
+
     _warn_unused_interval(ctx, watch, interval, f"{prog} kickoff {crew_name}")
 
     url = f"{server}/api/v1/crews/{crew_name}/kickoff"
@@ -965,7 +986,7 @@ def kickoff(
 
     with console.status("Submitting execution..."):
         try:
-            with httpx.Client(timeout=30.0) as client:
+            with httpx.Client(timeout=ctx.obj["timeout"]) as client:
                 response = client.post(
                     url,
                     json=body,
@@ -1008,7 +1029,6 @@ def kickoff(
             output_json=is_json,
         )
     else:
-        prog = ctx.find_root().info_name or "blackbeard"
         console.print(f"\nTrack with: [bold]{prog} status {execution_id} -w[/]")
 
 
@@ -1038,16 +1058,18 @@ Examples:
     default=2,
     show_default=True,
     type=click.IntRange(1, 60),
+    metavar="SECONDS",
     help="Polling interval in seconds (used with --wait)",
 )
-@click.option(
-    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
-)
+@_json_opt
 @click.pass_context
 def status(
     ctx: click.Context, execution_id: str, watch: bool, interval: int, output_json: bool
 ) -> None:
-    """Show execution status and details."""
+    """Show execution status and details.
+
+    EXECUTION_ID is the UUID returned by the kickoff command.
+    """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     api_key = _require_api_key(ctx)
@@ -1063,7 +1085,7 @@ def status(
     def _status_color(s: str) -> str:
         return _STATUS_COLORS.get(s, "dim")
 
-    with httpx.Client(timeout=30.0) as client:
+    with httpx.Client(timeout=ctx.obj["timeout"]) as client:
 
         def fetch() -> dict[str, Any]:
             try:
@@ -1164,7 +1186,6 @@ def status(
             render(data)
             current = data.get("status", "")
             if current and current not in terminal_states:
-                prog = ctx.find_root().info_name or "blackbeard"
                 console.print(f"\n[dim]Still running. Watch: {prog} status {execution_id} -w[/]")
             elif current in ("failed", "cancelled"):
                 raise SystemExit(1)
@@ -1192,10 +1213,11 @@ def status(
                 if current_status in terminal_states:
                     break
 
-                time.sleep(interval)
+                with console.status(f"[dim]Polling in {interval}s…[/]"):
+                    time.sleep(interval)
         except KeyboardInterrupt:
             console.print("\n[dim]Stopped watching.[/]")
-            return
+            raise SystemExit(130) from None
 
         if current_status in ("failed", "cancelled"):
             raise SystemExit(1)

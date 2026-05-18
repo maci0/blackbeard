@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { api } from '@/api/client'
-import type { Execution, ExecutionEvent, ExecutionTask } from '@/lib/types'
-export type { Execution, ExecutionEvent, ExecutionTask }
+import type { Execution, ExecutionEvent } from '@/lib/types'
+
+const MAX_EVENTS = 2000
 
 interface ExecutionState {
   executions: Execution[]
@@ -132,7 +133,11 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       const lastSeq = state.events.at(-1)?.sequence ?? -1
       const unique = newEvents.filter((e) => e.sequence > lastSeq)
       if (unique.length === 0) return state
-      return { events: state.events.concat(unique) }
+      let merged = state.events.concat(unique)
+      if (merged.length > MAX_EVENTS) {
+        merged = merged.slice(merged.length - MAX_EVENTS)
+      }
+      return { events: merged }
     })
   },
 

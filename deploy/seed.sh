@@ -5,8 +5,9 @@ usage() {
   cat <<'EOF'
 Usage: bash deploy/seed.sh [OPTIONS]
 
-Seed the Blackbeard database with an example research crew and common tools.
-Requires a running Blackbeard stack and Ollama with qwen3.6 pulled.
+Seed the Blackbeard database with RBAC roles, an example research crew,
+and common tools (builtin + MCP). Requires a running Blackbeard stack.
+Ollama with qwen3.6 is needed only to execute the seeded crew.
 
 Resources are created via POST — re-running will upsert (update existing
 resources and increment their version).
@@ -15,8 +16,8 @@ Options:
   --help, -h    Show this help
 
 Environment:
-  BLACKBEARD_SERVER       API base URL (default: http://localhost:8000)
-  BLACKBEARD_API_KEY   API key     (default: change-me-in-production)
+  BLACKBEARD_SERVER      API base URL (default: http://localhost:8000)
+  BLACKBEARD_API_KEY     API key     (default: change-me-in-production)
 
 Examples:
   bash deploy/seed.sh
@@ -48,18 +49,18 @@ CREATED=0
 seed() {
   local label="$1"
   shift
-  local body
-  if body=$(curl -sSf "$@" 2>&1); then
-    echo "  + $label"
-    CREATED=$((CREATED + 1))
-  else
-    echo "  x $label (failed)" >&2
-    # Show the API error response if non-empty, to aid debugging
-    if [ -n "$body" ]; then
-      echo "    $body" >&2
-    fi
-    ERRORS=$((ERRORS + 1))
-  fi
+  local resp http_code
+  resp=$(curl -sS -w '\n%{http_code}' "$@" 2>&1)
+  http_code=${resp##*$'\n'}
+  resp=${resp%$'\n'*}
+  case "$http_code" in
+    2??) echo "  + $label"; CREATED=$((CREATED + 1)) ;;
+    *)
+      echo "  x $label (HTTP $http_code)" >&2
+      [ -n "$resp" ] && echo "$resp" | sed 's/^/    /' >&2
+      ERRORS=$((ERRORS + 1))
+      ;;
+  esac
 }
 
 echo "Seeding Blackbeard at $API ..."
@@ -171,11 +172,12 @@ seed "Role/agent-read-only" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
 
 # ── Default admin user (DEBUG mode only) ────────────────────────────
 if [ "${DEBUG:-false}" = "true" ]; then
+  ADMIN_PASSWORD="${BLACKBEARD_ADMIN_PASSWORD:-$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")}"
   echo "  (DEBUG mode: creating default admin user)"
   admin_resp=$(curl -sSf -X POST "$API/api/v1/auth/register" \
     -H "Content-Type: application/json" \
-    -d '{"email": "admin@blackbeard.sh", "password": "Adm1nP@ss!", "display_name": "Admin"}' 2>&1) && \
-    echo "  + User/admin@blackbeard.sh" || \
+    -d "{\"email\": \"admin@blackbeard.sh\", \"password\": \"${ADMIN_PASSWORD}\", \"display_name\": \"Admin\"}" 2>&1) && \
+    { echo "  + User/admin@blackbeard.sh"; echo "    Admin password (stderr only): $ADMIN_PASSWORD" >&2; } || \
     echo "  ~ User/admin@blackbeard.sh (already exists or skipped)"
 fi
 

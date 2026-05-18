@@ -46,10 +46,30 @@ async def test_cors_preflight(client):
     assert "X-API-Key" in response.headers.get("access-control-allow-headers", "")
 
 
+async def test_cors_disallows_unauthorized_origin(client):
+    """CORS preflight from an unauthorized origin should not reflect that origin."""
+    response = await client.options(
+        "/api/v1/agents",
+        headers={
+            "Origin": "https://evil.example.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    allow_origin = response.headers.get("access-control-allow-origin", "")
+    assert allow_origin != "https://evil.example.com", (
+        "CORS should not reflect an unauthorized origin"
+    )
+    assert allow_origin != "*", "CORS must not use wildcard — would allow any origin"
+
+
 async def test_docs_no_auth(client):
     """OpenAPI docs should not require auth."""
     response = await client.get("/docs")
-    assert response.status_code in (200, 307)  # 307 redirect is OK
+    assert response.status_code in (200, 307), (
+        f"OpenAPI docs returned unexpected status {response.status_code}"
+    )
+    if response.status_code == 200:
+        assert len(response.content) > 0, "Docs response should have content"
 
 
 async def test_error_no_secret_leak(client):
@@ -186,7 +206,7 @@ async def test_401_no_internal_path_leak(client):
     assert response.status_code == 401
     body_str = str(response.json())
     for forbidden in ("/Users/", "/home/", "Traceback", 'File "'):
-        assert forbidden not in body_str
+        assert forbidden not in body_str, f"401 response leaks internal detail: {forbidden!r}"
 
 
 # ---------------------------------------------------------------------------

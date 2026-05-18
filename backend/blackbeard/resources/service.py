@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import defer
+from sqlalchemy.orm import defer, load_only
 
 from blackbeard.kinds import ResourceKind
 from blackbeard.logging_config import request_id_var
@@ -192,20 +192,33 @@ class ResourceService:
         if labels:
             filters.append(Resource.labels.contains(labels))
 
-        query = select(Resource).options(defer(Resource.raw_yaml)).where(*filters)
-        count_query = select(func.count(Resource.id)).where(*filters)
-
         query = (
-            query.order_by(Resource.kind, Resource.namespace, Resource.name)
+            select(Resource)
+            .options(
+                load_only(
+                    Resource.id,
+                    Resource.kind,
+                    Resource.name,
+                    Resource.namespace,
+                    Resource.labels,
+                    Resource.spec,
+                    Resource.version,
+                    Resource.created_at,
+                    Resource.updated_at,
+                )
+            )
+            .where(*filters)
+            .order_by(Resource.kind, Resource.namespace, Resource.name)
             .limit(limit)
             .offset(offset)
         )
         result = await self.session.execute(query)
         items = list(result.scalars().all())
 
-        if len(items) < limit:
+        if len(items) < limit and (len(items) > 0 or offset == 0):
             total = offset + len(items)
         else:
+            count_query = select(func.count(Resource.id)).where(*filters)
             total = (await self.session.execute(count_query)).scalar() or 0
 
         return items, total
@@ -333,11 +346,13 @@ class ResourceService:
     ) -> Resource | None:
         """Look up a resource by its unique identity."""
         result = await self.session.execute(
-            select(Resource).where(
+            select(Resource)
+            .where(
                 Resource.kind == kind,
                 Resource.name == name,
                 Resource.namespace == namespace,
             )
+            .options(defer(Resource.raw_yaml))
         )
         return result.scalar_one_or_none()
 

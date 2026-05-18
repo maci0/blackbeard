@@ -11,40 +11,47 @@ from blackbeard.config import settings
 
 _ALGORITHM = "HS256"
 _ISSUER = "blackbeard"
+_AUDIENCE = "blackbeard"
+
+_jwt_secret: str | None = None
+
+
+def _get_secret() -> str:
+    global _jwt_secret
+    if _jwt_secret is None:
+        _jwt_secret = settings.jwt_secret.get_secret_value()
+    return _jwt_secret
+
+
+def _create_token(token_type: str, expires_delta: timedelta, **extra: Any) -> str:
+    now = datetime.now(UTC)
+    payload: dict[str, Any] = {
+        **extra,
+        "type": token_type,
+        "iss": _ISSUER,
+        "aud": _AUDIENCE,
+        "iat": now,
+        "exp": now + expires_delta,
+    }
+    return jwt.encode(payload, _get_secret(), algorithm=_ALGORITHM)
 
 
 def create_access_token(user_id: str, email: str) -> str:
     """Create a short-lived JWT access token (default 15 minutes)."""
-    now = datetime.now(UTC)
-    payload: dict[str, Any] = {
-        "sub": user_id,
-        "email": email,
-        "type": "access",
-        "iss": _ISSUER,
-        "iat": now,
-        "exp": now + timedelta(minutes=settings.jwt_access_token_expire_minutes),
-    }
-    return jwt.encode(
-        payload,
-        settings.jwt_secret.get_secret_value(),
-        algorithm=_ALGORITHM,
+    return _create_token(
+        "access",
+        timedelta(minutes=settings.jwt_access_token_expire_minutes),
+        sub=user_id,
+        email=email,
     )
 
 
 def create_refresh_token(user_id: str) -> str:
     """Create a long-lived JWT refresh token (default 7 days)."""
-    now = datetime.now(UTC)
-    payload: dict[str, Any] = {
-        "sub": user_id,
-        "type": "refresh",
-        "iss": _ISSUER,
-        "iat": now,
-        "exp": now + timedelta(days=settings.jwt_refresh_token_expire_days),
-    }
-    return jwt.encode(
-        payload,
-        settings.jwt_secret.get_secret_value(),
-        algorithm=_ALGORITHM,
+    return _create_token(
+        "refresh",
+        timedelta(days=settings.jwt_refresh_token_expire_days),
+        sub=user_id,
     )
 
 
@@ -58,7 +65,9 @@ def decode_token(token: str) -> dict[str, Any]:
     """
     return jwt.decode(
         token,
-        settings.jwt_secret.get_secret_value(),
+        _get_secret(),
         algorithms=[_ALGORITHM],
         issuer=_ISSUER,
+        audience=_AUDIENCE,
+        options={"require": ["exp", "iss", "sub", "aud", "type"]},
     )

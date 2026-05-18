@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Play, ChevronRight, RefreshCw } from 'lucide-react'
 import { useDocumentTitle, usePolling } from '@/lib/hooks'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
+import { useShallow } from 'zustand/react/shallow'
 import { useExecutionStore } from '@/stores/executionStore'
 import { TERMINAL_STATUSES } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -12,19 +13,24 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { formatDate, getDuration, formatCost } from '@/lib/formatters'
 
+const TABLE_HEADERS = ['Status', 'Crew', 'Tokens', 'Cost', 'Created', 'Duration'] as const
+
 export default function Executions() {
   const navigate = useNavigate()
-  const executions = useExecutionStore((s) => s.executions)
-  const loading = useExecutionStore((s) => s.loading)
-  const error = useExecutionStore((s) => s.error)
-  const fetchExecutions = useExecutionStore((s) => s.fetchExecutions)
+  const { executions, loading, error, fetchExecutions } = useExecutionStore(
+    useShallow((s) => ({
+      executions: s.executions,
+      loading: s.loading,
+      error: s.error,
+      fetchExecutions: s.fetchExecutions,
+    })),
+  )
 
   const loadExecutions = () => void fetchExecutions()
 
   useEffect(() => {
-    loadExecutions()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
-  }, [])
+    void fetchExecutions()
+  }, [fetchExecutions])
 
   const hasRunning = useMemo(
     () => executions.some((e) => !TERMINAL_STATUSES.has(e.status)),
@@ -104,7 +110,7 @@ export default function Executions() {
               <table className="w-full text-sm" aria-label="Executions">
                 <thead>
                   <tr className="border-b bg-muted/60">
-                    {['Status', 'Crew', 'Tokens', 'Cost', 'Created', 'Duration'].map((h) => (
+                    {TABLE_HEADERS.map((h) => (
                       <th
                         key={h}
                         scope="col"
@@ -162,7 +168,14 @@ export default function Executions() {
                         {formatDate(execution.created_at)}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                        {getDuration(execution.started_at, execution.completed_at)}
+                        {execution.started_at ? (
+                          getDuration(execution.started_at, execution.completed_at)
+                        ) : (
+                          <>
+                            <span aria-hidden="true">—</span>
+                            <span className="sr-only">Not started</span>
+                          </>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <ChevronRight

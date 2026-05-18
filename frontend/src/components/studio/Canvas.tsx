@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import {
   ReactFlow,
   Background,
@@ -42,8 +42,8 @@ const PRO_OPTIONS = { hideAttribution: true } as const
 const DELETE_KEY_CODE = ['Delete', 'Backspace']
 const MINIMAP_STYLE = { width: 140, height: 90 } as const
 
-function pickEdgeType(nodeMap: Map<string, Node>, connection: Connection): string {
-  const sourceNode = connection.source ? nodeMap.get(connection.source) : undefined
+function pickEdgeType(nodes: Node[], connection: Connection): string {
+  const sourceNode = connection.source ? nodes.find((n) => n.id === connection.source) : undefined
   if (sourceNode?.type === 'tool') return 'toolassign'
   return 'dataflow'
 }
@@ -81,8 +81,8 @@ function CanvasInner() {
   const onConnect = useStudioStore((s) => s.onConnect)
   const addNode = useStudioStore((s) => s.addNode)
   const setSelectedNode = useStudioStore((s) => s.setSelectedNode)
-  const nodeMapRef = useRef(new Map<string, Node>())
-  nodeMapRef.current = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes])
+  const nodesRef = useRef(nodes)
+  nodesRef.current = nodes
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -111,7 +111,7 @@ function CanvasInner() {
 
   const handleConnect = useCallback(
     (connection: Connection) => {
-      const edgeType = pickEdgeType(nodeMapRef.current, connection)
+      const edgeType = pickEdgeType(nodesRef.current, connection)
       const enriched: Edge = {
         ...connection,
         id: `${connection.source}-${connection.target}-${crypto.randomUUID()}`,

@@ -110,6 +110,8 @@ def test_build_agent(mock_agent_cls, mock_llm_cls):
     assert kwargs["backstory"] == "Expert"
     assert kwargs["verbose"] is True
     assert kwargs["allow_delegation"] is False
+    mock_llm_cls.assert_not_called()
+    assert "llm" not in kwargs
 
 
 @patch("blackbeard.engine.loader.LLM")

@@ -3,8 +3,6 @@ import { api } from '@/api/client'
 import { KIND_TO_PLURAL, ALL_PLURALS } from '@/lib/kinds'
 import type { Resource } from '@/lib/types'
 
-export type { Resource }
-
 interface ResourceState {
   resources: Record<string, Resource[]>
   loadingKinds: Set<string>

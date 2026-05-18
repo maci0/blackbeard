@@ -12,35 +12,56 @@ interface ToastState {
   error: (message: string) => void
   info: (message: string) => void
   dismiss: (id: string) => void
+  pause: (id: string) => void
+  resume: (id: string) => void
 }
 
 let counter = 0
 
-export const useToastStore = create<ToastState>((set) => ({
+const DURATIONS: Record<Toast['type'], number> = {
+  success: 5000,
+  error: 15000,
+  info: 5000,
+}
+
+const timers = new Map<
+  string,
+  { timeoutId: ReturnType<typeof setTimeout>; remaining: number; startedAt: number }
+>()
+
+function dismissToast(id: string) {
+  const timer = timers.get(id)
+  if (timer) clearTimeout(timer.timeoutId)
+  timers.delete(id)
+  useToastStore.setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
+}
+
+function startTimer(id: string, duration: number) {
+  const timeoutId = setTimeout(() => dismissToast(id), duration)
+  timers.set(id, { timeoutId, remaining: duration, startedAt: Date.now() })
+}
+
+function addToast(type: Toast['type'], message: string) {
+  const id = `toast-${++counter}-${Date.now()}`
+  useToastStore.setState((s) => ({ toasts: [...s.toasts, { id, type, message }] }))
+  startTimer(id, DURATIONS[type])
+}
+
+export const useToastStore = create<ToastState>(() => ({
   toasts: [],
-
-  success: (message: string) => {
-    const id = `toast-${++counter}-${Date.now()}`
-    set((s) => ({ toasts: [...s.toasts, { id, type: 'success', message }] }))
-    setTimeout(() => {
-      set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
-    }, 4000)
+  success: (message: string) => addToast('success', message),
+  error: (message: string) => addToast('error', message),
+  info: (message: string) => addToast('info', message),
+  dismiss: (id: string) => dismissToast(id),
+  pause: (id: string) => {
+    const timer = timers.get(id)
+    if (!timer) return
+    clearTimeout(timer.timeoutId)
+    timer.remaining = Math.max(timer.remaining - (Date.now() - timer.startedAt), 0)
   },
-
-  error: (message: string) => {
-    const id = `toast-${++counter}-${Date.now()}`
-    set((s) => ({ toasts: [...s.toasts, { id, type: 'error', message }] }))
-  },
-
-  info: (message: string) => {
-    const id = `toast-${++counter}-${Date.now()}`
-    set((s) => ({ toasts: [...s.toasts, { id, type: 'info', message }] }))
-    setTimeout(() => {
-      set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
-    }, 4000)
-  },
-
-  dismiss: (id: string) => {
-    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
+  resume: (id: string) => {
+    const timer = timers.get(id)
+    if (!timer || timer.remaining <= 0) return
+    startTimer(id, timer.remaining)
   },
 }))

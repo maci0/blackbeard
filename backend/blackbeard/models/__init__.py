@@ -8,6 +8,7 @@ ORM models:
 API schemas (Pydantic):
     resource_schemas — request/response models for resource endpoints
     execution_schemas — request/response models for execution endpoints
+    user_schemas — request/response models for user endpoints
 """
 
 from __future__ import annotations

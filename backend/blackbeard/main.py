@@ -14,11 +14,9 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-import blackbeard.models.execution  # register execution-related tables
-import blackbeard.models.resource  # register Resource/ResourceRef tables
-import blackbeard.models.user  # noqa: F401 — register User/Group/GroupMember tables
 from blackbeard import __version__
 from blackbeard.api.auth import router as auth_router
 from blackbeard.api.chat import router as chat_router
@@ -32,6 +30,7 @@ from blackbeard.api.middleware import (
     http_exception_handler,
     security_headers_middleware,
     set_api_key,
+    validation_exception_handler,
 )
 from blackbeard.api.resources import router as resources_router
 from blackbeard.api.users import router as users_router
@@ -256,7 +255,8 @@ app.add_middleware(
     expose_headers=["X-Request-Id"],
 )
 
-# Middleware stack (LIFO order — last registered runs first):
+# HTTP middleware stack (LIFO order — last registered runs first).
+# CORSMiddleware (above) wraps all of these as the outermost layer.
 #   1. security_headers — always runs, adds headers to every response
 #   2. api_key_middleware — authenticate, set request ID
 #   3. body_size_limiter — reject oversized bodies (innermost)
@@ -264,6 +264,7 @@ app.middleware("http")(body_size_limiter)
 app.middleware("http")(api_key_middleware)
 app.middleware("http")(security_headers_middleware)
 
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(Exception, global_exception_handler)
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import logging
 import re
+import time
 from typing import TYPE_CHECKING, Any
 
 __all__ = [
@@ -29,7 +30,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _SAFE_FILENAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
-_PATH_TRAVERSAL_INDICATORS = ("..", "~", "\\")
+_PATH_TRAVERSAL_INDICATORS = ("..", "~", "\\", "\x00")
 _SENSITIVE_PATH_PREFIXES = ("/etc/", "/proc/", "/sys/", "/dev/", "/var/run/")
 
 _SAFE_BUILTIN_NAME = re.compile(r"^[A-Z][a-zA-Z0-9]+$")
@@ -90,6 +91,7 @@ class ResourceLoader:
         self._tool_cache: dict[str, Any] = {}
         self._tools_loaded = 0
         self._tools_skipped = 0
+        self._discovery_tools_cache: dict[str, list[Any]] = {}
 
     def _resolve_ref(self, ref_str: str) -> Resource:
         """Resolve a ref string to a Resource object."""
@@ -415,6 +417,19 @@ class ResourceLoader:
 
         agent = Agent(**agent_kwargs)
         self._agent_cache[ref_or_name] = agent
+        logger.info(
+            "Agent built: %s tools=%d llm=%s",
+            resource.name,
+            len(agent_kwargs.get("tools", [])),
+            bool(llm_ref),
+            extra={
+                "event": "agent_built",
+                "agent_name": resource.name,
+                "tool_count": len(agent_kwargs.get("tools", [])),
+                "has_llm": bool(llm_ref),
+                "has_memory": bool(agent_kwargs.get("memory")),
+            },
+        )
         return agent
 
     def build_task(self, ref_or_name: str) -> Task:
@@ -454,11 +469,15 @@ class ResourceLoader:
         return task
 
     def _build_discovery_tools(self, namespace: str) -> list[Any]:
-        """Build the JIT discovery meta-tools for the given namespace."""
+        """Build the JIT discovery meta-tools for the given namespace (cached per loader)."""
+        cached = self._discovery_tools_cache.get(namespace)
+        if cached is not None:
+            return cached
+
         from blackbeard.engine.discovery_tools import GetToolTool, SearchToolsTool
 
         api_key = settings.blackbeard_api_key.get_secret_value()
-        return [
+        tools = [
             SearchToolsTool(
                 api_url=_self_api_url(),
                 api_key=api_key,
@@ -470,6 +489,8 @@ class ResourceLoader:
                 namespace=namespace,
             ),
         ]
+        self._discovery_tools_cache[namespace] = tools
+        return tools
 
     def _inject_discovery_tools(
         self,
@@ -506,6 +527,7 @@ class ResourceLoader:
         This is the main entry point — resolves all agents, tasks, and their
         dependencies recursively.
         """
+        t0 = time.monotonic()
         crew_key = f"Crew/{crew_name}"
         resource = self._resources.get(crew_key)
         if resource is None:
@@ -560,14 +582,16 @@ class ResourceLoader:
             crew_kwargs["manager_llm"] = self.build_llm(manager_llm_ref)
 
         crew = Crew(**crew_kwargs)
+        build_ms = round((time.monotonic() - t0) * 1000, 1)
         logger.info(
-            "Crew built: %s agents=%d tasks=%d tools=%d skipped=%d process=%s",
+            "Crew built: %s agents=%d tasks=%d tools=%d skipped=%d process=%s (%.0fms)",
             crew_name,
             len(agents),
             len(tasks),
             self._tools_loaded,
             self._tools_skipped,
             process_str,
+            build_ms,
             extra={
                 "event": "crew_built",
                 "crew_name": crew_name,
@@ -576,6 +600,7 @@ class ResourceLoader:
                 "tools_loaded": self._tools_loaded,
                 "tools_skipped": self._tools_skipped,
                 "crew_process": process_str,
+                "build_ms": build_ms,
             },
         )
         return crew

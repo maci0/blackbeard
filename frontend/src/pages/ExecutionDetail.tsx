@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState, useMemo, useRef } from 'react'
+import { useEffect, useCallback, useState, useMemo, useRef, memo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   XCircle,
@@ -13,13 +13,10 @@ import {
 } from 'lucide-react'
 import { useDocumentTitle, usePolling } from '@/lib/hooks'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
-import {
-  useExecutionStore,
-  type Execution,
-  type ExecutionTask,
-  type ExecutionEvent,
-} from '@/stores/executionStore'
+import { useShallow } from 'zustand/react/shallow'
+import { useExecutionStore } from '@/stores/executionStore'
 import { TERMINAL_STATUSES } from '@/lib/types'
+import type { Execution, ExecutionTask, ExecutionEvent } from '@/lib/types'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { statusLabel } from '@/lib/formatters'
 import { Spinner } from '@/components/ui/Spinner'
@@ -60,7 +57,7 @@ function SummaryCard({
         <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
       <div className="min-w-0">
-        <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {label}
         </p>
         <p className="mt-0.5 text-xl font-bold tabular-nums">
@@ -83,7 +80,7 @@ function SummaryCard({
 /* Task row                                                            */
 /* ------------------------------------------------------------------ */
 
-function TaskRow({ task, index }: { task: ExecutionTask; index: number }) {
+const TaskRow = memo(function TaskRow({ task, index }: { task: ExecutionTask; index: number }) {
   const [expanded, setExpanded] = useState(false)
   const needsExpand = (task.output?.split('\n').length ?? 0) > 4 || (task.output?.length ?? 0) > 400
 
@@ -94,7 +91,9 @@ function TaskRow({ task, index }: { task: ExecutionTask; index: number }) {
           {index + 1}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{task.task_name}</p>
+          <p className="truncate text-sm font-medium" title={task.task_name}>
+            {task.task_name}
+          </p>
           {task.agent_name && (
             <p className="mt-0.5 text-xs text-muted-foreground">
               Agent: <span className="font-medium">{task.agent_name}</span>
@@ -140,7 +139,7 @@ function TaskRow({ task, index }: { task: ExecutionTask; index: number }) {
       )}
     </div>
   )
-}
+})
 
 /* ------------------------------------------------------------------ */
 /* Event log                                                           */
@@ -157,14 +156,15 @@ const EVENT_COLORS: Record<string, string> = {
   llm_completed: 'text-violet-400',
 }
 
+const eventTimeFmt = new Intl.DateTimeFormat('en-US', {
+  hour12: false,
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+})
+
 function formatEventTime(timestamp: string): string {
-  const d = new Date(timestamp)
-  return d.toLocaleTimeString('en-US', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
+  return eventTimeFmt.format(new Date(timestamp))
 }
 
 function str(v: unknown, fallback = 'unknown'): string {
@@ -195,22 +195,39 @@ function formatEventMessage(event: ExecutionEvent): string {
   }
 }
 
-function EventLog({ events }: { events: ExecutionEvent[] }) {
+const EventRow = memo(function EventRow({ event }: { event: ExecutionEvent }) {
+  return (
+    <div className="flex gap-2">
+      <span className="shrink-0 text-gray-400">[{formatEventTime(event.timestamp)}]</span>
+      <span className={cn('break-all', EVENT_COLORS[event.event_type] ?? 'text-gray-400')}>
+        {formatEventMessage(event)}
+      </span>
+    </div>
+  )
+})
+
+const EventLog = memo(function EventLog({ events }: { events: ExecutionEvent[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
+  const rafRef = useRef(0)
 
   useEffect(() => {
     if (autoScroll && containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight
+      cancelAnimationFrame(rafRef.current)
+      const el = containerRef.current
+      rafRef.current = requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight
+      })
     }
   }, [events.length, autoScroll])
 
-  const handleScroll = () => {
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), [])
+
+  const handleScroll = useCallback(() => {
     if (!containerRef.current) return
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current
-    // If user scrolled up more than 40px from bottom, disable auto-scroll
     setAutoScroll(scrollHeight - scrollTop - clientHeight < 40)
-  }
+  }, [])
 
   if (events.length === 0) return null
 
@@ -230,18 +247,13 @@ function EventLog({ events }: { events: ExecutionEvent[] }) {
       >
         <div className="space-y-0.5 font-mono text-xs leading-relaxed">
           {events.map((event) => (
-            <div key={event.sequence} className="flex gap-2">
-              <span className="shrink-0 text-gray-400">[{formatEventTime(event.timestamp)}]</span>
-              <span className={cn('break-all', EVENT_COLORS[event.event_type] ?? 'text-gray-400')}>
-                {formatEventMessage(event)}
-              </span>
-            </div>
+            <EventRow key={event.sequence} event={event} />
           ))}
         </div>
       </div>
     </div>
   )
-}
+})
 
 /* ------------------------------------------------------------------ */
 /* Spend section                                                       */
@@ -343,18 +355,35 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
 
 export default function ExecutionDetail() {
   const { id = '' } = useParams<{ id: string }>()
-  const currentExecution = useExecutionStore((s) => s.currentExecution)
-  const loading = useExecutionStore((s) => s.loading)
-  const error = useExecutionStore((s) => s.error)
-  const events = useExecutionStore((s) => s.events)
-  const spendData = useExecutionStore((s) => s.spendData)
-  const fetchExecution = useExecutionStore((s) => s.fetchExecution)
-  const cancelExecution = useExecutionStore((s) => s.cancelExecution)
-  const pollExecution = useExecutionStore((s) => s.pollExecution)
-  const addEvents = useExecutionStore((s) => s.addEvents)
-  const clearEvents = useExecutionStore((s) => s.clearEvents)
-  const fetchEvents = useExecutionStore((s) => s.fetchEvents)
-  const fetchSpend = useExecutionStore((s) => s.fetchSpend)
+  const {
+    currentExecution,
+    loading,
+    error,
+    events,
+    spendData,
+    fetchExecution,
+    cancelExecution,
+    pollExecution,
+    addEvents,
+    clearEvents,
+    fetchEvents,
+    fetchSpend,
+  } = useExecutionStore(
+    useShallow((s) => ({
+      currentExecution: s.currentExecution,
+      loading: s.loading,
+      error: s.error,
+      events: s.events,
+      spendData: s.spendData,
+      fetchExecution: s.fetchExecution,
+      cancelExecution: s.cancelExecution,
+      pollExecution: s.pollExecution,
+      addEvents: s.addEvents,
+      clearEvents: s.clearEvents,
+      fetchEvents: s.fetchEvents,
+      fetchSpend: s.fetchSpend,
+    })),
+  )
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
@@ -367,13 +396,7 @@ export default function ExecutionDetail() {
   // Initial load + clear events
   useEffect(() => {
     clearEvents()
-    let cancelled = false
-    void fetchExecution(id).then(() => {
-      if (cancelled) return
-    })
-    return () => {
-      cancelled = true
-    }
+    void fetchExecution(id)
   }, [id, fetchExecution, clearEvents])
 
   const isActive = currentExecution ? !TERMINAL_STATUSES.has(currentExecution.status) : false

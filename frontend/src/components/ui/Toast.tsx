@@ -19,6 +19,8 @@ const STYLE_MAP = {
 
 function ToastItem({ toast }: { toast: Toast }) {
   const dismiss = useToastStore((s) => s.dismiss)
+  const pause = useToastStore((s) => s.pause)
+  const resume = useToastStore((s) => s.resume)
   const Icon = ICON_MAP[toast.type]
   const ref = useRef<HTMLDivElement>(null)
 
@@ -38,8 +40,12 @@ function ToastItem({ toast }: { toast: Toast }) {
       ref={ref}
       role={toast.type === 'error' ? 'alert' : 'status'}
       aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+      onMouseEnter={() => pause(toast.id)}
+      onMouseLeave={() => resume(toast.id)}
+      onFocus={() => pause(toast.id)}
+      onBlur={() => resume(toast.id)}
       className={cn(
-        'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border p-4 shadow-lg transition-all duration-300 ease-out',
+        'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border p-4 shadow-lg transition-all duration-300 ease-out motion-reduce:transition-none',
         'translate-x-full opacity-0',
         STYLE_MAP[toast.type],
       )}
@@ -60,10 +66,9 @@ function ToastItem({ toast }: { toast: Toast }) {
 export function ToastContainer() {
   const toasts = useToastStore((s) => s.toasts)
 
-  if (toasts.length === 0) return null
-
   return (
     <div
+      role="region"
       aria-label="Notifications"
       className="pointer-events-none fixed bottom-4 right-4 z-[100] flex flex-col-reverse gap-2"
     >

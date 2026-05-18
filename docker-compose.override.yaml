@@ -5,3 +5,6 @@ services:
     volumes:
       - ./backend:/app
       - /app/.venv
+  ui:
+    environment:
+      NGINX_API_KEY_FALLBACK: ${BLACKBEARD_API_KEY:-change-me-in-production}

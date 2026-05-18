@@ -8,17 +8,17 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 
 | Feature | Scope for MVP |
 |---------|---------------|
-| Resource model | Agent, Task, Crew, Tool, LLMConnection (no Flow, KnowledgeSource, EnvironmentVariable yet) |
+| Resource model | Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding (no Flow, KnowledgeSource, EnvironmentVariable yet) |
 | Visual editor | Canvas with Agent/Task/Tool nodes, edges for context/tool assignment, property panel, YAML tab |
 | Execution | Sequential crews only (no hierarchical, no flows) |
 | LLM routing | LiteLLM Proxy with basic config generation from LLMConnection resources |
 | Sandbox | `none` and `wasm` tiers only (no Docker/MicroVM sandbox) |
-| Tools | Python tools (`BaseTool`) and WASM tools. No MCP, no OAuth integrations |
+| Tools | Python tools (`BaseTool`), WASM tools, and MCP tools (stdio + HTTP). No OAuth integrations |
 | Agent policy | Tool allowlists and LLM budget limits only. No network/FS/delegation policies |
 | Guardrails | Task-level guardrails (function-based and LLM-based) — wired through CrewAI's built-in guardrail system. No namespace or crew-level guardrails |
 | Observability | Execution event log + SSE streaming + LiteLLM dashboard for LLM request inspection |
 | API | REST CRUD for resources + kickoff/status endpoints. No gRPC, no webhooks |
-| Auth | Single API key configured via `BLACKBEARD_API_KEY` env var. No users, no SSO, no RBAC. All API requests require this key in `X-API-Key` header. |
+| Auth & RBAC | Built-in email/password auth with JWT tokens (access + refresh). User and Group models. Role and RoleBinding resource kinds with predefined roles (owner/admin/developer/operator/viewer/policy-admin + agent roles). Authorization middleware accepts both `X-API-Key` and `Authorization: Bearer <jwt>`. Visual RBAC editor (Roles, Users, RoleBindings). No SSO/OIDC, no SpiceDB, no OPA. |
 | CLI | `blackbeard apply`, `blackbeard validate`, `blackbeard kickoff`, `blackbeard status` |
 | Deployment | `docker compose up` only. No Helm, no Git deploy, no triggers |
 
@@ -26,9 +26,9 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 
 | Feature | Why deferred |
 |---------|-------------|
-| Ory Kratos/Hydra (auth, SSO) | Single-user MVP doesn't need auth |
-| SpiceDB (entity permissions) | No multi-user yet |
-| OPA (policy engine) | MVP policies are simple allowlists — in-process Python check is fine |
+| Ory Kratos/Hydra (SSO/OIDC) | Built-in auth covers MVP; SSO deferred |
+| SpiceDB (relationship-based AC) | Role-based RBAC covers MVP; entity-level permissions deferred |
+| OPA (policy-as-code) | MVP policies are simple allowlists — in-process Python check is fine |
 | Temporal (workflow orchestration) | Sequential crews don't need durable execution; in-process is fine |
 | Presidio (PII redaction) | Not critical for MVP; execution events are stored in own DB |
 | Infisical (secrets) | `.env` files are fine for MVP |

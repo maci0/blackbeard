@@ -7,6 +7,9 @@ Determines which sandbox tier to use for a tool based on:
 
 Tier ordering: none < wasm < docker < microvm
 Higher tier = more isolation. Policy floor promotes lower tiers upward.
+
+Only ``none`` and ``wasm`` are currently implemented; ``docker`` and
+``microvm`` fall back to ``wasm`` at runtime.
 """
 
 from __future__ import annotations

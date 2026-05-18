@@ -37,7 +37,7 @@ bun run test -- --run            # vitest (single run)
 ```bash
 ./run.sh                         # build + start all services (auto-detects docker compose / podman-compose)
 ./run.sh --detach                # background mode
-bash deploy/seed.sh              # seed DB with example crew using Ollama (requires running stack + ollama)
+bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and tools (requires running stack)
 ```
 
 ## Architecture
@@ -48,7 +48,7 @@ bash deploy/seed.sh              # seed DB with example crew using Ollama (requi
 
 **Execution flow**: `POST /api/v1/crews/{crew_name}/kickoff` → creates `Execution` record → submits to `ThreadPoolExecutor` → background thread builds CrewAI objects via `ResourceLoader` (resolves refs, builds LLM/Agent/Task/Crew) → calls `crew.kickoff(inputs=...)` → stores result + token usage. Each crew run gets its own thread with an isolated asyncio event loop to avoid blocking the FastAPI async loop.
 
-**Middleware stack** (LIFO): security headers → API key auth (hmac.compare_digest or JWT Bearer) + request ID → body size limiter (10MB). Auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`) and health checks are public (no auth required).
+**Middleware stack** (outermost → innermost): CORS (`CORSMiddleware` via `add_middleware`) → security headers → API key auth (hmac.compare_digest or JWT Bearer) + request ID → body size limiter (10MB). The three `app.middleware("http")` middlewares are registered LIFO in `main.py`. Auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`) and health checks are public (no auth required).
 
 **External services**: PostgreSQL (resources + executions), Valkey (cache), LiteLLM proxy (model routing to Vertex AI / OpenAI, with built-in spend/token/latency tracking).
 
@@ -64,13 +64,13 @@ bash deploy/seed.sh              # seed DB with example crew using Ollama (requi
 
 **docker-compose.yaml**: 5 services — api, ui, postgres (18), valkey (9), litellm. All containers use `no-new-privileges`, `cap_drop: ALL`. Postgres adds back CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID; Valkey adds back SETGID, SETUID.
 
-DB schema is managed in `entrypoint.sh`: first creates PostgreSQL enum types and runs `Base.metadata.create_all()` (for initial table creation), then runs `alembic upgrade head` if configured. `create_all` only creates new tables — it cannot alter existing ones — so Alembic handles schema evolution. If `alembic.ini` or `alembic/versions` doesn't exist, migrations are skipped.
+DB schema is managed in `backend/entrypoint.sh`: first creates PostgreSQL enum types and runs `Base.metadata.create_all()` (for initial table creation), then runs `alembic upgrade head` if configured. `create_all` only creates new tables — it cannot alter existing ones — so Alembic handles schema evolution. If `alembic.ini` or `alembic/versions` doesn't exist, migrations are skipped.
 
 **CI**: GitHub Actions — backend (ruff + mypy + pytest with in-memory SQLite) → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (parallel, cached).
 
 ## Conventions
 
-- **Python**: ruff lint + format, mypy strict, `from __future__ import annotations` in all modules, type annotations on all functions. Rules: `E F I N W UP B SIM ANN RUF PT C4 PIE T20 TCH`. Tests exempt from `ANN` and `E402`; API files exempt from `TCH` (FastAPI needs types at runtime) and `B008` (Depends in defaults).
+- **Python**: ruff lint + format, mypy strict, `from __future__ import annotations` in all modules, type annotations on all functions. Rules: `E F I N W UP B SIM ANN RUF PT C4 PIE T20 TCH`. Tests exempt from `ANN` and `E402`; API and auth files exempt from `TCH` (FastAPI needs types at runtime) and `B008` (Depends in defaults).
 - **TypeScript**: ESLint `recommendedTypeChecked` + Prettier. Strict mode, `noUncheckedIndexedAccess`. Use `void` for fire-and-forget promises in React (e.g., `onClick={() => void handleClick()}`).
 - **Imports**: Use `@/` path alias in frontend. Backend uses relative imports within packages.
 - **Resource names**: lowercase alphanumeric + hyphens (`^[a-z0-9][a-z0-9\-]*$`).

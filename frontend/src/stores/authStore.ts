@@ -12,22 +12,40 @@ export interface User {
 interface AuthState {
   user: User | null
   token: string | null
+  refreshToken: string | null
   loading: boolean
   error: string | null
 
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, displayName: string) => Promise<void>
   logout: () => void
-  refreshToken: () => Promise<void>
+  refresh: () => Promise<void>
   fetchMe: () => Promise<void>
   hydrate: () => void
 }
 
 const TOKEN_KEY = 'blackbeard_token'
+const REFRESH_KEY = 'blackbeard_refresh_token'
+
+function applyAuthResult(
+  result: { access_token: string; refresh_token: string; user: User },
+  set: (state: Partial<AuthState>) => void,
+) {
+  localStorage.setItem(TOKEN_KEY, result.access_token)
+  localStorage.setItem(REFRESH_KEY, result.refresh_token)
+  api.setToken(result.access_token)
+  set({
+    token: result.access_token,
+    refreshToken: result.refresh_token,
+    user: result.user,
+    loading: false,
+  })
+}
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
+  refreshToken: null,
   loading: false,
   error: null,
 
@@ -37,18 +55,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       api.setToken(stored)
       set({ token: stored })
     }
+    const storedRefresh = localStorage.getItem(REFRESH_KEY)
+    if (storedRefresh) {
+      set({ refreshToken: storedRefresh })
+    }
   },
 
   login: async (email: string, password: string) => {
     set({ loading: true, error: null })
     try {
-      const result = await api.post<{ access_token: string; user: User }>('/api/v1/auth/login', {
-        email,
-        password,
-      })
-      localStorage.setItem(TOKEN_KEY, result.access_token)
-      api.setToken(result.access_token)
-      set({ token: result.access_token, user: result.user, loading: false })
+      const result = await api.post<{ access_token: string; refresh_token: string; user: User }>(
+        '/api/v1/auth/login',
+        { email, password },
+      )
+      applyAuthResult(result, set)
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Login failed'
       set({ error: message, loading: false })
@@ -59,14 +79,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (email: string, password: string, displayName: string) => {
     set({ loading: true, error: null })
     try {
-      const result = await api.post<{ access_token: string; user: User }>('/api/v1/auth/register', {
-        email,
-        password,
-        display_name: displayName,
-      })
-      localStorage.setItem(TOKEN_KEY, result.access_token)
-      api.setToken(result.access_token)
-      set({ token: result.access_token, user: result.user, loading: false })
+      const result = await api.post<{ access_token: string; refresh_token: string; user: User }>(
+        '/api/v1/auth/register',
+        { email, password, display_name: displayName },
+      )
+      applyAuthResult(result, set)
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Registration failed'
       set({ error: message, loading: false })
@@ -76,13 +93,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(REFRESH_KEY)
     api.setToken('')
-    set({ user: null, token: null, error: null })
+    set({ user: null, token: null, refreshToken: null, error: null })
   },
 
-  refreshToken: async () => {
+  refresh: async () => {
+    const currentRefresh = get().refreshToken
+    if (!currentRefresh) {
+      get().logout()
+      return
+    }
     try {
-      const result = await api.post<{ access_token: string }>('/api/v1/auth/refresh', {})
+      const result = await api.post<{ access_token: string }>('/api/v1/auth/refresh', {
+        refresh_token: currentRefresh,
+      })
       localStorage.setItem(TOKEN_KEY, result.access_token)
       api.setToken(result.access_token)
       set({ token: result.access_token })

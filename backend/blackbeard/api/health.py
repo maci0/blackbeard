@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from fastapi import APIRouter, Depends, Response
@@ -36,14 +36,14 @@ _NO_CACHE = "no-cache, no-store, must-revalidate"
 
 
 class HealthResponse(BaseModel):
-    status: str
+    status: Literal["ok"]
     service: str
     version: str
     uptime_s: float | None = None
 
 
 class ComponentCheck(BaseModel):
-    status: str
+    status: Literal["up", "down", "degraded", "saturated"]
     latency_ms: float | None = None
     reason: str | None = None
     http_status: int | None = None
@@ -53,7 +53,7 @@ class ComponentCheck(BaseModel):
 
 
 class ReadinessResponse(BaseModel):
-    status: str
+    status: Literal["healthy", "degraded", "unhealthy"]
     service: str
     version: str
     uptime_s: float | None = None
@@ -84,7 +84,7 @@ async def _check_valkey() -> dict[str, object]:
             async with _valkey_lock:
                 if _valkey_client is None:
                     url = settings.valkey_url.get_secret_value().replace("valkey://", "redis://", 1)
-                    _valkey_client = _redis_from_url(url, socket_connect_timeout=2)
+                    _valkey_client = _redis_from_url(url, socket_connect_timeout=2)  # type: ignore[no-untyped-call]
         await _valkey_client.ping()
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
         return {"status": "up", "latency_ms": latency_ms}
@@ -110,11 +110,11 @@ async def _check_valkey() -> dict[str, object]:
             err,
             e,
             latency_ms,
-            exc_info=True,
             extra={
                 "event": "health_check_failed",
                 "component": "valkey",
                 "error_type": err,
+                "error_message": str(e)[:200],
                 "latency_ms": latency_ms,
             },
         )
@@ -150,11 +150,11 @@ async def _check_litellm() -> dict[str, object]:
             err,
             e,
             latency_ms,
-            exc_info=True,
             extra={
                 "event": "health_check_failed",
                 "component": "litellm",
                 "error_type": err,
+                "error_message": str(e)[:200],
                 "latency_ms": latency_ms,
             },
         )
@@ -191,7 +191,7 @@ async def _check_database(session: AsyncSession) -> dict[str, object]:
     except Exception as e:
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
         err = type(e).__name__
-        logger.warning(
+        logger.error(
             "Health check: database is down: %s: %s (%.0fms)",
             err,
             e,
@@ -201,6 +201,7 @@ async def _check_database(session: AsyncSession) -> dict[str, object]:
                 "event": "health_check_failed",
                 "component": "database",
                 "error_type": err,
+                "error_message": str(e)[:200],
                 "latency_ms": latency_ms,
             },
         )
@@ -265,7 +266,7 @@ async def readiness(
     # but the API can still serve resource CRUD.
     critical_components = {"database"}
     for comp_name, comp_check in checks.items():
-        if comp_check["status"] in ("down", "degraded"):
+        if comp_check["status"] in ("down", "degraded", "saturated"):
             if comp_name in critical_components:
                 overall = "unhealthy"
                 break
@@ -276,8 +277,11 @@ async def readiness(
     if overall == "unhealthy":
         response.status_code = 503
         response.headers["Retry-After"] = "5"
-
-    log_level = logging.WARNING if overall != "healthy" else logging.DEBUG
+        log_level = logging.ERROR
+    elif overall == "degraded":
+        log_level = logging.WARNING
+    else:
+        log_level = logging.DEBUG
     log_event = f"readiness_{overall}"
     logger.log(
         log_level,

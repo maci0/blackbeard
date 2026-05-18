@@ -98,10 +98,16 @@ async def test_create_agent(client: AsyncClient):
     assert response.status_code == 201
     data = response.json()
     assert "id" in data
+    import uuid as _uuid
+
+    _uuid.UUID(data["id"])  # must be a valid UUID
     assert data["kind"] == "Agent"
     assert data["metadata"]["name"] == "researcher"
+    assert data["metadata"]["namespace"] == "default"
     assert data["version"] == 1
     assert data["spec"]["role"] == "Research Analyst"
+    assert isinstance(data["created_at"], str), "created_at should be a string"
+    assert len(data["created_at"]) > 0, "created_at should be non-empty"
 
 
 async def test_create_agent_invalid_spec(client: AsyncClient):
@@ -117,6 +123,7 @@ async def test_create_agent_invalid_spec(client: AsyncClient):
     detail = response.json()["detail"]
     detail_str = str(detail).lower()
     assert "role" in detail_str
+    assert "backstory" in detail_str
 
 
 async def test_list_agents_after_create(client: AsyncClient):
@@ -131,6 +138,8 @@ async def test_list_agents_after_create(client: AsyncClient):
     data = response.json()
     assert data["total"] == 2
     assert len(data["items"]) == 2
+    returned_names = {item["metadata"]["name"] for item in data["items"]}
+    assert returned_names == {"agent-1", "agent-2"}
 
 
 async def test_get_agent(client: AsyncClient):
@@ -150,7 +159,7 @@ async def test_get_agent_not_found(client: AsyncClient):
     response = await client.get("/api/v1/agents/nonexistent", headers=API_KEY_HEADER)
     assert response.status_code == 404
     detail = response.json()["detail"].lower()
-    assert "not found" in detail or "nonexistent" in detail
+    assert "not found" in detail, f"Expected 'not found' in detail, got: {detail!r}"
 
 
 async def test_update_agent(client: AsyncClient):
@@ -173,6 +182,8 @@ async def test_update_agent(client: AsyncClient):
     data = response.json()
     assert data["version"] == 2
     assert data["spec"]["role"] == "Senior Research Analyst"
+    assert data["id"] == create_resp.json()["id"], "Update should preserve resource id"
+    assert data["updated_at"] is not None
 
 
 async def test_update_agent_version_conflict(client: AsyncClient):
@@ -241,6 +252,7 @@ async def test_create_agent_upsert(client: AsyncClient):
     assert r2.status_code == 200  # 200 on upsert (update), 201 on create
     assert r2.json()["version"] == 2  # version bumped on upsert
     assert r2.json()["spec"]["role"] == payload["spec"]["role"]
+    assert r2.json()["id"] == r1.json()["id"], "Upsert must preserve resource id"
 
 
 # ---------------------------------------------------------------------------
@@ -368,10 +380,14 @@ async def test_list_agents_pagination(client: AsyncClient):
     assert len(data["items"]) == 2
     assert data["total"] == 5
     assert data["has_more"] is True
+    assert all("metadata" in item and "name" in item["metadata"] for item in data["items"]), (
+        "Paginated items should contain full resource objects"
+    )
 
     response = await client.get("/api/v1/agents?limit=2&offset=4", headers=API_KEY_HEADER)
     data = response.json()
     assert len(data["items"]) == 1
+    assert data["total"] == 5
     assert data["has_more"] is False
 
 
@@ -420,3 +436,7 @@ async def test_create_task_with_dangling_ref_succeeds(client: AsyncClient):
     response = await client.post("/api/v1/tasks", json=payload, headers=API_KEY_HEADER)
     # Refs are soft — creation succeeds even if target doesn't exist
     assert response.status_code == 201
+    data = response.json()
+    assert data["kind"] == "Task"
+    assert data["metadata"]["name"] == "orphan-task"
+    assert data["spec"]["agent"] == "ref:agents/nonexistent"

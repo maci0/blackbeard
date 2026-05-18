@@ -7,7 +7,8 @@ async def test_health_returns_ok(client):
     data = response.json()
     assert data["status"] == "ok"
     assert data["service"] == "blackbeard"
-    assert "version" in data
+    assert isinstance(data["version"], str), "version must be a string"
+    assert len(data["version"]) > 0, "version must be non-empty"
 
 
 async def test_health_response_has_no_extra_fields(client):

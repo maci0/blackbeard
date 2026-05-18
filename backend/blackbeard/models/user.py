@@ -40,6 +40,13 @@ class User(Base):
         default=lambda: datetime.now(UTC),
         server_default=text("now()"),
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        server_default=text("now()"),
+    )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     group_memberships: Mapped[list[GroupMember]] = relationship(
@@ -51,6 +58,8 @@ class User(Base):
 
     __table_args__ = (
         Index("ix_users_api_key", "api_key", postgresql_where=text("api_key IS NOT NULL")),
+        Index("ix_users_created_at", "created_at"),
+        Index("ix_users_email_lower", text("lower(email)"), unique=True),
         CheckConstraint("length(email) >= 1", name="ck_user_email_nonempty"),
         CheckConstraint("length(display_name) >= 1", name="ck_user_display_name_nonempty"),
     )
@@ -73,6 +82,13 @@ class Group(Base):
         default=lambda: datetime.now(UTC),
         server_default=text("now()"),
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        server_default=text("now()"),
+    )
 
     members: Mapped[list[GroupMember]] = relationship(
         "GroupMember",
@@ -81,9 +97,7 @@ class Group(Base):
         lazy="raise",
     )
 
-    __table_args__ = (
-        CheckConstraint("length(name) >= 1", name="ck_group_name_nonempty"),
-    )
+    __table_args__ = (CheckConstraint("length(name) >= 1", name="ck_group_name_nonempty"),)
 
     def __repr__(self) -> str:
         return f"<Group {self.name}>"
@@ -104,13 +118,17 @@ class GroupMember(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=text("now()"),
+    )
 
     group: Mapped[Group] = relationship("Group", back_populates="members", lazy="raise")
     user: Mapped[User] = relationship("User", back_populates="group_memberships", lazy="raise")
 
-    __table_args__ = (
-        Index("ix_group_members_user_id", "user_id"),
-    )
+    __table_args__ = (Index("ix_group_members_user_id", "user_id"),)
 
     def __repr__(self) -> str:
         return f"<GroupMember group={self.group_id} user={self.user_id}>"

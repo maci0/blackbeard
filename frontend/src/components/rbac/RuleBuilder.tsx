@@ -1,22 +1,12 @@
 import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
+import { ALL_PLURALS } from '@/lib/kinds'
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
 /* ------------------------------------------------------------------ */
 
-const RESOURCES = [
-  'agents',
-  'tasks',
-  'crews',
-  'tools',
-  'llm-connections',
-  'flows',
-  'knowledge-sources',
-  'roles',
-  'role-bindings',
-  'users',
-] as const
+const RESOURCES = [...ALL_PLURALS, 'users'] as const
 
 const VERBS = ['get', 'list', 'create', 'update', 'delete', 'run', 'invoke', 'delegate'] as const
 
@@ -124,7 +114,7 @@ function RuleRow({
             return (
               <label
                 key={resource}
-                className={`inline-flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors ${
+                className={`inline-flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${
                   checked
                     ? 'border-primary/40 bg-primary/10 text-primary'
                     : 'border-border bg-background text-muted-foreground hover:bg-muted'
@@ -162,7 +152,7 @@ function RuleRow({
             return (
               <label
                 key={verb}
-                className={`inline-flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors ${
+                className={`inline-flex cursor-pointer items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${
                   checked
                     ? 'border-emerald-400/40 bg-emerald-100/60 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                     : 'border-border bg-background text-muted-foreground hover:bg-muted'

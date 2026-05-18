@@ -13,6 +13,7 @@ import sys
 from datetime import UTC, datetime
 
 request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
+user_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("user_id", default="")
 
 
 class _RequestIdFilter(logging.Filter):
@@ -20,6 +21,7 @@ class _RequestIdFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.request_id = request_id_var.get("-")
+        record.user_id = user_id_var.get("")
         return True
 
 
@@ -48,6 +50,7 @@ _LOG_RECORD_BUILTIN = frozenset(
         "msecs",
         "taskName",
         "request_id",
+        "user_id",
     }
 )
 
@@ -65,6 +68,8 @@ _SENSITIVE_KEYS = frozenset(
         "private_key",
         "secret_key",
         "access_key",
+        "access_token",
+        "refresh_token",
         "master_key",
         "database_url",
         "dsn",
@@ -75,6 +80,8 @@ _SENSITIVE_KEYS = frozenset(
 )
 
 _SENSITIVE_SUFFIXES = tuple(f"_{s}" for s in _SENSITIVE_KEYS)
+
+_SCALAR_TYPES = (str, int, float, bool, type(None))
 
 
 class _JsonFormatter(logging.Formatter):
@@ -88,6 +95,7 @@ class _JsonFormatter(logging.Formatter):
             "message": record.getMessage(),
             "service": "blackbeard",
             "request_id": getattr(record, "request_id", "-"),
+            "user_id": getattr(record, "user_id", "") or None,
             "thread": record.threadName,
             "pid": record.process,
         }
@@ -109,9 +117,8 @@ class _JsonFormatter(logging.Formatter):
         try:
             return json.dumps(log_entry, default=str)
         except (TypeError, ValueError, OverflowError):
-            _scalar = (str, int, float, bool, type(None))
             safe = {
-                k: v for k, v in log_entry.items() if isinstance(v, _scalar)
+                k: v for k, v in log_entry.items() if isinstance(v, _SCALAR_TYPES)
             }
             safe["_serialization_error"] = True
             return json.dumps(safe, default=str)

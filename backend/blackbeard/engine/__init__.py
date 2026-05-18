@@ -1,4 +1,4 @@
-"""Execution engine: crew lifecycle and resource loading."""
+"""Execution engine: crew lifecycle management."""
 
 from __future__ import annotations
 
@@ -12,26 +12,15 @@ __all__ = [
     "shutdown_executor",
 ]
 
-_LAZY_IMPORTS: dict[str, tuple[str, ...]] = {
-    "blackbeard.engine.executor": (
-        "ExecutionError",
-        "ExecutionNotFoundError",
-        "get_pool_status",
-        "recover_stale_executions",
-        "shutdown_executor",
-    ),
-}
-
-_NAME_TO_MODULE = {name: mod for mod, names in _LAZY_IMPORTS.items() for name in names}
+_EXECUTOR_ATTRS = frozenset(__all__)
 
 
 def __getattr__(name: str) -> Any:
-    module_path = _NAME_TO_MODULE.get(name)
-    if module_path is None:
+    if name not in _EXECUTOR_ATTRS:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     import importlib
 
-    module = importlib.import_module(module_path)
-    for attr in _LAZY_IMPORTS[module_path]:
+    module = importlib.import_module("blackbeard.engine.executor")
+    for attr in _EXECUTOR_ATTRS:
         globals()[attr] = getattr(module, attr)
     return globals()[name]

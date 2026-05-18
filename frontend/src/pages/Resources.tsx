@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Database, Search, ChevronRight, RefreshCw, X } from 'lucide-react'
-import { useResourceStore, type Resource } from '@/stores/resourceStore'
+import { useResourceStore } from '@/stores/resourceStore'
+import type { Resource } from '@/lib/types'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { KindBadge } from '@/components/ui/KindBadge'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -38,8 +39,7 @@ export default function Resources() {
 
   useEffect(() => {
     void fetchAllResources()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; fetchAllResources is stable
-  }, [])
+  }, [fetchAllResources])
 
   // Flatten all resources from the store
   const allResources = useMemo(() => {

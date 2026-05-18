@@ -34,20 +34,20 @@ open http://localhost:3000
 ## Apply Example Crew
 
 ```bash
-# Install CLI (requires uv)
+# Install CLI deps (requires uv)
 cd backend && uv sync && cd ..
 
 # Validate and apply the research crew
-blackbeard validate -f examples/research-crew/
-blackbeard apply -f examples/research-crew/
-blackbeard apply -f examples/research-crew/ --dry-run  # validate without applying
+uv run --project backend blackbeard validate -f examples/research-crew/
+uv run --project backend blackbeard apply -f examples/research-crew/
+uv run --project backend blackbeard apply -f examples/research-crew/ --dry-run  # validate without applying
 
 # Kick off an execution
-blackbeard kickoff research-crew --input topic="AI agents"
+uv run --project backend blackbeard kickoff research-crew --input topic="AI agents"
 
 # Check status
-blackbeard status <execution-id>
-blackbeard status <execution-id> --watch               # poll until complete
+uv run --project backend blackbeard status <execution-id>
+uv run --project backend blackbeard status <execution-id> --watch               # poll until complete
 ```
 
 ## Architecture
@@ -87,7 +87,7 @@ blackbeard/
 ├── frontend/                   # React + TypeScript SPA
 │   └── src/
 │       ├── components/studio/  # Visual editor (React Flow)
-│       ├── pages/              # Resources, Executions, Models, Tools
+│       ├── pages/              # Studio, Resources, Executions, Models, Tools, Roles, Users, Login
 │       └── stores/             # Zustand state management
 ├── examples/                   # Example YAML crews
 ├── deploy/                     # Dockerfiles + LiteLLM config

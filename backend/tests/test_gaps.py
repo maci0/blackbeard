@@ -188,9 +188,9 @@ def test_crew_empty_tasks_rejected():
     }
     errors, _ = validate_resource("Crew", spec)
     assert len(errors) > 0
-    # Should mention tasks constraint (jsonschema says "should be non-empty")
-    error_text = " ".join(e.message for e in errors)
-    assert "non-empty" in error_text.lower() or "too short" in error_text.lower()
+    assert any(e.field and "tasks" in e.field.lower() for e in errors), (
+        f"Expected a validation error on 'tasks' field, got: {[e.to_dict() for e in errors]}"
+    )
 
 
 def test_crew_missing_tasks_rejected():

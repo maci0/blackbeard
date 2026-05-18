@@ -1,15 +1,22 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Anchor, LogIn } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useDocumentTitle } from '@/lib/hooks'
 import { Spinner } from '@/components/ui/Spinner'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const login = useAuthStore((s) => s.login)
   const loading = useAuthStore((s) => s.loading)
   const storeError = useAuthStore((s) => s.error)
+  const redirectTo = (location.state as { from?: string } | null)?.from ?? '/studio'
+
+  useEffect(() => {
+    useAuthStore.setState({ error: null })
+  }, [])
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -30,40 +37,32 @@ export default function Login() {
 
     try {
       await login(email, password)
-      void navigate('/studio', { replace: true })
+      void navigate(redirectTo, { replace: true })
     } catch {
       // Error is set in the store
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <main className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900">
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 dark:border dark:border-slate-700">
             <Anchor className="h-7 w-7 text-indigo-400" />
           </div>
           <h1 className="text-xl font-bold tracking-tight">Sign in to Blackbeard</h1>
           <p className="mt-1 text-sm text-muted-foreground">Agent Management Platform</p>
         </div>
 
-        {/* Error */}
-        {error && (
-          <div
-            role="alert"
-            className="mb-4 rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          >
-            {error}
-          </div>
-        )}
+        {error && <ErrorAlert message={error} className="mb-4" />}
 
         {/* Form */}
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <fieldset disabled={loading} className="space-y-4">
             <div>
               <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium">
-                Email
+                Email <span className="text-destructive">*</span>
               </label>
               <input
                 id="login-email"
@@ -80,7 +79,7 @@ export default function Login() {
 
             <div>
               <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium">
-                Password
+                Password <span className="text-destructive">*</span>
               </label>
               <input
                 id="login-password"
@@ -121,6 +120,6 @@ export default function Login() {
           </Link>
         </p>
       </div>
-    </div>
+    </main>
   )
 }

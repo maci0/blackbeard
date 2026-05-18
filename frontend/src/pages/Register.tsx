@@ -1,15 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Anchor, UserPlus } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useDocumentTitle } from '@/lib/hooks'
 import { Spinner } from '@/components/ui/Spinner'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
 
 export default function Register() {
   const navigate = useNavigate()
   const register = useAuthStore((s) => s.register)
   const loading = useAuthStore((s) => s.loading)
   const storeError = useAuthStore((s) => s.error)
+
+  useEffect(() => {
+    useAuthStore.setState({ error: null })
+  }, [])
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -46,33 +51,25 @@ export default function Register() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <main className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900">
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 dark:border dark:border-slate-700">
             <Anchor className="h-7 w-7 text-indigo-400" />
           </div>
           <h1 className="text-xl font-bold tracking-tight">Create your account</h1>
           <p className="mt-1 text-sm text-muted-foreground">Get started with Blackbeard</p>
         </div>
 
-        {/* Error */}
-        {error && (
-          <div
-            role="alert"
-            className="mb-4 rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          >
-            {error}
-          </div>
-        )}
+        {error && <ErrorAlert message={error} className="mb-4" />}
 
         {/* Form */}
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <fieldset disabled={loading} className="space-y-4">
             <div>
               <label htmlFor="register-display-name" className="mb-1.5 block text-sm font-medium">
-                Display name
+                Display name <span className="text-destructive">*</span>
               </label>
               <input
                 id="register-display-name"
@@ -89,7 +86,7 @@ export default function Register() {
 
             <div>
               <label htmlFor="register-email" className="mb-1.5 block text-sm font-medium">
-                Email
+                Email <span className="text-destructive">*</span>
               </label>
               <input
                 id="register-email"
@@ -105,7 +102,7 @@ export default function Register() {
 
             <div>
               <label htmlFor="register-password" className="mb-1.5 block text-sm font-medium">
-                Password
+                Password <span className="text-destructive">*</span>
               </label>
               <input
                 id="register-password"
@@ -115,11 +112,16 @@ export default function Register() {
                 autoComplete="new-password"
                 required
                 minLength={8}
+                aria-describedby="register-password-hint"
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="Min 8 characters"
               />
               {password.length > 0 && password.length < 8 && (
-                <p className="mt-1 text-xs text-muted-foreground" aria-live="polite">
+                <p
+                  id="register-password-hint"
+                  className="mt-1 text-xs text-muted-foreground"
+                  aria-live="polite"
+                >
                   {8 - password.length} more character{password.length === 7 ? '' : 's'} needed
                 </p>
               )}
@@ -152,6 +154,6 @@ export default function Register() {
           </Link>
         </p>
       </div>
-    </div>
+    </main>
   )
 }

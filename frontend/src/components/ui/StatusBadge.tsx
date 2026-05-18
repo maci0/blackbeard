@@ -29,7 +29,7 @@ export function StatusBadge({ status, live }: { status: string; live?: boolean }
       className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${classes}`}
     >
       {status === 'running' ? (
-        <span className="relative flex h-2 w-2">
+        <span className="relative flex h-2 w-2" aria-hidden="true">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75 motion-reduce:animate-none" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
         </span>

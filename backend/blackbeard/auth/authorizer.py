@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections
 import logging
 import time
 from typing import Any
@@ -14,14 +15,16 @@ from blackbeard.models import Resource
 
 logger = logging.getLogger(__name__)
 
-# Simple in-memory cache with TTL for authorization decisions
-_cache: dict[str, tuple[bool, float]] = {}
+# OrderedDict gives O(1) FIFO eviction vs heapq's O(n log k) scan.
+_cache: collections.OrderedDict[str, tuple[bool, float]] = collections.OrderedDict()
 _CACHE_TTL_S = 30.0
 _CACHE_MAX_SIZE = 10_000
 
 
-def _cache_key(subject_kind: str, subject_name: str, verb: str, resource_kind: str) -> str:
-    return f"{subject_kind}:{subject_name}:{verb}:{resource_kind}"
+def _cache_key(
+    subject_kind: str, subject_name: str, verb: str, resource_kind: str, namespace: str
+) -> str:
+    return f"{subject_kind}:{subject_name}:{verb}:{resource_kind}:{namespace}"
 
 
 def _get_cached(key: str) -> bool | None:
@@ -37,7 +40,20 @@ def _get_cached(key: str) -> bool | None:
 
 def _set_cached(key: str, result: bool) -> None:
     if len(_cache) >= _CACHE_MAX_SIZE:
-        _cache.clear()
+        to_evict = _CACHE_MAX_SIZE // 5
+        for _ in range(min(to_evict, len(_cache))):
+            _cache.popitem(last=False)
+        logger.debug(
+            "Authorization cache eviction: evicted=%d remaining=%d",
+            to_evict,
+            len(_cache),
+            extra={
+                "event": "authz_cache_eviction",
+                "evicted": to_evict,
+                "remaining": len(_cache),
+                "max_size": _CACHE_MAX_SIZE,
+            },
+        )
     _cache[key] = (result, time.monotonic())
 
 
@@ -68,13 +84,33 @@ class Authorizer:
 
         Returns True if authorized, False otherwise.
         """
-        key = _cache_key(subject_kind, subject_name, verb, resource_kind)
+        key = _cache_key(subject_kind, subject_name, verb, resource_kind, namespace)
         cached = _get_cached(key)
         if cached is not None:
             return cached
 
+        t0 = time.monotonic()
         result = await self._check_uncached(subject_kind, subject_name, verb, resource_kind)
+        duration_ms = round((time.monotonic() - t0) * 1000, 1)
         _set_cached(key, result)
+        if duration_ms > 100:
+            logger.warning(
+                "Slow authorization check: %s/%s verb=%s resource=%s (%.0fms)",
+                subject_kind,
+                subject_name,
+                verb,
+                resource_kind,
+                duration_ms,
+                extra={
+                    "event": "authz_slow_check",
+                    "subject_kind": subject_kind,
+                    "subject_name": subject_name,
+                    "verb": verb,
+                    "resource_kind": resource_kind,
+                    "duration_ms": duration_ms,
+                    "result": result,
+                },
+            )
         return result
 
     async def _check_uncached(
@@ -86,36 +122,15 @@ class Authorizer:
     ) -> bool:
         """Perform the actual authorization check against the database."""
         bindings = await self._find_bindings(subject_kind, subject_name)
-        if not bindings:
-            logger.warning(
-                "Authorization denied: %s/%s verb=%s resource=%s bindings=0",
-                subject_kind,
-                subject_name,
-                verb,
-                resource_kind,
-                extra={
-                    "event": "authz_denied",
-                    "subject_kind": subject_kind,
-                    "subject_name": subject_name,
-                    "verb": verb,
-                    "resource_kind": resource_kind,
-                    "bindings_checked": 0,
-                },
-            )
-            return False
 
-        role_names: set[str] = set()
-        for binding_spec in bindings:
-            role_ref = binding_spec.get("role", "")
-            if role_ref:
-                rn = role_ref.removeprefix("ref:roles/")
-                role_names.add(rn)
+        binding_role_names: list[str] = [
+            binding.get("role", "").removeprefix("ref:roles/") for binding in bindings
+        ]
+        role_names = {n for n in binding_role_names if n}
 
         roles = await self._load_roles_batch(role_names) if role_names else {}
 
-        for binding_spec in bindings:
-            role_ref = binding_spec.get("role", "")
-            role_name = role_ref.removeprefix("ref:roles/")
+        for role_name in binding_role_names:
             role_spec = roles.get(role_name)
             if role_spec is None:
                 continue
@@ -129,6 +144,22 @@ class Authorizer:
                 verb_match = "*" in rule_verbs or verb in rule_verbs
 
                 if resource_match and verb_match:
+                    logger.debug(
+                        "Authorization granted: %s/%s verb=%s resource=%s via role=%s",
+                        subject_kind,
+                        subject_name,
+                        verb,
+                        resource_kind,
+                        role_name,
+                        extra={
+                            "event": "authz_granted",
+                            "subject_kind": subject_kind,
+                            "subject_name": subject_name,
+                            "verb": verb,
+                            "resource_kind": resource_kind,
+                            "role_name": role_name,
+                        },
+                    )
                     return True
 
         logger.warning(
@@ -156,9 +187,7 @@ class Authorizer:
     ) -> list[dict[str, Any]]:
         """Find all RoleBinding specs where the subject matches."""
         result = await self._session.execute(
-            select(Resource.spec).where(
-                Resource.kind == ResourceKind.ROLE_BINDING,
-            )
+            select(Resource.spec).where(Resource.kind == ResourceKind.ROLE_BINDING).limit(1000)
         )
         rows = result.scalars().all()
         matching: list[dict[str, Any]] = []

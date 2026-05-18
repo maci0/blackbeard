@@ -41,8 +41,8 @@ fi
 if [ ! -f .env ]; then
   cp .env.example .env
   echo ""
-  echo "WARNING: Created .env from .env.example with default credentials." >&2
-  echo "         Change BLACKBEARD_API_KEY and POSTGRES_PASSWORD before deploying." >&2
+  echo "Warning: Created .env from .env.example with default credentials." >&2
+  echo "         Change BLACKBEARD_API_KEY, JWT_SECRET, and POSTGRES_PASSWORD before deploying." >&2
   echo ""
 fi
 

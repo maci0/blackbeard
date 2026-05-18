@@ -1,22 +1,32 @@
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, lazy, useEffect, type ReactNode } from 'react'
 import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
-import Layout from './components/Layout'
-import { ErrorBoundary } from './components/ui/ErrorBoundary'
-import { Spinner } from './components/ui/Spinner'
-import { ToastContainer } from './components/ui/Toast'
-import { useAuthStore } from './stores/authStore'
+import Layout from '@/components/Layout'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
+import { Spinner } from '@/components/ui/Spinner'
+import { ToastContainer } from '@/components/ui/Toast'
+import { useAuthStore } from '@/stores/authStore'
 
-const Studio = lazy(() => import('./pages/Studio'))
-const Resources = lazy(() => import('./pages/Resources'))
-const ResourceDetail = lazy(() => import('./pages/ResourceDetail'))
-const Executions = lazy(() => import('./pages/Executions'))
-const ExecutionDetail = lazy(() => import('./pages/ExecutionDetail'))
-const Models = lazy(() => import('./pages/Models'))
-const Tools = lazy(() => import('./pages/Tools'))
-const Login = lazy(() => import('./pages/Login'))
-const Register = lazy(() => import('./pages/Register'))
-const Users = lazy(() => import('./pages/Users'))
-const Roles = lazy(() => import('./pages/Roles'))
+const Studio = lazy(() => import('@/pages/Studio'))
+const Resources = lazy(() => import('@/pages/Resources'))
+const ResourceDetail = lazy(() => import('@/pages/ResourceDetail'))
+const Executions = lazy(() => import('@/pages/Executions'))
+const ExecutionDetail = lazy(() => import('@/pages/ExecutionDetail'))
+const Models = lazy(() => import('@/pages/Models'))
+const Tools = lazy(() => import('@/pages/Tools'))
+const Login = lazy(() => import('@/pages/Login'))
+const Register = lazy(() => import('@/pages/Register'))
+const Users = lazy(() => import('@/pages/Users'))
+const Roles = lazy(() => import('@/pages/Roles'))
+
+function DocumentTitle({ title, children }: { title: string; children: ReactNode }) {
+  useEffect(() => {
+    document.title = `${title} — Blackbeard`
+    return () => {
+      document.title = 'Blackbeard'
+    }
+  }, [title])
+  return <>{children}</>
+}
 
 const PUBLIC_PATHS = new Set(['/login', '/register'])
 
@@ -25,7 +35,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const location = useLocation()
 
   if (!token && !PUBLIC_PATHS.has(location.pathname)) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />
   }
 
   return <>{children}</>
@@ -77,34 +87,36 @@ function App() {
                 <Route
                   path="*"
                   element={
-                    <div className="flex flex-1 items-center justify-center">
-                      <div className="text-center">
-                        <p
-                          className="mb-2 text-6xl font-bold text-muted-foreground/20"
-                          aria-hidden="true"
-                        >
-                          404
-                        </p>
-                        <h1 className="mb-1 text-lg font-semibold">Page not found</h1>
-                        <p className="mb-4 text-sm text-muted-foreground">
-                          The page you're looking for doesn't exist or may have been moved.
-                        </p>
-                        <div className="flex items-center justify-center gap-3">
-                          <Link
-                            to="/studio"
-                            className="inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    <DocumentTitle title="Page not found">
+                      <div className="flex flex-1 items-center justify-center">
+                        <div className="text-center">
+                          <p
+                            className="mb-2 text-6xl font-bold text-muted-foreground/20"
+                            aria-hidden="true"
                           >
-                            Go to Studio
-                          </Link>
-                          <Link
-                            to="/resources"
-                            className="inline-flex rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          >
-                            Browse Resources
-                          </Link>
+                            404
+                          </p>
+                          <h1 className="mb-1 text-lg font-semibold">Page not found</h1>
+                          <p className="mb-4 text-sm text-muted-foreground">
+                            The page you're looking for doesn't exist or may have been moved.
+                          </p>
+                          <div className="flex items-center justify-center gap-3">
+                            <Link
+                              to="/studio"
+                              className="inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                              Go to Studio
+                            </Link>
+                            <Link
+                              to="/resources"
+                              className="inline-flex rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                              Browse Resources
+                            </Link>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    </DocumentTitle>
                   }
                 />
               </Route>

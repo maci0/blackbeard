@@ -13,16 +13,18 @@ import {
   Server,
   Thermometer,
   Hash,
-  Check,
   Settings,
 } from 'lucide-react'
-import { useResourceStore, type Resource } from '@/stores/resourceStore'
+import { useResourceStore } from '@/stores/resourceStore'
+import type { Resource } from '@/lib/types'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { cn } from '@/lib/utils'
+import { useToastStore } from '@/stores/toastStore'
 
 /* ------------------------------------------------------------------ */
 /* Provider badge                                                      */
@@ -120,6 +122,7 @@ function ModelCard({
               e.stopPropagation()
               onDelete()
             }}
+            onKeyDown={(e) => e.stopPropagation()}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-muted-foreground opacity-60 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
             title={`Delete ${resource.metadata.name}`}
             aria-label={`Delete connection ${resource.metadata.name}`}
@@ -214,14 +217,10 @@ const INITIAL_FORM: AddModelForm = {
   max_tokens: '4096',
 }
 
-const PROVIDER_OPTIONS = [
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'vertex_ai', label: 'Google Vertex AI' },
-  { value: 'azure', label: 'Azure OpenAI' },
-  { value: 'ollama', label: 'Ollama (local)' },
-  { value: 'other', label: 'Other' },
-]
+const PROVIDER_OPTIONS = Object.entries(PROVIDER_DISPLAY).map(([value, label]) => ({
+  value,
+  label,
+}))
 
 function AddModelDialog({
   open,
@@ -378,6 +377,7 @@ function AddModelDialog({
             {submitError && (
               <div
                 role="alert"
+                aria-live="assertive"
                 className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
               >
                 <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -397,7 +397,8 @@ function AddModelDialog({
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                aria-busy={submitting}
+                className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting && <Spinner size="sm" className="text-white" />}
                 Add connection
@@ -414,36 +415,38 @@ function AddModelDialog({
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
+const EMPTY_MODELS: Resource[] = []
+
 export default function Models() {
   const navigate = useNavigate()
-  const { resources, loading, error, fetchResources, createResource, deleteResource } =
-    useResourceStore()
+  const models = useResourceStore((s) => s.resources['llm-connections'] ?? EMPTY_MODELS)
+  const loading = useResourceStore((s) => s.loading)
+  const error = useResourceStore((s) => s.error)
+  const fetchResources = useResourceStore((s) => s.fetchResources)
+  const createResource = useResourceStore((s) => s.createResource)
+  const deleteResource = useResourceStore((s) => s.deleteResource)
+
+  const toasts = useToastStore()
 
   const [addOpen, setAddOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const deleteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     return () => {
-      if (successTimerRef.current) clearTimeout(successTimerRef.current)
       if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
     }
   }, [])
-
-  const models = resources['llm-connections'] ?? []
 
   useDocumentTitle('Models')
 
   useEffect(() => {
     void fetchResources('llm-connections')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [fetchResources])
 
   const handleAdd = async (form: AddModelForm) => {
     setSubmitting(true)
@@ -463,9 +466,7 @@ export default function Models() {
         },
       })
       setAddOpen(false)
-      setSuccessMessage(`Connection "${form.name}" created`)
-      if (successTimerRef.current) clearTimeout(successTimerRef.current)
-      successTimerRef.current = setTimeout(() => setSuccessMessage(null), 5000)
+      toasts.success(`Connection "${form.name}" created`)
     } catch (err) {
       setSubmitError((err as Error).message)
     } finally {
@@ -480,9 +481,7 @@ export default function Models() {
     try {
       await deleteResource('llm-connections', name)
       setDeleteTarget(null)
-      setSuccessMessage(`Connection "${name}" deleted`)
-      if (successTimerRef.current) clearTimeout(successTimerRef.current)
-      successTimerRef.current = setTimeout(() => setSuccessMessage(null), 5000)
+      toasts.success(`Connection "${name}" deleted`)
     } catch (err) {
       setDeleteTarget(null)
       setDeleteError((err as Error).message)
@@ -531,44 +530,15 @@ export default function Models() {
           />
         </div>
 
-        {/* Success */}
-        {successMessage && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="mb-4 flex items-center gap-2 text-sm text-green-600 dark:text-green-400"
-          >
-            <Check className="h-4 w-4" />
-            {successMessage}
-            <button
-              onClick={() => setSuccessMessage(null)}
-              className="ml-auto flex h-[44px] w-[44px] items-center justify-center rounded transition-colors hover:bg-green-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-green-900"
-              aria-label="Dismiss success message"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
-
         {/* Delete error */}
         {deleteError && (
-          <div
-            role="alert"
-            aria-live="assertive"
-            className="mb-4 flex items-center justify-between rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
-          >
-            <span className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {deleteError}
-            </span>
-            <button
-              onClick={() => setDeleteError(null)}
-              className="flex h-[44px] shrink-0 items-center rounded px-3 text-xs font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Dismiss error"
-            >
-              Dismiss
-            </button>
-          </div>
+          <ErrorAlert
+            message={deleteError}
+            actionLabel="Dismiss"
+            onAction={() => setDeleteError(null)}
+            ariaLabel="Dismiss error"
+            className="mb-4"
+          />
         )}
 
         {/* Error */}
@@ -585,28 +555,18 @@ export default function Models() {
         {loading && models.length === 0 ? (
           <TableSkeleton />
         ) : models.length === 0 ? (
-          <div className="page-enter flex flex-col items-center justify-center py-16 text-center">
-            <div
-              aria-hidden="true"
-              className="mb-4 text-muted-foreground/60 [&>svg]:h-12 [&>svg]:w-12"
-            >
-              <Settings />
-            </div>
-            <h2 className="text-sm font-medium text-foreground">No LLM connections</h2>
-            <p className="mt-1 max-w-xs text-xs text-muted-foreground">
-              Add an LLM connection to get started
-            </p>
-            <button
-              onClick={() => {
+          <EmptyState
+            icon={<Settings />}
+            title="No LLM connections"
+            description="Add an LLM connection to get started"
+            action={{
+              label: 'Add Connection',
+              onClick: () => {
                 setSubmitError(null)
                 setAddOpen(true)
-              }}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add Connection
-            </button>
-          </div>
+              },
+            }}
+          />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {models.map((resource) => (

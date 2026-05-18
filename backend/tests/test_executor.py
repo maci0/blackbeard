@@ -120,6 +120,8 @@ async def test_kickoff_crew(client: AsyncClient):
     assert isinstance(parsed_id, uuid.UUID)
     assert data["inputs"] == {"topic": "AI"}
     assert data["created_at"] is not None
+    assert data["error"] is None, "New execution should have no error"
+    assert data["outputs"] is None, "New execution should have no outputs"
 
 
 async def test_kickoff_crew_has_tasks(client: AsyncClient):
@@ -224,7 +226,8 @@ async def test_get_execution_not_found(client: AsyncClient):
     random_id = str(uuid.uuid4())
     response = await client.get(f"/api/v1/executions/{random_id}", headers=API_KEY_HEADER)
     assert response.status_code == 404
-    assert "detail" in response.json()
+    detail = response.json()["detail"].lower()
+    assert "not found" in detail or "execution" in detail
 
 
 async def test_get_execution_after_kickoff(client: AsyncClient):
@@ -256,7 +259,8 @@ async def test_cancel_execution_not_found(client: AsyncClient):
     random_id = str(uuid.uuid4())
     response = await client.patch(f"/api/v1/executions/{random_id}/cancel", headers=API_KEY_HEADER)
     assert response.status_code == 404
-    assert "detail" in response.json()
+    detail = response.json()["detail"].lower()
+    assert "not found" in detail or "execution" in detail
 
 
 async def test_cancel_execution(client: AsyncClient):
@@ -267,6 +271,7 @@ async def test_cancel_execution(client: AsyncClient):
         json={"inputs": {}},
         headers=API_KEY_HEADER,
     )
+    assert kickoff_resp.status_code == 202
     execution_id = kickoff_resp.json()["id"]
 
     cancel_resp = await client.patch(
@@ -275,8 +280,11 @@ async def test_cancel_execution(client: AsyncClient):
     assert cancel_resp.status_code == 200
     data = cancel_resp.json()
     assert data["status"] == "cancelled"
-    assert data["completed_at"] is not None
+    assert isinstance(data["completed_at"], str), "completed_at should be a string"
+    assert len(data["completed_at"]) > 0, "completed_at should be non-empty"
     assert data["error"] is None
+    assert data["id"] == execution_id, "Cancelled response should return same execution id"
+    assert data["crew_name"] == "test-crew", "Cancel response must preserve crew_name"
 
 
 async def test_cancel_already_cancelled_returns_conflict(client: AsyncClient):
@@ -287,6 +295,7 @@ async def test_cancel_already_cancelled_returns_conflict(client: AsyncClient):
         json={"inputs": {}},
         headers=API_KEY_HEADER,
     )
+    assert kickoff_resp.status_code == 202
     execution_id = kickoff_resp.json()["id"]
 
     # Cancel first time — succeeds
@@ -681,6 +690,9 @@ async def test_kickoff_rejects_empty_body(client: AsyncClient):
         headers={**API_KEY_HEADER, "Content-Type": "application/json"},
     )
     assert response.status_code == 422
+    detail = response.json().get("detail")
+    assert detail is not None, "422 response should include detail"
+    assert detail != "", "422 detail should be non-empty"
 
 
 async def test_kickoff_rejects_non_json_body(client: AsyncClient):
@@ -692,6 +704,9 @@ async def test_kickoff_rejects_non_json_body(client: AsyncClient):
         headers={**API_KEY_HEADER, "Content-Type": "application/json"},
     )
     assert response.status_code == 422
+    detail = response.json().get("detail")
+    assert detail is not None, "422 response should include detail"
+    assert detail != "", "422 detail should be non-empty"
 
 
 # ---------------------------------------------------------------------------
@@ -762,7 +777,14 @@ async def test_execution_response_has_required_fields(client: AsyncClient):
     # Verify types and zero-initialization for new executions
     assert isinstance(data["total_tokens"], int)
     assert isinstance(data["tasks"], list)
+    assert isinstance(data["cost_usd"], (int, float, str)), (
+        f"cost_usd should be numeric or string-encoded decimal, got {type(data['cost_usd'])}"
+    )
+    if isinstance(data["cost_usd"], str):
+        float(data["cost_usd"])  # must be parseable as a number
     assert data["crew_namespace"] == "default"
     assert data["total_tokens"] == 0
     assert data["prompt_tokens"] == 0
     assert data["completion_tokens"] == 0
+    assert data["started_at"] is None, "New execution should not have started_at"
+    assert data["completed_at"] is None, "New execution should not have completed_at"

@@ -96,9 +96,16 @@ async def test_register_success(client: AsyncClient):
     data = await _register_user(client)
     assert "access_token" in data
     assert "refresh_token" in data
-    assert data["user"]["email"] == "test@example.com"
-    assert data["user"]["display_name"] == "Test User"
-    assert data["user"]["is_active"] is True
+    assert isinstance(data["access_token"], str), "access_token must be a string"
+    assert len(data["access_token"]) > 0, "access_token must be non-empty"
+    assert isinstance(data["refresh_token"], str), "refresh_token must be a string"
+    assert len(data["refresh_token"]) > 0, "refresh_token must be non-empty"
+    assert data["access_token"] != data["refresh_token"], "Access and refresh tokens must differ"
+    user = data["user"]
+    assert user["email"] == "test@example.com"
+    assert user["display_name"] == "Test User"
+    assert user["is_active"] is True
+    assert "id" in user, "User response should include an id"
 
 
 async def test_register_duplicate_email(client: AsyncClient):
@@ -109,7 +116,8 @@ async def test_register_duplicate_email(client: AsyncClient):
         json=_register_payload(),
     )
     assert resp.status_code == 409
-    assert "already registered" in resp.json()["detail"].lower()
+    detail = resp.json()["detail"].lower()
+    assert "registration" in detail or "email" in detail or "exists" in detail
 
 
 async def test_register_short_password(client: AsyncClient):
@@ -150,7 +158,13 @@ async def test_login_success(client: AsyncClient):
     data = resp.json()
     assert "access_token" in data
     assert "refresh_token" in data
+    assert isinstance(data["access_token"], str)
+    assert len(data["access_token"]) > 0
+    assert isinstance(data["refresh_token"], str)
+    assert len(data["refresh_token"]) > 0
     assert data["user"]["email"] == "test@example.com"
+    assert "id" in data["user"], "Login response user should include an id"
+    assert data["user"]["is_active"] is True
 
 
 async def test_login_wrong_password(client: AsyncClient):
@@ -193,6 +207,10 @@ async def test_login_deactivated_user(client: AsyncClient):
         json=_login_payload(),
     )
     assert resp.status_code == 403
+    detail = resp.json()["detail"].lower()
+    assert "deactivat" in detail or "disabled" in detail or "active" in detail, (
+        f"403 response should mention account deactivation, got: {detail!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +226,14 @@ async def test_refresh_success(client: AsyncClient):
         json={"refresh_token": data["refresh_token"]},
     )
     assert resp.status_code == 200
-    assert "access_token" in resp.json()
+    refresh_data = resp.json()
+    assert "access_token" in refresh_data
+    assert isinstance(refresh_data["access_token"], str), "access_token must be a string"
+    assert len(refresh_data["access_token"]) > 0, "access_token must be non-empty"
+    assert refresh_data["access_token"] != data["refresh_token"], (
+        "Refreshed access token should differ from the refresh token used"
+    )
+    assert refresh_data["token_type"] == "bearer"
 
 
 async def test_refresh_with_access_token_fails(client: AsyncClient):
@@ -229,7 +254,10 @@ async def test_refresh_with_invalid_token(client: AsyncClient):
         json={"refresh_token": "invalid-token-string"},
     )
     assert resp.status_code == 401
-    assert "detail" in resp.json()
+    detail = resp.json().get("detail", "")
+    assert "invalid" in detail.lower() or "token" in detail.lower(), (
+        f"Expected error about invalid token, got: {detail!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -289,8 +317,8 @@ async def test_list_users(client: AsyncClient):
     resp = await client.get("/api/v1/users", headers=_bearer(data["access_token"]))
     assert resp.status_code == 200
     users = resp.json()
-    assert users["total"] >= 1
-    assert any(u["email"] == "test@example.com" for u in users["items"])
+    assert users["total"] == 1, f"Expected exactly 1 user, got {users['total']}"
+    assert users["items"][0]["email"] == "test@example.com"
 
 
 async def test_list_users_requires_auth(client: AsyncClient):
@@ -485,7 +513,7 @@ async def test_list_roles(client: AsyncClient):
     assert r.status_code == 201, f"Role setup failed: {r.status_code} {r.text}"
     resp = await client.get("/api/v1/roles", headers=API_KEY_HEADER)
     assert resp.status_code == 200
-    assert resp.json()["total"] >= 1
+    assert resp.json()["total"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -725,6 +753,8 @@ def test_jwt_access_token_roundtrip():
     assert payload["sub"] == "user-123"
     assert payload["email"] == "user@test.com"
     assert payload["type"] == "access"
+    assert "exp" in payload, "Access token must have an expiration claim"
+    assert "iat" in payload, "Access token must have an issued-at claim"
 
 
 def test_jwt_refresh_token_roundtrip():
@@ -735,6 +765,7 @@ def test_jwt_refresh_token_roundtrip():
     payload = decode_token(token)
     assert payload["sub"] == "user-456"
     assert payload["type"] == "refresh"
+    assert "exp" in payload, "Refresh token must have an expiration claim"
 
 
 def test_jwt_decode_invalid_token():

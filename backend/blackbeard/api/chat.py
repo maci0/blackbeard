@@ -42,9 +42,11 @@ def _get_litellm_client() -> httpx.AsyncClient:
 def _extract_content(data: dict[str, Any]) -> tuple[str, TokenUsage]:
     """Extract content and usage from a LiteLLM chat completion response."""
     choices = data.get("choices") or []
-    choice = choices[0] if choices else {}
-    message = choice.get("message", {})
-    usage = data.get("usage", {})
+    choice = choices[0] if isinstance(choices, list) and choices else {}
+    message = choice.get("message", {}) if isinstance(choice, dict) else {}
+    usage = data.get("usage") or {}
+    if not isinstance(usage, dict):
+        usage = {}
     content = message.get("content") or message.get("reasoning_content") or ""
     tokens = TokenUsage(
         prompt=usage.get("prompt_tokens", 0),
@@ -299,7 +301,7 @@ async def test_model(
             parameter_size=param_size,
         )
 
-    except (httpx.ConnectError, httpx.TimeoutException) as e:
+    except httpx.TransportError as e:
         latency_ms = int((time.monotonic() - t0) * 1000)
         logger.warning(
             "Model test connection failed: model=%s error=%s latency_ms=%d",

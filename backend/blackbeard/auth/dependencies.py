@@ -8,8 +8,10 @@ import jwt as pyjwt
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from blackbeard.auth.jwt import decode_token
+from blackbeard.logging_config import request_id_var
 from blackbeard.models import User, get_session
 
 logger = logging.getLogger(__name__)
@@ -35,41 +37,71 @@ async def get_current_user(
         except pyjwt.ExpiredSignatureError:
             logger.info(
                 "JWT expired",
-                extra={"event": "jwt_expired"},
+                extra={"event": "jwt_expired", "request_id": request_id_var.get("-")},
             )
-            raise HTTPException(status_code=401, detail="Token has expired") from None
+            raise HTTPException(
+                status_code=401,
+                detail="Token has expired",
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from None
         except pyjwt.InvalidTokenError:
             logger.warning(
                 "JWT invalid",
-                extra={"event": "jwt_invalid"},
+                extra={"event": "jwt_invalid", "request_id": request_id_var.get("-")},
             )
-            raise HTTPException(status_code=401, detail="Invalid token") from None
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token",
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from None
 
         if payload.get("type") != "access":
             logger.warning(
                 "JWT wrong type: %s",
                 payload.get("type"),
-                extra={"event": "jwt_wrong_type", "token_type": payload.get("type")},
+                extra={
+                    "event": "jwt_wrong_type",
+                    "token_type": payload.get("type"),
+                    "request_id": request_id_var.get("-"),
+                },
             )
-            raise HTTPException(status_code=401, detail="Invalid token type")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token type",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
         user_id = payload.get("sub")
         if not user_id:
             logger.warning(
                 "JWT missing sub claim",
-                extra={"event": "jwt_missing_sub"},
+                extra={"event": "jwt_missing_sub", "request_id": request_id_var.get("-")},
             )
-            raise HTTPException(status_code=401, detail="Invalid token payload")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token payload",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
-        result = await session.execute(select(User).where(User.id == user_id))
+        result = await session.execute(
+            select(User).where(User.id == user_id).options(defer(User.password_hash))
+        )
         user = result.scalar_one_or_none()
         if user is None or not user.is_active:
             logger.warning(
                 "JWT user not found or inactive: sub=%s",
                 user_id,
-                extra={"event": "jwt_user_invalid", "user_id": str(user_id)},
+                extra={
+                    "event": "jwt_user_invalid",
+                    "user_id": str(user_id),
+                    "request_id": request_id_var.get("-"),
+                },
             )
-            raise HTTPException(status_code=401, detail="User not found or inactive")
+            raise HTTPException(
+                status_code=401,
+                detail="User not found or inactive",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         return user
 
     # Try resolving the X-API-Key to a user (optional — API key may belong to
@@ -80,8 +112,10 @@ async def get_current_user(
     api_key = request.headers.get("X-API-Key", "")
     if not api_key and request.url.path.endswith("/stream"):
         api_key = request.query_params.get("api_key", "")
-    if api_key:
-        result = await session.execute(select(User).where(User.api_key == api_key))
+    if api_key and len(api_key) >= 16:
+        result = await session.execute(
+            select(User).where(User.api_key == api_key).options(defer(User.password_hash))
+        )
         user = result.scalar_one_or_none()
         if user is not None and user.is_active:
             return user
@@ -96,8 +130,16 @@ async def require_user(
 ) -> User:
     """Require an authenticated user. Returns 401 if not authenticated."""
     if user is None:
+        logger.warning(
+            "Authentication required but no credentials provided",
+            extra={
+                "event": "auth_required_no_credentials",
+                "request_id": request_id_var.get("-"),
+            },
+        )
         raise HTTPException(
             status_code=401,
             detail="Authentication required. Provide a Bearer token or user API key.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     return user

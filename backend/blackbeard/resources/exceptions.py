@@ -19,7 +19,7 @@ class ValidationError(NamedTuple):
     message: str
 
     def to_dict(self) -> dict[str, str]:
-        return {"field": self.field, "message": self.message}
+        return self._asdict()
 
 
 class ResourceNotFoundError(Exception):

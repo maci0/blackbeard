@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import * as TabsPrimitive from '@radix-ui/react-tabs'
-import { Trash2, Pencil, Save, X, AlertTriangle, Play, Check, Info } from 'lucide-react'
+import { Trash2, Pencil, Save, X, AlertTriangle, Play, Info } from 'lucide-react'
 import { modKey } from '@/lib/platform'
 
 import { CodeBlock } from '@/components/ui/CodeBlock'
-import { useResourceStore, type Resource } from '@/stores/resourceStore'
+import { useResourceStore } from '@/stores/resourceStore'
+import type { Resource } from '@/lib/types'
 import { api } from '@/api/client'
 import { cn } from '@/lib/utils'
 import { useDocumentTitle } from '@/lib/hooks'
@@ -27,7 +28,6 @@ function InlineAlert({ message }: { message: string | null }) {
   return (
     <div
       role="alert"
-      aria-live="assertive"
       className="mb-4 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
     >
       <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -145,7 +145,8 @@ function SpecDisplay({ spec }: { spec: Record<string, unknown> }) {
 export default function ResourceDetail() {
   const { kindPlural = '', name = '' } = useParams<{ kindPlural: string; name: string }>()
   const navigate = useNavigate()
-  const { deleteResource, updateResource } = useResourceStore()
+  const deleteResource = useResourceStore((s) => s.deleteResource)
+  const updateResource = useResourceStore((s) => s.updateResource)
   const toasts = useToastStore()
 
   const [resource, setResource] = useState<Resource | null>(null)
@@ -154,7 +155,6 @@ export default function ResourceDetail() {
   const [editMode, setEditMode] = useState(false)
   const [yamlContent, setYamlContent] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [saveSuccess, setSaveSuccess] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -162,12 +162,12 @@ export default function ResourceDetail() {
   const [activeTab, setActiveTab] = useState('spec')
   const [showRunDialog, setShowRunDialog] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [runLoading, setRunLoading] = useState(false)
+  const yamlEditorRef = useRef<HTMLTextAreaElement>(null)
   const deleteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
     }
   }, [])
@@ -197,6 +197,7 @@ export default function ResourceDetail() {
     setEditMode(true)
     setActiveTab('yaml')
     setSaveError(null)
+    requestAnimationFrame(() => yamlEditorRef.current?.focus())
   }
 
   const handleCancelEdit = () => {
@@ -227,10 +228,7 @@ export default function ResourceDetail() {
       setResource(updated)
       setYamlContent(resourceToYaml(updated))
       setEditMode(false)
-      setSaveSuccess(true)
       toasts.success(`Resource "${name}" saved`)
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-      saveTimerRef.current = setTimeout(() => setSaveSuccess(false), 5000)
     } catch (err) {
       const message = (err as Error).message
       setSaveError(message)
@@ -276,6 +274,7 @@ export default function ResourceDetail() {
 
   const handleRun = async (rawInputs: string) => {
     setRunError(null)
+    setRunLoading(true)
     try {
       const inputs = JSON.parse(rawInputs) as Record<string, unknown>
       const ns = resource?.metadata.namespace ?? 'default'
@@ -286,6 +285,8 @@ export default function ResourceDetail() {
       void navigate(`/executions/${result.id}`)
     } catch (err) {
       setRunError((err as Error).message)
+    } finally {
+      setRunLoading(false)
     }
   }
 
@@ -468,25 +469,6 @@ export default function ResourceDetail() {
         {/* Save error */}
         <InlineAlert message={saveError} />
 
-        {/* Save success */}
-        {saveSuccess && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="mb-4 flex items-center gap-2 text-sm text-green-600 dark:text-green-400"
-          >
-            <Check className="h-4 w-4" />
-            Saved successfully
-            <button
-              onClick={() => setSaveSuccess(false)}
-              className="ml-auto flex h-[44px] w-[44px] items-center justify-center rounded transition-colors hover:bg-green-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-green-900"
-              aria-label="Dismiss success message"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
-
         {/* Run error */}
         <InlineAlert message={runError} />
 
@@ -531,6 +513,7 @@ export default function ResourceDetail() {
             >
               {editMode ? (
                 <textarea
+                  ref={yamlEditorRef}
                   value={yamlContent}
                   onChange={(e) => setYamlContent(e.target.value)}
                   className="h-[500px] w-full resize-none bg-[#0d1117] p-4 font-mono text-sm text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -580,7 +563,6 @@ export default function ResourceDetail() {
       {deleteError && (
         <div
           role="alert"
-          aria-live="assertive"
           className="fixed bottom-6 left-1/2 z-50 flex w-full max-w-sm -translate-x-1/2 items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-lg"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -601,6 +583,7 @@ export default function ResourceDetail() {
         onOpenChange={setShowRunDialog}
         crewName={resource.metadata.name}
         onRun={(inputs) => void handleRun(inputs)}
+        loading={runLoading}
       />
     </div>
   )

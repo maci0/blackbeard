@@ -10,7 +10,7 @@ export function ErrorAlert({
 }: {
   message: string
   actionLabel?: string
-  onAction: () => void
+  onAction?: () => void
   ariaLabel?: string
   className?: string
 }) {
@@ -26,13 +26,15 @@ export function ErrorAlert({
         <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
         {message}
       </span>
-      <button
-        onClick={onAction}
-        className="flex h-[44px] shrink-0 items-center rounded px-3 text-xs font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={ariaLabel}
-      >
-        {actionLabel}
-      </button>
+      {onAction && (
+        <button
+          onClick={onAction}
+          className="flex h-[44px] shrink-0 items-center rounded px-3 text-xs font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={ariaLabel ?? actionLabel}
+        >
+          {actionLabel}
+        </button>
+      )}
     </div>
   )
 }

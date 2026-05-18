@@ -140,6 +140,7 @@ function InviteDialog({
           {error && (
             <div
               role="alert"
+              aria-live="assertive"
               className="mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
             >
               {error}
@@ -274,7 +275,7 @@ function UserDetailPanel({
         <button
           onClick={onClose}
           aria-label="Close user details"
-          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <X className="h-4 w-4" />
         </button>
@@ -325,7 +326,7 @@ function UserDetailPanel({
         </div>
         <div className="flex justify-between">
           <dt className="text-muted-foreground">Last login</dt>
-          <dd>{formatDate(user.last_login)}</dd>
+          <dd>{user.last_login ? formatDate(user.last_login) : 'Never'}</dd>
         </div>
         <div className="flex justify-between">
           <dt className="text-muted-foreground">Created</dt>
@@ -460,7 +461,7 @@ export default function Users() {
               <input
                 id="users-search"
                 type="search"
-                placeholder="Search by name or email..."
+                placeholder="Search by name or email…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 autoComplete="off"
@@ -548,7 +549,14 @@ export default function Users() {
                     >
                       <td className="px-4 py-3 font-medium">{user.email}</td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {user.display_name || <span className="text-muted-foreground/40">--</span>}
+                        {user.display_name || (
+                          <>
+                            <span aria-hidden="true" className="text-muted-foreground/40">
+                              --
+                            </span>
+                            <span className="sr-only">No display name</span>
+                          </>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <RoleBadge role={user.role} />
@@ -557,7 +565,7 @@ export default function Users() {
                         <ActiveBadge active={user.is_active} />
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {formatDate(user.last_login)}
+                        {user.last_login ? formatDate(user.last_login) : 'Never'}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {formatDate(user.created_at)}

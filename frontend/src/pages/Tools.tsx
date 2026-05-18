@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useDocumentTitle } from '@/lib/hooks'
 import { Wrench, Search, RefreshCw, Code2, Box, Shield, X } from 'lucide-react'
-import { useResourceStore, type Resource } from '@/stores/resourceStore'
+import { useResourceStore } from '@/stores/resourceStore'
+import type { Resource } from '@/lib/types'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -178,18 +179,20 @@ function ToolCard({ resource }: { resource: Resource }) {
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
-export default function Tools() {
-  const { resources, loading, error, fetchResources } = useResourceStore()
-  const [search, setSearch] = useState('')
+const EMPTY_TOOLS: Resource[] = []
 
-  const tools = useMemo(() => resources['tools'] ?? [], [resources])
+export default function Tools() {
+  const tools = useResourceStore((s) => s.resources['tools'] ?? EMPTY_TOOLS)
+  const loading = useResourceStore((s) => s.loading)
+  const error = useResourceStore((s) => s.error)
+  const fetchResources = useResourceStore((s) => s.fetchResources)
+  const [search, setSearch] = useState('')
 
   useDocumentTitle('Tools')
 
   useEffect(() => {
     void fetchResources('tools')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [fetchResources])
 
   const filtered = useMemo(() => {
     if (!search.trim()) return tools

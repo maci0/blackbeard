@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent, type KeyboardEvent } from 'react'
-import { Play, AlertCircle, X } from 'lucide-react'
+import { Play, AlertCircle, X, Loader2 } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { modKey } from '@/lib/platform'
 
@@ -12,11 +12,13 @@ export function RunDialog({
   onOpenChange,
   crewName,
   onRun,
+  loading = false,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   crewName: string
   onRun: (inputs: string) => void
+  loading?: boolean
 }) {
   const [inputs, setInputs] = useState('{}')
   const [error, setError] = useState('')
@@ -117,17 +119,22 @@ export function RunDialog({
 
             <div className="flex justify-end gap-2">
               <Dialog.Close asChild>
-                <button className="rounded-lg border border-border px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <button className="rounded-md border border-border px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   Cancel
                 </button>
               </Dialog.Close>
               <button
                 onClick={handleRun}
-                disabled={!!error}
-                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!!error || loading}
+                aria-busy={loading}
+                className="flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Play className="h-3.5 w-3.5" />
-                Run
+                {loading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+                ) : (
+                  <Play className="h-3.5 w-3.5" />
+                )}
+                {loading ? 'Starting…' : 'Run'}
               </button>
             </div>
           </div>

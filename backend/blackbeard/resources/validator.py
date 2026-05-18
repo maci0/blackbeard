@@ -86,6 +86,7 @@ _BLOCKED_ENV_PREFIXES = (
     "SLACK_",
     "DISCORD_",
     "NPM_",
+    "JWT_",
 )
 
 _BLOCKED_ENV_EXACT = frozenset(
@@ -135,23 +136,18 @@ _INTERNAL_DOMAIN_SUFFIXES = (
 _SHARED_ADDRESS_SPACE = ipaddress.IPv4Network("100.64.0.0/10")
 
 
-def _is_nonroutable(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    return (
-        addr.is_private
-        or addr.is_reserved
-        or addr.is_loopback
-        or addr.is_link_local
-        or addr.is_unspecified
-        or (isinstance(addr, ipaddress.IPv4Address) and addr in _SHARED_ADDRESS_SPACE)
-    )
-
-
 def _is_internal_ip(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    if _is_nonroutable(addr):
-        return True
+    check = addr
     if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
-        return _is_nonroutable(addr.ipv4_mapped)
-    return False
+        check = addr.ipv4_mapped
+    return (
+        check.is_private
+        or check.is_reserved
+        or check.is_loopback
+        or check.is_link_local
+        or check.is_unspecified
+        or (isinstance(check, ipaddress.IPv4Address) and check in _SHARED_ADDRESS_SPACE)
+    )
 
 
 def _is_internal_host(hostname: str) -> bool:
@@ -204,6 +200,8 @@ def _is_blocked_env_name(name: str) -> bool:
 
 def _is_path_traversal(path: str) -> bool:
     """Check if a file path contains traversal or escapes the working directory."""
+    if "\x00" in path:
+        return True
     if path.startswith(("/", "\\", "~")):
         return True
     normalized = path.replace("\\", "/")
@@ -309,10 +307,12 @@ def _check_dns_resolution(hostname: str, field_name: str, errors: list[Validatio
             )
         )
     except socket.gaierror:
-        # DNS resolution failed — hostname doesn't exist.
-        # Allow it through: the actual HTTP request will fail at runtime,
-        # and blocking here would reject valid hostnames during DNS outages.
-        pass
+        errors.append(
+            ValidationError(
+                field_name,
+                "URL hostname could not be resolved. Verify the hostname is correct.",
+            )
+        )
 
 
 def _validate_knowledge_source_extra(spec: dict[str, Any], errors: list[ValidationError]) -> None:
@@ -352,6 +352,9 @@ BLOCKED_TOOL_SUBMODULES = (
     "langchain_community.tools.python",
     "langchain_community.tools.file_management",
     "langchain_community.tools.requests_tool",
+    "langchain_community.tools.sql_database",
+    "langchain_community.tools.zapier",
+    "langchain_community.tools.playwright",
     "langchain.tools.python_tool",
     "langchain.tools.shell_tool",
     "crewai_tools.code_interpreter_tool",
@@ -427,22 +430,7 @@ def _validate_tool_extra(spec: dict[str, Any], errors: list[ValidationError]) ->
             if isinstance(val, str):
                 if val.startswith(("http://", "https://")):
                     _validate_url_ssrf(val, f"spec.config.{key}", errors)
-                if "`" in val or "$(" in val:
-                    errors.append(
-                        ValidationError(
-                            f"spec.config.{key}",
-                            "Config value must not contain command substitution "
-                            "(backticks or $(...)).",
-                        )
-                    )
-                elif _has_blocked_env_expansion(val):
-                    errors.append(
-                        ValidationError(
-                            f"spec.config.{key}",
-                            "Config value must not reference internal variables "
-                            "via shell expansion.",
-                        )
-                    )
+                _check_value_injection(val, f"spec.config.{key}", "Config value", errors)
                 if (
                     isinstance(key, str)
                     and key.lower() in _CREDENTIAL_CONFIG_KEYS
@@ -467,22 +455,9 @@ def _validate_tool_extra(spec: dict[str, Any], errors: list[ValidationError]) ->
                     )
                 )
             if isinstance(value, str):
-                if "`" in value or "$(" in value:
-                    errors.append(
-                        ValidationError(
-                            f"spec.env.{key}",
-                            "Environment variable value must not contain "
-                            "command substitution (backticks or $(...)).",
-                        )
-                    )
-                elif _has_blocked_env_expansion(value):
-                    errors.append(
-                        ValidationError(
-                            f"spec.env.{key}",
-                            "Environment variable value must not reference "
-                            "internal variables via shell expansion.",
-                        )
-                    )
+                _check_value_injection(
+                    value, f"spec.env.{key}", "Environment variable value", errors
+                )
 
 
 # Allowlist for function_path in guardrails and flow steps.
@@ -523,7 +498,7 @@ _BLOCKED_FUNCTION_MODULES = frozenset(
 def _validate_function_path(
     spec: dict[str, Any], field_name: str, errors: list[ValidationError]
 ) -> None:
-    """Validate a function_path field against the allowed module allowlist."""
+    """Validate a function_path field against the module allowlist."""
     func_path = spec.get("function_path")
     if not func_path or not isinstance(func_path, str):
         return
@@ -553,11 +528,30 @@ def _validate_flow_extra(spec: dict[str, Any], errors: list[ValidationError]) ->
     if not isinstance(steps, list):
         return
     for i, step in enumerate(steps):
-        if not isinstance(step, dict):
-            continue
-        func_path = step.get("function_path")
-        if func_path and isinstance(func_path, str):
+        if isinstance(step, dict):
             _validate_function_path(step, f"spec.steps[{i}].function_path", errors)
+
+
+def _check_value_injection(
+    val: str, field: str, label: str, errors: list[ValidationError]
+) -> None:
+    """Check a string value for command substitution and blocked env expansion."""
+    if "`" in val or "$(" in val:
+        errors.append(
+            ValidationError(
+                field,
+                f"{label} must not contain command substitution "
+                "(backticks or $(...)).",
+            )
+        )
+    elif _has_blocked_env_expansion(val):
+        errors.append(
+            ValidationError(
+                field,
+                f"{label} must not reference internal variables "
+                "via shell expansion.",
+            )
+        )
 
 
 _CREDENTIAL_CONFIG_KEYS = frozenset(

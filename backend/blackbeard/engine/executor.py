@@ -28,7 +28,7 @@ __all__ = [
 
 from crewai.crews.crew_output import CrewOutput
 from sqlalchemy import func, select, update
-from sqlalchemy.orm import defer, selectinload
+from sqlalchemy.orm import defer, load_only, selectinload
 
 from blackbeard.config import settings
 from blackbeard.engine.execution_listener import BlackbeardExecutionListener
@@ -230,14 +230,16 @@ async def kickoff(
     # Flush to assign execution.id before creating child ExecutionTask rows.
     await session.flush()
 
+    task_refs = crew_resource.spec.get("tasks", [])
     pool = get_pool_status()
     pool_saturated = pool["saturated"]
     logger.log(
         logging.WARNING if pool_saturated else logging.INFO,
-        "Kickoff: execution_id=%s crew=%s namespace=%s input_keys=%s pool=%d/%d queued=%d",
+        "Kickoff: execution_id=%s crew=%s namespace=%s tasks=%d input_keys=%s pool=%d/%d queued=%d",
         execution.id,
         crew_name,
         namespace,
+        len(task_refs),
         sorted(inputs.keys()),
         pool["active_threads"],
         pool["max_workers"],
@@ -247,14 +249,13 @@ async def kickoff(
             "execution_id": str(execution.id),
             "crew_name": crew_name,
             "namespace": namespace,
+            "task_count": len(task_refs),
             "pool_active_threads": pool["active_threads"],
             "pool_max_workers": pool["max_workers"],
             "pool_queued_tasks": pool["queued_tasks"],
             "pool_saturated": pool_saturated,
         },
     )
-
-    task_refs = crew_resource.spec.get("tasks", [])
     if task_refs:
         session.add_all(
             [
@@ -414,14 +415,24 @@ def _thread_session_factory() -> tuple[async_sessionmaker[AsyncSession], AsyncEn
     thread_engine = create_async_engine(
         settings.database_url.get_secret_value(),
         echo=False,
-        pool_size=2,
-        max_overflow=3,
+        pool_size=1,
+        max_overflow=2,
         pool_pre_ping=True,
         pool_timeout=30,
         pool_recycle=3600,
         connect_args=CONNECT_ARGS,
     )
     factory = async_sessionmaker(thread_engine, class_=_AsyncSession, expire_on_commit=False)
+    logger.debug(
+        "Thread DB pool created: thread=%s pool_size=1 max_overflow=2",
+        threading.current_thread().name,
+        extra={
+            "event": "thread_db_pool_created",
+            "thread_name": threading.current_thread().name,
+            "pool_size": 1,
+            "max_overflow": 2,
+        },
+    )
     return factory, thread_engine
 
 
@@ -572,6 +583,8 @@ async def _run_crew_async(
                 if execution is not None and execution.started_at
                 else None
             )
+            crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
+            task_count = len(crew_snap.get("spec", {}).get("tasks", []))
             logger.exception(
                 "Execution %s failed: %s (duration_s=%.1f)",
                 execution_id,
@@ -582,6 +595,7 @@ async def _run_crew_async(
                     "execution_id": str(execution_id),
                     "crew_name": crew_name,
                     "namespace": running_namespace,
+                    "task_count": task_count,
                     "error_type": type(e).__name__,
                     "error_message": str(e)[:500],
                     "duration_s": round(duration_s, 1) if duration_s else None,
@@ -663,12 +677,27 @@ async def list_executions(
         filters.append(Execution.status == status)
 
     query = select(Execution).where(*filters)
-    count_query = select(func.count(Execution.id)).where(*filters)
 
     if include_tasks:
         query = query.options(selectinload(Execution.tasks))
     else:
-        query = query.options(defer(Execution.outputs), defer(Execution.inputs))
+        query = query.options(
+            load_only(
+                Execution.id,
+                Execution.crew_name,
+                Execution.crew_namespace,
+                Execution.status,
+                Execution.error,
+                Execution.total_tokens,
+                Execution.prompt_tokens,
+                Execution.completion_tokens,
+                Execution.cost_usd,
+                Execution.litellm_key,
+                Execution.created_at,
+                Execution.started_at,
+                Execution.completed_at,
+            )
+        )
 
     query = (
         query.order_by(Execution.created_at.desc(), Execution.id.desc()).limit(limit).offset(offset)
@@ -676,9 +705,10 @@ async def list_executions(
     result = await session.execute(query)
     items = list(result.scalars().all())
 
-    if len(items) < limit:
+    if len(items) < limit and (len(items) > 0 or offset == 0):
         total = offset + len(items)
     else:
+        count_query = select(func.count(Execution.id)).where(*filters)
         total = (await session.execute(count_query)).scalar() or 0
 
     return items, total
@@ -715,8 +745,14 @@ async def cancel_execution(session: AsyncSession, execution_id: UUID) -> Executi
 
     if execution.status in (ExecutionStatus.QUEUED, ExecutionStatus.RUNNING):
         prev_status = execution.status.value
+        now = datetime.now(UTC)
         execution.status = ExecutionStatus.CANCELLED
-        execution.completed_at = datetime.now(UTC)
+        execution.completed_at = now
+        for task in execution.tasks:
+            if task.status in (TaskStatus.PENDING, TaskStatus.RUNNING):
+                task.status = TaskStatus.FAILED
+                task.error = "Execution cancelled"
+                task.completed_at = now
         await session.commit()
         logger.info(
             "Execution %s cancelled: crew=%s previous_status=%s",

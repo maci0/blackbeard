@@ -144,6 +144,10 @@ class Execution(Base):
             "error IS NULL OR status = 'failed'",
             name="ck_execution_error_only_failed",
         ),
+        CheckConstraint(
+            "status != 'queued' OR started_at IS NULL",
+            name="ck_execution_queued_no_started_at",
+        ),
     )
 
     def __repr__(self) -> str:

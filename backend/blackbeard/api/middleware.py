@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import collections
-import heapq
 import hmac
 import logging
 import re
@@ -19,9 +18,9 @@ if TYPE_CHECKING:
     from fastapi import Request, Response
     from starlette.middleware.base import RequestResponseEndpoint
 
-from blackbeard.auth.jwt import decode_token as _decode_jwt
+from blackbeard.auth.jwt import decode_token
 from blackbeard.config import settings
-from blackbeard.logging_config import request_id_var
+from blackbeard.logging_config import request_id_var, user_id_var
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +49,9 @@ def set_api_key(key: str) -> None:
 _REQUEST_ID_PATTERN = re.compile(r"^[a-zA-Z0-9\-]{1,64}$")
 
 
-_SENSITIVE_QS_PARAMS = frozenset({"api_key", "token", "secret", "key", "password", "credential"})
+_SENSITIVE_QS_PARAMS = frozenset(
+    {"api_key", "token", "secret", "key", "password", "credential", "access_token", "refresh_token"}
+)
 
 
 def _redact_query_string(query: str) -> str:
@@ -84,7 +85,6 @@ def _check_rate_limit(request: Request, request_id: str, client_ip: str) -> JSON
         return None
     if len(ip_failures) < _AUTH_FAIL_MAX:
         return None
-    path = request.url.path
     response = JSONResponse(
         status_code=429,
         content={
@@ -97,13 +97,13 @@ def _check_rate_limit(request: Request, request_id: str, client_ip: str) -> JSON
     logger.warning(
         "Auth rate limited: %s %s from %s (failures=%d)",
         request.method,
-        path,
+        request.url.path,
         client_ip,
         len(ip_failures),
         extra={
             "event": "auth_rate_limited",
             "http_method": request.method,
-            "http_path": path,
+            "http_path": request.url.path,
             "client_ip": client_ip,
             "failure_count": len(ip_failures),
             "request_id": request_id,
@@ -118,19 +118,18 @@ def _record_auth_failure(client_ip: str) -> None:
     if client_ip not in _auth_failures:
         _auth_failures[client_ip] = collections.deque(maxlen=_AUTH_FAIL_MAX + 10)
     _auth_failures[client_ip].append(now)
-    if len(_auth_failures) > 500:
+    if len(_auth_failures) > 200:
         cutoff = now - _AUTH_FAIL_WINDOW_S
         stale = [ip for ip, dq in _auth_failures.items() if not dq or dq[-1] < cutoff]
         for ip in stale:
             _auth_failures.pop(ip, None)
-        if len(_auth_failures) > 1_000:
-            to_evict = len(_auth_failures) - 500
-            oldest = heapq.nsmallest(
-                to_evict,
+        if len(_auth_failures) > 200:
+            to_evict = len(_auth_failures) - 200
+            by_recency = sorted(
                 _auth_failures,
                 key=lambda k: _auth_failures[k][-1] if _auth_failures[k] else 0,
             )
-            for ip in oldest:
+            for ip in by_recency[:to_evict]:
                 _auth_failures.pop(ip, None)
 
 
@@ -146,12 +145,13 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     """Validate X-API-Key header on all non-public endpoints."""
     request_id = get_request_id(request)
     request_id_var.set(request_id)
+    user_id_var.set("")
     start = time.monotonic()
     path = request.url.path
+    client_ip = request.client.host if request.client else "unknown"
 
     if path in PUBLIC_PATHS:
         if path in _AUTH_PATHS:
-            client_ip = request.client.host if request.client else "unknown"
             rate_limited = _check_rate_limit(request, request_id, client_ip)
             if rate_limited is not None:
                 return rate_limited
@@ -160,7 +160,6 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         response.headers["X-Request-Id"] = request_id
 
         if path in _AUTH_PATHS and response.status_code in (401, 403, 409):
-            client_ip = request.client.host if request.client else "unknown"
             _record_auth_failure(client_ip)
 
         _log_request(request, response, start)
@@ -182,7 +181,6 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         )
         return response
 
-    client_ip = request.client.host if request.client else "unknown"
     rate_limited = _check_rate_limit(request, request_id, client_ip)
     if rate_limited is not None:
         return rate_limited
@@ -194,23 +192,27 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
         try:
-            payload = _decode_jwt(token)
+            payload = decode_token(token)
             if payload.get("type") != "access":
                 raise pyjwt.InvalidTokenError("Not an access token")
-        except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError):
+            user_id_var.set(payload.get("sub", ""))
+        except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError) as jwt_exc:
             _record_auth_failure(client_ip)
             duration_ms = (time.monotonic() - start) * 1000
+            jwt_reason = type(jwt_exc).__name__
             logger.warning(
-                "JWT auth failed: %s %s from %s (%.0fms)",
+                "JWT auth failed: %s %s from %s reason=%s (%.0fms)",
                 request.method,
                 path,
                 client_ip,
+                jwt_reason,
                 duration_ms,
                 extra={
                     "event": "jwt_auth_failure",
                     "http_method": request.method,
                     "http_path": path,
                     "client_ip": client_ip,
+                    "jwt_rejection_reason": jwt_reason,
                     "duration_ms": round(duration_ms, 1),
                     "request_id": request_id,
                 },
@@ -238,7 +240,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     api_key = request.headers.get("X-API-Key", "")
     if not api_key and path.endswith("/stream"):
         api_key = request.query_params.get("api_key", "")
-    if not hmac.compare_digest(api_key, _EXPECTED_API_KEY):
+    if not api_key or not hmac.compare_digest(api_key, _EXPECTED_API_KEY):
         _record_auth_failure(client_ip)
 
         response = JSONResponse(
@@ -300,6 +302,7 @@ def _log_request(request: Request, response: Response, start: float) -> None:
     resp_content_type = response.headers.get("content-type", "")
     query_string = _redact_query_string(request.url.query) if request.url.query else None
 
+    user_id = user_id_var.get("")
     extra: dict[str, object] = {
         "event": "http_request",
         "http_method": request.method,
@@ -308,6 +311,7 @@ def _log_request(request: Request, response: Response, start: float) -> None:
         "http_status": status,
         "duration_ms": round(duration_ms, 1),
         "client_ip": client_ip,
+        "user_id": user_id or None,
         "user_agent": user_agent[:200] if user_agent else "",
         "content_length": int(content_length)
         if content_length and content_length.isdigit()
@@ -346,6 +350,7 @@ SECURITY_HEADERS = {
     "Cross-Origin-Resource-Policy": "same-origin",
     "X-Permitted-Cross-Domain-Policies": "none",
     "X-DNS-Prefetch-Control": "off",
+    "X-Robots-Tag": "noindex, nofollow",
 }
 
 
@@ -467,12 +472,59 @@ async def body_size_limiter(request: Request, call_next: RequestResponseEndpoint
     return await call_next(request)
 
 
+async def validation_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
+    """Handle Pydantic validation errors with request_id for log correlation."""
+    from fastapi.encoders import jsonable_encoder
+
+    rid = request_id_var.get("-")
+    errors: object = exc.errors() if callable(getattr(exc, "errors", None)) else []
+    error_count = len(errors) if isinstance(errors, list) else 0
+    logger.info(
+        "Validation error: %s %s fields=%d",
+        _request.method,
+        _request.url.path,
+        error_count,
+        extra={
+            "event": "validation_error",
+            "http_method": _request.method,
+            "http_path": _request.url.path,
+            "error_count": error_count,
+            "request_id": rid,
+        },
+    )
+    return JSONResponse(
+        status_code=422,
+        content={"detail": jsonable_encoder(errors), "request_id": rid},
+        headers={"X-Request-Id": rid},
+    )
+
+
 async def http_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
     """Handle HTTPException with request_id in body for log correlation."""
     rid = request_id_var.get("-")
     status_code: int = getattr(exc, "status_code", 500)
     detail: object = getattr(exc, "detail", str(exc))
     exc_headers: dict[str, str] = getattr(exc, "headers", None) or {}
+    if status_code >= 500:
+        uid = user_id_var.get("")
+        path = _request.url.path
+        logger.error(
+            "HTTP %d on %s %s: %s",
+            status_code,
+            _request.method,
+            path,
+            str(detail)[:200],
+            exc_info=True,
+            extra={
+                "event": "http_exception",
+                "http_method": _request.method,
+                "http_path": path,
+                "http_status": status_code,
+                "error_message": str(detail)[:500],
+                "request_id": rid,
+                "user_id": uid or None,
+            },
+        )
     return JSONResponse(
         status_code=status_code,
         content={"detail": detail, "request_id": rid},
@@ -483,6 +535,7 @@ async def http_exception_handler(_request: Request, exc: Exception) -> JSONRespo
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch unhandled exceptions and return a sanitized 500 response."""
     rid = request_id_var.get("-")
+    uid = user_id_var.get("")
     logger.error(
         "Unhandled exception on %s %s [request_id=%s]: %s",
         request.method,
@@ -497,6 +550,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
             "http_method": request.method,
             "http_path": request.url.path,
             "request_id": rid,
+            "user_id": uid or None,
         },
     )
     return JSONResponse(
