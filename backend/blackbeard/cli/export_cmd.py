@@ -1,0 +1,203 @@
+"""CLI export command — dump resources as YAML."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import click
+import httpx
+import yaml
+
+from blackbeard.cli.helpers import (
+    console,
+    handle_http_error,
+    handle_request_error,
+    json_opt,
+    out,
+    require_auth,
+)
+from blackbeard.cli.helpers import (
+    output_json as _print_json,
+)
+from blackbeard.kinds import ALL_KINDS, KIND_TO_PLURAL
+
+
+def _strip_server_fields(resource: dict[str, Any]) -> dict[str, Any]:
+    """Keep only apiVersion, kind, metadata (name/namespace/labels), and spec."""
+    meta = resource.get("metadata", {})
+    clean_meta: dict[str, Any] = {"name": meta.get("name", "")}
+    ns = meta.get("namespace")
+    if ns and ns != "default":
+        clean_meta["namespace"] = ns
+    labels = meta.get("labels")
+    if labels:
+        clean_meta["labels"] = labels
+
+    return {
+        "apiVersion": resource.get("apiVersion", "blackbeard/v1"),
+        "kind": resource.get("kind", ""),
+        "metadata": clean_meta,
+        "spec": resource.get("spec", {}),
+    }
+
+
+def _fetch_resources(
+    client: httpx.Client,
+    server: str,
+    headers: dict[str, str],
+    kind: str,
+    namespace: str | None,
+) -> list[dict[str, Any]]:
+    """Fetch all resources of a given kind."""
+    plural = KIND_TO_PLURAL.get(kind)
+    if not plural:
+        return []
+
+    params: dict[str, Any] = {"limit": 1000}
+    if namespace:
+        params["namespace"] = namespace
+
+    try:
+        resp = client.get(f"{server}/api/v1/{plural}", headers=headers, params=params)
+    except httpx.RequestError:
+        return []
+
+    if resp.status_code != 200:
+        return []
+
+    data = resp.json()
+    items = data if isinstance(data, list) else data.get("items", [])
+    return [_strip_server_fields(item) for item in items]
+
+
+def _resources_to_yaml(resources: list[dict[str, Any]]) -> str:
+    """Convert resource dicts to multi-document YAML string."""
+    docs = []
+    for res in resources:
+        docs.append(yaml.dump(res, default_flow_style=False, sort_keys=False).rstrip())
+    return "\n---\n".join(docs) + "\n" if docs else ""
+
+
+@click.command("export")
+@click.argument(
+    "kind",
+    required=False,
+    type=click.Choice(sorted(ALL_KINDS), case_sensitive=False),
+)
+@click.argument("name", required=False)
+@click.option("--all", "export_all", is_flag=True, help="Export all resource kinds")
+@click.option("-o", "--output", "output_path", type=click.Path(), help="Write to file or directory")
+@json_opt
+@click.pass_context
+def export_cmd(
+    ctx: click.Context,
+    kind: str | None,
+    name: str | None,
+    export_all: bool,
+    output_path: str | None,
+    output_json: bool = False,
+) -> None:
+    """Export resources as YAML.
+
+    \b
+    Examples:
+      blackbeard export Agent researcher          # single resource
+      blackbeard export Agent                     # all agents
+      blackbeard export --all                     # everything
+      blackbeard export --all -o backup/          # to directory
+    """
+    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
+    server = ctx.obj["server"]
+    headers = require_auth(ctx)
+    namespace = ctx.obj.get("namespace")
+
+    if not export_all and not kind:
+        console.print("[red bold]Error:[/] Specify a Kind or use --all.")
+        raise SystemExit(2)
+
+    with httpx.Client(timeout=ctx.obj["timeout"]) as client:
+        if export_all:
+            resources = _export_all(client, server, headers, namespace)
+        elif kind and name:
+            resources = _export_single(client, server, headers, kind, name, namespace)
+        elif kind:
+            resources = _fetch_resources(client, server, headers, kind, namespace)
+        else:
+            resources = []
+
+    if not resources:
+        console.print("[dim]No resources to export.[/]")
+        return
+
+    if ctx.obj["json"]:
+        _print_json(resources)
+        return
+
+    yaml_str = _resources_to_yaml(resources)
+
+    if output_path:
+        p = Path(output_path)
+        if export_all and p.suffix == "":
+            p.mkdir(parents=True, exist_ok=True)
+            by_kind: dict[str, list[dict[str, Any]]] = {}
+            for res in resources:
+                k = res.get("kind", "unknown")
+                by_kind.setdefault(k, []).append(res)
+            for k, items in sorted(by_kind.items()):
+                plural = KIND_TO_PLURAL.get(k, k.lower() + "s")
+                file = p / f"{plural}.yaml"
+                file.write_text(_resources_to_yaml(items), encoding="utf-8")
+                console.print(f"  [green]Wrote[/] {file} ({len(items)} {k})")
+        else:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(yaml_str, encoding="utf-8")
+            console.print(f"[green]Wrote[/] {p} ({len(resources)} resource(s))")
+    else:
+        out.print(yaml_str, end="", highlight=False)
+
+    if not output_path:
+        console.print(f"[dim]{len(resources)} resource(s) exported[/]")
+
+
+def _export_all(
+    client: httpx.Client,
+    server: str,
+    headers: dict[str, str],
+    namespace: str | None,
+) -> list[dict[str, Any]]:
+    """Fetch all resources of all kinds."""
+    all_resources: list[dict[str, Any]] = []
+    for kind in sorted(ALL_KINDS):
+        resources = _fetch_resources(client, server, headers, kind, namespace)
+        all_resources.extend(resources)
+    return all_resources
+
+
+def _export_single(
+    client: httpx.Client,
+    server: str,
+    headers: dict[str, str],
+    kind: str,
+    name: str,
+    namespace: str | None,
+) -> list[dict[str, Any]]:
+    """Fetch a single resource by kind and name."""
+    plural = KIND_TO_PLURAL.get(kind)
+    if not plural:
+        console.print(f"[red bold]Error:[/] Unknown kind: {kind}")
+        raise SystemExit(2)
+
+    params: dict[str, Any] = {}
+    if namespace:
+        params["namespace"] = namespace
+
+    try:
+        resp = client.get(f"{server}/api/v1/{plural}/{name}", headers=headers, params=params)
+    except httpx.RequestError as exc:
+        handle_request_error(server, exc)
+
+    if resp.status_code != 200:
+        handle_http_error(resp)
+
+    return [_strip_server_fields(resp.json())]

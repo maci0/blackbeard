@@ -49,9 +49,12 @@ from blackbeard.models.database import CONNECT_ARGS
 from blackbeard.resources import parse_ref
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+
+    from blackbeard.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -203,11 +206,42 @@ async def _load_crew_resources(
     return resources
 
 
+def _build_principal_chain(
+    user: User | None,
+    crew_name: str,
+    resources: Mapping[str, Resource | dict[str, Any]],
+) -> dict[str, Any]:
+    """Build the principal chain for an execution.
+
+    Records the identity context: User (who kicked off) -> Crew -> Agents
+    (each with their ServiceAccount).
+    """
+    chain: dict[str, Any] = {}
+    if user is not None:
+        chain["user"] = {"id": str(user.id), "email": user.email}
+    chain["crew"] = crew_name
+    agents: list[dict[str, str]] = []
+    for key, r in resources.items():
+        if not key.startswith("Agent/"):
+            continue
+        if isinstance(r, dict):
+            spec = r.get("spec", {})
+            name = r.get("name", "")
+        else:
+            spec = r.spec or {}
+            name = r.name
+        sa = spec.get("serviceAccount", f"sa-{name}")
+        agents.append({"name": name, "serviceAccount": sa})
+    chain["agents"] = agents
+    return chain
+
+
 async def kickoff(
     session: AsyncSession,
     crew_name: str,
     inputs: dict[str, Any] | None = None,
     namespace: str = "default",
+    user: User | None = None,
 ) -> Execution:
     """Start a crew execution.
 
@@ -220,11 +254,15 @@ async def kickoff(
     crew_key = f"Crew/{crew_name}"
     crew_resource = resources[crew_key]
 
+    principal_chain = _build_principal_chain(user, crew_name, resources)
+
     execution = Execution(
         crew_name=crew_name,
         crew_namespace=namespace,
         status=ExecutionStatus.QUEUED,
         inputs=inputs,
+        initiated_by=user.id if user is not None else None,
+        principal_chain=principal_chain,
     )
     session.add(execution)
     # Flush to assign execution.id before creating child ExecutionTask rows.
@@ -693,6 +731,8 @@ async def list_executions(
                 Execution.completion_tokens,
                 Execution.cost_usd,
                 Execution.litellm_key,
+                Execution.initiated_by,
+                Execution.principal_chain,
                 Execution.created_at,
                 Execution.started_at,
                 Execution.completed_at,

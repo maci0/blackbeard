@@ -365,3 +365,72 @@ def test_resource_create_accepts_valid():
     )
     assert rc.kind == "Agent"
     assert rc.apiVersion == "blackbeard/v1"
+
+
+# ---------------------------------------------------------------------------
+# Agent serviceAccount schema validation
+# ---------------------------------------------------------------------------
+
+
+def test_agent_accepts_service_account():
+    """Agent spec with valid serviceAccount should pass validation."""
+    spec = {
+        "role": "R",
+        "goal": "G",
+        "backstory": "B",
+        "serviceAccount": "my-custom-sa",
+    }
+    errors, _ = validate_resource("Agent", spec)
+    assert errors == []
+
+
+def test_agent_rejects_invalid_service_account():
+    """Agent spec with invalid serviceAccount pattern should fail validation."""
+    spec = {
+        "role": "R",
+        "goal": "G",
+        "backstory": "B",
+        "serviceAccount": "Invalid_SA",
+    }
+    errors, _ = validate_resource("Agent", spec)
+    assert len(errors) > 0
+    assert _has_error(errors, field_contains="serviceAccount")
+
+
+def test_agent_service_account_optional():
+    """Agent spec without serviceAccount should pass (it is optional)."""
+    spec = {"role": "R", "goal": "G", "backstory": "B"}
+    errors, _ = validate_resource("Agent", spec)
+    assert errors == []
+
+
+# ---------------------------------------------------------------------------
+# ExecutionResponse identity fields
+# ---------------------------------------------------------------------------
+
+
+def test_execution_response_schema_has_identity_fields():
+    """ExecutionResponse schema should declare initiated_by and principal_chain."""
+    from blackbeard.models.execution_schemas import ExecutionResponse
+
+    fields = ExecutionResponse.model_fields
+    assert "initiated_by" in fields
+    assert "principal_chain" in fields
+
+
+def test_execution_response_identity_defaults():
+    """ExecutionResponse identity fields should default to None."""
+    from datetime import UTC, datetime
+
+    from blackbeard.models.execution_schemas import ExecutionResponse
+
+    resp = ExecutionResponse(
+        id="00000000-0000-0000-0000-000000000000",
+        crew_name="test",
+        crew_namespace="default",
+        status="queued",
+        inputs={},
+        created_at=datetime.now(UTC),
+    )
+    assert resp.initiated_by is None
+    assert resp.principal_chain is None

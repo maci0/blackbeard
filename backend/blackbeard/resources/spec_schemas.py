@@ -57,6 +57,11 @@ AGENT_SCHEMA = {
         "system_template": {"type": "string", "maxLength": 50000},
         "prompt_template": {"type": "string", "maxLength": 50000},
         "response_template": {"type": "string", "maxLength": 50000},
+        "serviceAccount": {
+            "type": "string",
+            "maxLength": 255,
+            "pattern": "^[a-z0-9][a-z0-9\\-]*$",
+        },
     },
     "additionalProperties": False,
 }

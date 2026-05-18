@@ -13,7 +13,7 @@ Both classes use the same primitives — Objects, Verbs, Roles, RoleBindings, Ru
 
 ## 1.1 MVP Scope
 
-**MVP implements:** Built-in email/password auth with JWT tokens, User and Group models, Role and RoleBinding resource kinds, predefined roles (owner/admin/developer/operator/viewer/policy-admin + agent roles), authorization enforcement middleware, AgentPolicy runtime constraints, sandbox tier enforcement, and a visual RBAC editor in the UI (Roles tab, Users/Groups tab, RoleBindings tab, AgentPolicy editor).
+**MVP implements:** Built-in email/password auth with JWT tokens, User and Group models, Role and RoleBinding resource kinds, predefined roles (owner/admin/developer/operator/viewer/policy-admin + agent roles), authorization enforcement middleware, AgentPolicy runtime constraints, sandbox tier enforcement, and a visual RBAC editor in the UI (Roles tab, Users/Groups tab, RoleBindings tab, AgentPolicy editor). Agents run as ServiceAccounts (configured via `spec.serviceAccount`, defaulting to `sa-<agent-name>`). Tools invoked by an agent execute under that agent's ServiceAccount context. Each execution records the principal chain: User (who kicked off) -> Crew -> Agent (ServiceAccount).
 
 **Deferred to post-MVP:** SSO/OIDC integration (Ory Kratos/Hydra), SpiceDB for relationship-based access control, OPA for policy-as-code, entity-level fine-grained permissions (`metadata.access`), and multi-organization support.
 

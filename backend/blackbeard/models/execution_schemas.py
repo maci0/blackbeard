@@ -127,6 +127,8 @@ class ExecutionResponse(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_usd: Decimal = Decimal("0")
+    initiated_by: str | None = None
+    principal_chain: dict[str, Any] | None = None
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -166,6 +168,7 @@ class ExecutionResponse(BaseModel):
                 for t in raw_tasks
             ]
         raw_inputs = execution.__dict__.get('inputs')
+        initiated_by_raw = execution.__dict__.get('initiated_by')
         return cls.model_construct(
             id=execution.id,
             crew_name=execution.crew_name,
@@ -178,6 +181,8 @@ class ExecutionResponse(BaseModel):
             prompt_tokens=execution.prompt_tokens,
             completion_tokens=execution.completion_tokens,
             cost_usd=execution.cost_usd,
+            initiated_by=str(initiated_by_raw) if initiated_by_raw else None,
+            principal_chain=execution.__dict__.get('principal_chain'),
             created_at=execution.created_at,
             started_at=execution.started_at,
             completed_at=execution.completed_at,

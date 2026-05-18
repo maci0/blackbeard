@@ -617,6 +617,107 @@ def test_exceeds_depth_with_lists():
 # ---------------------------------------------------------------------------
 
 
+def test_build_principal_chain_without_user():
+    """_build_principal_chain without a user should omit user key."""
+    from blackbeard.engine.executor import _build_principal_chain
+
+    resources = {
+        "Agent/researcher": {
+            "kind": "Agent",
+            "name": "researcher",
+            "namespace": "default",
+            "spec": {"role": "R", "goal": "G", "backstory": "B"},
+        },
+    }
+    chain = _build_principal_chain(None, "my-crew", resources)
+    assert "user" not in chain
+    assert chain["crew"] == "my-crew"
+    assert len(chain["agents"]) == 1
+    assert chain["agents"][0]["name"] == "researcher"
+    assert chain["agents"][0]["serviceAccount"] == "sa-researcher"
+
+
+def test_build_principal_chain_with_custom_service_account():
+    """_build_principal_chain should use serviceAccount from agent spec."""
+    from blackbeard.engine.executor import _build_principal_chain
+
+    resources = {
+        "Agent/deployer": {
+            "kind": "Agent",
+            "name": "deployer",
+            "namespace": "default",
+            "spec": {
+                "role": "R",
+                "goal": "G",
+                "backstory": "B",
+                "serviceAccount": "deploy-sa",
+            },
+        },
+    }
+    chain = _build_principal_chain(None, "deploy-crew", resources)
+    assert chain["agents"][0]["serviceAccount"] == "deploy-sa"
+
+
+def test_build_principal_chain_with_user():
+    """_build_principal_chain with a user should include user info."""
+    import uuid
+
+    from blackbeard.engine.executor import _build_principal_chain
+    from blackbeard.models.user import User
+
+    user = User()
+    user.id = uuid.UUID("12345678-1234-1234-1234-123456789abc")
+    user.email = "alice@example.com"
+    user.display_name = "Alice"
+    user.password_hash = "hashed"
+
+    resources = {
+        "Agent/researcher": {
+            "kind": "Agent",
+            "name": "researcher",
+            "namespace": "default",
+            "spec": {"role": "R", "goal": "G", "backstory": "B"},
+        },
+    }
+    chain = _build_principal_chain(user, "my-crew", resources)
+    assert chain["user"]["id"] == "12345678-1234-1234-1234-123456789abc"
+    assert chain["user"]["email"] == "alice@example.com"
+    assert chain["crew"] == "my-crew"
+
+
+def test_build_principal_chain_skips_non_agent_resources():
+    """_build_principal_chain should only include Agent/* resources."""
+    from blackbeard.engine.executor import _build_principal_chain
+
+    resources = {
+        "Crew/my-crew": {
+            "kind": "Crew",
+            "name": "my-crew",
+            "namespace": "default",
+            "spec": {"process": "sequential", "agents": [], "tasks": []},
+        },
+        "Agent/worker": {
+            "kind": "Agent",
+            "name": "worker",
+            "namespace": "default",
+            "spec": {"role": "R", "goal": "G", "backstory": "B"},
+        },
+        "Task/do-stuff": {
+            "kind": "Task",
+            "name": "do-stuff",
+            "namespace": "default",
+            "spec": {
+                "description": "D",
+                "expected_output": "E",
+                "agent": "ref:agents/worker",
+            },
+        },
+    }
+    chain = _build_principal_chain(None, "my-crew", resources)
+    assert len(chain["agents"]) == 1
+    assert chain["agents"][0]["name"] == "worker"
+
+
 def test_snapshot_resource_captures_essentials():
     """_snapshot_resource should capture kind/name/namespace/spec only."""
     from blackbeard.engine.executor import _snapshot_resource
@@ -788,3 +889,168 @@ async def test_execution_response_has_required_fields(client: AsyncClient):
     assert data["completion_tokens"] == 0
     assert data["started_at"] is None, "New execution should not have started_at"
     assert data["completed_at"] is None, "New execution should not have completed_at"
+
+
+# ---------------------------------------------------------------------------
+# Tests — ServiceAccount execution context (principal chain / initiated_by)
+# ---------------------------------------------------------------------------
+
+
+async def test_kickoff_without_user_has_no_initiated_by(client: AsyncClient):
+    """Kickoff via API key (no JWT) should leave initiated_by as None."""
+    await _create_full_crew(client)
+
+    response = await client.post(
+        "/api/v1/crews/test-crew/kickoff",
+        json={"inputs": {}},
+        headers=API_KEY_HEADER,
+    )
+    assert response.status_code == 202
+    data = response.json()
+    assert data["initiated_by"] is None
+
+
+async def test_kickoff_without_user_has_principal_chain(client: AsyncClient):
+    """Even without a user, principal_chain should contain crew and agents."""
+    await _create_full_crew(client)
+
+    response = await client.post(
+        "/api/v1/crews/test-crew/kickoff",
+        json={"inputs": {}},
+        headers=API_KEY_HEADER,
+    )
+    assert response.status_code == 202
+    data = response.json()
+    chain = data["principal_chain"]
+    assert chain is not None
+    assert chain["crew"] == "test-crew"
+    assert "agents" in chain
+    assert isinstance(chain["agents"], list)
+    assert len(chain["agents"]) >= 1
+    # Agent should have default serviceAccount
+    agent_entry = chain["agents"][0]
+    assert agent_entry["name"] == "test-agent"
+    assert agent_entry["serviceAccount"] == "sa-test-agent"
+    # No user in chain when authenticating with API key only
+    assert "user" not in chain
+
+
+async def test_principal_chain_uses_custom_service_account(client: AsyncClient):
+    """When agent spec has serviceAccount, it should appear in the principal chain."""
+    # Create agent with custom serviceAccount
+    r = await client.post(
+        "/api/v1/llm-connections",
+        json={
+            "apiVersion": "blackbeard/v1",
+            "kind": "LLMConnection",
+            "metadata": {"name": "test-llm"},
+            "spec": {"provider": "vertex_ai", "model": "claude-sonnet-4-6"},
+        },
+        headers=API_KEY_HEADER,
+    )
+    assert r.status_code in (200, 201)
+
+    r = await client.post(
+        "/api/v1/agents",
+        json={
+            "apiVersion": "blackbeard/v1",
+            "kind": "Agent",
+            "metadata": {"name": "sa-agent"},
+            "spec": {
+                "role": "Test Agent",
+                "goal": "Test goal",
+                "backstory": "Test backstory",
+                "serviceAccount": "custom-sa",
+            },
+        },
+        headers=API_KEY_HEADER,
+    )
+    assert r.status_code in (200, 201)
+
+    r = await client.post(
+        "/api/v1/tasks",
+        json={
+            "apiVersion": "blackbeard/v1",
+            "kind": "Task",
+            "metadata": {"name": "sa-task"},
+            "spec": {
+                "description": "Test task",
+                "expected_output": "Output",
+                "agent": "ref:agents/sa-agent",
+            },
+        },
+        headers=API_KEY_HEADER,
+    )
+    assert r.status_code in (200, 201)
+
+    r = await client.post(
+        "/api/v1/crews",
+        json={
+            "apiVersion": "blackbeard/v1",
+            "kind": "Crew",
+            "metadata": {"name": "sa-crew"},
+            "spec": {
+                "process": "sequential",
+                "agents": ["ref:agents/sa-agent"],
+                "tasks": ["ref:tasks/sa-task"],
+            },
+        },
+        headers=API_KEY_HEADER,
+    )
+    assert r.status_code in (200, 201)
+
+    response = await client.post(
+        "/api/v1/crews/sa-crew/kickoff",
+        json={"inputs": {}},
+        headers=API_KEY_HEADER,
+    )
+    assert response.status_code == 202
+    data = response.json()
+    chain = data["principal_chain"]
+    assert chain is not None
+    # Find the agent with the custom service account
+    agent_entry = next(a for a in chain["agents"] if a["name"] == "sa-agent")
+    assert agent_entry["serviceAccount"] == "custom-sa"
+
+
+async def test_execution_response_includes_identity_fields(client: AsyncClient):
+    """Execution response should include initiated_by and principal_chain fields."""
+    await _create_full_crew(client)
+    kickoff_resp = await client.post(
+        "/api/v1/crews/test-crew/kickoff",
+        json={"inputs": {}},
+        headers=API_KEY_HEADER,
+    )
+    assert kickoff_resp.status_code == 202
+    data = kickoff_resp.json()
+
+    # Fields must be present in the response
+    assert "initiated_by" in data
+    assert "principal_chain" in data
+
+    # Verify via GET as well
+    exec_id = data["id"]
+    get_resp = await client.get(f"/api/v1/executions/{exec_id}", headers=API_KEY_HEADER)
+    assert get_resp.status_code == 200
+    get_data = get_resp.json()
+    assert "initiated_by" in get_data
+    assert "principal_chain" in get_data
+    assert get_data["principal_chain"]["crew"] == "test-crew"
+
+
+async def test_list_executions_includes_identity_fields(client: AsyncClient):
+    """List executions should include initiated_by and principal_chain."""
+    await _create_full_crew(client)
+    r = await client.post(
+        "/api/v1/crews/test-crew/kickoff",
+        json={"inputs": {}},
+        headers=API_KEY_HEADER,
+    )
+    assert r.status_code == 202
+
+    response = await client.get("/api/v1/executions", headers=API_KEY_HEADER)
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert "initiated_by" in items[0]
+    assert "principal_chain" in items[0]

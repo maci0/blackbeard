@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from blackbeard.api import sse_state
+from blackbeard.auth.dependencies import get_current_user
 from blackbeard.config import settings
 from blackbeard.engine import ExecutionError, ExecutionNotFoundError
 from blackbeard.engine import executor as _executor_mod
@@ -23,6 +24,7 @@ from blackbeard.logging_config import request_id_var
 from blackbeard.models import (
     TERMINAL_STATUSES,
     ExecutionStatus,
+    User,
     async_session,
     get_session,
 )
@@ -74,10 +76,13 @@ async def kickoff_crew(
         description="Namespace containing the crew",
     ),
     session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_current_user),
 ) -> ExecutionResponse:
     """Kick off a crew execution. Returns immediately with status=queued."""
     try:
-        execution = await _executor_mod.kickoff(session, crew_name, body.inputs, namespace)
+        execution = await _executor_mod.kickoff(
+            session, crew_name, body.inputs, namespace, user=user
+        )
     except ExecutionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ExecutionError as exc:

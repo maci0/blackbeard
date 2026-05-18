@@ -8,133 +8,48 @@ import time
 from graphlib import TopologicalSorter
 from importlib.metadata import version as pkg_version
 from pathlib import Path
-from typing import Any, NoReturn, cast
+from typing import Any, cast
 
 import click
 import httpx
 import yaml
-from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.syntax import Syntax
 from rich.table import Table
 
+from blackbeard.cli.helpers import (
+    STATUS_COLORS as _STATUS_COLORS,
+)
+from blackbeard.cli.helpers import (
+    console,
+    out,
+    require_auth,
+)
+from blackbeard.cli.helpers import (
+    extract_detail as _extract_detail,
+)
+from blackbeard.cli.helpers import (
+    handle_http_error as _handle_http_error,
+)
+from blackbeard.cli.helpers import (
+    handle_request_error as _handle_request_error,
+)
+from blackbeard.cli.helpers import (
+    json_opt as _json_opt,
+)
+from blackbeard.cli.helpers import (
+    output_json as _output_json,
+)
+from blackbeard.cli.helpers import (
+    validate_name as _validate_name,
+)
+from blackbeard.cli.helpers import (
+    warn_unused_interval as _warn_unused_interval,
+)
 from blackbeard.kinds import ALL_KINDS, KIND_TO_PLURAL, NAME_PATTERN
 from blackbeard.models import TERMINAL_STATUSES
 from blackbeard.resources import ValidationError, build_adjacency, detect_cycles, validate_resource
-
-# Rich consoles — stderr for errors/progress, stdout for data
-console = Console(stderr=True)
-out = Console()
-
-_STATUS_COLORS: dict[str, str] = {
-    "completed": "green",
-    "failed": "red",
-    "cancelled": "yellow",
-    "running": "blue",
-    "queued": "cyan",
-    "pending": "cyan",
-}
-
-_json_opt = click.option(
-    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
-)
-
-
-def _require_api_key(ctx: click.Context) -> str:
-    """Get API key from context, raising if not set."""
-    key = ctx.obj.get("api_key")
-    if not key:
-        console.print(
-            "[red bold]Error:[/] API key required. Set BLACKBEARD_API_KEY or pass --api-key."
-        )
-        raise SystemExit(2)
-    return cast("str", key)
-
-
-def _validate_name(name: str) -> None:
-    """Exit with code 2 if *name* doesn't match the resource naming rules."""
-    if not re.fullmatch(NAME_PATTERN, name):
-        console.print(
-            f"[red bold]Error:[/] Invalid resource name {name!r}.\n"
-            "  Names must start with a lowercase letter or digit and"
-            " contain only lowercase letters, digits, and hyphens."
-        )
-        raise SystemExit(2)
-
-
-def _warn_unused_interval(ctx: click.Context, watch: bool, interval: int, cmd_hint: str) -> None:
-    """Warn when --interval is passed without --wait."""
-    from_cli = ctx.get_parameter_source("interval") == click.core.ParameterSource.COMMANDLINE
-    if not watch and from_cli:
-        console.print(
-            f"[yellow]Warning:[/] --interval/-i has no effect without --wait/--watch/-w."
-            f" Try: [bold]{cmd_hint} -w -i {interval}[/]"
-        )
-
-
-def _output_json(data: object, *, compact: bool = False) -> None:
-    if compact:
-        out.print(
-            json.dumps(data, default=str, ensure_ascii=False, separators=(",", ":")),
-            highlight=False,
-        )
-    else:
-        out.print_json(json.dumps(data, default=str, ensure_ascii=False))
-
-
-def _extract_detail(response: httpx.Response) -> str:
-    try:
-        body = response.json()
-        if isinstance(body, dict):
-            detail = body.get("detail", response.text)
-            if isinstance(detail, str):
-                return detail
-            return str(detail)
-        return response.text
-    except Exception:
-        return response.text
-
-
-def _handle_request_error(server: str, exc: httpx.RequestError) -> NoReturn:
-    console.print(
-        f"[red bold]Error:[/] Cannot reach server at [bold]{server}[/]\n"
-        f"  {exc}\n\n"
-        f"[dim]Suggestions:\n"
-        f"  • Is the server running? Try: curl {server}/api/v1/health\n"
-        f"  • Wrong URL? Set --server or BLACKBEARD_SERVER[/]"
-    )
-    raise SystemExit(1) from exc
-
-
-def _handle_http_error(response: httpx.Response) -> NoReturn:
-    detail = _extract_detail(response)
-    console.print(f"[red bold]Error:[/] HTTP {response.status_code}: {detail}")
-    if response.status_code == 401:
-        console.print("[dim]Hint: Check your API key (--api-key or BLACKBEARD_API_KEY)[/]")
-    elif response.status_code == 403:
-        console.print("[dim]Hint: API key valid but lacks permission for this action[/]")
-    elif response.status_code == 404:
-        console.print("[dim]Hint: Verify the resource name and namespace (-n)[/]")
-    elif response.status_code == 409:
-        console.print("[dim]Hint: Resource version conflict — re-fetch and retry[/]")
-    elif response.status_code == 422:
-        console.print("[dim]Hint: Check your resource spec against the expected schema[/]")
-    elif response.status_code == 429:
-        retry = response.headers.get("Retry-After")
-        hint = "Too many requests — wait and retry"
-        if retry:
-            hint += f" (Retry-After: {retry}s)"
-        console.print(f"[dim]Hint: {hint}[/]")
-    elif response.status_code >= 500:
-        console.print("[dim]Hint: Server error — check server logs for details[/]")
-    try:
-        body = response.json()
-        if isinstance(body, dict) and "request_id" in body:
-            console.print(f"[dim]Request ID: {body['request_id']}[/]")
-    except Exception:
-        pass
-    raise SystemExit(1)
 
 
 def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
@@ -473,7 +388,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
     """Apply YAML resource files to the server (create or update)."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
-    api_key = _require_api_key(ctx)
+
 
     resources = load_yaml_resources(Path(path))
 
@@ -559,7 +474,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
         if "namespace" not in meta:
             meta["namespace"] = namespace
 
-    headers = {"X-API-Key": api_key}
+    headers = require_auth(ctx)
     results: list[dict[str, Any]] = []
 
     try:
@@ -688,12 +603,12 @@ def get(ctx: click.Context, kind: str, name: str, output_json: bool) -> None:
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     _validate_name(name)
     server = ctx.obj["server"]
-    api_key = _require_api_key(ctx)
+
     namespace = ctx.obj["namespace"]
     plural = KIND_TO_PLURAL[kind]
 
     url = f"{server}/api/v1/{plural}/{name}"
-    headers = {"X-API-Key": api_key}
+    headers = require_auth(ctx)
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
@@ -768,7 +683,7 @@ def list_resources_cmd(
     """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
-    api_key = _require_api_key(ctx)
+
     namespace = ctx.obj["namespace"]
     plural = KIND_TO_PLURAL[kind]
 
@@ -792,7 +707,7 @@ def list_resources_cmd(
         params["label_selector"] = ",".join(label_parts)
 
     url = f"{server}/api/v1/{plural}"
-    headers = {"X-API-Key": api_key}
+    headers = require_auth(ctx)
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
@@ -871,7 +786,7 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: boo
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     _validate_name(name)
     server = ctx.obj["server"]
-    api_key = _require_api_key(ctx)
+
     namespace = ctx.obj["namespace"]
     plural = KIND_TO_PLURAL[kind]
 
@@ -886,7 +801,7 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: boo
         return
 
     url = f"{server}/api/v1/{plural}/{name}"
-    headers = {"X-API-Key": api_key}
+    headers = require_auth(ctx)
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
@@ -974,14 +889,14 @@ def kickoff(
             parsed_inputs[key] = value
 
     server = ctx.obj["server"]
-    api_key = _require_api_key(ctx)
+
     namespace = ctx.obj["namespace"]
     prog = ctx.find_root().info_name or "blackbeard"
 
     _warn_unused_interval(ctx, watch, interval, f"{prog} kickoff {crew_name}")
 
     url = f"{server}/api/v1/crews/{crew_name}/kickoff"
-    headers = {"X-API-Key": api_key}
+    headers = require_auth(ctx)
     body = {"inputs": parsed_inputs}
 
     with console.status("Submitting execution..."):
@@ -1072,7 +987,7 @@ def status(
     """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
-    api_key = _require_api_key(ctx)
+
     is_json = ctx.obj["json"]
 
     prog = ctx.find_root().info_name or "blackbeard"
@@ -1080,7 +995,7 @@ def status(
 
     terminal_states = {s.value for s in TERMINAL_STATUSES}
     url = f"{server}/api/v1/executions/{execution_id}"
-    headers = {"X-API-Key": api_key}
+    headers = require_auth(ctx)
 
     def _status_color(s: str) -> str:
         return _STATUS_COLORS.get(s, "dim")
@@ -1221,6 +1136,28 @@ def status(
 
         if current_status in ("failed", "cancelled"):
             raise SystemExit(1)
+
+
+# ── Register subcommands from CLI modules ────────────────────────────────────
+
+from blackbeard.cli.auth_cmds import login, logout, register, whoami  # noqa: E402
+from blackbeard.cli.exec import cancel, events, executions_list  # noqa: E402
+from blackbeard.cli.export_cmd import export_cmd  # noqa: E402
+from blackbeard.cli.rbac import role, rolebinding  # noqa: E402
+from blackbeard.cli.users import group, user  # noqa: E402
+
+cli.add_command(login)
+cli.add_command(logout)
+cli.add_command(whoami)
+cli.add_command(register)
+cli.add_command(executions_list)
+cli.add_command(events)
+cli.add_command(cancel)
+cli.add_command(export_cmd)
+cli.add_command(user)
+cli.add_command(group)
+cli.add_command(role)
+cli.add_command(rolebinding)
 
 
 if __name__ == "__main__":
