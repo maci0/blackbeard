@@ -176,9 +176,9 @@ class ExecutionResponse(BaseModel):
     id: UUID
     crew_name: str
     crew_namespace: str
-    execution_type: Literal["kickoff", "train", "test"] = Field(
+    execution_type: Literal["kickoff", "train", "test", "flow"] = Field(
         default="kickoff",
-        description="Execution mode: kickoff, train, or test",
+        description="Execution mode: kickoff, train, test, or flow",
     )
     status: Literal["queued", "running", "completed", "failed", "cancelled"] = Field(
         description="Execution status",

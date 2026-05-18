@@ -247,6 +247,75 @@ async def test_crew_endpoint(
     return ExecutionResponse.from_db(execution)
 
 
+@router.post(
+    "/flows/{flow_name}/run",
+    response_model=ExecutionResponse,
+    status_code=202,
+    responses={
+        202: {"description": "Flow execution queued"},
+        404: {"description": "Flow not found"},
+    },
+)
+async def run_flow_endpoint(
+    response: Response,
+    flow_name: str = Path(
+        ...,
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Name of the flow to run",
+    ),
+    body: KickoffRequest = Body(...),
+    namespace: str = Query(
+        default="default",
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Namespace containing the flow",
+    ),
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_current_user),
+    request: Request = None,  # type: ignore[assignment]
+) -> ExecutionResponse:
+    """Run a flow. Returns immediately with status=queued."""
+    try:
+        execution = await _executor_mod.run_flow(
+            session,
+            flow_name,
+            body.inputs,
+            namespace=namespace,
+            user=user,
+        )
+    except ExecutionNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Flow '{flow_name}' not found") from None
+    except ExecutionError as exc:
+        logger.error(
+            "Flow run failed for '%s': %s",
+            flow_name,
+            exc,
+            extra={
+                "event": "flow_run_error",
+                "flow_name": flow_name,
+                "namespace": namespace,
+                "error": str(exc)[:500],
+            },
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Flow execution could not be created. Check server logs.",
+        ) from exc
+    if request:
+        await log_audit(
+            session,
+            action="flow_started",
+            resource_type="Flow",
+            resource_id=flow_name,
+            detail={"execution_id": str(execution.id), "namespace": namespace},
+            **audit_from_request(request, user),
+        )
+        await session.commit()
+    response.headers["Location"] = f"/api/v1/executions/{execution.id}"
+    return ExecutionResponse.from_db(execution)
+
+
 @router.get(
     "/executions",
     response_model=ExecutionListResponse,

@@ -1329,11 +1329,17 @@ def test_test_request_validates_inputs():
 
 
 def test_execution_type_values():
-    """ExecutionType enum should have exactly kickoff, train, test."""
-    assert set(ExecutionType) == {ExecutionType.KICKOFF, ExecutionType.TRAIN, ExecutionType.TEST}
+    """ExecutionType enum should have kickoff, train, test, flow."""
+    assert set(ExecutionType) == {
+        ExecutionType.KICKOFF,
+        ExecutionType.TRAIN,
+        ExecutionType.TEST,
+        ExecutionType.FLOW,
+    }
     assert ExecutionType.KICKOFF.value == "kickoff"
     assert ExecutionType.TRAIN.value == "train"
     assert ExecutionType.TEST.value == "test"
+    assert ExecutionType.FLOW.value == "flow"
 
 
 # ---------------------------------------------------------------------------

@@ -23,6 +23,7 @@ __all__ = [
     "list_execution_events",
     "list_executions",
     "recover_stale_executions",
+    "run_flow",
     "shutdown_executor",
     "test_crew",
     "train_crew",
@@ -34,7 +35,7 @@ from sqlalchemy.orm import defer, load_only, selectinload
 
 from blackbeard.config import settings
 from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-from blackbeard.engine.loader import ResourceLoader
+from blackbeard.engine.loader import LoaderError, ResourceLoader
 from blackbeard.kinds import ResourceKind
 from blackbeard.logging_config import request_id_var
 from blackbeard.models import (
@@ -75,6 +76,7 @@ _CREW_RELEVANT_KINDS = (
     ResourceKind.TOOL,
     ResourceKind.KNOWLEDGE_SOURCE,
     ResourceKind.AGENT_POLICY,
+    ResourceKind.FLOW,
 )
 
 _NAMESPACE_RESOURCE_LIMIT = 500
@@ -587,6 +589,29 @@ async def test_crew(
     )
 
 
+async def run_flow(
+    session: AsyncSession,
+    flow_name: str,
+    inputs: dict[str, Any] | None = None,
+    namespace: str = "default",
+    user: User | None = None,
+) -> Execution:
+    """Start a flow execution.
+
+    Loads the Flow resource, resolves all referenced crews, and executes
+    each step sequentially (or by dependency graph). Returns the execution
+    record immediately (status=queued).
+    """
+    return await _submit_execution(
+        session,
+        flow_name,
+        inputs or {},
+        namespace,
+        user,
+        ExecutionType.FLOW,
+    )
+
+
 async def _mark_failed_async(execution_id: UUID, error: str) -> None:
     """Mark an execution as failed."""
     async with async_session() as session:
@@ -767,6 +792,87 @@ def _resolve_eval_llm(
     return "gpt-4o"
 
 
+def _run_flow_steps(
+    loader: Any,
+    resource_snapshot: dict[str, dict[str, Any]],
+    flow_name: str,
+    inputs: dict[str, Any],
+    listener: Any,
+) -> Any:
+    """Execute a Flow resource by running its steps sequentially.
+
+    Each step of type "crew" builds and kicks off the referenced crew.
+    Step outputs are chained: the result of step N is available to step N+1.
+    """
+    from crewai.crews.crew_output import CrewOutput
+
+    flow_snap = resource_snapshot.get(f"Flow/{flow_name}")
+    if not flow_snap:
+        raise LoaderError(f"Flow '{flow_name}' not found in resource snapshot")
+
+    flow_spec = flow_snap.get("spec", {})
+    steps = flow_spec.get("steps", [])
+    step_outputs: dict[str, Any] = {}
+    last_result: Any = None
+
+    for step in steps:
+        step_name = step.get("name", "unnamed")
+        step_type = step.get("type", "crew")
+
+        if step_type == "crew":
+            crew_ref = step.get("crew")
+            if not crew_ref:
+                logger.warning("Flow step '%s' has no crew ref — skipped", step_name)
+                continue
+
+            crew = loader.build_crew(crew_ref.split("/")[-1] if "/" in crew_ref else crew_ref)
+            step_inputs = {**inputs, **step_outputs}
+            result = crew.kickoff(inputs=step_inputs)
+
+            if isinstance(result, CrewOutput):
+                step_outputs[step_name] = result.raw
+                last_result = result
+            else:
+                step_outputs[step_name] = str(result) if result else ""
+                last_result = result
+
+            logger.info(
+                "Flow step '%s' completed (crew=%s)",
+                step_name,
+                crew_ref,
+                extra={
+                    "event": "flow_step_completed",
+                    "flow_name": flow_name,
+                    "step_name": step_name,
+                    "crew_ref": crew_ref,
+                },
+            )
+
+        elif step_type == "function":
+            fn_path = step.get("function_path", "")
+            if fn_path and ":" in fn_path:
+                module_path, fn_name = fn_path.rsplit(":", 1)
+                try:
+                    import importlib
+
+                    mod = importlib.import_module(module_path)
+                    fn = getattr(mod, fn_name)
+                    step_result = fn({**inputs, **step_outputs})
+                    step_outputs[step_name] = step_result
+                except Exception as exc:
+                    logger.warning("Flow function step '%s' failed: %s", step_name, exc)
+                    step_outputs[step_name] = f"error: {exc}"
+
+        elif step_type in ("router", "condition"):
+            logger.info(
+                "Flow step '%s' (type=%s) — routing not yet implemented, continuing",
+                step_name,
+                step_type,
+            )
+
+    return last_result
+
+
 async def _run_crew_async(
     execution_id: UUID,
     resource_snapshot: dict[str, dict[str, Any]],
@@ -900,7 +1006,11 @@ async def _run_crew_async(
                 db_url=settings.database_url.get_secret_value(),
             )
 
-            if execution_type == ExecutionType.TRAIN:
+            if execution_type == ExecutionType.FLOW:
+                result = _run_flow_steps(
+                    loader, resource_snapshot, crew_name, inputs, listener
+                )
+            elif execution_type == ExecutionType.TRAIN:
                 crew.train(
                     n_iterations=n_iterations,
                     inputs=inputs,
@@ -908,8 +1018,6 @@ async def _run_crew_async(
                 )
                 result = None
             elif execution_type == ExecutionType.TEST:
-                # crew.test() requires an eval_llm — resolve from the
-                # crew's manager_llm or first agent's LLM.
                 eval_llm = _resolve_eval_llm(loader, resource_snapshot, crew_name)
                 crew.test(
                     n_iterations=n_iterations,

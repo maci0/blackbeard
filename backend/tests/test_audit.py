@@ -4,9 +4,6 @@ Covers: audit log model creation, audit service, API endpoint (list + filters),
 and integration tests verifying that key actions produce audit entries.
 """
 
-from __future__ import annotations
-
-import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

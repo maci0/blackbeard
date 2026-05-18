@@ -29,11 +29,12 @@ from blackbeard.models.database import Base
 
 
 class ExecutionType(enum.StrEnum):
-    """Execution mode: kickoff, train, or test."""
+    """Execution mode: kickoff, train, test, or flow."""
 
     KICKOFF = "kickoff"
     TRAIN = "train"
     TEST = "test"
+    FLOW = "flow"
 
 
 class ExecutionStatus(enum.StrEnum):
