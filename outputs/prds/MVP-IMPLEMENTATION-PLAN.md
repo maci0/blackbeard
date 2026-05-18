@@ -32,13 +32,13 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 | Temporal (workflow orchestration) | Sequential crews don't need durable execution; in-process is fine |
 | Presidio (PII redaction) | Not critical for MVP; execution events are stored in own DB |
 | Infisical (secrets) | `.env` files are fine for MVP |
-| MinIO (object storage) | Local filesystem for MVP |
-| Flows (event-driven workflows) | Crews are enough to prove the concept |
+| MinIO (object storage) | Git-based asset management via export/apply; no blob store needed |
+| Flow router/condition steps | Sequential flow steps work; dynamic routing deferred |
 | Hierarchical process | Sequential is enough for MVP |
 | Docker/MicroVM sandbox tiers | `none` + `wasm` covers most cases |
 | OAuth integrations (Gmail, Slack, etc.) | Complex, not core |
 | A2A protocol | Inter-agent comms deferred |
-| Asset repository | No multi-team sharing yet |
+| Asset repository | Git-based via export/apply; custom registry deferred |
 | React component export | Post-MVP UX feature |
 | Webhook streaming | Post-MVP integration feature |
 | Plugin SDK | Post-MVP extensibility |
