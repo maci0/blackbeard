@@ -18,6 +18,7 @@ from blackbeard.cli.helpers import (
     json_opt,
     out,
     require_auth,
+    warn_unused_interval,
 )
 from blackbeard.cli.helpers import (
     output_json as _print_json,
@@ -28,13 +29,19 @@ from blackbeard.cli.helpers import (
 @click.option("--crew", "-c", default=None, help="Filter by crew name")
 @click.option(
     "--status",
-    "-s",
     "status_filter",
     default=None,
     type=click.Choice(["queued", "running", "completed", "failed", "cancelled"]),
     help="Filter by status",
 )
-@click.option("--limit", default=20, type=click.IntRange(1, 1000), help="Max results")
+@click.option(
+    "--limit",
+    default=20,
+    show_default=True,
+    type=click.IntRange(1, 1000),
+    metavar="N",
+    help="Maximum number of results",
+)
 @json_opt
 @click.pass_context
 def executions_list(
@@ -57,9 +64,7 @@ def executions_list(
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-            resp = client.get(
-                f"{server}/api/v1/executions", headers=headers, params=params
-            )
+            resp = client.get(f"{server}/api/v1/executions", headers=headers, params=params)
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
 
@@ -111,7 +116,15 @@ def executions_list(
 @click.command()
 @click.argument("execution_id")
 @click.option("--follow", "-f", is_flag=True, default=False, help="Follow events in real-time")
-@click.option("--interval", "-i", default=2, type=click.IntRange(1, 30), help="Poll interval (s)")
+@click.option(
+    "--interval",
+    "-i",
+    default=2,
+    show_default=True,
+    type=click.IntRange(1, 30),
+    metavar="SECONDS",
+    help="Polling interval in seconds (used with --follow)",
+)
 @json_opt
 @click.pass_context
 def events(
@@ -126,6 +139,16 @@ def events(
     server = ctx.obj["server"]
     headers = require_auth(ctx)
     is_json = ctx.obj["json"]
+
+    prog = ctx.find_root().info_name or "blackbeard"
+    warn_unused_interval(
+        ctx,
+        follow,
+        interval,
+        f"{prog} events {execution_id}",
+        watch_flag="--follow/-f",
+        watch_short="-f",
+    )
 
     url = f"{server}/api/v1/executions/{execution_id}/events"
     after = -1
@@ -214,9 +237,7 @@ def _event_summary(event_type: str, data: dict[str, Any]) -> str:
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation")
 @json_opt
 @click.pass_context
-def cancel(
-    ctx: click.Context, execution_id: str, yes: bool, output_json: bool = False
-) -> None:
+def cancel(ctx: click.Context, execution_id: str, yes: bool, output_json: bool = False) -> None:
     """Cancel a running execution."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]

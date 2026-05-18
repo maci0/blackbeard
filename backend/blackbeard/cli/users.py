@@ -22,7 +22,7 @@ from blackbeard.cli.helpers import (
 # ── User subgroup ────────────────────────────────────────────────────────────
 
 
-@click.group()
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.pass_context
 def user(ctx: click.Context) -> None:
     """Manage platform users."""
@@ -30,7 +30,14 @@ def user(ctx: click.Context) -> None:
 
 
 @user.command("list")
-@click.option("--limit", default=100, type=click.IntRange(1, 1000), help="Max results")
+@click.option(
+    "--limit",
+    default=100,
+    show_default=True,
+    type=click.IntRange(1, 1000),
+    metavar="N",
+    help="Maximum number of results",
+)
 @json_opt
 @click.pass_context
 def user_list(ctx: click.Context, limit: int, output_json: bool = False) -> None:
@@ -41,9 +48,7 @@ def user_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-            resp = client.get(
-                f"{server}/api/v1/users", headers=headers, params={"limit": limit}
-            )
+            resp = client.get(f"{server}/api/v1/users", headers=headers, params={"limit": limit})
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
 
@@ -83,8 +88,15 @@ def user_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
 
 @user.command("invite")
 @click.option("--email", "-e", required=True, help="Email address")
-@click.option("--password", "-p", required=True, help="Initial password")
-@click.option("--name", "-n", "display_name", required=True, help="Display name")
+@click.option(
+    "--password",
+    "-p",
+    prompt=True,
+    hide_input=True,
+    confirmation_prompt=True,
+    help="Initial password (prompted securely if omitted)",
+)
+@click.option("--name", "-d", "display_name", required=True, help="Display name")
 @json_opt
 @click.pass_context
 def user_invite(
@@ -97,11 +109,13 @@ def user_invite(
     """Create a new user account (admin invite)."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
+    headers = require_auth(ctx)
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             resp = client.post(
                 f"{server}/api/v1/auth/register",
+                headers=headers,
                 json={
                     "email": email,
                     "password": password,
@@ -128,7 +142,7 @@ def user_invite(
 # ── Group subgroup ───────────────────────────────────────────────────────────
 
 
-@click.group()
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.pass_context
 def group(ctx: click.Context) -> None:
     """Manage groups."""
@@ -136,7 +150,14 @@ def group(ctx: click.Context) -> None:
 
 
 @group.command("list")
-@click.option("--limit", default=100, type=click.IntRange(1, 1000), help="Max results")
+@click.option(
+    "--limit",
+    default=100,
+    show_default=True,
+    type=click.IntRange(1, 1000),
+    metavar="N",
+    help="Maximum number of results",
+)
 @json_opt
 @click.pass_context
 def group_list(ctx: click.Context, limit: int, output_json: bool = False) -> None:
@@ -147,9 +168,7 @@ def group_list(ctx: click.Context, limit: int, output_json: bool = False) -> Non
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-            resp = client.get(
-                f"{server}/api/v1/groups", headers=headers, params={"limit": limit}
-            )
+            resp = client.get(f"{server}/api/v1/groups", headers=headers, params={"limit": limit})
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
 
@@ -203,9 +222,7 @@ def group_create(
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-            resp = client.post(
-                f"{server}/api/v1/groups", headers=headers, json=body
-            )
+            resp = client.post(f"{server}/api/v1/groups", headers=headers, json=body)
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
 
@@ -228,9 +245,7 @@ def group_create(
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation")
 @json_opt
 @click.pass_context
-def group_delete(
-    ctx: click.Context, group_id: str, yes: bool, output_json: bool = False
-) -> None:
+def group_delete(ctx: click.Context, group_id: str, yes: bool, output_json: bool = False) -> None:
     """Delete a group by ID."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]

@@ -61,8 +61,7 @@ def login(ctx: click.Context, email: str, password: str, output_json: bool = Fal
 
     user = data.get("user", {})
     out.print(
-        f"[green]Logged in[/] as [bold]{user.get('display_name', email)}[/]"
-        f" ({email}) on {server}"
+        f"[green]Logged in[/] as [bold]{user.get('display_name', email)}[/] ({email}) on {server}"
     )
 
 
@@ -125,7 +124,7 @@ def whoami(ctx: click.Context, output_json: bool = False) -> None:
 @click.option(
     "--password", "-p", prompt=True, hide_input=True, confirmation_prompt=True, help="Password"
 )
-@click.option("--name", "-n", "display_name", prompt="Display name", help="Display name")
+@click.option("--name", "-d", "display_name", prompt="Display name", help="Display name")
 @json_opt
 @click.pass_context
 def register(

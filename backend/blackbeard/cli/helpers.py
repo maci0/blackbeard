@@ -152,14 +152,20 @@ def validate_name(name: str) -> None:
 
 
 def warn_unused_interval(
-    ctx: click.Context, watch: bool, interval: int, cmd_hint: str
+    ctx: click.Context,
+    watch: bool,
+    interval: int,
+    cmd_hint: str,
+    *,
+    watch_flag: str = "--wait/--watch/-w",
+    watch_short: str = "-w",
 ) -> None:
-    """Warn when --interval is passed without --wait."""
+    """Warn when --interval is passed without the streaming/watch flag."""
     from_cli = ctx.get_parameter_source("interval") == click.core.ParameterSource.COMMANDLINE
     if not watch and from_cli:
         console.print(
-            f"[yellow]Warning:[/] --interval/-i has no effect without --wait/--watch/-w."
-            f" Try: [bold]{cmd_hint} -w -i {interval}[/]"
+            f"[yellow]Warning:[/] --interval/-i has no effect without {watch_flag}."
+            f" Try: [bold]{cmd_hint} {watch_short} -i {interval}[/]"
         )
 
 

@@ -27,7 +27,7 @@ ALL_VERBS = ["get", "list", "create", "update", "delete", "run", "invoke", "dele
 # ── Role subgroup ────────────────────────────────────────────────────────────
 
 
-@click.group()
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.pass_context
 def role(ctx: click.Context) -> None:
     """Manage RBAC roles."""
@@ -35,9 +35,17 @@ def role(ctx: click.Context) -> None:
 
 
 @role.command("list")
+@click.option(
+    "--limit",
+    default=100,
+    show_default=True,
+    type=click.IntRange(1, 1000),
+    metavar="N",
+    help="Maximum number of results",
+)
 @json_opt
 @click.pass_context
-def role_list(ctx: click.Context, output_json: bool = False) -> None:
+def role_list(ctx: click.Context, limit: int, output_json: bool = False) -> None:
     """List all roles."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
@@ -45,7 +53,11 @@ def role_list(ctx: click.Context, output_json: bool = False) -> None:
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-            resp = client.get(f"{server}/api/v1/roles", headers=headers)
+            resp = client.get(
+                f"{server}/api/v1/roles",
+                headers=headers,
+                params={"limit": limit},
+            )
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
 
@@ -150,7 +162,7 @@ def role_describe(ctx: click.Context, name: str, output_json: bool = False) -> N
 # ── RoleBinding subgroup ─────────────────────────────────────────────────────
 
 
-@click.group()
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.pass_context
 def rolebinding(ctx: click.Context) -> None:
     """Manage role bindings."""
@@ -158,9 +170,17 @@ def rolebinding(ctx: click.Context) -> None:
 
 
 @rolebinding.command("list")
+@click.option(
+    "--limit",
+    default=100,
+    show_default=True,
+    type=click.IntRange(1, 1000),
+    metavar="N",
+    help="Maximum number of results",
+)
 @json_opt
 @click.pass_context
-def rolebinding_list(ctx: click.Context, output_json: bool = False) -> None:
+def rolebinding_list(ctx: click.Context, limit: int, output_json: bool = False) -> None:
     """List all role bindings."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
@@ -168,7 +188,11 @@ def rolebinding_list(ctx: click.Context, output_json: bool = False) -> None:
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-            resp = client.get(f"{server}/api/v1/role-bindings", headers=headers)
+            resp = client.get(
+                f"{server}/api/v1/role-bindings",
+                headers=headers,
+                params={"limit": limit},
+            )
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
 
@@ -234,9 +258,7 @@ def rolebinding_create(
     parsed_subjects = []
     for s in subjects:
         if ":" not in s:
-            console.print(
-                f"[red bold]Error:[/] Invalid --subject: expected KIND:NAME, got: {s!r}"
-            )
+            console.print(f"[red bold]Error:[/] Invalid --subject: expected KIND:NAME, got: {s!r}")
             console.print("[dim]Example: --subject User:admin@blackbeard.sh[/]")
             raise SystemExit(2)
         kind, _, subj_name = s.partition(":")
@@ -258,9 +280,7 @@ def rolebinding_create(
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-            resp = client.post(
-                f"{server}/api/v1/role-bindings", headers=headers, json=body
-            )
+            resp = client.post(f"{server}/api/v1/role-bindings", headers=headers, json=body)
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
 

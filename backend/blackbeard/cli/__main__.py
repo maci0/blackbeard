@@ -389,7 +389,6 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
 
-
     resources = load_yaml_resources(Path(path))
 
     if not resources:
