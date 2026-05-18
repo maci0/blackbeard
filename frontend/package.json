@@ -12,8 +12,10 @@
     "format:check": "prettier --check 'src/**/*.{ts,tsx,css,html}'",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
+    "test:e2e": "bunx playwright test",
     "check": "bun run typecheck && bun run lint && bun run format:check",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "generate:api": "bunx openapi-typescript openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.0",
@@ -24,6 +26,7 @@
     "highlight.js": "^11.11.1",
     "js-yaml": "^4.1.1",
     "lucide-react": "^0.511.0",
+    "openapi-fetch": "^0.17.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.0",
@@ -32,6 +35,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
+    "@playwright/test": "^1.60.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.15.0",
     "@types/react": "^19.1.0",
@@ -43,6 +50,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.0",
     "globals": "^16.1.0",
+    "jsdom": "^29.1.1",
     "postcss": "^8.5.0",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.8.0",

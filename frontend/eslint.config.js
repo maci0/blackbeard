@@ -6,7 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist'] },
+  { ignores: ['dist', 'e2e'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommendedTypeChecked, prettier],
     files: ['**/*.{ts,tsx}'],
@@ -15,7 +15,7 @@ export default tseslint.config(
       globals: globals.browser,
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['vite.config.ts'],
+          allowDefaultProject: ['vite.config.ts', 'playwright.config.ts'],
         },
         tsconfigRootDir: import.meta.dirname,
       },
