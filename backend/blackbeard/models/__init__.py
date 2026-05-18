@@ -4,6 +4,7 @@ ORM models:
     Resource, ResourceRef — generic resource storage (resource.py)
     Execution, ExecutionTask, ExecutionToolCall, ExecutionEvent — execution tracking (execution.py)
     User, Group, GroupMember — authentication and group membership (user.py)
+    AuditLog — immutable security audit trail (audit.py)
 
 API schemas (Pydantic):
     resource_schemas — request/response models for resource endpoints
@@ -13,6 +14,7 @@ API schemas (Pydantic):
 
 from __future__ import annotations
 
+from blackbeard.models.audit import AuditLog
 from blackbeard.models.database import Base, async_session, get_session
 from blackbeard.models.execution import (
     TERMINAL_STATUSES,
@@ -29,6 +31,7 @@ from blackbeard.models.user import Group, GroupMember, User
 
 __all__ = [
     "TERMINAL_STATUSES",
+    "AuditLog",
     "Base",
     "Execution",
     "ExecutionEvent",

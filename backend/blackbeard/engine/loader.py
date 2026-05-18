@@ -20,6 +20,7 @@ __all__ = [
 from crewai import LLM, Agent, Crew, Process, Task
 
 from blackbeard.config import settings
+from blackbeard.engine.policy import AgentPolicy, resolve_policy
 from blackbeard.kinds import ResourceKind
 from blackbeard.litellm import apply_model_params, apply_vertex_params
 from blackbeard.resources import ALLOWED_TOOL_MODULE_PREFIXES, BLOCKED_TOOL_SUBMODULES, parse_ref
@@ -83,6 +84,7 @@ class ResourceLoader:
         self,
         resources: dict[str, Resource],
         api_key: str | None = None,
+        policies: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         """Initialize with a dict of resources keyed by 'Kind/name'.
 
@@ -92,11 +94,16 @@ class ResourceLoader:
                 When provided, ``build_llm()`` uses this key instead of
                 the global ``litellm_master_key``.  Used by the executor
                 to inject per-execution virtual keys with budget limits.
+            policies: Dict of policy name -> policy spec for policy
+                enforcement.  When provided, ``build_agent()`` resolves
+                agent policies and enforces tool filtering and delegation
+                constraints at crew-build time.
 
         Example: {"Agent/researcher": <Resource>, "Task/research-topic": <Resource>}
         """
         self._resources = resources
         self._api_key = api_key
+        self._policies = policies or {}
         self._llm_cache: dict[str, LLM] = {}
         self._agent_cache: dict[str, Agent] = {}
         self._task_cache: dict[str, Task] = {}
@@ -357,6 +364,53 @@ class ResourceLoader:
             )
         return tool_instance
 
+    def _filter_tools_by_policy(
+        self,
+        tools: list[Any],
+        policy: AgentPolicy,
+        agent_name: str,
+    ) -> list[Any]:
+        """Filter tools according to the agent's policy allowlist/denylist.
+
+        - mode='allowlist': only tools whose name is in ``policy.allowed_tools`` pass.
+        - mode='denylist': tools whose name is in ``policy.denied_tools`` are removed.
+        - mode='all' (default): all tools pass through unchanged.
+        """
+        if policy.tool_mode == "all":
+            return tools
+
+        filtered: list[Any] = []
+        for tool in tools:
+            tool_name = getattr(tool, "name", str(tool))
+            if policy.tool_mode == "denylist" and tool_name in policy.denied_tools:
+                logger.warning(
+                    "Policy denied tool '%s' for agent '%s'",
+                    tool_name,
+                    agent_name,
+                    extra={
+                        "event": "policy_tool_denied",
+                        "tool_name": tool_name,
+                        "agent_name": agent_name,
+                        "policy_mode": "denylist",
+                    },
+                )
+                continue
+            if policy.tool_mode == "allowlist" and tool_name not in policy.allowed_tools:
+                logger.warning(
+                    "Policy allowlist excludes tool '%s' for agent '%s'",
+                    tool_name,
+                    agent_name,
+                    extra={
+                        "event": "policy_tool_excluded",
+                        "tool_name": tool_name,
+                        "agent_name": agent_name,
+                        "allowed_tools": sorted(policy.allowed_tools),
+                    },
+                )
+                continue
+            filtered.append(tool)
+        return filtered
+
     def build_agent(self, ref_or_name: str) -> Agent:
         """Build a CrewAI Agent from an Agent resource ref."""
         if ref_or_name in self._agent_cache:
@@ -384,6 +438,47 @@ class ResourceLoader:
             tools = [t for ref in tool_refs if (t := self.build_tool(ref)) is not None]
             if tools:
                 agent_kwargs["tools"] = tools
+
+        # --- Policy enforcement ---
+        # Resolve the effective policy for this agent and apply constraints
+        # before the CrewAI Agent is constructed.
+        if self._policies:
+            policy = resolve_policy(spec, policies=self._policies)
+            # Tool filtering: remove tools not permitted by policy
+            if "tools" in agent_kwargs:
+                agent_kwargs["tools"] = self._filter_tools_by_policy(
+                    agent_kwargs["tools"], policy, resource.name
+                )
+                if not agent_kwargs["tools"]:
+                    del agent_kwargs["tools"]
+            # Delegation enforcement: policy can override allow_delegation
+            if policy.delegation_allowed is not None and not policy.delegation_allowed:
+                if agent_kwargs.get("allow_delegation"):
+                    logger.info(
+                        "Policy overrides delegation for agent '%s': "
+                        "allow_delegation forced to False",
+                        resource.name,
+                        extra={
+                            "event": "policy_delegation_override",
+                            "agent_name": resource.name,
+                        },
+                    )
+                agent_kwargs["allow_delegation"] = False
+            # Log delegation targets constraint (informational — CrewAI does
+            # not support restricting *which* agents can be delegated to,
+            # so we can only log when targets are configured).
+            if policy.delegation_targets:
+                logger.info(
+                    "Agent '%s' policy specifies delegation targets %s — "
+                    "note: target restriction is advisory only (CrewAI limitation)",
+                    resource.name,
+                    policy.delegation_targets,
+                    extra={
+                        "event": "policy_delegation_targets",
+                        "agent_name": resource.name,
+                        "delegation_targets": policy.delegation_targets,
+                    },
+                )
 
         for key in ("max_iter", "max_rpm", "cache"):
             if key in spec:

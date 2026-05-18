@@ -317,6 +317,18 @@ AGENT_POLICY_SCHEMA = {
             },
             "additionalProperties": False,
         },
+        "delegation": {
+            "type": "object",
+            "properties": {
+                "allowed": {"type": "boolean"},
+                "targets": {
+                    "type": "array",
+                    "items": {"type": "string", "maxLength": 255},
+                    "maxItems": 50,
+                },
+            },
+            "additionalProperties": False,
+        },
     },
     "additionalProperties": False,
 }

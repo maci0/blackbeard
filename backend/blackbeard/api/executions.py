@@ -9,11 +9,12 @@ from collections.abc import AsyncGenerator
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from blackbeard.api import sse_state
+from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.config import settings
 from blackbeard.engine import ExecutionError, ExecutionNotFoundError
@@ -64,6 +65,7 @@ def _get_spend_client() -> httpx.AsyncClient:
     },
 )
 async def kickoff_crew(
+    request: Request,
     response: Response,
     crew_name: str = Path(
         ...,
@@ -107,6 +109,15 @@ async def kickoff_crew(
             status_code=500,
             detail="Execution could not be created. Check server logs.",
         ) from exc
+    await log_audit(
+        session,
+        action="execution_started",
+        resource_type="Crew",
+        resource_id=crew_name,
+        detail={"execution_id": str(execution.id), "namespace": namespace},
+        **audit_from_request(request, user),
+    )
+    await session.commit()
     response.headers["Location"] = f"/api/v1/executions/{execution.id}"
     return ExecutionResponse.from_db(execution)
 
@@ -410,8 +421,10 @@ async def list_execution_events(
     },
 )
 async def cancel_execution(
+    request: Request,
     execution_id: UUID = Path(..., description="Execution UUID"),
     session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_current_user),
 ) -> ExecutionResponse:
     """Cancel a queued or running execution."""
     try:
@@ -422,6 +435,15 @@ async def cancel_execution(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not execution:
         raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
+    await log_audit(
+        session,
+        action="execution_cancelled",
+        resource_type="Execution",
+        resource_id=str(execution_id),
+        detail={"crew_name": execution.crew_name},
+        **audit_from_request(request, user),
+    )
+    await session.commit()
     return ExecutionResponse.from_db(execution)
 
 

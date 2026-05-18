@@ -18,6 +18,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from blackbeard import __version__
+from blackbeard.api.audit import router as audit_router
 from blackbeard.api.auth import router as auth_router
 from blackbeard.api.chat import router as chat_router
 from blackbeard.api.executions import router as executions_router
@@ -234,6 +235,7 @@ app = FastAPI(
         {"name": "health", "description": "Liveness and readiness probes"},
         {"name": "auth", "description": "Authentication: register, login, refresh, profile"},
         {"name": "users", "description": "User and group management"},
+        {"name": "audit", "description": "Security audit log queries"},
         {"name": "chat", "description": "Ad-hoc chat completions and model management"},
         {
             "name": "executions",
@@ -271,6 +273,7 @@ app.add_exception_handler(Exception, global_exception_handler)
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
+app.include_router(audit_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(executions_router, prefix="/api/v1")
 app.include_router(resources_router, prefix="/api/v1")

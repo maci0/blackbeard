@@ -7,13 +7,14 @@ import re
 from datetime import UTC, datetime
 
 import jwt as pyjwt
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
+from blackbeard.audit import log_audit
 from blackbeard.auth.dependencies import require_user
 from blackbeard.auth.jwt import create_access_token, create_refresh_token, decode_token
 from blackbeard.auth.passwords import hash_password, verify_password
@@ -115,6 +116,7 @@ def _auth_response(user: User) -> AuthResponse:
 )
 async def register(
     data: RegisterRequest,
+    request: Request,
     response: Response,
     session: AsyncSession = Depends(get_session),
 ) -> AuthResponse:
@@ -127,7 +129,7 @@ async def register(
     )
     session.add(user)
     try:
-        await session.commit()
+        await session.flush()
     except IntegrityError:
         await session.rollback()
         logger.info(
@@ -138,6 +140,18 @@ async def register(
         raise HTTPException(
             status_code=409, detail="Registration failed — please try again or log in"
         ) from None
+
+    await log_audit(
+        session,
+        action="user_registered",
+        actor_type="user",
+        actor_id=str(user.id),
+        actor_email=user.email,
+        resource_type="User",
+        resource_id=str(user.id),
+        ip_address=request.client.host if request.client else None,
+    )
+    await session.commit()
     await session.refresh(user)
 
     logger.info(
@@ -167,10 +181,12 @@ async def register(
 )
 async def login(
     data: LoginRequest,
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> AuthResponse:
     """Authenticate with email and password."""
     email = data.email.lower()
+    ip = request.client.host if request.client else None
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
@@ -186,6 +202,15 @@ async def login(
                 "request_id": request_id_var.get("-"),
             },
         )
+        await log_audit(
+            session,
+            action="login_failed",
+            actor_type="user",
+            actor_id=email,
+            detail={"reason": "invalid_credentials"},
+            ip_address=ip,
+        )
+        await session.commit()
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password",
@@ -203,9 +228,29 @@ async def login(
                 "email": data.email,
             },
         )
+        await log_audit(
+            session,
+            action="login_failed",
+            actor_type="user",
+            actor_id=str(user.id),
+            actor_email=user.email,
+            detail={"reason": "account_deactivated"},
+            ip_address=ip,
+        )
+        await session.commit()
         raise HTTPException(status_code=403, detail="Account is deactivated")
 
     user.last_login_at = datetime.now(UTC)
+    await log_audit(
+        session,
+        action="user_login",
+        actor_type="user",
+        actor_id=str(user.id),
+        actor_email=user.email,
+        resource_type="User",
+        resource_id=str(user.id),
+        ip_address=ip,
+    )
     await session.commit()
     await session.refresh(user)
 

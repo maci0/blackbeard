@@ -67,6 +67,23 @@ class AgentPolicy:
         """Minimum sandbox tier required by policy."""
         return cast("str", self._sandbox.get("minimum_tier", "none"))
 
+    @property
+    def delegation_allowed(self) -> bool | None:
+        """Whether delegation is allowed.  ``None`` means no constraint."""
+        delegation = self.spec.get("delegation")
+        if delegation is None:
+            return None
+        return cast("bool", delegation.get("allowed", True))
+
+    @property
+    def delegation_targets(self) -> list[str] | None:
+        """Allowed delegation target agent names (None = unrestricted)."""
+        delegation = self.spec.get("delegation")
+        if delegation is None:
+            return None
+        targets = delegation.get("targets")
+        return list(targets) if targets else None
+
     def check_tool_access(self, agent_name: str, tool_name: str) -> None:
         """Check if an agent is allowed to use a tool.
 

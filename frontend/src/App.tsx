@@ -2,6 +2,8 @@ import { Suspense, lazy, useEffect, type ReactNode } from 'react'
 import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
+import { OnboardingWizard } from '@/components/ui/OnboardingWizard'
+import { useOnboarding } from '@/hooks/useOnboarding'
 import { Spinner } from '@/components/ui/Spinner'
 import { ToastContainer } from '@/components/ui/Toast'
 import { useAuthStore } from '@/stores/authStore'
@@ -45,6 +47,7 @@ function App() {
   const hydrate = useAuthStore((s) => s.hydrate)
   const token = useAuthStore((s) => s.token)
   const fetchMe = useAuthStore((s) => s.fetchMe)
+  const { showOnboarding, dismissOnboarding } = useOnboarding()
 
   useEffect(() => {
     hydrate()
@@ -58,6 +61,7 @@ function App() {
 
   return (
     <>
+      {token && showOnboarding && <OnboardingWizard onDismiss={dismissOnboarding} />}
       <ErrorBoundary>
         <Suspense
           fallback={

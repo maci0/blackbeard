@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from blackbeard.audit import audit_from_request, log_audit
+from blackbeard.auth.dependencies import get_current_user
 from blackbeard.kinds import NAME_PATTERN, PLURAL_TO_KIND
-from blackbeard.models import get_session
+from blackbeard.models import User, get_session
 from blackbeard.models.resource_schemas import (
     ResourceCreate,
     ResourceListResponse,
@@ -119,9 +121,11 @@ async def list_resources(
 )
 async def create_resource(
     data: ResourceCreate,
+    request: Request,
     response: Response,
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
     session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_current_user),
 ) -> ResourceResponse:
     """Create (or upsert) a resource of a given kind."""
     url_kind = _resolve_kind(kind_plural)
@@ -133,6 +137,14 @@ async def create_resource(
     service = ResourceService(session)
     try:
         resource, created = await service.create(data)
+        audit_action = "resource_created" if created else "resource_updated"
+        await log_audit(
+            session,
+            action=audit_action,
+            resource_type=data.kind,
+            resource_id=data.metadata.name,
+            **audit_from_request(request, user),
+        )
         await session.commit()
     except ResourceValidationError as exc:
         logger.warning(
@@ -202,6 +214,7 @@ async def get_resource(
 )
 async def update_resource(
     data: ResourceUpdate,
+    request: Request,
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
     name: str = Path(
         ...,
@@ -216,6 +229,7 @@ async def update_resource(
         description="Resource namespace",
     ),
     session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_current_user),
 ) -> ResourceResponse:
     """Update a resource by kind and name (optimistic locking via version)."""
     kind = _resolve_kind(kind_plural)
@@ -241,6 +255,13 @@ async def update_resource(
     service = ResourceService(session)
     try:
         resource = await service.update(kind, name, data, namespace=namespace)
+        await log_audit(
+            session,
+            action="resource_updated",
+            resource_type=kind,
+            resource_id=name,
+            **audit_from_request(request, user),
+        )
         await session.commit()
     except ResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -285,6 +306,7 @@ async def update_resource(
     responses={204: {"description": "Resource deleted (or did not exist — idempotent)"}},
 )
 async def delete_resource(
+    request: Request,
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
     name: str = Path(
         ...,
@@ -299,12 +321,20 @@ async def delete_resource(
         description="Resource namespace",
     ),
     session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_current_user),
 ) -> None:
     """Delete a resource by kind and name. Idempotent."""
     kind = _resolve_kind(kind_plural)
     service = ResourceService(session)
     try:
         await service.delete(kind, name, namespace)
+        await log_audit(
+            session,
+            action="resource_deleted",
+            resource_type=kind,
+            resource_id=name,
+            **audit_from_request(request, user),
+        )
         await session.commit()
     except ResourceNotFoundError:
         logger.debug(

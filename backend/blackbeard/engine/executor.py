@@ -883,7 +883,15 @@ async def _run_crew_async(
                     )
                     virtual_api_key = None
 
-            loader = ResourceLoader(mock_resources, api_key=virtual_api_key)
+            # Extract policy specs for runtime enforcement
+            policy_specs: dict[str, dict[str, Any]] = {}
+            for _key, snap in resource_snapshot.items():
+                if snap.get("kind") == "AgentPolicy":
+                    policy_specs[snap["name"]] = snap.get("spec", {})
+
+            loader = ResourceLoader(
+                mock_resources, api_key=virtual_api_key, policies=policy_specs
+            )
             crew = loader.build_crew(crew_name)
 
             # Wire up execution event listener for real-time streaming.

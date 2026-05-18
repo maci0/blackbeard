@@ -6,13 +6,14 @@ import logging
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
+from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import require_user
 from blackbeard.models import Group, User, get_session
 from blackbeard.models.user_schemas import UserResponse, user_response
@@ -197,6 +198,7 @@ async def update_user(
 )
 async def deactivate_user(
     user_id: uuid.UUID,
+    request: Request,
     current_user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ) -> None:
@@ -220,6 +222,13 @@ async def deactivate_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     user.is_active = False
+    await log_audit(
+        session,
+        action="user_deactivated",
+        resource_type="User",
+        resource_id=str(user.id),
+        **audit_from_request(request, current_user),
+    )
     await session.commit()
 
     logger.info(
@@ -268,6 +277,7 @@ async def list_groups(
 )
 async def create_group(
     data: GroupCreateRequest,
+    request: Request,
     response: Response,
     current_user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
@@ -276,7 +286,7 @@ async def create_group(
     group = Group(name=data.name, description=data.description)
     session.add(group)
     try:
-        await session.commit()
+        await session.flush()
     except IntegrityError:
         await session.rollback()
         logger.info(
@@ -285,6 +295,15 @@ async def create_group(
             extra={"event": "group_create_conflict", "group_name": data.name},
         )
         raise HTTPException(status_code=409, detail="Group name already exists") from None
+
+    await log_audit(
+        session,
+        action="group_created",
+        resource_type="Group",
+        resource_id=data.name,
+        **audit_from_request(request, current_user),
+    )
+    await session.commit()
     await session.refresh(group)
 
     response.headers["Location"] = f"/api/v1/groups/{group.id}"
@@ -373,6 +392,7 @@ async def update_group(
 )
 async def delete_group(
     group_id: uuid.UUID,
+    request: Request,
     current_user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ) -> None:
@@ -390,17 +410,25 @@ async def delete_group(
         )
         return
 
+    group_name = group.name
     await session.delete(group)
+    await log_audit(
+        session,
+        action="group_deleted",
+        resource_type="Group",
+        resource_id=group_name,
+        **audit_from_request(request, current_user),
+    )
     await session.commit()
 
     logger.info(
         "Group deleted: %s by user %s",
-        group.name,
+        group_name,
         current_user.id,
         extra={
             "event": "group_deleted",
-            "group_id": str(group.id),
-            "group_name": group.name,
+            "group_id": str(group_id),
+            "group_name": group_name,
             "actor_user_id": str(current_user.id),
         },
     )
