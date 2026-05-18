@@ -124,6 +124,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user, loading: false })
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
+        try {
+          await get().refresh()
+          if (get().token) {
+            const user = await api.get<User>('/api/v1/auth/me')
+            set({ user, loading: false })
+            return
+          }
+        } catch {
+          // refresh also failed
+        }
         get().logout()
       }
       set({ loading: false })
