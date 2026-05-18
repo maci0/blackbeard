@@ -8,7 +8,7 @@ import click
 import httpx
 from rich.table import Table
 
-from blackbeard.cli.helpers import (
+from blackbeard_cli.helpers import (
     console,
     extract_detail,
     handle_http_error,

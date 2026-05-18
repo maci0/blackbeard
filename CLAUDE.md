@@ -32,6 +32,16 @@ bun run check                    # typecheck + lint + format:check (all-in-one)
 bun run test -- --run            # vitest (single run)
 ```
 
+### CLI (from `cli/` — standalone package, no server deps)
+
+```bash
+uv sync                          # install deps (click, httpx, rich, pyyaml, jsonschema only)
+uv run blackbeard --help         # all commands
+uv run blackbeard validate -f ../examples/research-crew/  # offline validation
+uv run blackbeard login          # store JWT credentials
+uv run ruff check blackbeard_cli/  # lint
+```
+
 ### Full Stack
 
 ```bash
@@ -56,7 +66,7 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Middleware stack** (outermost → innermost): CORS (`CORSMiddleware` via `add_middleware`) → security headers → API key auth (hmac.compare_digest or JWT Bearer) + request ID → body size limiter (10MB). The three `app.middleware("http")` middlewares are registered LIFO in `main.py`. Auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`) and health checks are public (no auth required).
 
-**CLI** (`cli/` package): 28 commands across 7 modules — `helpers.py` (shared output/auth), `credentials.py` (JWT storage in `~/.config/blackbeard/`), `auth_cmds.py` (login/logout/whoami/register), `users.py` (user/group mgmt), `rbac.py` (role/rolebinding), `exec.py` (executions/events/cancel), `export_cmd.py` (YAML export). Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT.
+**CLI** (`cli/` — separate package `blackbeard-cli`): Standalone binary with no server deps (click, httpx, rich, pyyaml, jsonschema only). 22 commands across 7 modules. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
 
 **External services**: PostgreSQL (resources + executions + users), Valkey (cache), LiteLLM proxy (model routing to Vertex AI / OpenAI, with per-execution virtual keys for budget enforcement + spend tracking).
 

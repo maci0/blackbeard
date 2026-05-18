@@ -1,1 +1,1 @@
-"""CLI interface: Rich-powered commands for resource management and execution."""
+"""CLI has been extracted to a standalone package: blackbeard-cli (../cli/)."""

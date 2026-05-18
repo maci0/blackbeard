@@ -9,7 +9,7 @@ import click
 import httpx
 import yaml
 
-from blackbeard.cli.helpers import (
+from blackbeard_cli.helpers import (
     console,
     handle_http_error,
     handle_request_error,
@@ -18,7 +18,7 @@ from blackbeard.cli.helpers import (
     print_json,
     require_auth,
 )
-from blackbeard.kinds import ALL_KINDS, KIND_TO_PLURAL
+from blackbeard_cli.kinds import ALL_KINDS, KIND_TO_PLURAL
 
 
 def _strip_server_fields(resource: dict[str, Any]) -> dict[str, Any]:

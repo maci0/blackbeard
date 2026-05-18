@@ -18,7 +18,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.syntax import Syntax
 from rich.table import Table
 
-from blackbeard.cli.helpers import (
+from blackbeard_cli.helpers import (
     STATUS_COLORS,
     console,
     extract_detail,
@@ -31,9 +31,16 @@ from blackbeard.cli.helpers import (
     validate_name,
     warn_unused_interval,
 )
-from blackbeard.kinds import ALL_KINDS, KIND_TO_PLURAL, NAME_PATTERN
-from blackbeard.models import TERMINAL_STATUSES
-from blackbeard.resources import ValidationError, build_adjacency, detect_cycles, validate_resource
+from blackbeard_cli.kinds import ALL_KINDS, KIND_TO_PLURAL, NAME_PATTERN
+from blackbeard_cli.resources import (
+    ValidationError,
+    build_adjacency,
+    detect_cycles,
+    validate_resource,
+)
+
+# Terminal execution statuses — inlined to avoid pulling in SQLAlchemy.
+TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
 
 
 def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
@@ -117,7 +124,7 @@ Common workflows:
   blackbeard delete Agent my-agent            # remove a resource
 """,
 )
-@click.version_option(version=pkg_version("blackbeard"))
+@click.version_option(version=pkg_version("blackbeard-cli"))
 @click.option(
     "--server",
     "-s",
@@ -1256,7 +1263,7 @@ def status(
     prog = ctx.find_root().info_name or "blackbeard"
     warn_unused_interval(ctx, watch, interval, f"{prog} status {execution_id}")
 
-    terminal_states = {s.value for s in TERMINAL_STATUSES}
+    terminal_states = TERMINAL_STATUSES
     url = f"{server}/api/v1/executions/{execution_id}"
     headers = require_auth(ctx)
 
@@ -1403,11 +1410,11 @@ def status(
 
 # ── Register subcommands from CLI modules ────────────────────────────────────
 
-from blackbeard.cli.auth_cmds import login, logout, register, whoami  # noqa: E402
-from blackbeard.cli.exec import cancel, events, executions_list  # noqa: E402
-from blackbeard.cli.export_cmd import export_cmd  # noqa: E402
-from blackbeard.cli.rbac import role, rolebinding  # noqa: E402
-from blackbeard.cli.users import group, user  # noqa: E402
+from blackbeard_cli.auth_cmds import login, logout, register, whoami  # noqa: E402
+from blackbeard_cli.exec import cancel, events, executions_list  # noqa: E402
+from blackbeard_cli.export_cmd import export_cmd  # noqa: E402
+from blackbeard_cli.rbac import role, rolebinding  # noqa: E402
+from blackbeard_cli.users import group, user  # noqa: E402
 
 cli.add_command(login)
 cli.add_command(logout)

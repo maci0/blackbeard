@@ -100,7 +100,7 @@ def require_auth(ctx: click.Context) -> dict[str, str]:
     Returns dict suitable for httpx headers.
     Exits with code 2 if no auth available.
     """
-    from blackbeard.cli.credentials import get_valid_token
+    from blackbeard_cli.credentials import get_valid_token
 
     api_key = ctx.obj.get("api_key")
     if api_key:
@@ -121,7 +121,7 @@ def require_auth(ctx: click.Context) -> dict[str, str]:
 
 def auth_headers(ctx: click.Context) -> dict[str, str] | None:
     """Like require_auth but returns None instead of exiting."""
-    from blackbeard.cli.credentials import get_valid_token
+    from blackbeard_cli.credentials import get_valid_token
 
     api_key = ctx.obj.get("api_key")
     if api_key:
@@ -140,7 +140,7 @@ def validate_name(name: str) -> None:
     """Exit with code 2 if name doesn't match resource naming rules."""
     import re
 
-    from blackbeard.kinds import NAME_PATTERN
+    from blackbeard_cli.kinds import NAME_PATTERN
 
     if not re.fullmatch(NAME_PATTERN, name):
         console.print(
