@@ -19,6 +19,7 @@ const Login = lazy(() => import('@/pages/Login'))
 const Register = lazy(() => import('@/pages/Register'))
 const Users = lazy(() => import('@/pages/Users'))
 const Roles = lazy(() => import('@/pages/Roles'))
+const Marketplace = lazy(() => import('@/pages/Marketplace'))
 
 function DocumentTitle({ title, children }: { title: string; children: ReactNode }) {
   useEffect(() => {
@@ -88,6 +89,7 @@ function App() {
                 <Route path="tools" element={<Tools />} />
                 <Route path="users" element={<Users />} />
                 <Route path="roles" element={<Roles />} />
+                <Route path="marketplace" element={<Marketplace />} />
                 <Route
                   path="*"
                   element={

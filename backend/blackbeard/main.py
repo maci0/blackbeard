@@ -24,6 +24,7 @@ from blackbeard.api.chat import router as chat_router
 from blackbeard.api.executions import router as executions_router
 from blackbeard.api.health import router as health_router
 from blackbeard.api.health import shutdown_health_clients
+from blackbeard.api.marketplace import router as marketplace_router
 from blackbeard.api.middleware import (
     api_key_middleware,
     body_size_limiter,
@@ -242,6 +243,10 @@ app = FastAPI(
             "description": "Crew execution lifecycle (kickoff, status, cancel, stream)",
         },
         {
+            "name": "marketplace",
+            "description": "Import resources from git repositories or built-in examples",
+        },
+        {
             "name": "resources",
             "description": "Generic CRUD for all resource kinds (Agent, Task, Crew, etc.)",
         },
@@ -276,4 +281,5 @@ app.include_router(users_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 app.include_router(executions_router, prefix="/api/v1")
+app.include_router(marketplace_router, prefix="/api/v1")
 app.include_router(resources_router, prefix="/api/v1")

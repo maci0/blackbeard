@@ -8,6 +8,7 @@ import {
   Wrench,
   Users,
   Shield,
+  Store,
   Menu,
   X,
   Anchor,
@@ -32,6 +33,7 @@ const navItems = [
   { to: '/tools', label: 'Tools', icon: Wrench },
   { to: '/users', label: 'Users', icon: Users },
   { to: '/roles', label: 'Roles', icon: Shield },
+  { to: '/marketplace', label: 'Marketplace', icon: Store },
 ]
 
 function BlackbeardLogo({ size = 28 }: { size?: number }) {
