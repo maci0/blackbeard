@@ -1408,6 +1408,59 @@ def status(
             raise SystemExit(1)
 
 
+@cli.command(
+    epilog="""\b
+Examples:
+  blackbeard pull https://github.com/org/crew-repo.git
+  blackbeard pull ./local-crew-dir
+  blackbeard pull https://github.com/org/crew-repo.git -n prod
+""",
+)
+@click.argument("source")
+@json_opt
+@click.pass_context
+def pull(ctx: click.Context, source: str, output_json: bool) -> None:
+    """Import resources from a git URL or local directory.
+
+    SOURCE is a git HTTPS URL or local directory path containing YAML resource files.
+    """
+    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
+    server = ctx.obj["server"]
+    headers = require_auth(ctx)
+
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.post(
+                f"{server}/api/v1/marketplace/import",
+                json={"url": source},
+                headers=headers,
+            )
+    except httpx.RequestError as exc:
+        handle_request_error(server, exc)
+
+    if resp.status_code not in (200, 201):
+        handle_http_error(resp)
+
+    data = resp.json()
+
+    if ctx.obj["json"]:
+        print_json(data)
+        return
+
+    imported = data.get("imported", 0)
+    errors = data.get("errors", 0)
+    resources = data.get("resources", [])
+
+    if imported:
+        out.print(f"[green]Imported {imported} resource(s)[/]")
+        for r in resources:
+            out.print(f"  [green]✓[/] {r}")
+    if errors:
+        out.print(f"[red]{errors} error(s)[/]")
+    if not imported and not errors:
+        out.print("[dim]No resources found.[/]")
+
+
 # ── Register subcommands from CLI modules ────────────────────────────────────
 
 from blackbeard_cli.auth_cmds import login, logout, register, whoami  # noqa: E402
