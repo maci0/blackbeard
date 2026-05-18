@@ -46,11 +46,19 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Resource system**: All entities (Agent, Task, Crew, etc.) are stored as generic `Resource` rows with a JSONB `spec` column, validated against per-kind JSON schemas (`resources/spec_schemas.py`). Resources reference each other with strings like `ref:agents/researcher`, tracked in a `ResourceRef` table. `kinds.py` is the single source of truth for the kind registry and URL plural mapping.
 
-**Execution flow**: `POST /api/v1/crews/{crew_name}/kickoff` → creates `Execution` record → submits to `ThreadPoolExecutor` → background thread builds CrewAI objects via `ResourceLoader` (resolves refs, builds LLM/Agent/Task/Crew) → calls `crew.kickoff(inputs=...)` → stores result + token usage. Each crew run gets its own thread with an isolated asyncio event loop to avoid blocking the FastAPI async loop.
+**Execution flow**: `POST /api/v1/crews/{crew_name}/kickoff` (also `/train`, `/test`) → creates `Execution` record with `initiated_by` (user) + `principal_chain` (User → Crew → Agent/ServiceAccount) → derives budget limits from AgentPolicy → creates per-execution LiteLLM virtual key with budget caps → submits to `ThreadPoolExecutor` → background thread builds CrewAI objects via `ResourceLoader` (resolves refs, builds LLM/Agent/Task/Crew with virtual key) → calls `crew.kickoff(inputs=...)` (or `.train()`/`.test()`) → stores result + token usage → deletes virtual key. Each crew run gets its own thread with an isolated asyncio event loop.
+
+**Budget enforcement**: AgentPolicy `max_usd`/`max_tokens` → LiteLLM virtual key with budget limits → LiteLLM Proxy enforces at call time. Key created before execution, deleted after (success or failure). Most restrictive policy across all agents wins.
+
+**CrewAI delegation**: Blackbeard delegates to CrewAI native features where possible — memory, knowledge/RAG, guardrails (function-based + LLM-prompt), structured outputs (`output_json`/`output_pydantic`), delegation, tool discovery. Only extends where needed (event persistence, sandbox tiers, policy enforcement).
+
+**Auth & RBAC**: Built-in email/password with JWT (access 15min + refresh 7d). User/Group models in `models/user.py`. Role and RoleBinding as resource kinds. Predefined roles seeded by `deploy/seed.sh`. Auth middleware accepts both `X-API-Key` and `Authorization: Bearer <jwt>`. Agent execution tracks principal chain: User → Crew → Agent (ServiceAccount via `spec.serviceAccount`, defaults to `sa-<name>`).
 
 **Middleware stack** (outermost → innermost): CORS (`CORSMiddleware` via `add_middleware`) → security headers → API key auth (hmac.compare_digest or JWT Bearer) + request ID → body size limiter (10MB). The three `app.middleware("http")` middlewares are registered LIFO in `main.py`. Auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`) and health checks are public (no auth required).
 
-**External services**: PostgreSQL (resources + executions), Valkey (cache), LiteLLM proxy (model routing to Vertex AI / OpenAI, with built-in spend/token/latency tracking).
+**CLI** (`cli/` package): 28 commands across 7 modules — `helpers.py` (shared output/auth), `credentials.py` (JWT storage in `~/.config/blackbeard/`), `auth_cmds.py` (login/logout/whoami/register), `users.py` (user/group mgmt), `rbac.py` (role/rolebinding), `exec.py` (executions/events/cancel), `export_cmd.py` (YAML export). Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT.
+
+**External services**: PostgreSQL (resources + executions + users), Valkey (cache), LiteLLM proxy (model routing to Vertex AI / OpenAI, with per-execution virtual keys for budget enforcement + spend tracking).
 
 ### Frontend (React + React Flow)
 
@@ -70,7 +78,7 @@ DB schema is managed in `backend/entrypoint.sh`: first creates PostgreSQL enum t
 
 ## Conventions
 
-- **Python**: ruff lint + format, mypy strict, `from __future__ import annotations` in all modules, type annotations on all functions. Rules: `E F I N W UP B SIM ANN RUF PT C4 PIE T20 TCH`. Tests exempt from `ANN` and `E402`; API and auth files exempt from `TCH` (FastAPI needs types at runtime) and `B008` (Depends in defaults).
+- **Python**: ruff lint + format, mypy strict, `from __future__ import annotations` in all modules, type annotations on all functions. Rules: `E F I N W UP B SIM ANN RUF PT C4 PIE T20 TCH`. Tests exempt from `ANN` and `E402`; API and auth files exempt from `TCH` and `B008` (FastAPI needs types at runtime); API and executor files exempt from `PT` (functions named `test_*` are not pytest tests).
 - **TypeScript**: ESLint `recommendedTypeChecked` + Prettier. Strict mode, `noUncheckedIndexedAccess`. Use `void` for fire-and-forget promises in React (e.g., `onClick={() => void handleClick()}`).
 - **Imports**: Use `@/` path alias in frontend. Backend uses relative imports within packages.
 - **Resource names**: lowercase alphanumeric + hyphens (`^[a-z0-9][a-z0-9\-]*$`).
