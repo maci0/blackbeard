@@ -3,13 +3,25 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request, Response
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
@@ -714,3 +726,102 @@ async def stream_execution(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.websocket("/executions/{execution_id}/ws")
+async def ws_execution(
+    websocket: WebSocket,
+    execution_id: UUID,
+) -> None:
+    """WebSocket stream of execution events. Sends JSON frames."""
+    await websocket.accept()
+
+    async with async_session() as check_session:
+        check = await _executor_mod.get_execution_status(check_session, execution_id)
+    if check is None:
+        await websocket.send_json({"event": "error", "data": {"detail": "Execution not found"}})
+        await websocket.close(code=4004, reason="Execution not found")
+        return
+
+    last_status: ExecutionStatus | None = None
+    last_event_seq = -1
+    polls = 0
+    max_polls = 400
+
+    try:
+        while polls < max_polls:
+            polls += 1
+            async with async_session() as session:
+                if last_status is None:
+                    execution = await _executor_mod.get_execution(session, execution_id)
+                    if not execution:
+                        await websocket.send_json(
+                            {"event": "error", "data": {"detail": "Execution not found"}}
+                        )
+                        break
+                    current_status = execution.status
+                    data = json.loads(ExecutionResponse.from_db(execution).model_dump_json())
+                    await websocket.send_json({"event": "status", "data": data})
+                    last_status = current_status
+                else:
+                    current_status = await _executor_mod.get_execution_status(
+                        session, execution_id
+                    )
+                    if current_status is None:
+                        await websocket.send_json(
+                            {"event": "error", "data": {"detail": "Execution not found"}}
+                        )
+                        break
+
+                    if current_status != last_status or current_status in TERMINAL_STATUSES:
+                        execution = await _executor_mod.get_execution(session, execution_id)
+                        if execution:
+                            data = json.loads(
+                                ExecutionResponse.from_db(execution).model_dump_json()
+                            )
+                            await websocket.send_json({"event": "status", "data": data})
+                        last_status = current_status
+                    else:
+                        await websocket.send_json(
+                            {"event": "heartbeat", "data": {"status": current_status.value}}
+                        )
+
+                new_events = await _executor_mod.list_execution_events(
+                    session, execution_id, after=last_event_seq, limit=50
+                )
+                for ev in new_events:
+                    await websocket.send_json({
+                        "event": ev.event_type,
+                        "data": {
+                            "sequence": ev.sequence,
+                            "timestamp": ev.timestamp.isoformat(),
+                            **ev.data,
+                        },
+                    })
+                    last_event_seq = ev.sequence
+
+                if current_status in TERMINAL_STATUSES:
+                    break
+
+            await asyncio.sleep(2 if polls < 10 else 3 if polls < 30 else 5)
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error(
+            "WS stream error: execution_id=%s error=%s",
+            execution_id,
+            e,
+            extra={
+                "event": "ws_stream_error",
+                "execution_id": str(execution_id),
+                "error_type": type(e).__name__,
+            },
+        )
+        with contextlib.suppress(Exception):
+            await websocket.send_json(
+                {"event": "error", "data": {"detail": "Internal stream error"}}
+            )
+    finally:
+        with contextlib.suppress(Exception):
+            await websocket.close()
