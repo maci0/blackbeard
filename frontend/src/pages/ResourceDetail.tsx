@@ -276,7 +276,14 @@ export default function ResourceDetail() {
     setRunError(null)
     setRunLoading(true)
     try {
-      const inputs = JSON.parse(rawInputs) as Record<string, unknown>
+      let inputs: Record<string, unknown> = {}
+      try {
+        inputs = JSON.parse(rawInputs) as Record<string, unknown>
+      } catch {
+        setRunError('Invalid JSON input')
+        setRunLoading(false)
+        return
+      }
       const ns = resource?.metadata.namespace ?? 'default'
       const nsParam = ns !== 'default' ? `?namespace=${encodeURIComponent(ns)}` : ''
       const result = await api.post<{ id: string }>(`/api/v1/crews/${name}/kickoff${nsParam}`, {

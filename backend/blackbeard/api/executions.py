@@ -145,6 +145,7 @@ async def kickoff_crew(
     },
 )
 async def train_crew_endpoint(
+    request: Request,
     response: Response,
     crew_name: str = Path(
         ...,
@@ -193,6 +194,15 @@ async def train_crew_endpoint(
             status_code=500,
             detail="Training execution could not be created. Check server logs.",
         ) from exc
+    await log_audit(
+        session,
+        action="train_started",
+        resource_type="Crew",
+        resource_id=crew_name,
+        detail={"execution_id": str(execution.id), "namespace": namespace},
+        **audit_from_request(request, user),
+    )
+    await session.commit()
     response.headers["Location"] = f"/api/v1/executions/{execution.id}"
     return ExecutionResponse.from_db(execution)
 
@@ -208,6 +218,7 @@ async def train_crew_endpoint(
     },
 )
 async def test_crew_endpoint(
+    request: Request,
     response: Response,
     crew_name: str = Path(
         ...,
@@ -255,6 +266,15 @@ async def test_crew_endpoint(
             status_code=500,
             detail="Test execution could not be created. Check server logs.",
         ) from exc
+    await log_audit(
+        session,
+        action="test_started",
+        resource_type="Crew",
+        resource_id=crew_name,
+        detail={"execution_id": str(execution.id), "namespace": namespace},
+        **audit_from_request(request, user),
+    )
+    await session.commit()
     response.headers["Location"] = f"/api/v1/executions/{execution.id}"
     return ExecutionResponse.from_db(execution)
 
@@ -269,6 +289,7 @@ async def test_crew_endpoint(
     },
 )
 async def run_flow_endpoint(
+    request: Request,
     response: Response,
     flow_name: str = Path(
         ...,
@@ -285,7 +306,6 @@ async def run_flow_endpoint(
     ),
     session: AsyncSession = Depends(get_session),
     user: User | None = Depends(get_current_user),
-    request: Request = None,  # type: ignore[assignment]
 ) -> ExecutionResponse:
     """Run a flow. Returns immediately with status=queued."""
     try:
@@ -314,16 +334,15 @@ async def run_flow_endpoint(
             status_code=500,
             detail="Flow execution could not be created. Check server logs.",
         ) from exc
-    if request:
-        await log_audit(
-            session,
-            action="flow_started",
-            resource_type="Flow",
-            resource_id=flow_name,
-            detail={"execution_id": str(execution.id), "namespace": namespace},
-            **audit_from_request(request, user),
-        )
-        await session.commit()
+    await log_audit(
+        session,
+        action="flow_started",
+        resource_type="Flow",
+        resource_id=flow_name,
+        detail={"execution_id": str(execution.id), "namespace": namespace},
+        **audit_from_request(request, user),
+    )
+    await session.commit()
     response.headers["Location"] = f"/api/v1/executions/{execution.id}"
     return ExecutionResponse.from_db(execution)
 

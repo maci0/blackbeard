@@ -177,6 +177,12 @@ async def import_from_url(
         try:
             await _clone_repo(url, tmpdir)
             search_dir = tmpdir / body.path if body.path else tmpdir
+            # Prevent path traversal: ensure resolved search_dir stays inside tmpdir
+            if not search_dir.resolve().is_relative_to(tmpdir.resolve()):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Path must not escape the repository root (path traversal detected)",
+                )
             if not search_dir.is_dir():
                 raise HTTPException(
                     status_code=422,

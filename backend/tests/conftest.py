@@ -196,6 +196,8 @@ def _make_execution(
 ):
     """Build a detached Execution ORM object for unit tests (no DB needed)."""
     import uuid as _uuid
+    from datetime import UTC as _UTC
+    from datetime import datetime as _datetime
     from decimal import Decimal as _Decimal
 
     from blackbeard.models.execution import Execution, ExecutionStatus, ExecutionType
@@ -215,7 +217,7 @@ def _make_execution(
     e.cost_usd = _Decimal(cost_usd)
     e.n_iterations = n_iterations
     e.training_file = training_file
-    e.created_at = None
+    e.created_at = _datetime.now(_UTC)
     e.started_at = None
     e.completed_at = None
     e.tasks = tasks if tasks is not None else []

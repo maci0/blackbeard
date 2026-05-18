@@ -410,9 +410,15 @@ export default function ExecutionDetail() {
     setSseDisconnected(false)
 
     const apiKey = api.getApiKey()
-    const sseUrl = apiKey
-      ? `/api/v1/executions/${id}/stream?api_key=${encodeURIComponent(apiKey)}`
-      : `/api/v1/executions/${id}/stream`
+    const token = api.getToken()
+    const sseParams = new URLSearchParams()
+    if (token) {
+      sseParams.set('token', token)
+    } else if (apiKey) {
+      sseParams.set('api_key', apiKey)
+    }
+    const qs = sseParams.toString()
+    const sseUrl = `/api/v1/executions/${id}/stream${qs ? `?${qs}` : ''}`
     const es = new EventSource(sseUrl)
 
     const eventTypes = Object.keys(EVENT_COLORS)
@@ -606,7 +612,7 @@ export default function ExecutionDetail() {
             icon={DollarSign}
             label="Cost"
             value={formatCost(execution.cost_usd)}
-            valueLabel={execution.cost_usd > 0 ? undefined : 'No cost recorded'}
+            valueLabel={Number(execution.cost_usd) > 0 ? undefined : 'No cost recorded'}
             borderColor="border-t-emerald-500"
           />
           <SummaryCard

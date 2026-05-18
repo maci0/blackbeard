@@ -22,7 +22,7 @@ export interface ExecutionTask {
   output: string | null
   error: string | null
   tokens_used: number
-  cost_usd: number
+  cost_usd: number | string
   started_at: string | null
   completed_at: string | null
 }
@@ -45,11 +45,11 @@ export interface Execution {
   total_tokens: number
   prompt_tokens: number
   completion_tokens: number
-  cost_usd: number
+  cost_usd: number | string
   created_at: string
   started_at: string | null
   completed_at: string | null
-  tasks: ExecutionTask[]
+  tasks: ExecutionTask[] | undefined
 }
 
 export const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled'])

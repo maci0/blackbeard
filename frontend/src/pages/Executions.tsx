@@ -155,7 +155,7 @@ export default function Executions() {
                         )}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                        {execution.cost_usd > 0 ? (
+                        {Number(execution.cost_usd) > 0 ? (
                           formatCost(execution.cost_usd)
                         ) : (
                           <>

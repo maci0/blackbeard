@@ -203,7 +203,8 @@ class BlackbeardExecutionListener(BaseEventListener):
                 data=data,
             )
             self._buffer.append(event)
-            if len(self._buffer) >= self._MAX_BUFFER:
+            buffer_size = len(self._buffer)
+            if buffer_size >= self._MAX_BUFFER:
                 flush_now = True
         if flush_now:
             self._flush_buffer()
@@ -215,14 +216,14 @@ class BlackbeardExecutionListener(BaseEventListener):
                 self._execution_id,
                 event_type,
                 seq,
-                len(self._buffer),
+                buffer_size,
                 self._MAX_BUFFER,
                 extra={
                     "event": "event_buffered",
                     "execution_id": str(self._execution_id),
                     "event_type": event_type,
                     "sequence": seq,
-                    "buffer_size": len(self._buffer),
+                    "buffer_size": buffer_size,
                     "buffer_max": self._MAX_BUFFER,
                 },
             )
