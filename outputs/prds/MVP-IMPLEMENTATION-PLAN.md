@@ -8,7 +8,7 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 
 | Feature | Scope for MVP |
 |---------|---------------|
-| Resource model | Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding (no Flow, KnowledgeSource, EnvironmentVariable yet) |
+| Resource model | Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding, Flow (CRUD only, no execution), KnowledgeSource (CRUD only, not wired to execution). No EnvironmentVariable, Namespace, or standalone ServiceAccount resource yet. |
 | Visual editor | Canvas with Agent/Task/Tool nodes, edges for context/tool assignment, property panel, YAML tab |
 | Execution | Sequential crews only (no hierarchical, no flows) |
 | LLM routing | LiteLLM Proxy with basic config generation from LLMConnection resources |
@@ -19,7 +19,7 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 | Observability | Execution event log + SSE streaming + LiteLLM dashboard for LLM request inspection |
 | API | REST CRUD for resources + kickoff/status endpoints. No gRPC, no webhooks |
 | Auth & RBAC | Built-in email/password auth with JWT tokens (access + refresh). User and Group models. Role and RoleBinding resource kinds with predefined roles (owner/admin/developer/operator/viewer/policy-admin + agent roles). Authorization middleware accepts both `X-API-Key` and `Authorization: Bearer <jwt>`. Visual RBAC editor (Roles, Users, RoleBindings). No SSO/OIDC, no SpiceDB, no OPA. |
-| CLI | `blackbeard apply`, `blackbeard validate`, `blackbeard kickoff`, `blackbeard status` |
+| CLI | Full parity with UI: `apply`, `validate`, `kickoff`, `status`, `get`, `list`, `delete`, `export`, `login`/`logout`/`whoami`/`register`, `user list/invite`, `group list/create/delete`, `role list/describe`, `rolebinding list/create`, `executions`, `events --follow`, `cancel`. JWT credential storage in `~/.config/blackbeard/`. |
 | Deployment | `docker compose up` only. No Helm, no Git deploy, no triggers |
 
 ### Out of scope (post-MVP)

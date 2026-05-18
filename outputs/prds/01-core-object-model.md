@@ -6,7 +6,7 @@ Define the canonical data model for every first-class resource in Blackbeard. Al
 
 ## 1.1 MVP Scope
 
-**MVP resource kinds:** Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail. These are the only kinds implemented for MVP. **Deferred to post-MVP:** Flow, KnowledgeSource, EnvironmentVariable, Namespace (beyond `default`), ServiceAccount, and all RBAC kinds (Role, RoleBinding, SSOConfig, APIKey). The schemas and YAML examples below cover the full v1 design; see the MVP Implementation Plan for what ships first.
+**MVP resource kinds:** Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding. Flow and KnowledgeSource are registered (CRUD works) but not wired to the execution engine yet. Agent spec supports an optional `serviceAccount` field (defaults to `sa-<agent-name>`) for principal chain tracking. **Deferred to post-MVP:** EnvironmentVariable, Namespace (beyond `default`), ServiceAccount (as a standalone resource kind — agents use inline `serviceAccount` field for now), SSOConfig, APIKey. The schemas and YAML examples below cover the full v1 design; see the MVP Implementation Plan for what ships first.
 
 ---
 

@@ -8,7 +8,7 @@ Ensure every operation available in the Blackbeard UI can also be performed via 
 
 ## 1.1 MVP Scope
 
-**MVP implements:** All commands listed in Phase 1 and Phase 2 below.
+**MVP implements (DONE):** All commands in Phase 1, Phase 2, and most of Phase 3 are implemented. CLI modules: `cli/auth_cmds.py`, `cli/credentials.py`, `cli/users.py`, `cli/rbac.py`, `cli/exec.py`, `cli/export_cmd.py`, `cli/helpers.py`. Group member management endpoints (`POST/DELETE /groups/{id}/members`) are the only remaining gap.
 
 **Deferred to post-MVP:** Interactive TUI mode, `blackbeard shell` (REPL), plugin system for custom commands.
 

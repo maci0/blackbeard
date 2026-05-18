@@ -13,9 +13,11 @@ Both classes use the same primitives — Objects, Verbs, Roles, RoleBindings, Ru
 
 ## 1.1 MVP Scope
 
-**MVP implements:** Built-in email/password auth with JWT tokens, User and Group models, Role and RoleBinding resource kinds, predefined roles (owner/admin/developer/operator/viewer/policy-admin + agent roles), authorization enforcement middleware, AgentPolicy runtime constraints, sandbox tier enforcement, and a visual RBAC editor in the UI (Roles tab, Users/Groups tab, RoleBindings tab, AgentPolicy editor). Agents run as ServiceAccounts (configured via `spec.serviceAccount`, defaulting to `sa-<agent-name>`). Tools invoked by an agent execute under that agent's ServiceAccount context. Each execution records the principal chain: User (who kicked off) -> Crew -> Agent (ServiceAccount).
+**MVP implements:** Built-in email/password auth with JWT tokens (access 15min + refresh 7d), User and Group models, Role and RoleBinding resource kinds, predefined roles (owner/admin/developer/operator/viewer/policy-admin + agent-unrestricted/agent-standard/agent-read-only), authorization enforcement middleware (RBAC checks on API endpoints), AgentPolicy resource kind (tool allowlist/denylist + LLM budget limits), sandbox tier selection (none/wasm), and a visual RBAC editor in the UI (Roles tab, Users/Groups tab, AgentPolicy editor). Agents run as ServiceAccounts (configured via `spec.serviceAccount`, defaulting to `sa-<agent-name>`). Tools invoked by an agent execute under that agent's ServiceAccount context. Each execution records the principal chain: User (who kicked off) → Crew → Agent (ServiceAccount). CLI supports `login`/`logout`/`whoami` with credential storage in `~/.config/blackbeard/`.
 
-**Deferred to post-MVP:** SSO/OIDC integration (Ory Kratos/Hydra), SpiceDB for relationship-based access control, OPA for policy-as-code, entity-level fine-grained permissions (`metadata.access`), and multi-organization support.
+**MVP does NOT implement (planned but not yet built):** Principal chain intersection (effective permissions = user role ∩ agent role), delegation constraints, network/filesystem/code-execution policy enforcement, audit logging, token budget hard enforcement (tracked advisorily only), predefined agent policy auto-seeding.
+
+**Deferred to post-MVP:** SSO/OIDC integration (Ory Kratos/Hydra), SpiceDB for relationship-based access control, OPA for policy-as-code, entity-level fine-grained permissions (`metadata.access`), multi-organization support, ServiceAccount as a standalone resource kind.
 
 ---
 
