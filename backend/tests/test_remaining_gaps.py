@@ -396,9 +396,7 @@ def test_config_gen_mixed_valid_and_skipped():
         make_resource(
             ResourceKind.LLM_CONNECTION, "valid", {"provider": "openai", "model": "gpt-4o"}
         ),
-        make_resource(
-            ResourceKind.LLM_CONNECTION, "invalid", {"provider": "openai"}
-        ),  # no model
+        make_resource(ResourceKind.LLM_CONNECTION, "invalid", {"provider": "openai"}),  # no model
     ]
     config_str = generate_litellm_config(conns)
     config = yaml.safe_load(config_str)

@@ -32,8 +32,7 @@ def _redact_sensitive_inputs(inputs: dict[str, Any]) -> dict[str, Any]:
     structures need walking — avoids a copy on the common-case flat dict.
     """
     if not any(
-        _SENSITIVE_INPUT_KEYS.search(k) or isinstance(v, (dict, list))
-        for k, v in inputs.items()
+        _SENSITIVE_INPUT_KEYS.search(k) or isinstance(v, (dict, list)) for k, v in inputs.items()
     ):
         return inputs
     redacted: dict[str, Any] = {}
@@ -44,8 +43,7 @@ def _redact_sensitive_inputs(inputs: dict[str, Any]) -> dict[str, Any]:
             redacted[k] = _redact_sensitive_inputs(v)
         elif isinstance(v, list):
             redacted[k] = [
-                _redact_sensitive_inputs(item) if isinstance(item, dict) else item
-                for item in v
+                _redact_sensitive_inputs(item) if isinstance(item, dict) else item for item in v
             ]
         else:
             redacted[k] = v
@@ -132,6 +130,8 @@ class TrainRequest(BaseModel):
 
 class TestRequest(BaseModel):
     """Request to test a crew."""
+
+    __test__ = False  # Not a pytest test class
 
     inputs: dict[str, Any] = Field(
         default_factory=dict,
@@ -232,8 +232,8 @@ class ExecutionResponse(BaseModel):
                 )
                 for t in raw_tasks
             ]
-        raw_inputs = execution.__dict__.get('inputs')
-        initiated_by_raw = execution.__dict__.get('initiated_by')
+        raw_inputs = execution.__dict__.get("inputs")
+        initiated_by_raw = execution.__dict__.get("initiated_by")
         return cls.model_construct(
             id=execution.id,
             crew_name=execution.crew_name,
@@ -245,14 +245,14 @@ class ExecutionResponse(BaseModel):
             n_iterations=execution.n_iterations,
             training_file=execution.training_file,
             inputs=_redact_sensitive_inputs(raw_inputs) if raw_inputs else {},
-            outputs=execution.__dict__.get('outputs'),
+            outputs=execution.__dict__.get("outputs"),
             error=execution.error,
             total_tokens=execution.total_tokens,
             prompt_tokens=execution.prompt_tokens,
             completion_tokens=execution.completion_tokens,
             cost_usd=execution.cost_usd,
             initiated_by=str(initiated_by_raw) if initiated_by_raw else None,
-            principal_chain=execution.__dict__.get('principal_chain'),
+            principal_chain=execution.__dict__.get("principal_chain"),
             created_at=execution.created_at,
             started_at=execution.started_at,
             completed_at=execution.completed_at,

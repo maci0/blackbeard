@@ -23,9 +23,7 @@ from tests.conftest import _resource_map, make_resource
 # ---------------------------------------------------------------------------
 
 
-def _policy_spec(
-    *, max_usd: float | None = None, max_tokens: int | None = None
-) -> dict[str, Any]:
+def _policy_spec(*, max_usd: float | None = None, max_tokens: int | None = None) -> dict[str, Any]:
     """Build a minimal AgentPolicy spec with budget limits."""
     budget: dict[str, Any] = {}
     if max_usd is not None:

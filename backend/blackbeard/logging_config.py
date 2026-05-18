@@ -108,18 +108,14 @@ class _JsonFormatter(logging.Formatter):
         for key, val in record.__dict__.items():
             if key not in _LOG_RECORD_BUILTIN and key not in log_entry:
                 key_lower = key.lower()
-                if key_lower in _SENSITIVE_KEYS or key_lower.endswith(
-                    _SENSITIVE_SUFFIXES
-                ):
+                if key_lower in _SENSITIVE_KEYS or key_lower.endswith(_SENSITIVE_SUFFIXES):
                     log_entry[key] = "[REDACTED]"
                 else:
                     log_entry[key] = val
         try:
             return json.dumps(log_entry, default=str)
         except (TypeError, ValueError, OverflowError):
-            safe = {
-                k: v for k, v in log_entry.items() if isinstance(v, _SCALAR_TYPES)
-            }
+            safe = {k: v for k, v in log_entry.items() if isinstance(v, _SCALAR_TYPES)}
             safe["_serialization_error"] = True
             return json.dumps(safe, default=str)
 

@@ -214,9 +214,7 @@ async def deactivate_user(
         )
         raise HTTPException(status_code=403, detail="Cannot deactivate other users")
 
-    result = await session.execute(
-        select(User).where(User.id == user_id).with_for_update()
-    )
+    result = await session.execute(select(User).where(User.id == user_id).with_for_update())
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")

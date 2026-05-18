@@ -354,9 +354,7 @@ class BlackbeardExecutionListener(BaseEventListener):
 
         @crewai_event_bus.on(ToolUsageFinishedEvent)
         def on_tool_finished(source: Any, event: ToolUsageFinishedEvent) -> None:
-            duration_ms = int(
-                (event.finished_at - event.started_at).total_seconds() * 1000
-            )
+            duration_ms = int((event.finished_at - event.started_at).total_seconds() * 1000)
             data = {
                 "tool_name": event.tool_name,
                 "duration_ms": duration_ms,
@@ -380,9 +378,7 @@ class BlackbeardExecutionListener(BaseEventListener):
             started = getattr(event, "started_at", None)
             finished = getattr(event, "finished_at", None)
             if started and finished:
-                duration_ms = int(
-                    (finished - started).total_seconds() * 1000
-                )
+                duration_ms = int((finished - started).total_seconds() * 1000)
             data: dict[str, Any] = {
                 "model": event.model,
                 "tokens": usage.get("total_tokens", 0) if isinstance(usage, dict) else 0,

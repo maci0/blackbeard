@@ -421,7 +421,6 @@ async def kickoff(
     return loaded
 
 
-
 async def _submit_execution(
     session: AsyncSession,
     crew_name: str,
@@ -534,9 +533,7 @@ async def _submit_execution(
 
     loaded = await get_execution(session, execution_id)
     if loaded is None:
-        raise ExecutionError(
-            f"Execution {execution_id} not found after {execution_type.value}"
-        )
+        raise ExecutionError(f"Execution {execution_id} not found after {execution_type.value}")
     return loaded
 
 
@@ -588,7 +585,6 @@ async def test_crew(
         ExecutionType.TEST,
         n_iterations=n_iterations,
     )
-
 
 
 async def _mark_failed_async(execution_id: UUID, error: str) -> None:
@@ -727,6 +723,50 @@ def _thread_session_factory() -> tuple[async_sessionmaker[AsyncSession], AsyncEn
     return factory, thread_engine
 
 
+def _resolve_eval_llm(
+    loader: ResourceLoader,
+    resource_snapshot: dict[str, dict[str, Any]],
+    crew_name: str,
+) -> str:
+    """Resolve an eval LLM model string for crew.test().
+
+    Uses the crew's manager_llm if defined, otherwise falls back to
+    the first agent's LLM. Returns a model string (e.g. 'gpt-4o').
+    """
+    crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
+    crew_spec = crew_snap.get("spec", {})
+
+    # Prefer manager_llm
+    manager_ref = crew_spec.get("manager_llm")
+    if manager_ref:
+        try:
+            llm = loader.build_llm(manager_ref)
+            return llm.model
+        except Exception:
+            logger.warning(
+                "Failed to resolve manager_llm '%s' for eval — trying agent LLMs",
+                manager_ref,
+            )
+
+    # Fall back to first agent's LLM
+    for agent_ref in crew_spec.get("agents", []):
+        ref = parse_ref(agent_ref)
+        if not ref:
+            continue
+        agent_snap = resource_snapshot.get(f"Agent/{ref.name}", {})
+        agent_spec = agent_snap.get("spec", {})
+        llm_ref = agent_spec.get("llm")
+        if llm_ref:
+            try:
+                llm = loader.build_llm(llm_ref)
+                return llm.model
+            except Exception:
+                continue
+
+    # Last resort: use a reasonable default
+    return "gpt-4o"
+
+
 async def _run_crew_async(
     execution_id: UUID,
     resource_snapshot: dict[str, dict[str, Any]],
@@ -798,9 +838,7 @@ async def _run_crew_async(
 
             # --- Budget enforcement via LiteLLM virtual keys ---
             virtual_api_key: str | None = None
-            max_budget, max_tokens = _derive_budget_limits(
-                resource_snapshot, crew_name
-            )
+            max_budget, max_tokens = _derive_budget_limits(resource_snapshot, crew_name)
             has_budget = max_budget is not None or max_tokens is not None
 
             if has_budget:
@@ -827,9 +865,7 @@ async def _run_crew_async(
                     virtual_key = virtual_api_key  # for cleanup in finally
 
                     # Persist the key reference on the execution row
-                    execution = await _get_execution_for_update(
-                        session, execution_id
-                    )
+                    execution = await _get_execution_for_update(session, execution_id)
                     if execution:
                         execution.litellm_key = virtual_api_key
                         await session.commit()
@@ -857,16 +893,22 @@ async def _run_crew_async(
             )
 
             if execution_type == ExecutionType.TRAIN:
-                result = crew.train(
+                crew.train(
                     n_iterations=n_iterations,
                     inputs=inputs,
                     filename=training_file,
                 )
+                result = None
             elif execution_type == ExecutionType.TEST:
-                result = crew.test(
+                # crew.test() requires an eval_llm — resolve from the
+                # crew's manager_llm or first agent's LLM.
+                eval_llm = _resolve_eval_llm(loader, resource_snapshot, crew_name)
+                crew.test(
                     n_iterations=n_iterations,
+                    eval_llm=eval_llm,
                     inputs=inputs,
                 )
+                result = None
             else:
                 result = crew.kickoff(inputs=inputs)
             listener.flush()

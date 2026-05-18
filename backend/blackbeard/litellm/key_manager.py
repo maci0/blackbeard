@@ -79,15 +79,11 @@ class VirtualKeyManager:
                 f"{exc.response.text[:200]}"
             ) from exc
         except httpx.HTTPError as exc:
-            raise VirtualKeyError(
-                f"LiteLLM /key/generate request failed: {exc}"
-            ) from exc
+            raise VirtualKeyError(f"LiteLLM /key/generate request failed: {exc}") from exc
 
         key = data.get("key")
         if not key:
-            raise VirtualKeyError(
-                "LiteLLM /key/generate response missing 'key' field"
-            )
+            raise VirtualKeyError("LiteLLM /key/generate response missing 'key' field")
 
         logger.info(
             "Virtual key created: name=%s max_budget=%s max_tokens=%s",

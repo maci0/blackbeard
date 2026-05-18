@@ -68,9 +68,7 @@ class ResourceService:
         t0 = time.monotonic()
         kind_enum = _parse_kind(data.kind)
 
-        errors, validated_refs = await asyncio.to_thread(
-            validate_resource, data.kind, data.spec
-        )
+        errors, validated_refs = await asyncio.to_thread(validate_resource, data.kind, data.spec)
         if errors:
             raise ResourceValidationError(errors)
 
@@ -254,9 +252,7 @@ class ResourceService:
         validated_refs = None
         has_changes = False
         if data.spec is not None:
-            errors, validated_refs = await asyncio.to_thread(
-                validate_resource, kind, data.spec
-            )
+            errors, validated_refs = await asyncio.to_thread(validate_resource, kind, data.spec)
             if errors:
                 raise ResourceValidationError(errors)
             resource.spec = data.spec

@@ -532,24 +532,20 @@ def _validate_flow_extra(spec: dict[str, Any], errors: list[ValidationError]) ->
             _validate_function_path(step, f"spec.steps[{i}].function_path", errors)
 
 
-def _check_value_injection(
-    val: str, field: str, label: str, errors: list[ValidationError]
-) -> None:
+def _check_value_injection(val: str, field: str, label: str, errors: list[ValidationError]) -> None:
     """Check a string value for command substitution and blocked env expansion."""
     if "`" in val or "$(" in val:
         errors.append(
             ValidationError(
                 field,
-                f"{label} must not contain command substitution "
-                "(backticks or $(...)).",
+                f"{label} must not contain command substitution (backticks or $(...)).",
             )
         )
     elif _has_blocked_env_expansion(val):
         errors.append(
             ValidationError(
                 field,
-                f"{label} must not reference internal variables "
-                "via shell expansion.",
+                f"{label} must not reference internal variables via shell expansion.",
             )
         )
 
