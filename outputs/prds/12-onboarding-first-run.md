@@ -6,7 +6,9 @@ Provide a guided first-run experience that helps new users understand Blackbeard
 
 ### 1.1 MVP Scope
 
-The onboarding experience described here is a stretch goal for MVP. If time permits, the Welcome Dialog (section 5.1) and "Load Example" enhancement (section 5.3) ship with MVP. The guided tour (section 5.2) and help sidebar (section 5.4) are post-MVP.
+**Implemented:** Onboarding wizard — a 5-step welcome dialog that introduces new users to the platform on first visit, stored in localStorage. The "Load Example" button is available on the empty canvas.
+
+**Deferred to post-MVP:** Guided tour (step-by-step tooltip walkthrough of Studio UI elements), progressive disclosure (contextual tooltips on first interaction), help sidebar with "Restart tour" and documentation links, interactive tutorial, "What's new" dialog.
 
 ---
 

@@ -4,7 +4,11 @@
 
 Provide a shared, versioned library of reusable agents, tasks, tools, crews, flows, guardrails, and templates. Teams can publish, discover, fork, and compose assets without duplicating work. The repository is the internal marketplace.
 
-**MVP scope:** This entire PRD is post-MVP. MVP uses git as the asset repository — resources are YAML files managed via `blackbeard export --all -o repo/` and `blackbeard apply -f repo/`. Versioning via git commits. Sharing via git push/pull. No MinIO, no custom registry, no publishing UI. Post-MVP may add `blackbeard pull <git-url>` convenience commands and GitOps webhook integration.
+### 1.1 MVP Scope
+
+**Implemented:** Git-based asset management via `blackbeard export --all -o repo/` and `blackbeard apply -f repo/`. Marketplace import from git repositories (clone and apply). Versioning via git commits. Sharing via git push/pull.
+
+**Deferred to post-MVP:** No MinIO, no custom registry (`repository_assets` table), no publishing UI, no `blackbeard repo publish/install` commands, no approval workflows, no semver resolution. The full repository system described in this PRD remains post-MVP.
 
 ## 2. Asset Types
 

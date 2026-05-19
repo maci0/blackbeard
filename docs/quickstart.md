@@ -239,12 +239,111 @@ blackbeard kickoff summary-crew --input content="Blackbeard is a self-hosted age
 
 ---
 
+## Step 8: Import from the Marketplace
+
+The Marketplace lets you import pre-built crews from git repositories or the bundled example library.
+
+### From the UI
+
+1. Navigate to **http://localhost:3000/marketplace**
+2. Click **Import Built-in** to load the bundled Research Crew Starter
+3. Or paste an HTTPS git URL to import resources from any public repository
+
+### From the API
+
+```bash
+# Import built-in example crew
+curl -X POST -H "X-API-Key: change-me-in-production" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "built-in"}' \
+  http://localhost:8000/api/v1/marketplace/import
+
+# Import from a git repository
+curl -X POST -H "X-API-Key: change-me-in-production" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://github.com/org/crew-templates.git", "path": "agents/"}' \
+  http://localhost:8000/api/v1/marketplace/import
+```
+
+The import endpoint clones the repo (shallow, HTTPS only), finds all YAML files, validates them, and upserts the resources.
+
+---
+
+## Step 9: Train and Test Your Crew
+
+Beyond standard execution, Blackbeard supports iterative training and evaluation runs.
+
+### Train a crew
+
+Training runs the crew multiple times and persists learning data for performance improvement.
+
+```bash
+blackbeard train research-crew --input topic="AI agents" --iterations 3 --wait
+```
+
+### Test a crew
+
+Test runs evaluate crew performance with metrics, using an LLM judge to score outputs.
+
+```bash
+blackbeard test-crew research-crew --input topic="AI agents" --iterations 3 --wait
+```
+
+### From the UI
+
+In the Studio toolbar, use the **Train** and **Test** buttons alongside the standard **Run** button.
+
+---
+
+## Step 10: Pull Resources from the Server
+
+Use the `pull` command to download resources from the server as YAML files, useful for backup or version control.
+
+```bash
+# Pull a single resource
+blackbeard pull Agent researcher -o agents/researcher.yaml
+
+# Export all resources in a namespace
+blackbeard export --namespace default > backup.yaml
+```
+
+---
+
+## Step 11: Use the YAML Editor
+
+The Studio property panel includes a bidirectional YAML editor (Monaco). You can switch between the form view and YAML view at any time -- changes sync automatically. This is useful for power users who prefer editing raw YAML.
+
+---
+
+## Step 12: Manage Users and Groups
+
+### Create users
+
+```bash
+blackbeard user create alice@example.com --display-name "Alice" --password "..."
+```
+
+### Manage groups
+
+```bash
+blackbeard group create engineering --description "Engineering team"
+blackbeard group add-member engineering alice@example.com
+blackbeard group remove-member engineering alice@example.com
+```
+
+Groups can be used as subjects in RoleBindings for team-level RBAC.
+
+---
+
 ## Next Steps
 
 - **Add tools to agents** -- see `examples/research-crew/tools/` for examples of builtin and Python tools
-- **Set up agent policies** -- create `AgentPolicy` resources to enforce spending budgets and tool allowlists
-- **Add guardrails** -- attach `Guardrail` resources to tasks for output validation
-- **Configure RBAC** -- create users, roles, and role bindings for team access control
+- **Set up agent policies** -- create `AgentPolicy` resources to enforce spending budgets, tool allowlists, and delegation rules
+- **Add guardrails** -- attach `Guardrail` resources to tasks for output validation (function, LLM, or schema-based)
+- **Configure RBAC** -- create users, groups, roles, and role bindings for team access control
 - **Use different LLM providers** -- create `LLMConnection` resources pointing to OpenAI, Anthropic, or Vertex AI
+- **Build flows** -- create `Flow` resources to chain multiple crews into multi-step pipelines
+- **Set up webhooks** -- register webhook URLs at `POST /api/v1/webhooks` for execution event delivery
+- **Install the Python SDK** -- see [sdks/python/README.md](../sdks/python/README.md) for programmatic access
 - **Read the YAML reference** -- see [docs/yaml-reference.md](yaml-reference.md) for every field on every resource kind
 - **Explore the API** -- open http://localhost:8000/docs for interactive Swagger documentation (debug mode)

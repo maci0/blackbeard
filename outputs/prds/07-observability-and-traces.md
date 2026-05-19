@@ -10,6 +10,12 @@ Provide comprehensive visibility into every crew, flow, and agent execution thro
 
 **No external trace backend.** The combination of LiteLLM's built-in observability + Blackbeard's execution event log covers all use cases with fewer moving parts and no additional container dependency.
 
+### 1.1 MVP Scope
+
+**Implemented:** Execution event log (`execution_events` table) with SSE and WebSocket streaming to the frontend, REST endpoint for historical event replay, LiteLLM dashboard at `:4000/ui` for LLM-level request inspection, token and cost tracking per execution, audit log API for RBAC and resource mutation events, optional OpenTelemetry export configuration.
+
+**Deferred to post-MVP:** PII redaction on event data (Presidio integration), custom trace backend integration, execution timeline (Gantt) view, advanced dashboards (policy denials, sandbox usage, budget utilization charts).
+
 ### What LiteLLM provides (LLM-level)
 
 - Per-request logging: model, tokens, cost, latency, success/failure

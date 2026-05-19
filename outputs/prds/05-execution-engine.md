@@ -4,6 +4,12 @@
 
 The Execution Engine is the runtime that loads YAML resource definitions, resolves references, constructs the agent/task/crew/flow runtime graph, invokes LLMs, dispatches tool calls through sandboxed execution environments, manages state, enforces agent policies (PRD 03), and produces structured outputs. It is the only module that actually "runs" agent workloads.
 
+### 1.1 MVP Scope
+
+**Implemented:** Sequential and hierarchical crew execution, flow execution (sequential steps of type crew and function), train and test modes via CrewAI native APIs, budget enforcement via LiteLLM virtual keys (per-execution), guardrails (function-based, LLM-based, and schema-based) wired through CrewAI's built-in guardrail system, AgentPolicy enforcement (tool allowlist/denylist, sandbox tier promotion), HITL respond endpoint, event streaming via both SSE and WebSocket, webhooks for execution events, `none` and `wasm` sandbox tiers. In-process execution backend using `ThreadPoolExecutor`.
+
+**Deferred to post-MVP:** Temporal workflow backend, Docker and MicroVM sandbox tiers, flow router/condition steps, dynamic task creation in hierarchical mode, warm container/VM pools.
+
 ## 2. Architecture
 
 ```

@@ -29,8 +29,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/marketplace", tags=["marketplace"])
 
-# Path to the bundled examples directory, relative to the repo root.
-# In Docker the working directory is /app/backend so the examples sit one level up.
+# Path to the bundled examples directory, resolved relative to this file.
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _EXAMPLES_DIR = _REPO_ROOT / "examples"
 

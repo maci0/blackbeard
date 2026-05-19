@@ -43,7 +43,8 @@ class VirtualKeyManager:
         Args:
             name: Human-readable key name (e.g. ``exec-<uuid>``).
             max_budget: Maximum spend in USD.  ``None`` means unlimited.
-            max_tokens: Maximum total tokens.  ``None`` means unlimited.
+            max_tokens: Maximum total tokens (mapped to LiteLLM ``tpm_limit``).
+                ``None`` means unlimited.
             metadata: Arbitrary metadata stored on the key.
 
         Returns:

@@ -4,6 +4,12 @@
 
 Provide a centralised catalogue for all tools, integrations, and MCP servers that agents can use. Tools are defined as YAML resources, discoverable through a searchable registry UI, installable per-agent or per-crew, and governed by RBAC.
 
+### 1.1 MVP Scope
+
+**Implemented:** Python tools (`BaseTool`), WASM tools (compiled and executed in Wasmtime sandbox), MCP tools (both stdio and HTTP transports), and builtin tool types are all supported. Tool discovery and the marketplace import from git (`blackbeard apply` from a git-cloned directory) are working. Tools are governed by AgentPolicy allowlist/denylist enforcement.
+
+**Deferred to post-MVP:** Composio integration, OAuth connectors (`IntegrationConnector` resource), tool compilation CLI (`blackbeard tool compile`), Registry UI with browse/search/detail views, tool versioning, JIT tool discovery meta-tools, approval workflows.
+
 ## 2. Tool Types
 
 | Type | Description | Default Sandbox | Example |

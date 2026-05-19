@@ -56,6 +56,7 @@ spec:
   system_template: "You are {role}..."     # Override the system prompt template
   prompt_template: "Task: {task}..."       # Override the human prompt template
   response_template: "Output: {output}"   # Override the response format template
+  serviceAccount: "sa-researcher"          # Service account identity for RBAC (default: sa-<name>)
 ```
 
 | Field | Type | Required | Description |
@@ -78,6 +79,7 @@ spec:
 | `system_template` | string | — | Custom system prompt template (stored but not yet passed to CrewAI at runtime) |
 | `prompt_template` | string | — | Custom task prompt template (stored but not yet passed to CrewAI at runtime) |
 | `response_template` | string | — | Custom response format template (stored but not yet passed to CrewAI at runtime) |
+| `serviceAccount` | string | — | Service account identity used for RBAC principal chain during execution (default `sa-<name>`); must match `^[a-z0-9][a-z0-9\-]*$` |
 
 ---
 
@@ -397,6 +399,13 @@ spec:
   # Sandbox enforcement
   sandbox:
     minimum_tier: wasm                     # "none", "wasm", "docker", or "microvm"
+
+  # Delegation control
+  delegation:
+    allowed: true                          # Whether agent-to-agent delegation is permitted
+    targets:                               # Restrict which agents can be delegated to (optional)
+      - "ref:agents/researcher"
+      - "ref:agents/writer"
 ```
 
 | Field | Type | Required | Description |
@@ -407,6 +416,8 @@ spec:
 | `budget.max_usd` | number ≥ 0 | — | Max spend in USD per execution |
 | `budget.max_tokens` | integer ≥ 1 | — | Max total tokens per execution |
 | `sandbox.minimum_tier` | `none`\|`wasm`\|`docker`\|`microvm` | — | Minimum sandbox isolation required |
+| `delegation.allowed` | boolean | — | Whether agent-to-agent delegation is permitted |
+| `delegation.targets` | string[] | — | Restrict which agents can receive delegated work (refs) |
 
 > **Note:** For MVP, only `none` and `wasm` sandbox tiers are implemented. `docker` and `microvm` are accepted by the schema but fall back to `wasm` at runtime.
 
@@ -424,7 +435,7 @@ metadata:
   namespace: default
 spec:
   # --- Required ---
-  type: function                           # "function" (Python) or "llm" (LLM judge)
+  type: function                           # "function", "llm", or "schema"
 
   # --- Optional ---
   description: "Reject outputs containing personally identifiable information"
@@ -439,16 +450,30 @@ spec:
   #   Does the following text contain PII? Answer YES or NO only.
   #   Text: {output}
   # llm: "ref:llm-connections/vertex-claude-sonnet"
+
+  # For type: schema
+  # type: schema
+  # json_schema:                           # JSON Schema the output must conform to
+  #   type: object
+  #   required: [summary, confidence]
+  #   properties:
+  #     summary:
+  #       type: string
+  #     confidence:
+  #       type: number
+  #       minimum: 0
+  #       maximum: 1
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | `function`\|`llm` | ✅ | Guardrail implementation strategy |
+| `type` | `function`\|`llm`\|`schema` | ✅ | Guardrail implementation strategy |
 | `description` | string | — | Human-readable description of what is being checked |
 | `on_fail` | `reject`\|`warn`\|`log` | — | Action on validation failure (default `reject`) |
 | `function_path` | string | — | Dotted path to Python callable `(output: str) -> bool` (required for `function`) |
 | `llm_prompt` | string | — | Prompt template with `{output}` placeholder (required for `llm`) |
 | `llm` | string | — | LLMConnection ref used for the LLM judge |
+| `json_schema` | object | — | JSON Schema to validate output against (required for `schema`) |
 
 ---
 

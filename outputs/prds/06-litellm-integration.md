@@ -10,6 +10,12 @@ Blackbeard's job is to:
 3. Consume LiteLLM's spend data for Blackbeard's observability dashboards (PRD 07).
 4. Expose a simplified LLM management UI that writes to LiteLLM's config.
 
+### 1.1 MVP Scope
+
+**Implemented:** Fully implemented. LiteLLM Proxy co-deployed as a sidecar container, automatic config generation from `LLMConnection` resources, per-execution virtual key lifecycle (create on kickoff, delete on completion), spend tracking per key/user/model, per-user LiteLLM registration on Blackbeard user creation, LiteLLM dashboard accessible at `:4000/ui`. All LLM calls route through the proxy with no direct provider calls.
+
+**Deferred to post-MVP:** Advanced routing strategies (`LLMRoutingConfig` resource), standalone/external deployment topologies, tag-based routing, Blackbeard-side spend dashboards (LiteLLM dashboard serves this role for now).
+
 ## 2. Architecture
 
 ```

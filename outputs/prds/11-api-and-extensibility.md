@@ -4,6 +4,12 @@
 
 Define the public API surface, webhook streaming protocol, plugin SDK, and extension points that allow Blackbeard to be embedded, extended, and integrated into arbitrary systems.
 
+### 1.1 MVP Scope
+
+**Implemented:** REST CRUD for all 11 resource kinds, execution lifecycle endpoints (kickoff, status, cancel, stream, events), auth endpoints (register, login, refresh, whoami), health check endpoints (liveness and readiness), audit log API, marketplace import, webhook endpoint configuration, HITL respond endpoint, OpenAPI schema auto-generated at `/api/v1/docs`. SDKs: Python SDK and TypeScript SDK (both auto-generated from the OpenAPI spec). CLI fully implemented as a standalone package with 25+ commands and credential storage.
+
+**Deferred to post-MVP:** gRPC API, React component export (`@blackbeard/react` widget), Plugin SDK (`blackbeard-plugin-sdk` package), AsyncAPI spec for webhook events.
+
 ## 2. REST API
 
 **Convention:** All API paths use lowercase plural resource names: `/api/v1/agents/{name}`, `/api/v1/tasks/{name}`, `/api/v1/crews/{name}`, etc. This follows REST conventions and Kubernetes API patterns.

@@ -185,9 +185,8 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     if rate_limited is not None:
         return rate_limited
 
-    # Check for JWT Bearer token — validate signature and expiry before
-    # allowing through.  Endpoints without a require_user dependency
-    # would otherwise be unprotected if we only checked the header format.
+    # Validate JWT Bearer token (signature + expiry).  Invalid tokens
+    # trigger rate-limit recording to throttle brute-force attempts.
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]

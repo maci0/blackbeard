@@ -76,7 +76,10 @@ _valkey_lock = asyncio.Lock()
 
 
 async def _check_valkey() -> dict[str, object]:
-    """Ping Valkey/Redis and return status dict."""
+    """Ping Valkey and return status dict.
+
+    Converts valkey:// URLs to redis:// for the redis-py client.
+    """
     global _valkey_client
     t0 = time.monotonic()
     try:

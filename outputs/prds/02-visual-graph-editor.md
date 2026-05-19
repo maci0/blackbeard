@@ -6,7 +6,9 @@ Provide a browser-based drag-and-drop canvas where users compose agents, tasks, 
 
 ### 1.1 MVP Scope
 
-**MVP ships:** Canvas with Agent/Task/Tool nodes, edges for context and tool assignment, property panel with spec fields, YAML tab (read-only initially; bidirectional sync is a stretch goal), save to API, run button triggering kickoff, basic execution view with status badges, undo/redo (30 snapshots). **Deferred to post-MVP:** Flow step nodes, Crew compound nodes (bounding box), AI Copilot, Export ZIP/PNG/SVG/React, auto-layout via ELK.js, drag reparenting, live collaboration, accessibility beyond basic keyboard nav. Monaco editor for YAML is a post-MVP enhancement (MVP uses a standard textarea or read-only code display).
+**Implemented:** Canvas with Agent/Task/Tool nodes, edges for context and tool assignment, property panel with spec fields, YAML editor with bidirectional sync (Monaco), save to API, Run/Train/Test mode selector triggering crew execution, FlowStep nodes, CrewGroup compound nodes (bounding box for grouping agents and tasks), ELK.js auto-layout, undo/redo (30-snapshot history), basic execution view with status badges.
+
+**Deferred to post-MVP:** AI Copilot, Export ZIP/PNG/SVG/React, drag reparenting, live collaboration, accessibility beyond basic keyboard nav.
 
 ---
 

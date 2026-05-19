@@ -1,10 +1,12 @@
 # Getting Started with Blackbeard
 
+> **See also:** For a more comprehensive walkthrough (marketplace import, train/test commands, YAML editor, group management), see [quickstart.md](quickstart.md).
+
 Blackbeard is an open, self-hosted Agent Management Platform built on top of CrewAI. This guide walks you through standing up the platform and running your first crew.
 
 ## Prerequisites
 
-- **Podman** (or Docker) + **podman-compose** — used to orchestrate all platform services
+- **Docker** (or Podman) — `run.sh` auto-detects `docker compose` or `podman-compose`
 - **GCP service account** with Vertex AI access — optional; only needed if using Vertex AI as an LLM provider
 - **Bun** — required only for frontend development
 - **Python 3.12+** and **uv** — required only for backend development
@@ -48,13 +50,13 @@ Navigate to **http://localhost:3000** in your browser. The home page opens the S
 The `blackbeard` CLI can apply a directory of YAML files, creating or updating all resources in dependency order.
 
 ```bash
-# Install the CLI (requires uv: https://docs.astral.sh/uv/)
-cd backend
+# Install the standalone CLI (requires uv: https://docs.astral.sh/uv/)
+cd cli
 uv sync
 
 # Apply the research-crew example (path relative to repo root)
 cd ..
-uv run --project backend blackbeard apply -f examples/research-crew/
+blackbeard apply -f examples/research-crew/
 
 # Verify resources were created (via API)
 curl -H "X-API-Key: $BLACKBEARD_API_KEY" http://localhost:8000/api/v1/agents
@@ -65,8 +67,8 @@ curl -H "X-API-Key: $BLACKBEARD_API_KEY" http://localhost:8000/api/v1/crews
 Validate YAML files without applying:
 
 ```bash
-uv run --project backend blackbeard validate -f examples/research-crew/
-uv run --project backend blackbeard apply -f examples/research-crew/ --dry-run
+blackbeard validate -f examples/research-crew/
+blackbeard apply -f examples/research-crew/ --dry-run
 ```
 
 ---
@@ -93,11 +95,11 @@ You can switch between the form view and a read-only YAML preview (Monaco) in th
 
 ```bash
 # Run a crew, passing inputs as key=value pairs
-uv run --project backend blackbeard kickoff research-crew --input topic="The future of agentic AI"
+blackbeard kickoff research-crew --input topic="The future of agentic AI"
 
 # Poll execution status
-uv run --project backend blackbeard status <execution-id>
-uv run --project backend blackbeard status <execution-id> --watch  # poll until terminal state
+blackbeard status <execution-id>
+blackbeard status <execution-id> --watch  # poll until terminal state
 ```
 
 ### Kick off via UI
@@ -109,6 +111,11 @@ Open a crew in the Studio or navigate to the Crew resource detail page and click
 ## 6. Next Steps
 
 - **Create custom tools** — Write a Python class extending `crewai.tools.BaseTool`, package it, and register it with a `Tool` resource (`type: python`, `class_path: your_package.YourTool`)
-- **Set up agent policies** — Use `AgentPolicy` resources to enforce tool allowlists, spending budgets, and minimum sandbox tiers per crew
-- **Add guardrails** — Attach `Guardrail` resources to tasks to validate or filter outputs using a Python function or an LLM judge
+- **Set up agent policies** — Use `AgentPolicy` resources to enforce tool allowlists, spending budgets, delegation rules, and minimum sandbox tiers per crew
+- **Add guardrails** — Attach `Guardrail` resources to tasks to validate or filter outputs using a Python function, an LLM judge, or JSON schema validation
+- **Build flows** — Create `Flow` resources to chain multiple crews into multi-step pipelines
+- **Import from the Marketplace** — Use the `/marketplace` page or API to import crews from git repos or the built-in starter
+- **Train and test crews** — Use `blackbeard train` and `blackbeard test-crew` for iterative improvement and evaluation
+- **Set up webhooks** — Register webhook URLs for execution event delivery with HMAC-SHA256 signing
+- **Install the Python SDK** — See [`sdks/python/README.md`](../sdks/python/README.md) for programmatic access
 - **Browse the YAML reference** — See [`docs/yaml-reference.md`](./yaml-reference.md) for a complete field-by-field reference for all resource kinds

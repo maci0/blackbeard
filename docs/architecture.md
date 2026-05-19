@@ -160,6 +160,7 @@ Each execution gets its own thread with an isolated asyncio event loop. This pre
 | `POST /crews/{name}/kickoff`          | `kickoff` | Standard crew execution                  |
 | `POST /crews/{name}/train`            | `train`   | Iterative training with data persistence |
 | `POST /crews/{name}/test`             | `test`    | Test run with performance metrics        |
+| `POST /flows/{name}/run`              | `flow`    | Multi-step flow execution                |
 
 **Budget enforcement chain:**
 
@@ -414,3 +415,146 @@ All containers use `no-new-privileges` and `cap_drop: ALL`. PostgreSQL and Valke
 ### WASM Sandbox
 
 Tools with `sandbox: wasm` run in a WebAssembly runtime (`wasmtime-py`) with restricted capabilities. WASI grants are explicitly enumerated (e.g., `http_fetch`, `env`). The `env` capability exposes only a fixed set of safe variables (`LANG`, `LC_ALL`, `TZ`, `TERM`).
+
+---
+
+## Webhook Delivery
+
+Blackbeard supports webhook notifications for execution lifecycle events. Webhooks are registered via the API and receive HTTP POST callbacks with HMAC-SHA256 signed payloads.
+
+```
+POST /api/v1/webhooks           → Register a webhook URL
+GET  /api/v1/webhooks           → List registered webhooks
+DELETE /api/v1/webhooks/{id}    → Remove a webhook
+```
+
+**Event types:** `crew_started`, `task_completed`, `execution_completed`, `execution_failed`, and others. Register with an empty `events` list to receive all event types.
+
+**Signing:** Each webhook has an HMAC-SHA256 signing secret (auto-generated or user-provided). The signature is included in the delivery headers so you can verify authenticity.
+
+**Delivery:** Webhooks are delivered fire-and-forget during execution. The delivery system does not retry failed deliveries in the current implementation.
+
+---
+
+## Audit Logging
+
+All mutation operations are logged to the `audit_logs` table. Each entry records the action, resource type, resource ID, the user who performed the action, and a timestamp.
+
+```
+GET /api/v1/audit-logs          → Query the audit log
+```
+
+Audited actions include: resource create/update/delete, execution start/cancel, HITL responses, marketplace imports, user management, and webhook registration.
+
+---
+
+## Flow Execution
+
+Flows orchestrate multiple crews and functions into multi-step pipelines with state passing.
+
+```
+POST /api/v1/flows/{name}/run   → Run a flow
+```
+
+**Execution model:** Flow steps are executed sequentially. Each step of type `crew` builds and kicks off the referenced crew. Step outputs are chained -- the result of step N is available as input context to step N+1.
+
+**Step types:**
+
+| Type | Description |
+|------|-------------|
+| `crew` | Builds and runs a referenced crew |
+| `function` | Invokes a Python function (module:function format, allowlisted) |
+| `router` | Routes to different steps based on output (not yet implemented at runtime) |
+| `condition` | Conditional step execution (not yet implemented at runtime) |
+
+---
+
+## Human-in-the-Loop (HITL)
+
+Tasks with `human_input: true` pause execution and wait for human review. The system supports this through execution events.
+
+```
+POST /api/v1/executions/{id}/respond    → Submit a HITL response
+GET  /api/v1/executions/{id}/events     → Poll for hitl_request events
+```
+
+The frontend polls the events endpoint for `hitl_request` events, presents them to the user, and submits responses via the respond endpoint. The response is recorded as an `hitl_response` event that the execution listener picks up.
+
+---
+
+## Studio: Auto-Layout
+
+The Studio visual editor uses [ELK.js](https://github.com/kieler/elkjs) for automatic graph layout. When you click the auto-layout button, nodes are arranged left-to-right using the ELK layered algorithm, respecting agent-to-task and task-to-crew edges.
+
+---
+
+## Marketplace
+
+The Marketplace (`/marketplace` page) allows importing resources from external git repositories or the bundled example library.
+
+**Built-in examples:** A "Research Crew Starter" is bundled with the platform and can be imported without any external connectivity.
+
+**Git import:** The backend clones repositories (shallow, HTTPS only), finds all YAML files, validates them against resource schemas, and upserts them via the standard ResourceService. Safety limits apply: 60-second clone timeout, max 200 YAML files, max 256KB per file, symlinks are skipped, and path traversal is prevented.
+
+---
+
+## CLI Package
+
+The CLI (`cli/` directory) is a standalone Python package named `blackbeard-cli` with no server dependencies.
+
+**Dependencies:** click, httpx, rich, pyyaml, jsonschema only -- no FastAPI, SQLAlchemy, or CrewAI.
+
+**Module structure:**
+
+| Module | Commands |
+|--------|----------|
+| `__main__.py` | apply, validate, get, list, delete, kickoff, train, test-crew, status, pull, health |
+| `auth_cmds.py` | login, logout, whoami, register |
+| `exec.py` | executions (list), events, cancel |
+| `export_cmd.py` | export (YAML dump) |
+| `rbac.py` | role, rolebinding management |
+| `users.py` | user, group management (create, list, add-member, remove-member) |
+
+**Auth resolution order:** `--api-key` flag > `BLACKBEARD_API_KEY` env var > stored JWT in `~/.config/blackbeard/`.
+
+The CLI copies `kinds.py` and the `resources/` validation code from the backend. This avoids a runtime dependency on the backend package while keeping validation logic identical.
+
+---
+
+## SDKs
+
+**Python SDK** (`sdks/python/`): Thin wrapper over httpx. Covers auth (login, register, refresh, whoami), resource CRUD (list, get, create, update, delete, apply, export), and executions (kickoff, train, test, run_flow, cancel, wait, events, spend).
+
+**TypeScript SDK** (`sdks/typescript/`): Thin wrapper over fetch. Mirrors the Python SDK's API coverage.
+
+---
+
+## Helm Chart
+
+A Helm chart is available at `deploy/helm/blackbeard/` for Kubernetes deployment. It includes:
+
+- PostgreSQL StatefulSet
+- Valkey deployment
+- LiteLLM proxy deployment
+- API and UI deployments
+- Ingress, Secrets, ConfigMaps
+
+Install with:
+
+```bash
+helm install blackbeard deploy/helm/blackbeard/ \
+  --set auth.apiKey=... \
+  --set auth.jwtSecret=...
+```
+
+---
+
+## Observability
+
+### OpenTelemetry (Optional)
+
+The backend supports exporting traces to an OpenTelemetry collector. Set the `OTEL_ENDPOINT` environment variable to enable trace export. When not set, tracing is disabled and has no performance impact.
+
+### Structured Logging
+
+All backend log entries are structured with `extra` dicts containing event names and contextual fields (execution IDs, crew names, error types). This makes logs machine-parseable for aggregation in tools like Loki, Elasticsearch, or CloudWatch.

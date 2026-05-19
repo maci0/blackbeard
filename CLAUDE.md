@@ -68,6 +68,10 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **CLI** (`cli/` — separate package `blackbeard-cli`): Standalone binary with no server deps (click, httpx, rich, pyyaml, jsonschema only). 22 commands across 7 modules. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
 
+**HITL (Human-in-the-Loop)**: Tasks with `human_input: true` pause execution. Frontend polls for `hitl_request` events and submits responses via `POST /executions/{id}/respond`. Response recorded as `hitl_response` event.
+
+**OpenTelemetry**: Optional trace export via `OTEL_ENDPOINT` env var. When unset, tracing is disabled with no overhead.
+
 **External services**: PostgreSQL (resources + executions + users), Valkey (cache), LiteLLM proxy (model routing to Vertex AI / OpenAI, with per-execution virtual keys for budget enforcement + spend tracking).
 
 ### Frontend (React + React Flow)

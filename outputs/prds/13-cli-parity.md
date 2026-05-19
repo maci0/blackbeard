@@ -8,9 +8,9 @@ Ensure every operation available in the Blackbeard UI can also be performed via 
 
 ## 1.1 MVP Scope
 
-**MVP implements (DONE):** All commands in Phase 1, Phase 2, and most of Phase 3 are implemented. CLI modules: `cli/auth_cmds.py`, `cli/credentials.py`, `cli/users.py`, `cli/rbac.py`, `cli/exec.py`, `cli/export_cmd.py`, `cli/helpers.py`. Group member management endpoints (`POST/DELETE /groups/{id}/members`) are the only remaining gap.
+**Implemented:** Fully implemented as a standalone package with 25+ commands spanning all three phases. CLI modules: `cli/auth_cmds.py`, `cli/credentials.py`, `cli/users.py`, `cli/rbac.py`, `cli/exec.py`, `cli/export_cmd.py`, `cli/helpers.py`. Commands include: `apply`, `validate`, `get`, `list`, `delete`, `kickoff`, `status`, `cancel`, `executions`, `events --follow`, `export`, `login`/`logout`/`whoami`/`register`, `user list/invite`, `group list/create/delete/add-member/remove-member/members`, `role list/describe`, `rolebinding list/create`, `apikey generate/rotate/show`, `health`. JWT credential storage in `~/.config/blackbeard/` with auto-refresh. Both Rich (human) and JSON (machine) output modes.
 
-**Deferred to post-MVP:** Interactive TUI mode, `blackbeard shell` (REPL), plugin system for custom commands.
+**Deferred to post-MVP:** Interactive TUI mode, `blackbeard shell` (REPL), plugin system for custom commands, `blackbeard tool compile`, `blackbeard repo publish/install`, `blackbeard deploy/rollback`.
 
 ---
 

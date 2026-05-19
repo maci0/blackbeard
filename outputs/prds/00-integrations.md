@@ -11,6 +11,14 @@ Build the **orchestration and UX layer**. Delegate infrastructure to battle-test
 
 ---
 
+### Integration Status (MVP)
+
+**IMPLEMENTED:** CrewAI (agent/task/crew/flow primitives, guardrails, process modes), LiteLLM Proxy (model routing, spend tracking, virtual keys, config generation), PostgreSQL (resource and execution storage), Valkey (cache), React Flow (visual graph editor), Monaco Editor (YAML editing in Studio), Wasmtime (WASM sandbox for tool execution).
+
+**DEFERRED:** Ory Kratos/Hydra (SSO/OIDC -- using built-in JWT auth instead), SpiceDB (relationship-based access control -- using PostgreSQL RBAC tables instead), OPA (policy-as-code -- using in-process Python policy evaluator instead), Temporal (workflow orchestration -- using in-process ThreadPoolExecutor instead), Microsoft Presidio (PII redaction), Infisical (secrets management -- using `.env` files instead), MinIO (object storage -- using git-based asset management instead).
+
+---
+
 ## Integration Matrix
 
 ### What we inherit from CrewAI (unchanged)

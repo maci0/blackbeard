@@ -6,6 +6,10 @@
 
 **Blackbeard** is an open, self-hosted Agent Management Platform (AMP) that wraps and extends the open-source **CrewAI** framework with enterprise-grade RBAC, a visual editor, sandboxed tool execution, and production deployment infrastructure. It does **not** fork or rewrite CrewAI — it imports it as a dependency and adds the layers CrewAI OSS deliberately leaves to platform operators.
 
+#### Current Implementation Status
+
+The MVP is fully implemented. The platform supports 11 resource kinds (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding, Flow, KnowledgeSource), a visual Studio with FlowStep nodes, CrewGroup compound nodes, YAML editor with bidirectional sync, and ELK.js auto-layout. RBAC is working with JWT auth, users, groups, roles, role bindings, and policy enforcement. Audit logging captures all mutations. The marketplace supports git-based import via `blackbeard apply`. Webhooks and SSE/WebSocket streaming deliver real-time execution events. The CLI is a standalone package with 25+ commands and credential storage. Deployment is supported via Docker Compose and a Helm chart. Python and TypeScript SDKs are available. Deferred to post-MVP: Ory Kratos/Hydra (SSO), SpiceDB, OPA, Temporal, Presidio (PII), Infisical (secrets), MinIO (object storage), gRPC API, React component export, Plugin SDK.
+
 ### What CrewAI OSS already provides (we inherit, not reimplement)
 
 | Capability | CrewAI OSS Module | Blackbeard's Relationship |

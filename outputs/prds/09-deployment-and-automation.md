@@ -4,7 +4,11 @@
 
 Manage the full lifecycle of deployed crews and flows: build, deploy, version, rollback, trigger, and expose via external protocols (REST, webhooks, A2A). An **Automation** is a deployed instance of a Crew or Flow resource.
 
-**MVP scope:** This entire PRD is post-MVP. MVP crews are kicked off directly via `POST /api/v1/crews/{name}/kickoff` without the Automation resource, deployment lifecycle, triggers, or versioning. See PRD 05 section 3.1 for the MVP execution path.
+### 1.1 MVP Scope
+
+**Implemented:** Docker Compose deployment (`docker compose up` with 5 containers: api, ui, postgres, valkey, litellm) and a Helm chart for Kubernetes deployment. Crews are kicked off directly via `POST /api/v1/crews/{name}/kickoff`.
+
+**Deferred to post-MVP:** The Automation resource, deployment lifecycle (build/deploy/version/rollback), triggers (cron, webhook, custom), A2A protocol endpoints, versioning strategies, and the Automations Dashboard UI. These remain the full scope of this PRD for post-MVP work.
 
 ## 2. Automation Resource
 

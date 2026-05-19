@@ -267,11 +267,9 @@ app.add_middleware(
     expose_headers=["X-Request-Id"],
 )
 
-# HTTP middleware stack (LIFO order — last registered runs first).
-# CORSMiddleware (above) wraps all of these as the outermost layer.
-#   1. security_headers — always runs, adds headers to every response
-#   2. api_key_middleware — authenticate, set request ID
-#   3. body_size_limiter — reject oversized bodies (innermost)
+# HTTP middleware stack (LIFO — last registered = outermost).
+# CORSMiddleware (above) wraps all of these.
+# Execution order: security_headers → api_key_middleware → body_size_limiter
 app.middleware("http")(body_size_limiter)
 app.middleware("http")(api_key_middleware)
 app.middleware("http")(security_headers_middleware)
