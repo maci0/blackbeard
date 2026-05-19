@@ -10,13 +10,13 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 |---------|---------------|
 | Resource model | Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding, Flow (CRUD only, no execution), KnowledgeSource (CRUD only, not wired to execution). No EnvironmentVariable, Namespace, or standalone ServiceAccount resource yet. |
 | Visual editor | Canvas with Agent/Task/Tool nodes, edges for context/tool assignment, property panel, YAML tab |
-| Execution | Sequential crews only (no hierarchical, no flows) |
+| Execution | Sequential crews + sequential flow steps (crew/function). Train and test via CrewAI native. No hierarchical process, no flow router/condition steps. |
 | LLM routing | LiteLLM Proxy with basic config generation from LLMConnection resources |
 | Sandbox | `none` and `wasm` tiers only (no Docker/MicroVM sandbox) |
 | Tools | Python tools (`BaseTool`), WASM tools, and MCP tools (stdio + HTTP). No OAuth integrations |
-| Agent policy | Tool allowlists and LLM budget limits only. No network/FS/delegation policies |
+| Agent policy | Tool allowlists/denylists, LLM budget enforcement via per-execution LiteLLM virtual keys, delegation constraints (allowed/targets). Audit logging on all mutations. No network/FS policy enforcement at runtime. |
 | Guardrails | Task-level guardrails (function-based and LLM-based) — wired through CrewAI's built-in guardrail system. No namespace or crew-level guardrails |
-| Observability | Execution event log + SSE streaming + LiteLLM dashboard for LLM request inspection |
+| Observability | Execution event log + SSE streaming + WebSocket streaming + LiteLLM dashboard + audit log API |
 | API | REST CRUD for resources + kickoff/status endpoints. No gRPC, no webhooks |
 | Auth & RBAC | Built-in email/password auth with JWT tokens (access + refresh). User and Group models. Role and RoleBinding resource kinds with predefined roles (owner/admin/developer/operator/viewer/policy-admin + agent roles). Authorization middleware accepts both `X-API-Key` and `Authorization: Bearer <jwt>`. Visual RBAC editor (Roles, Users, RoleBindings). No SSO/OIDC, no SpiceDB, no OPA. |
 | CLI | Full parity with UI: `apply`, `validate`, `kickoff`, `status`, `get`, `list`, `delete`, `export`, `login`/`logout`/`whoami`/`register`, `user list/invite`, `group list/create/delete`, `role list/describe`, `rolebinding list/create`, `executions`, `events --follow`, `cancel`. JWT credential storage in `~/.config/blackbeard/`. |
