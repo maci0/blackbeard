@@ -227,7 +227,11 @@ TOOL_SCHEMA = {
             "maxLength": 500,
         },
         "config": {"type": "object", "maxProperties": 50},
-        "sandbox": {"type": "string", "enum": ["none", "wasm"], "default": "none"},
+        "sandbox": {
+            "type": "string",
+            "enum": ["none", "wasm", "docker", "podman", "gvisor", "microvm"],
+            "default": "none",
+        },
         "capabilities": {
             "type": "array",
             "items": {"type": "string", "maxLength": 100},
@@ -324,7 +328,10 @@ AGENT_POLICY_SCHEMA = {
         "sandbox": {
             "type": "object",
             "properties": {
-                "minimum_tier": {"type": "string", "enum": ["none", "wasm", "docker", "microvm"]},
+                "minimum_tier": {
+                    "type": "string",
+                    "enum": ["none", "wasm", "docker", "podman", "gvisor", "microvm"],
+                },
             },
             "additionalProperties": False,
         },
@@ -340,6 +347,26 @@ AGENT_POLICY_SCHEMA = {
             },
             "additionalProperties": False,
         },
+        "pii": {
+            "type": "object",
+            "properties": {
+                "enabled": {"type": "boolean", "default": False},
+                "backend": {
+                    "type": "string",
+                    "enum": ["default", "presidio-nlp", "litellm"],
+                    "default": "default",
+                },
+                "model": {"type": "string", "maxLength": 255},
+                "entities": {
+                    "type": "array",
+                    "items": {"type": "string", "maxLength": 50},
+                    "maxItems": 30,
+                },
+                "redact_outputs": {"type": "boolean", "default": True},
+                "redact_events": {"type": "boolean", "default": True},
+            },
+            "additionalProperties": False,
+        },
     },
     "additionalProperties": False,
 }
@@ -348,7 +375,7 @@ GUARDRAIL_SCHEMA = {
     "type": "object",
     "required": ["type"],
     "properties": {
-        "type": {"type": "string", "enum": ["function", "llm", "schema"]},
+        "type": {"type": "string", "enum": ["function", "llm", "schema", "pii"]},
         "description": {"type": "string", "maxLength": 5000},
         "function_path": {
             "type": "string",
@@ -359,6 +386,16 @@ GUARDRAIL_SCHEMA = {
         "llm": {"type": "string", "maxLength": 500},
         "json_schema": {"type": "object", "maxProperties": 200},
         "on_fail": {"type": "string", "enum": ["reject", "warn", "log"], "default": "reject"},
+        "pii_entities": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 50},
+            "maxItems": 30,
+        },
+        "pii_action": {
+            "type": "string",
+            "enum": ["redact", "reject", "warn"],
+            "default": "redact",
+        },
     },
     "additionalProperties": False,
 }

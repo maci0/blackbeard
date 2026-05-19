@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 
+export { useCollaboration } from './useCollaboration'
+
 export function useDocumentTitle(title: string): void {
   useEffect(() => {
     document.title = `${title} — Blackbeard`

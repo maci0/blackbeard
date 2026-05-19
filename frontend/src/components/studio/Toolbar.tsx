@@ -10,6 +10,9 @@ import {
   Keyboard,
   FileCode2,
   LayoutGrid,
+  Users,
+  Radio,
+  Sparkles,
 } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { toResourceName } from '@/lib/utils'
@@ -40,6 +43,11 @@ export function Toolbar({
   onYamlToggle,
   onAutoLayout,
   layouting,
+  onCopilotClick,
+  collabEnabled,
+  onCollabToggle,
+  collabConnected,
+  collabParticipants,
 }: {
   crewName: string
   onCrewNameChange: (v: string) => void
@@ -62,6 +70,11 @@ export function Toolbar({
   onYamlToggle: () => void
   onAutoLayout: () => void
   layouting?: boolean
+  onCopilotClick: () => void
+  collabEnabled?: boolean
+  onCollabToggle?: () => void
+  collabConnected?: boolean
+  collabParticipants?: number
 }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
@@ -232,6 +245,18 @@ export function Toolbar({
           Run
         </button>
 
+        {/* AI Copilot */}
+        <button
+          onClick={onCopilotClick}
+          disabled={status === 'saving' || status === 'loading'}
+          aria-label="AI Copilot — generate crew from prompt"
+          title="AI Copilot"
+          className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-950"
+        >
+          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+          Copilot
+        </button>
+
         {/* YAML editor toggle */}
         <button
           onClick={onYamlToggle}
@@ -259,6 +284,42 @@ export function Toolbar({
             <LayoutGrid className="h-3.5 w-3.5" />
           )}
         </button>
+
+        {/* Collaboration toggle + participant count */}
+        {onCollabToggle && (
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={onCollabToggle}
+              aria-label={
+                collabEnabled ? 'Disable live collaboration' : 'Enable live collaboration'
+              }
+              aria-pressed={collabEnabled}
+              title={
+                collabEnabled
+                  ? 'Collaboration active — click to disconnect'
+                  : 'Enable live collaboration'
+              }
+              className={`flex h-[44px] w-[44px] items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                collabEnabled && collabConnected
+                  ? 'border-emerald-500 bg-emerald-500/10 text-emerald-500'
+                  : collabEnabled
+                    ? 'border-amber-500 bg-amber-500/10 text-amber-500'
+                    : 'border-border hover:bg-muted'
+              }`}
+            >
+              <Radio className="h-3.5 w-3.5" />
+            </button>
+            {collabEnabled && collabConnected && (collabParticipants ?? 1) > 1 && (
+              <span
+                className="flex items-center gap-1 text-xs font-medium text-emerald-500"
+                aria-label={`${collabParticipants} collaborators connected`}
+              >
+                <Users className="h-3 w-3" aria-hidden="true" />
+                {collabParticipants}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Keyboard shortcuts */}
         <button

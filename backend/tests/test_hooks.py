@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from tests.conftest import API_KEY_HEADER, make_resource
-
-from blackbeard.kinds import ResourceKind
-
+from tests.conftest import API_KEY_HEADER
 
 # ── Schema validation tests ──────────────────────────────────────────
 
@@ -156,7 +153,6 @@ def test_call_hook_exception_does_not_crash():
 
 def test_flow_step_hooks_called():
     """Flow step before/after hooks are called during _run_flow_steps."""
-    from unittest.mock import patch as _patch
 
     from blackbeard.engine.executor import _run_flow_steps
 

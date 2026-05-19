@@ -343,9 +343,15 @@ class BlackbeardExecutionListener(BaseEventListener):
     _FLUSH_INTERVAL = 0.5  # seconds between buffer flushes
     _MAX_BUFFER = 20  # flush if buffer reaches this size
 
-    def __init__(self, execution_id: UUID, db_url: str) -> None:
+    def __init__(
+        self,
+        execution_id: UUID,
+        db_url: str,
+        pii_config: dict[str, Any] | None = None,
+    ) -> None:
         self._execution_id = execution_id
         self._db_url = db_url
+        self._pii_config = pii_config
         self._seq = 0
         self._task_order = 0  # tracks which task (by order) is currently running
         self._lock = threading.Lock()  # guards _seq, _task_order, and _buffer
@@ -357,13 +363,15 @@ class BlackbeardExecutionListener(BaseEventListener):
         self._otel_active_spans: dict[str, Any] = {}
         super().__init__()
         logger.info(
-            "Execution listener created: execution_id=%s otel=%s",
+            "Execution listener created: execution_id=%s otel=%s pii=%s",
             execution_id,
             self._otel_tracer is not None,
+            self._pii_config is not None,
             extra={
                 "event": "execution_listener_created",
                 "execution_id": str(execution_id),
                 "otel_enabled": self._otel_tracer is not None,
+                "pii_enabled": self._pii_config is not None,
             },
         )
 
@@ -488,6 +496,15 @@ class BlackbeardExecutionListener(BaseEventListener):
 
     def _write_event(self, event_type: str, data: dict[str, Any]) -> None:
         self._ensure_request_id()
+        # PII redaction on event data
+        if self._pii_config and self._pii_config.get("redact_events", True):
+            from blackbeard.pii import redact_dict
+
+            data = redact_dict(
+                data,
+                entities=self._pii_config.get("entities"),
+                config=self._pii_config,
+            )
         now = datetime.now(UTC)
         flush_now = False
         with self._lock:

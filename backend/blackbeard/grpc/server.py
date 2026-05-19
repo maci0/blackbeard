@@ -137,6 +137,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
                 resource = await service.get(kind, request.name, namespace)
             except ResourceNotFoundError as exc:
                 await context.abort(grpc.StatusCode.NOT_FOUND, str(exc))
+                return blackbeard_pb2.Resource()
 
         return _resource_to_proto(resource)
 
@@ -156,6 +157,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
                 grpc.StatusCode.INVALID_ARGUMENT,
                 f"Invalid spec_json: {exc}",
             )
+            return blackbeard_pb2.Resource()
 
         data = ResourceCreate(
             apiVersion=request.api_version or API_VERSION,
@@ -174,6 +176,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
                     grpc.StatusCode.INVALID_ARGUMENT,
                     str(exc),
                 )
+                return blackbeard_pb2.Resource()
 
         return _resource_to_proto(resource)
 
@@ -213,6 +216,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
                 grpc.StatusCode.INVALID_ARGUMENT,
                 f"Invalid inputs_json: {exc}",
             )
+            return blackbeard_pb2.Execution()
 
         async with async_session() as session:
             try:
@@ -224,8 +228,10 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
                 )
             except ExecutionNotFoundError as exc:
                 await context.abort(grpc.StatusCode.NOT_FOUND, str(exc))
+                return blackbeard_pb2.Execution()
             except ExecutionError as exc:
                 await context.abort(grpc.StatusCode.INTERNAL, str(exc))
+                return blackbeard_pb2.Execution()
 
         return _execution_to_proto(execution)
 
@@ -244,6 +250,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
                 grpc.StatusCode.INVALID_ARGUMENT,
                 f"Invalid execution_id: {request.execution_id}",
             )
+            return blackbeard_pb2.Execution()
 
         async with async_session() as session:
             execution = await _executor_mod.get_execution(session, execution_id)
@@ -252,6 +259,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
                     grpc.StatusCode.NOT_FOUND,
                     f"Execution '{request.execution_id}' not found",
                 )
+                return blackbeard_pb2.Execution()
 
         return _execution_to_proto(execution)
 

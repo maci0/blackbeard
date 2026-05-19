@@ -105,6 +105,49 @@ def _extract_policy_specs(
     }
 
 
+def _get_pii_config(
+    resource_snapshot: dict[str, dict[str, Any]],
+    crew_name: str,
+) -> dict[str, Any] | None:
+    """Extract PII redaction config from applicable AgentPolicy resources.
+
+    Scans the crew's agents for policy refs (agent-level then crew-level
+    default) and returns the first PII config block that has ``enabled=True``.
+    Returns ``None`` if no policy enables PII redaction.
+    """
+    from blackbeard.engine.policy import resolve_policy
+
+    crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
+    crew_spec = crew_snap.get("spec", {})
+    policy_specs = _extract_policy_specs(resource_snapshot)
+
+    # Check each agent's resolved policy for a PII block
+    agent_refs = crew_spec.get("agents", [])
+    for agent_ref in agent_refs:
+        ref = parse_ref(agent_ref)
+        if not ref:
+            continue
+        agent_snap = resource_snapshot.get(f"Agent/{ref.name}", {})
+        agent_spec = agent_snap.get("spec", {})
+
+        policy = resolve_policy(agent_spec, crew_spec, policy_specs)
+        pii = policy.spec.get("pii")
+        if isinstance(pii, dict) and pii.get("enabled"):
+            return pii
+
+    # Check crew-level default policy directly
+    default_ref = crew_spec.get("default_agent_policy")
+    if default_ref:
+        name = parse_ref(default_ref)
+        policy_name = name.name if name else default_ref
+        policy_spec = policy_specs.get(policy_name, {})
+        pii = policy_spec.get("pii")
+        if isinstance(pii, dict) and pii.get("enabled"):
+            return pii
+
+    return None
+
+
 def _derive_budget_limits(
     resource_snapshot: dict[str, dict[str, Any]],
     crew_name: str,
@@ -1244,9 +1287,11 @@ async def _run_crew_async(
             crew = loader.build_crew(crew_name)
 
             # Wire up execution event listener for real-time streaming.
+            listener_pii_config = _get_pii_config(resource_snapshot, crew_name)
             listener = BlackbeardExecutionListener(
                 execution_id=execution_id,
                 db_url=settings.database_url.get_secret_value(),
+                pii_config=listener_pii_config,
             )
 
             # --- Crew hooks ---
@@ -1340,6 +1385,28 @@ async def _run_crew_async(
                     }
             else:
                 execution.outputs = {"raw": repr(result), "result_type": type(result).__name__}
+
+            # --- PII redaction on outputs ---
+            pii_config = _get_pii_config(resource_snapshot, crew_name)
+            if pii_config and pii_config.get("redact_outputs", True) and execution.outputs:
+                from blackbeard.pii import redact_dict
+
+                pii_entities = pii_config.get("entities")
+                execution.outputs = redact_dict(
+                    execution.outputs,
+                    entities=pii_entities,
+                    config=pii_config,
+                )
+                logger.info(
+                    "PII redaction applied to execution %s outputs",
+                    execution_id,
+                    extra={
+                        "event": "pii_redaction_applied",
+                        "execution_id": str(execution_id),
+                        "crew_name": crew_name,
+                        "target": "outputs",
+                    },
+                )
 
             await session.commit()
             duration_s = (

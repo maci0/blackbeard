@@ -216,7 +216,11 @@ TOOL_SCHEMA = {
             "maxLength": 500,
         },
         "config": {"type": "object", "maxProperties": 50},
-        "sandbox": {"type": "string", "enum": ["none", "wasm"], "default": "none"},
+        "sandbox": {
+            "type": "string",
+            "enum": ["none", "wasm", "docker", "podman", "gvisor", "microvm"],
+            "default": "none",
+        },
         "capabilities": {
             "type": "array",
             "items": {"type": "string", "maxLength": 100},
@@ -313,7 +317,10 @@ AGENT_POLICY_SCHEMA = {
         "sandbox": {
             "type": "object",
             "properties": {
-                "minimum_tier": {"type": "string", "enum": ["none", "wasm", "docker", "microvm"]},
+                "minimum_tier": {
+                    "type": "string",
+                    "enum": ["none", "wasm", "docker", "podman", "gvisor", "microvm"],
+                },
             },
             "additionalProperties": False,
         },

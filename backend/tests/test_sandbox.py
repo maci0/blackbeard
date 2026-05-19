@@ -1,8 +1,23 @@
-"""Tests for WASM sandbox: ModuleCache, WasmToolResult, WasmSandbox, select_sandbox."""
+"""Tests for sandbox tiers: selector, ContainerSandbox, MicroVMSandbox, WasmSandbox."""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from blackbeard.engine.sandbox.selector import select_sandbox, tier_rank
+from blackbeard.engine.sandbox.container_runtime import (
+    ContainerResult,
+    ContainerRuntimeError,
+    ContainerSandbox,
+    ContainerTimeoutError,
+)
+from blackbeard.engine.sandbox.microvm_runtime import (
+    MicroVMError,
+    MicroVMResult,
+    MicroVMSandbox,
+)
+from blackbeard.engine.sandbox.selector import TIER_ORDER, select_sandbox, tier_rank
 from blackbeard.engine.sandbox.wasm_runtime import (
     ModuleCache,
     WasmExecutionError,
@@ -31,7 +46,7 @@ class TestModuleCache:
         a, b, c = object(), object(), object()
         cache.put("a", a)  # type: ignore[arg-type]
         cache.put("b", b)  # type: ignore[arg-type]
-        cache.put("c", c)  # type: ignore[arg-type]  — evicts "a"
+        cache.put("c", c)  # type: ignore[arg-type]
         assert cache.get("a") is None
         assert cache.get("b") is b
         assert cache.get("c") is c
@@ -43,7 +58,7 @@ class TestModuleCache:
         cache.put("b", b)  # type: ignore[arg-type]
         # Access "a" to move it to the end (most-recently-used)
         cache.get("a")
-        cache.put("c", c)  # type: ignore[arg-type]  — should evict "b", not "a"
+        cache.put("c", c)  # type: ignore[arg-type]
         assert cache.get("a") is a
         assert cache.get("b") is None
         assert cache.get("c") is c
@@ -96,7 +111,7 @@ class TestWasmToolResult:
 
 
 # ---------------------------------------------------------------------------
-# WasmSandbox (non-execution tests — no real .wasm files needed)
+# WasmSandbox (non-execution tests -- no real .wasm files needed)
 # ---------------------------------------------------------------------------
 
 
@@ -132,39 +147,422 @@ class TestSandboxSelector:
         assert tier_rank("wasm") < tier_rank("docker")
         assert tier_rank("docker") < tier_rank("microvm")
 
+    def test_tier_rank_docker_equals_podman(self):
+        """Docker and podman share the same isolation level."""
+        assert tier_rank("docker") == tier_rank("podman")
+
+    def test_tier_rank_podman_less_than_microvm(self):
+        assert tier_rank("podman") < tier_rank("microvm")
+
     def test_tier_rank_unknown_falls_back_to_none(self):
         assert tier_rank("unknown_tier") == 0
         assert tier_rank("unknown_tier") == tier_rank("none")
         assert tier_rank("unknown_tier") < tier_rank("wasm")
 
+    def test_tier_order_list(self):
+        """TIER_ORDER contains all six tiers."""
+        assert TIER_ORDER == ["none", "wasm", "docker", "podman", "gvisor", "microvm"]
+
     def test_select_default(self):
-        # No policy → tool tier wins
+        # No policy -> tool tier wins
         assert select_sandbox(tool_tier="none") == "none"
         assert select_sandbox(tool_tier="wasm") == "wasm"
 
+    def test_select_docker_tier(self):
+        assert select_sandbox(tool_tier="docker") == "docker"
+
+    def test_select_podman_tier(self):
+        assert select_sandbox(tool_tier="podman") == "podman"
+
+    def test_select_microvm_tier(self):
+        assert select_sandbox(tool_tier="microvm") == "microvm"
+
     def test_select_policy_promotes(self):
-        # Tool says none, policy requires wasm → wasm
+        # Tool says none, policy requires wasm -> wasm
         result = select_sandbox(tool_tier="none", policy_minimum="wasm")
         assert result == "wasm"
 
+    def test_select_policy_promotes_to_docker(self):
+        result = select_sandbox(tool_tier="none", policy_minimum="docker")
+        assert result == "docker"
+
+    def test_select_policy_promotes_to_podman(self):
+        result = select_sandbox(tool_tier="wasm", policy_minimum="podman")
+        assert result == "podman"
+
+    def test_select_policy_promotes_to_microvm(self):
+        result = select_sandbox(tool_tier="docker", policy_minimum="microvm")
+        assert result == "microvm"
+
     def test_select_tool_higher_than_policy(self):
-        # Tool already at wasm, policy says none → stays wasm
+        # Tool already at wasm, policy says none -> stays wasm
         result = select_sandbox(tool_tier="wasm", policy_minimum="none")
         assert result == "wasm"
 
-    def test_select_unsupported_tier_fallback(self):
-        # docker / microvm not supported in MVP → falls back to wasm
-        result = select_sandbox(tool_tier="docker")
-        assert result == "wasm"
+    def test_select_tool_docker_policy_none(self):
+        # Tool already at docker, policy says none -> stays docker
+        result = select_sandbox(tool_tier="docker", policy_minimum="none")
+        assert result == "docker"
 
-        result = select_sandbox(tool_tier="microvm")
-        assert result == "wasm"
-
-    def test_select_policy_promotes_to_unsupported_falls_to_wasm(self):
-        # Policy requires docker (unsupported) → falls back to wasm
-        result = select_sandbox(tool_tier="none", policy_minimum="docker")
-        assert result == "wasm"
+    def test_select_tool_microvm_policy_docker(self):
+        # Tool already at microvm, policy says docker -> stays microvm
+        result = select_sandbox(tool_tier="microvm", policy_minimum="docker")
+        assert result == "microvm"
 
     def test_select_policy_and_tool_both_none(self):
         result = select_sandbox(tool_tier="none", policy_minimum="none")
         assert result == "none"
+
+    def test_select_docker_policy_podman_same_rank(self):
+        """When tool is docker and policy is podman (same rank), tool wins."""
+        result = select_sandbox(tool_tier="docker", policy_minimum="podman")
+        assert result == "docker"
+
+    def test_select_podman_policy_docker_same_rank(self):
+        """When tool is podman and policy is docker (same rank), tool wins."""
+        result = select_sandbox(tool_tier="podman", policy_minimum="docker")
+        assert result == "podman"
+
+
+# ---------------------------------------------------------------------------
+# ContainerResult
+# ---------------------------------------------------------------------------
+
+
+class TestContainerResult:
+    def test_to_dict(self):
+        result = ContainerResult(exit_code=0, stdout="hello", stderr="")
+        d = result.to_dict()
+        assert d == {"exit_code": 0, "stdout": "hello", "stderr": ""}
+
+    def test_frozen(self):
+        result = ContainerResult(exit_code=0, stdout="", stderr="")
+        with pytest.raises(AttributeError):
+            result.exit_code = 1  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# ContainerSandbox -- runtime detection (mocked)
+# ---------------------------------------------------------------------------
+
+
+class TestContainerSandboxDetection:
+    def test_detect_podman_preferred(self):
+        """Auto-detect prefers podman over docker."""
+        with patch("shutil.which", side_effect=lambda cmd: f"/usr/bin/{cmd}"):
+            sandbox = ContainerSandbox(runtime="auto")
+            assert sandbox.runtime == "podman"
+
+    def test_detect_docker_fallback(self):
+        """Falls back to docker when podman is not available."""
+        def _which(cmd):
+            return "/usr/bin/docker" if cmd == "docker" else None
+
+        with patch("shutil.which", side_effect=_which):
+            sandbox = ContainerSandbox(runtime="auto")
+            assert sandbox.runtime == "docker"
+
+    def test_detect_none_raises(self):
+        """Raises when no runtime is available."""
+        with (
+            patch("shutil.which", return_value=None),
+            pytest.raises(ContainerRuntimeError, match="No container runtime found"),
+        ):
+            ContainerSandbox(runtime="auto")
+
+    def test_explicit_docker(self):
+        with patch("shutil.which", return_value="/usr/bin/docker"):
+            sandbox = ContainerSandbox(runtime="docker")
+            assert sandbox.runtime == "docker"
+
+    def test_explicit_podman(self):
+        with patch("shutil.which", return_value="/usr/bin/podman"):
+            sandbox = ContainerSandbox(runtime="podman")
+            assert sandbox.runtime == "podman"
+
+    def test_explicit_missing_raises(self):
+        with (
+            patch("shutil.which", return_value=None),
+            pytest.raises(ContainerRuntimeError, match="not found on PATH"),
+        ):
+            ContainerSandbox(runtime="docker")
+
+
+# ---------------------------------------------------------------------------
+# ContainerSandbox -- command building
+# ---------------------------------------------------------------------------
+
+
+class TestContainerSandboxCommand:
+    def _make_sandbox(self, runtime: str = "docker") -> ContainerSandbox:
+        with patch("shutil.which", return_value=f"/usr/bin/{runtime}"):
+            return ContainerSandbox(runtime=runtime)
+
+    def test_basic_command(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("python:3.13-slim", ["python", "-c", "print('hi')"])
+        assert cmd[0] == "docker"
+        assert "run" in cmd
+        assert "--rm" in cmd
+        assert "python:3.13-slim" in cmd
+        assert cmd[-3:] == ["python", "-c", "print('hi')"]
+
+    def test_security_defaults(self):
+        """Verify all security flags are present by default."""
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"])
+        assert "--cap-drop" in cmd
+        idx = cmd.index("--cap-drop")
+        assert cmd[idx + 1] == "ALL"
+        assert "--security-opt" in cmd
+        sec_idx = cmd.index("--security-opt")
+        assert cmd[sec_idx + 1] == "no-new-privileges:true"
+        assert "--network" in cmd
+        net_idx = cmd.index("--network")
+        assert cmd[net_idx + 1] == "none"
+        assert "--read-only" in cmd
+
+    def test_network_enabled(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"], network=True)
+        assert "--network" not in cmd
+
+    def test_read_only_disabled(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"], read_only=False)
+        assert "--read-only" not in cmd
+
+    def test_memory_limit(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"], memory_limit="512m")
+        idx = cmd.index("--memory")
+        assert cmd[idx + 1] == "512m"
+
+    def test_cpu_limit(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"], cpu_limit=2.5)
+        assert "--cpus=2.5" in cmd
+
+    def test_env_vars(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"], env={"FOO": "bar", "BAZ": "qux"})
+        # Should include both env vars in sorted order
+        env_pairs = []
+        for i, part in enumerate(cmd):
+            if part == "-e":
+                env_pairs.append(cmd[i + 1])
+        assert "BAZ=qux" in env_pairs
+        assert "FOO=bar" in env_pairs
+
+    def test_stdin_flag(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"], input_data="hello")
+        assert "-i" in cmd
+
+    def test_no_stdin_flag_without_input(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"], input_data=None)
+        assert "-i" not in cmd
+
+    def test_podman_runtime(self):
+        sandbox = self._make_sandbox("podman")
+        cmd = sandbox._build_command("img", ["cmd"])
+        assert cmd[0] == "podman"
+
+
+# ---------------------------------------------------------------------------
+# ContainerSandbox -- async execution (mocked subprocess)
+# ---------------------------------------------------------------------------
+
+
+class TestContainerSandboxExecution:
+    def _make_sandbox(self, runtime: str = "docker") -> ContainerSandbox:
+        with patch("shutil.which", return_value=f"/usr/bin/{runtime}"):
+            return ContainerSandbox(runtime=runtime)
+
+    @pytest.mark.asyncio
+    async def test_execute_success(self):
+        sandbox = self._make_sandbox()
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(b"output", b""))
+        mock_proc.returncode = 0
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await sandbox.execute("python:3.13-slim", ["echo", "hi"])
+            assert result.exit_code == 0
+            assert result.stdout == "output"
+            assert result.stderr == ""
+
+    @pytest.mark.asyncio
+    async def test_execute_with_input(self):
+        sandbox = self._make_sandbox()
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(b"processed", b""))
+        mock_proc.returncode = 0
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await sandbox.execute(
+                "python:3.13-slim",
+                ["python", "-c", "import sys; print(sys.stdin.read())"],
+                input_data="test input",
+            )
+            assert result.exit_code == 0
+            assert result.stdout == "processed"
+            # Verify input was encoded and passed
+            mock_proc.communicate.assert_called_once_with(b"test input")
+
+    @pytest.mark.asyncio
+    async def test_execute_nonzero_exit(self):
+        sandbox = self._make_sandbox()
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(b"", b"error msg"))
+        mock_proc.returncode = 1
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await sandbox.execute("img", ["cmd"])
+            assert result.exit_code == 1
+            assert result.stderr == "error msg"
+
+    @pytest.mark.asyncio
+    async def test_execute_timeout(self):
+        sandbox = self._make_sandbox()
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(side_effect=TimeoutError)
+        mock_proc.kill = MagicMock()
+        mock_proc.wait = AsyncMock()
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch("asyncio.wait_for", side_effect=TimeoutError),
+            pytest.raises(ContainerTimeoutError, match="timed out after 5s"),
+        ):
+            await sandbox.execute("img", ["cmd"], timeout=5)
+
+    @pytest.mark.asyncio
+    async def test_execute_runtime_not_found(self):
+        sandbox = self._make_sandbox()
+
+        with (
+            patch(
+                "asyncio.create_subprocess_exec",
+                side_effect=FileNotFoundError("docker"),
+            ),
+            pytest.raises(ContainerRuntimeError, match="not found"),
+        ):
+            await sandbox.execute("img", ["cmd"])
+
+
+# ---------------------------------------------------------------------------
+# MicroVMResult
+# ---------------------------------------------------------------------------
+
+
+class TestMicroVMResult:
+    def test_to_dict(self):
+        result = MicroVMResult(exit_code=0, stdout="ok", stderr="")
+        d = result.to_dict()
+        assert d == {"exit_code": 0, "stdout": "ok", "stderr": ""}
+
+    def test_frozen(self):
+        result = MicroVMResult(exit_code=0, stdout="", stderr="")
+        with pytest.raises(AttributeError):
+            result.exit_code = 1  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# MicroVMSandbox
+# ---------------------------------------------------------------------------
+
+
+class TestMicroVMSandbox:
+    def test_detect_firecracker(self):
+        def _which(cmd):
+            return "/usr/bin/firecracker" if cmd == "firecracker" else None
+
+        with patch("shutil.which", side_effect=_which):
+            sandbox = MicroVMSandbox(hypervisor="auto")
+            assert sandbox.hypervisor == "firecracker"
+
+    def test_detect_cloud_hypervisor(self):
+        def _which(cmd):
+            return "/usr/bin/cloud-hypervisor" if cmd == "cloud-hypervisor" else None
+
+        with patch("shutil.which", side_effect=_which):
+            sandbox = MicroVMSandbox(hypervisor="auto")
+            assert sandbox.hypervisor == "cloud-hypervisor"
+
+    def test_detect_none_raises(self):
+        with (
+            patch("shutil.which", return_value=None),
+            pytest.raises(MicroVMError, match="No MicroVM hypervisor found"),
+        ):
+            MicroVMSandbox(hypervisor="auto")
+
+    def test_explicit_hypervisor(self):
+        with patch("shutil.which", return_value="/usr/bin/firecracker"):
+            sandbox = MicroVMSandbox(hypervisor="firecracker")
+            assert sandbox.hypervisor == "firecracker"
+
+    def test_explicit_missing_raises(self):
+        with (
+            patch("shutil.which", return_value=None),
+            pytest.raises(MicroVMError, match="not found on PATH"),
+        ):
+            MicroVMSandbox(hypervisor="firecracker")
+
+    @pytest.mark.asyncio
+    async def test_execute_raises_not_implemented(self):
+        with patch("shutil.which", return_value="/usr/bin/firecracker"):
+            sandbox = MicroVMSandbox(hypervisor="firecracker")
+            with pytest.raises(NotImplementedError, match="requires kernel and rootfs"):
+                await sandbox.execute("echo hello")
+
+    @pytest.mark.asyncio
+    async def test_execute_suggests_alternatives(self):
+        with patch("shutil.which", return_value="/usr/bin/firecracker"):
+            sandbox = MicroVMSandbox(hypervisor="firecracker")
+            with pytest.raises(NotImplementedError, match=r"docker.*podman"):
+                await sandbox.execute("echo hello")
+
+
+# ---------------------------------------------------------------------------
+# Schema validation for new sandbox tiers
+# ---------------------------------------------------------------------------
+
+
+class TestSandboxSchemaValidation:
+    """Verify that spec schemas accept the new tier values."""
+
+    def test_tool_schema_accepts_new_tiers(self):
+        from blackbeard.resources.validator import validate_resource
+
+        for tier in ("none", "wasm", "docker", "podman", "gvisor", "microvm"):
+            spec = {"type": "builtin", "sandbox": tier}
+            errors, _ = validate_resource("Tool", spec)
+            assert errors == [], f"Expected no errors for sandbox={tier!r}, got {errors}"
+
+    def test_tool_schema_rejects_invalid_tier(self):
+        from blackbeard.resources.validator import validate_resource
+
+        spec = {"type": "builtin", "sandbox": "invalid"}
+        errors, _ = validate_resource("Tool", spec)
+        assert len(errors) > 0
+
+    def test_policy_schema_accepts_new_tiers(self):
+        from blackbeard.resources.validator import validate_resource
+
+        for tier in ("none", "wasm", "docker", "podman", "gvisor", "microvm"):
+            spec = {"sandbox": {"minimum_tier": tier}}
+            errors, _ = validate_resource("AgentPolicy", spec)
+            assert errors == [], f"Expected no errors for minimum_tier={tier!r}, got {errors}"
+
+    def test_policy_schema_rejects_invalid_tier(self):
+        from blackbeard.resources.validator import validate_resource
+
+        spec = {"sandbox": {"minimum_tier": "invalid"}}
+        errors, _ = validate_resource("AgentPolicy", spec)
+        assert len(errors) > 0

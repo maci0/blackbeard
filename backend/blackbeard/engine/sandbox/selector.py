@@ -5,11 +5,12 @@ Determines which sandbox tier to use for a tool based on:
 2. Agent policy's minimum sandbox tier (policy.spec.sandbox.minimum_tier)
 3. System default (none)
 
-Tier ordering: none < wasm < docker < microvm
+Tier ordering: none < wasm < docker = podman < gvisor < microvm
 Higher tier = more isolation. Policy floor promotes lower tiers upward.
 
-Only ``none`` and ``wasm`` are currently implemented; ``docker`` and
-``microvm`` fall back to ``wasm`` at runtime.
+Docker and podman share the same isolation level (container-based).
+gVisor adds syscall-level isolation on top of container runtimes.
+MicroVM provides the highest isolation via Firecracker or Cloud Hypervisor.
 """
 
 from __future__ import annotations
@@ -18,9 +19,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Tier ordering — higher index = more isolation
-TIER_ORDER = ["none", "wasm", "docker", "microvm"]
-_TIER_RANK: dict[str, int] = {name: i for i, name in enumerate(TIER_ORDER)}
+# Tier ordering — higher index = more isolation.
+# Docker and podman are at the same level (both provide container isolation).
+# gVisor adds syscall-level isolation via runsc on top of docker/podman.
+TIER_ORDER = ["none", "wasm", "docker", "podman", "gvisor", "microvm"]
+_TIER_RANK: dict[str, int] = {
+    "none": 0,
+    "wasm": 1,
+    "docker": 2,
+    "podman": 2,
+    "gvisor": 3,
+    "microvm": 4,
+}
 
 
 def tier_rank(tier: str) -> int:
@@ -47,6 +57,10 @@ def select_sandbox(
     - tool's declared tier
     - policy's minimum tier
     - system default
+
+    When the policy minimum exceeds the tool's tier, the tool is promoted
+    to the policy minimum.  If docker and podman are at the same rank,
+    promotion preserves the specific tier name from the policy.
     """
     effective = tool_tier or system_default
 
@@ -62,17 +76,5 @@ def select_sandbox(
             },
         )
         effective = policy_minimum
-
-    if effective not in ("none", "wasm"):
-        logger.warning(
-            "Sandbox tier '%s' not yet implemented, falling back to 'wasm'",
-            effective,
-            extra={
-                "event": "sandbox_tier_fallback",
-                "requested_tier": effective,
-                "fallback_tier": "wasm",
-            },
-        )
-        effective = "wasm"
 
     return effective

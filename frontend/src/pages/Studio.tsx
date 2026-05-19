@@ -5,7 +5,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useStudioStore } from '@/stores/studioStore'
 import { api } from '@/api/client'
 import { capitalize, toResourceName, parseRef } from '@/lib/utils'
-import { useDocumentTitle } from '@/hooks'
+import { useCollaboration, useDocumentTitle } from '@/hooks'
 import { API_VERSION, KIND_TO_PLURAL } from '@/lib/kinds'
 import { DATAFLOW_MARKER_END } from '@/components/studio/defaults'
 import Palette, { MobilePalette } from '@/components/studio/Palette'
@@ -15,6 +15,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { RunStatus } from '@/lib/types'
 import { RunDialog, type RunParams } from '@/components/studio/RunDialog'
 import { Toolbar } from '@/components/studio/Toolbar'
+import { CopilotDialog, type CopilotResource } from '@/components/studio/CopilotDialog'
 import { YamlEditor } from '@/components/studio/YamlEditor'
 import { autoLayout } from '@/components/studio/autoLayout'
 import type { Node, Edge } from '@xyflow/react'
@@ -154,6 +155,14 @@ function StudioInner() {
   const [pendingLoadCrew, setPendingLoadCrew] = useState<string | null>(null)
   const [yamlOpen, setYamlOpen] = useState(false)
   const [layouting, setLayouting] = useState(false)
+  const [copilotOpen, setCopilotOpen] = useState(false)
+  const [collabEnabled, setCollabEnabled] = useState(false)
+
+  const {
+    participants: collabParticipants,
+    connected: collabConnected,
+    broadcast,
+  } = useCollaboration(crewName, collabEnabled)
 
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -175,6 +184,74 @@ function StudioInner() {
     )
 
   useDocumentTitle('Studio')
+
+  /* ── Broadcast canvas changes to collaborators ── */
+  useEffect(() => {
+    if (!collabEnabled || !collabConnected) return
+
+    // Subscribe to Zustand store changes and broadcast relevant operations.
+    // The useCollaboration hook sets applyingRemoteRef=true when applying
+    // incoming changes, which causes broadcast() to no-op and prevents
+    // echo loops.
+    const unsubscribe = useStudioStore.subscribe((state, prevState) => {
+      // Detect added nodes
+      if (state.nodes.length > prevState.nodes.length) {
+        const prevIds = new Set(prevState.nodes.map((n) => n.id))
+        for (const node of state.nodes) {
+          if (!prevIds.has(node.id)) {
+            broadcast('node_add', { ...node })
+          }
+        }
+      }
+
+      // Detect removed nodes
+      if (state.nodes.length < prevState.nodes.length) {
+        const currentIds = new Set(state.nodes.map((n) => n.id))
+        for (const node of prevState.nodes) {
+          if (!currentIds.has(node.id)) {
+            broadcast('node_delete', { id: node.id })
+          }
+        }
+      }
+
+      // Detect moved nodes (same count, different positions)
+      if (state.nodes.length === prevState.nodes.length) {
+        for (let i = 0; i < state.nodes.length; i++) {
+          const curr = state.nodes[i]
+          const prev = prevState.nodes[i]
+          if (
+            curr &&
+            prev &&
+            curr.id === prev.id &&
+            (curr.position.x !== prev.position.x || curr.position.y !== prev.position.y)
+          ) {
+            broadcast('node_move', { id: curr.id, position: curr.position })
+          }
+        }
+      }
+
+      // Detect added edges
+      if (state.edges.length > prevState.edges.length) {
+        const prevIds = new Set(prevState.edges.map((e) => e.id))
+        for (const edge of state.edges) {
+          if (!prevIds.has(edge.id)) {
+            broadcast('edge_add', { ...edge })
+          }
+        }
+      }
+
+      // Detect removed edges
+      if (state.edges.length < prevState.edges.length) {
+        const currentIds = new Set(state.edges.map((e) => e.id))
+        for (const edge of prevState.edges) {
+          if (!currentIds.has(edge.id)) {
+            broadcast('edge_delete', { id: edge.id })
+          }
+        }
+      }
+    })
+    return unsubscribe
+  }, [collabEnabled, collabConnected, broadcast])
 
   /* ── Clear timeout on unmount ── */
   useEffect(() => {
@@ -564,6 +641,84 @@ function StudioInner() {
     }
   }, [applyStatus, setNodes, setEdges])
 
+  /* ── Apply copilot-generated resources to the canvas ── */
+  const handleCopilotApply = useCallback(
+    (resources: CopilotResource[]) => {
+      const agentResources = resources.filter((r) => r.kind === 'Agent')
+      const taskResources = resources.filter((r) => r.kind === 'Task')
+      const crewResource = resources.find((r) => r.kind === 'Crew')
+
+      // Build nodes — agents on left, tasks on right
+      const agentNodes: Node[] = agentResources.map((agent, i) => ({
+        id: `agent-${agent.metadata.name}`,
+        type: 'agent',
+        position: { x: 80, y: 60 + i * 200 },
+        data: { ...agent.spec },
+      }))
+
+      const taskNodes: Node[] = taskResources.map((task, i) => ({
+        id: `task-${task.metadata.name}`,
+        type: 'task',
+        position: { x: 360, y: 60 + i * 200 },
+        data: { name: task.metadata.name, ...task.spec },
+      }))
+
+      // Build edges: task.spec.agent ref -> agent node
+      const edges: Edge[] = taskResources
+        .filter((task) => typeof task.spec.agent === 'string' && task.spec.agent)
+        .map((task) => {
+          const agentName = parseRef(task.spec.agent as string)
+          return {
+            id: `edge-agent-${agentName}-task-${task.metadata.name}`,
+            source: `agent-${agentName}`,
+            target: `task-${task.metadata.name}`,
+            type: 'dataflow',
+            markerEnd: DATAFLOW_MARKER_END,
+          } satisfies Edge
+        })
+
+      // Add context edges between tasks
+      for (const task of taskResources) {
+        const contextRefs = (task.spec.context as string[] | undefined) ?? []
+        for (const ctxRef of contextRefs) {
+          const ctxName = parseRef(ctxRef)
+          edges.push({
+            id: `edge-ctx-${ctxName}-${task.metadata.name}`,
+            source: `task-${ctxName}`,
+            target: `task-${task.metadata.name}`,
+            type: 'dataflow',
+            markerEnd: DATAFLOW_MARKER_END,
+          })
+        }
+      }
+
+      const childNodes = [...agentNodes, ...taskNodes]
+      const groupName = crewResource?.metadata.name ?? toResourceName(crewName)
+
+      // Wrap in a crew group node
+      const groupNode = buildCrewGroupNode(groupName, childNodes)
+      const parentedNodes = childNodes.map((n) => ({
+        ...n,
+        parentId: groupNode.id,
+        extent: 'parent' as const,
+        position: {
+          x: n.position.x - groupNode.position.x,
+          y: n.position.y - groupNode.position.y,
+        },
+      }))
+
+      setNodes([groupNode, ...parentedNodes])
+      setEdges(edges)
+
+      if (crewResource?.metadata.name) {
+        setCrewName(crewResource.metadata.name)
+      }
+
+      applyStatus('success', `Copilot generated ${resources.length} resources`)
+    },
+    [applyStatus, crewName, setEdges, setNodes],
+  )
+
   return (
     <div className="flex h-full flex-col">
       <h1 className="sr-only">Studio</h1>
@@ -589,8 +744,13 @@ function StudioInner() {
         redo={redo}
         yamlOpen={yamlOpen}
         onYamlToggle={() => setYamlOpen((v) => !v)}
+        onCopilotClick={() => setCopilotOpen(true)}
         onAutoLayout={() => void handleAutoLayout()}
         layouting={layouting}
+        collabEnabled={collabEnabled}
+        onCollabToggle={() => setCollabEnabled((v) => !v)}
+        collabConnected={collabConnected}
+        collabParticipants={collabParticipants}
       />
 
       <div className="relative flex flex-1 overflow-hidden">
@@ -625,6 +785,12 @@ function StudioInner() {
           if (pendingLoadCrew) void doLoadCrew(pendingLoadCrew)
           setPendingLoadCrew(null)
         }}
+      />
+
+      <CopilotDialog
+        open={copilotOpen}
+        onOpenChange={setCopilotOpen}
+        onApply={handleCopilotApply}
       />
     </div>
   )

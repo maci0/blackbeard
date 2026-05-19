@@ -22,6 +22,8 @@ from blackbeard.api.audit import router as audit_router
 from blackbeard.api.auth import router as auth_router
 from blackbeard.api.automations import router as automations_router
 from blackbeard.api.chat import router as chat_router
+from blackbeard.api.collaboration import router as collaboration_router
+from blackbeard.api.copilot import router as copilot_router
 from blackbeard.api.executions import router as executions_router
 from blackbeard.api.health import router as health_router
 from blackbeard.api.health import shutdown_health_clients
@@ -293,6 +295,14 @@ app = FastAPI(
             "name": "automations",
             "description": "Automation triggers: cron, webhook, and API-triggered executions",
         },
+        {
+            "name": "collaboration",
+            "description": "Real-time canvas collaboration via WebSocket",
+        },
+        {
+            "name": "copilot",
+            "description": "AI-powered resource generation from natural language prompts",
+        },
     ],
 )
 
@@ -325,4 +335,6 @@ app.include_router(executions_router, prefix="/api/v1")
 app.include_router(marketplace_router, prefix="/api/v1")
 app.include_router(webhooks_router, prefix="/api/v1")
 app.include_router(automations_router, prefix="/api/v1")
+app.include_router(collaboration_router, prefix="/api/v1")
+app.include_router(copilot_router, prefix="/api/v1")
 app.include_router(resources_router, prefix="/api/v1")

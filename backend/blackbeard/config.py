@@ -46,6 +46,18 @@ class Settings(BaseSettings):
 
     otel_endpoint: str | None = None
 
+    # Container sandbox settings
+    container_runtime: str = "auto"  # "docker", "podman", or "auto"
+    container_default_image: str = "python:3.13-slim"
+    container_timeout: int = 30
+    container_memory_limit: str = "256m"
+
+    # gVisor sandbox settings
+    gvisor_enabled: bool = False
+
+    # MicroVM sandbox settings
+    microvm_enabled: bool = False
+
     max_concurrent_executions: int = 4
 
     host: str = "0.0.0.0"
