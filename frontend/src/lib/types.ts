@@ -34,11 +34,16 @@ export interface ExecutionEvent {
   data: Record<string, unknown>
 }
 
+export type ExecutionType = 'kickoff' | 'train' | 'test' | 'flow'
+
 export interface Execution {
   id: string
   crew_name: string
   crew_namespace: string
+  execution_type: ExecutionType
   status: string
+  n_iterations: number | null
+  training_file: string | null
   inputs: Record<string, unknown>
   outputs: Record<string, unknown> | null
   error: string | null

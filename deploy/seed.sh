@@ -170,6 +170,42 @@ seed "Role/agent-read-only" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
   }
 }'
 
+# ── Agent Policies ─────────────────────────────────────────────────
+
+seed "AgentPolicy/unrestricted" -X POST "$API/api/v1/agent-policies" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "AgentPolicy",
+  "metadata": {"name": "unrestricted"},
+  "spec": {
+    "tools": {"mode": "all"},
+    "delegation": {"allowed": true}
+  }
+}'
+
+seed "AgentPolicy/standard" -X POST "$API/api/v1/agent-policies" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "AgentPolicy",
+  "metadata": {"name": "standard"},
+  "spec": {
+    "tools": {"mode": "all"},
+    "budget": {"max_usd": 1.0, "max_tokens": 100000},
+    "delegation": {"allowed": false},
+    "sandbox": {"minimum_tier": "none"}
+  }
+}'
+
+seed "AgentPolicy/sandboxed" -X POST "$API/api/v1/agent-policies" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "AgentPolicy",
+  "metadata": {"name": "sandboxed"},
+  "spec": {
+    "tools": {"mode": "all"},
+    "budget": {"max_usd": 0.5, "max_tokens": 50000},
+    "delegation": {"allowed": false},
+    "sandbox": {"minimum_tier": "wasm"}
+  }
+}'
+
 # ── Default admin user (DEBUG mode only) ────────────────────────────
 if [ "${DEBUG:-false}" = "true" ]; then
   ADMIN_PASSWORD="${BLACKBEARD_ADMIN_PASSWORD:-$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")}"

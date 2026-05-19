@@ -751,6 +751,22 @@ class ResourceLoader:
         if manager_llm_ref:
             crew_kwargs["manager_llm"] = self.build_llm(manager_llm_ref)
 
+        # Manager agent for hierarchical process
+        manager_agent_ref = spec.get("manager_agent")
+        if manager_agent_ref:
+            crew_kwargs["manager_agent"] = self.build_agent(manager_agent_ref)
+
+        # Validate hierarchical process has a manager configured
+        if (
+            process is Process.hierarchical
+            and "manager_llm" not in crew_kwargs
+            and "manager_agent" not in crew_kwargs
+        ):
+            raise LoaderError(
+                f"Crew '{crew_name}' uses hierarchical process but has neither "
+                f"'manager_llm' nor 'manager_agent' configured"
+            )
+
         crew = Crew(**crew_kwargs)
         build_ms = round((time.monotonic() - t0) * 1000, 1)
         logger.info(

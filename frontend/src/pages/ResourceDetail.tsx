@@ -15,7 +15,7 @@ import { formatDate } from '@/lib/formatters'
 import { KindBadge } from '@/components/ui/KindBadge'
 import { PLURAL_TO_KIND } from '@/lib/kinds'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { RunDialog } from '@/components/studio/RunDialog'
+import { RunDialog, type RunParams } from '@/components/studio/RunDialog'
 import { Spinner } from '@/components/ui/Spinner'
 import { useToastStore } from '@/stores/toastStore'
 
@@ -272,13 +272,13 @@ export default function ResourceDetail() {
     }
   }
 
-  const handleRun = async (rawInputs: string) => {
+  const handleRun = async (params: RunParams) => {
     setRunError(null)
     setRunLoading(true)
     try {
       let inputs: Record<string, unknown> = {}
       try {
-        inputs = JSON.parse(rawInputs) as Record<string, unknown>
+        inputs = JSON.parse(params.inputs) as Record<string, unknown>
       } catch {
         setRunError('Invalid JSON input')
         setRunLoading(false)
@@ -286,9 +286,24 @@ export default function ResourceDetail() {
       }
       const ns = resource?.metadata.namespace ?? 'default'
       const nsParam = ns !== 'default' ? `?namespace=${encodeURIComponent(ns)}` : ''
-      const result = await api.post<{ id: string }>(`/api/v1/crews/${name}/kickoff${nsParam}`, {
-        inputs,
-      })
+
+      let result: { id: string }
+      if (params.mode === 'train') {
+        result = await api.post<{ id: string }>(`/api/v1/crews/${name}/train${nsParam}`, {
+          inputs,
+          n_iterations: params.iterations,
+          filename: params.filename,
+        })
+      } else if (params.mode === 'test') {
+        result = await api.post<{ id: string }>(`/api/v1/crews/${name}/test${nsParam}`, {
+          inputs,
+          n_iterations: params.iterations,
+        })
+      } else {
+        result = await api.post<{ id: string }>(`/api/v1/crews/${name}/kickoff${nsParam}`, {
+          inputs,
+        })
+      }
       void navigate(`/executions/${result.id}`)
     } catch (err) {
       setRunError((err as Error).message)
@@ -589,7 +604,7 @@ export default function ResourceDetail() {
         open={showRunDialog}
         onOpenChange={setShowRunDialog}
         crewName={resource.metadata.name}
-        onRun={(inputs) => void handleRun(inputs)}
+        onRun={(params) => void handleRun(params)}
         loading={runLoading}
       />
     </div>

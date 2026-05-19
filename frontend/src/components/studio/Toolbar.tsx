@@ -1,5 +1,15 @@
 import { useState, type ChangeEvent } from 'react'
-import { Save, Play, Loader2, FolderOpen, ChevronDown, Undo2, Redo2, Keyboard } from 'lucide-react'
+import {
+  Save,
+  Play,
+  Loader2,
+  FolderOpen,
+  ChevronDown,
+  Undo2,
+  Redo2,
+  Keyboard,
+  FileCode2,
+} from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { toResourceName } from '@/lib/utils'
 import { modKey } from '@/lib/platform'
@@ -25,6 +35,8 @@ export function Toolbar({
   canRedo,
   undo,
   redo,
+  yamlOpen,
+  onYamlToggle,
 }: {
   crewName: string
   onCrewNameChange: (v: string) => void
@@ -43,6 +55,8 @@ export function Toolbar({
   canRedo: boolean
   undo: () => void
   redo: () => void
+  yamlOpen: boolean
+  onYamlToggle: () => void
 }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
@@ -211,6 +225,19 @@ export function Toolbar({
             <Play className="h-3.5 w-3.5" />
           )}
           Run
+        </button>
+
+        {/* YAML editor toggle */}
+        <button
+          onClick={onYamlToggle}
+          aria-label={yamlOpen ? 'Close YAML editor' : 'Open YAML editor'}
+          aria-pressed={yamlOpen}
+          title="Toggle YAML editor"
+          className={`flex h-[44px] w-[44px] items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+            yamlOpen ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'
+          }`}
+        >
+          <FileCode2 className="h-3.5 w-3.5" />
         </button>
 
         {/* Keyboard shortcuts */}

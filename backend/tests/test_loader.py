@@ -1221,6 +1221,11 @@ def test_build_crew_hierarchical_process_enum(
     """Crew with process='hierarchical' should set Process.hierarchical."""
     from crewai import Process
 
+    llm_res = make_resource(
+        ResourceKind.LLM_CONNECTION,
+        "mgr-llm",
+        {"provider": "openai", "model": "gpt-4o"},
+    )
     agent_res = make_resource(
         ResourceKind.AGENT,
         "ag",
@@ -1238,13 +1243,95 @@ def test_build_crew_hierarchical_process_enum(
             "process": "hierarchical",
             "agents": ["ref:agents/ag"],
             "tasks": ["ref:tasks/tk"],
+            "manager_llm": "ref:llm-connections/mgr-llm",
         },
     )
-    loader = ResourceLoader(_resource_map(agent_res, task_res, crew_res))
+    loader = ResourceLoader(_resource_map(llm_res, agent_res, task_res, crew_res))
     loader.build_crew("hier-crew")
 
     _, kwargs = mock_crew_cls.call_args
     assert kwargs["process"] is Process.hierarchical
+
+
+# ---------------------------------------------------------------------------
+# Hierarchical crew with manager_agent
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+@patch("blackbeard.engine.loader.Crew")
+def test_build_crew_hierarchical_with_manager_agent(
+    mock_crew_cls, mock_task_cls, mock_agent_cls, mock_llm_cls
+):
+    """Hierarchical crew with manager_agent should wire the agent as manager."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "worker",
+        {"role": "Worker", "goal": "G", "backstory": "B"},
+    )
+    manager_res = make_resource(
+        ResourceKind.AGENT,
+        "manager",
+        {"role": "Manager", "goal": "Manage", "backstory": "Lead"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "task-h",
+        {"description": "D", "expected_output": "E", "agent": "ref:agents/worker"},
+    )
+    crew_res = make_resource(
+        ResourceKind.CREW,
+        "hier-mgr-crew",
+        {
+            "process": "hierarchical",
+            "agents": ["ref:agents/worker"],
+            "tasks": ["ref:tasks/task-h"],
+            "manager_agent": "ref:agents/manager",
+        },
+    )
+    loader = ResourceLoader(
+        _resource_map(agent_res, manager_res, task_res, crew_res)
+    )
+    loader.build_crew("hier-mgr-crew")
+
+    _, kwargs = mock_crew_cls.call_args
+    assert "manager_agent" in kwargs
+    # manager_agent is built via build_agent, so it's a mock return value
+    assert kwargs["manager_agent"] is mock_agent_cls.return_value
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+@patch("blackbeard.engine.loader.Crew")
+def test_build_crew_hierarchical_without_manager_raises(
+    mock_crew_cls, mock_task_cls, mock_agent_cls, mock_llm_cls
+):
+    """Hierarchical crew without manager_llm or manager_agent should raise LoaderError."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "ag",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "tk",
+        {"description": "D", "expected_output": "E", "agent": "ref:agents/ag"},
+    )
+    crew_res = make_resource(
+        ResourceKind.CREW,
+        "bad-hier-crew",
+        {
+            "process": "hierarchical",
+            "agents": ["ref:agents/ag"],
+            "tasks": ["ref:tasks/tk"],
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res, task_res, crew_res))
+    with pytest.raises(LoaderError, match=r"neither.*manager_llm.*nor.*manager_agent"):
+        loader.build_crew("bad-hier-crew")
 
 
 # ---------------------------------------------------------------------------

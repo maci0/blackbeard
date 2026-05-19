@@ -15,7 +15,7 @@ from sqlalchemy.orm import defer
 
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import require_user
-from blackbeard.models import Group, User, get_session
+from blackbeard.models import Group, GroupMember, User, get_session
 from blackbeard.models.user_schemas import UserResponse, user_response
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,19 @@ class GroupUpdateRequest(BaseModel):
     """Update group fields."""
 
     description: str | None = Field(default=None, max_length=5000)
+
+
+class GroupMemberAddRequest(BaseModel):
+    """Add a user to a group."""
+
+    user_id: str = Field(..., min_length=1, max_length=36)
+
+
+class GroupMemberListResponse(BaseModel):
+    """List of group members."""
+
+    items: list[UserResponse]
+    total: int
 
 
 class GroupListResponse(BaseModel):
@@ -445,6 +458,172 @@ async def delete_group(
             "event": "group_deleted",
             "group_id": str(group_id),
             "group_name": group_name,
+            "actor_user_id": str(current_user.id),
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Group Member Management
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/groups/{group_id}/members",
+    response_model=GroupMemberListResponse,
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Group not found"},
+    },
+)
+async def list_group_members(
+    group_id: uuid.UUID,
+    _current_user: User = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+) -> GroupMemberListResponse:
+    """List members of a group."""
+    # Verify group exists
+    group_result = await session.execute(select(Group).where(Group.id == group_id))
+    group = group_result.scalar_one_or_none()
+    if group is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    result = await session.execute(
+        select(User)
+        .join(GroupMember, GroupMember.user_id == User.id)
+        .where(GroupMember.group_id == group_id)
+        .options(defer(User.password_hash))
+        .order_by(User.email)
+    )
+    users = list(result.scalars().all())
+    return GroupMemberListResponse(
+        items=[user_response(u) for u in users],
+        total=len(users),
+    )
+
+
+@router.post(
+    "/groups/{group_id}/members",
+    status_code=201,
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Group or user not found"},
+        409: {"description": "User is already a member of the group"},
+    },
+)
+async def add_group_member(
+    group_id: uuid.UUID,
+    data: GroupMemberAddRequest,
+    request: Request,
+    current_user: User = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Add a user to a group."""
+    # Validate user_id is a valid UUID
+    try:
+        target_user_id = uuid.UUID(data.user_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid user_id format") from None
+
+    # Verify group exists
+    group_result = await session.execute(select(Group).where(Group.id == group_id))
+    group = group_result.scalar_one_or_none()
+    if group is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    # Verify user exists
+    user_result = await session.execute(select(User).where(User.id == target_user_id))
+    target_user = user_result.scalar_one_or_none()
+    if target_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    membership = GroupMember(group_id=group_id, user_id=target_user_id)
+    session.add(membership)
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(
+            status_code=409, detail="User is already a member of the group"
+        ) from None
+
+    await log_audit(
+        session,
+        action="group_member_added",
+        resource_type="GroupMember",
+        resource_id=f"{group.name}/{data.user_id}",
+        **audit_from_request(request, current_user),
+    )
+    await session.commit()
+
+    logger.info(
+        "Member added to group %s: user %s by %s",
+        group.name,
+        data.user_id,
+        current_user.id,
+        extra={
+            "event": "group_member_added",
+            "group_id": str(group_id),
+            "group_name": group.name,
+            "target_user_id": data.user_id,
+            "actor_user_id": str(current_user.id),
+        },
+    )
+    return {"group_id": str(group_id), "user_id": data.user_id, "status": "added"}
+
+
+@router.delete(
+    "/groups/{group_id}/members/{user_id}",
+    status_code=204,
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Group or membership not found"},
+    },
+)
+async def remove_group_member(
+    group_id: uuid.UUID,
+    user_id: uuid.UUID,
+    request: Request,
+    current_user: User = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """Remove a user from a group."""
+    # Verify group exists
+    group_result = await session.execute(select(Group).where(Group.id == group_id))
+    group = group_result.scalar_one_or_none()
+    if group is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    result = await session.execute(
+        select(GroupMember).where(
+            GroupMember.group_id == group_id,
+            GroupMember.user_id == user_id,
+        )
+    )
+    membership = result.scalar_one_or_none()
+    if membership is None:
+        raise HTTPException(status_code=404, detail="User is not a member of the group")
+
+    await session.delete(membership)
+    await log_audit(
+        session,
+        action="group_member_removed",
+        resource_type="GroupMember",
+        resource_id=f"{group.name}/{user_id}",
+        **audit_from_request(request, current_user),
+    )
+    await session.commit()
+
+    logger.info(
+        "Member removed from group %s: user %s by %s",
+        group.name,
+        user_id,
+        current_user.id,
+        extra={
+            "event": "group_member_removed",
+            "group_id": str(group_id),
+            "group_name": group.name,
+            "target_user_id": str(user_id),
             "actor_user_id": str(current_user.id),
         },
     )

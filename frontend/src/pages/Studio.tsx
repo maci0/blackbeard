@@ -12,8 +12,9 @@ import Canvas from '@/components/studio/Canvas'
 import PropertyPanel from '@/components/studio/PropertyPanel'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { RunStatus } from '@/lib/types'
-import { RunDialog } from '@/components/studio/RunDialog'
+import { RunDialog, type RunParams } from '@/components/studio/RunDialog'
 import { Toolbar } from '@/components/studio/Toolbar'
+import { YamlEditor } from '@/components/studio/YamlEditor'
 import type { Node, Edge } from '@xyflow/react'
 import type { Resource } from '@/lib/types'
 
@@ -57,6 +58,7 @@ function StudioInner() {
   const [crews, setCrews] = useState<string[]>([])
   const [crewsLoading, setCrewsLoading] = useState(false)
   const [pendingLoadCrew, setPendingLoadCrew] = useState<string | null>(null)
+  const [yamlOpen, setYamlOpen] = useState(false)
 
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -250,9 +252,9 @@ function StudioInner() {
     }
   }, [crewName, applyStatus, markClean])
 
-  /* ── Run the crew (auto-saves first) ── */
+  /* ── Run / Train / Test the crew (auto-saves first) ── */
   const handleRun = useCallback(
-    async (rawInputs: string) => {
+    async (params: RunParams) => {
       setRunDialogOpen(false)
       setExecutionId(null)
 
@@ -260,22 +262,46 @@ function StudioInner() {
       const saved = await handleSave()
       if (!saved) return
 
-      applyStatus('running', 'Starting execution…')
+      const modeLabel = params.mode === 'run' ? 'execution' : params.mode
+      applyStatus('running', `Starting ${modeLabel}…`)
       try {
         let parsedInputs: Record<string, unknown> = {}
         try {
-          parsedInputs = JSON.parse(rawInputs) as Record<string, unknown>
+          parsedInputs = JSON.parse(params.inputs) as Record<string, unknown>
         } catch {
           // keep empty inputs
         }
-        const result = await api.post<{ id: string }>(
-          `/api/v1/crews/${toResourceName(crewName)}/kickoff`,
-          { inputs: parsedInputs },
-        )
+
+        const slug = toResourceName(crewName)
+        let result: { id: string }
+
+        if (params.mode === 'train') {
+          result = await api.post<{ id: string }>(`/api/v1/crews/${slug}/train`, {
+            inputs: parsedInputs,
+            n_iterations: params.iterations,
+            filename: params.filename,
+          })
+        } else if (params.mode === 'test') {
+          result = await api.post<{ id: string }>(`/api/v1/crews/${slug}/test`, {
+            inputs: parsedInputs,
+            n_iterations: params.iterations,
+          })
+        } else {
+          result = await api.post<{ id: string }>(`/api/v1/crews/${slug}/kickoff`, {
+            inputs: parsedInputs,
+          })
+        }
+
         setExecutionId(result.id)
-        applyStatus('success', 'Execution started →')
+        const successLabel =
+          params.mode === 'train'
+            ? 'Training started'
+            : params.mode === 'test'
+              ? 'Test started'
+              : 'Execution started'
+        applyStatus('success', `${successLabel} →`)
       } catch (err) {
-        applyStatus('error', err instanceof Error ? err.message : 'Run failed')
+        applyStatus('error', err instanceof Error ? err.message : `${modeLabel} failed`)
       }
     },
     [crewName, handleSave, applyStatus],
@@ -381,12 +407,19 @@ function StudioInner() {
         canRedo={canRedo}
         undo={undo}
         redo={redo}
+        yamlOpen={yamlOpen}
+        onYamlToggle={() => setYamlOpen((v) => !v)}
       />
 
       <div className="relative flex flex-1 overflow-hidden">
         <Palette />
         <Canvas onLoadExample={handleLoadExample} />
         {selectedNodeId && <PropertyPanel />}
+        {yamlOpen && (
+          <div className="w-[360px] shrink-0">
+            <YamlEditor />
+          </div>
+        )}
       </div>
       <MobilePalette />
 
@@ -394,7 +427,7 @@ function StudioInner() {
         open={runDialogOpen}
         onOpenChange={setRunDialogOpen}
         crewName={crewName}
-        onRun={(inputs) => void handleRun(inputs)}
+        onRun={(params) => void handleRun(params)}
       />
 
       <ConfirmDialog

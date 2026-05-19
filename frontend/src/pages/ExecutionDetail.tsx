@@ -571,6 +571,21 @@ export default function ExecutionDetail() {
           <div>
             <div className="mb-1.5 flex flex-wrap items-center gap-3">
               <StatusBadge status={execution.status} live />
+              {execution.execution_type && execution.execution_type !== 'kickoff' && (
+                <span
+                  className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${
+                    execution.execution_type === 'train'
+                      ? 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300'
+                      : execution.execution_type === 'test'
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+                  }`}
+                >
+                  {execution.execution_type}
+                  {execution.n_iterations != null &&
+                    ` (${execution.n_iterations} iter${execution.n_iterations !== 1 ? 's' : ''})`}
+                </span>
+              )}
               <h1 className="text-2xl font-semibold tracking-tight">
                 <Link to={`/resources/crews/${execution.crew_name}`} className="hover:underline">
                   {execution.crew_name}
