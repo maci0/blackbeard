@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     # MicroVM sandbox settings
     microvm_enabled: bool = False
 
+    # MuninnDB cognitive memory settings
+    muninndb_url: str = "http://localhost:8475"
+
     max_concurrent_executions: int = 4
 
     host: str = "0.0.0.0"

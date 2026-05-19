@@ -751,6 +751,65 @@ class ResourceLoader:
                 },
             )
 
+    def _build_muninndb_backend(
+        self,
+        memory_spec: dict[str, Any],
+        namespace: str,
+    ) -> Any:
+        """Build a MuninnDB memory backend from crew memory configuration.
+
+        The returned backend is stored on the Crew kwargs for use by the
+        executor or downstream hooks.  It is not passed to the Crew
+        constructor directly because CrewAI does not support pluggable
+        memory backends.
+
+        Args:
+            memory_spec: The ``memory`` dict from the Crew spec.
+            namespace: Blackbeard resource namespace.
+
+        Returns:
+            A :class:`MuninnMemoryBackend` instance.
+
+        Raises:
+            LoaderError: If the ``muninn-python`` package is not installed.
+        """
+        import os
+
+        from blackbeard.engine.memory.muninn import MuninnMemoryBackend
+
+        url = memory_spec.get("muninndb_url", settings.muninndb_url)
+        vault = memory_spec.get("muninndb_vault", namespace)
+        token: str | None = None
+        token_env = memory_spec.get("muninndb_token_env")
+        if token_env:
+            token = os.environ.get(token_env)
+
+        try:
+            backend = MuninnMemoryBackend(
+                url=url,
+                namespace=namespace,
+                vault=vault,
+                token=token,
+            )
+        except ImportError as exc:
+            raise LoaderError(
+                "Crew memory provider is 'muninndb' but the muninn-python "
+                "package is not installed. Install it with: uv add muninn-python"
+            ) from exc
+
+        logger.info(
+            "MuninnDB memory backend configured: vault=%s url=%s",
+            vault,
+            url,
+            extra={
+                "event": "muninndb_backend_built",
+                "vault": vault,
+                "url": url,
+                "namespace": namespace,
+            },
+        )
+        return backend
+
     def build_crew(self, crew_name: str) -> Crew:
         """Build a complete CrewAI Crew from a Crew resource.
 
@@ -805,6 +864,11 @@ class ResourceLoader:
             crew_kwargs["memory"] = memory_spec
         elif isinstance(memory_spec, dict):
             crew_kwargs["memory"] = memory_spec.get("enabled", True)
+            provider = memory_spec.get("provider")
+            if provider == "muninndb":
+                crew_kwargs["_muninndb_backend"] = self._build_muninndb_backend(
+                    memory_spec, resource.namespace
+                )
 
         embedder_spec = spec.get("embedder")
         if embedder_spec:

@@ -240,9 +240,38 @@ services:
       start_period: 120s
     networks: [backend]
 
+  # ── MuninnDB (cognitive memory — optional) ──────────────────────────────
+  # Uncomment to enable MuninnDB as a memory backend for agents.
+  # See: https://muninndb.com
+  #
+  # muninndb:
+  #   image: muninndb/muninndb:latest
+  #   ports:
+  #     - "127.0.0.1:8475:8475"
+  #   volumes:
+  #     - muninndata:/data
+  #   restart: unless-stopped
+  #   init: true
+  #   logging: *default-logging
+  #   mem_limit: 1g
+  #   cpus: 1
+  #   pids_limit: 64
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   cap_drop:
+  #     - ALL
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8475/health || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 10s
+  #   networks: [backend]
+
 volumes:
   pgdata:
   valkeydata:
+  # muninndata:  # uncomment when enabling muninndb service
 
 networks:
   frontend:

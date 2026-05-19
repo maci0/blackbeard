@@ -130,10 +130,17 @@ CREW_SCHEMA = {
                         "enabled": {"type": "boolean", "default": True},
                         "provider": {
                             "type": "string",
-                            "enum": ["lancedb", "chromadb", "qdrant"],
+                            "enum": ["lancedb", "chromadb", "qdrant", "muninndb"],
                             "default": "lancedb",
                         },
                         "config": {"type": "object", "maxProperties": 50},
+                        "muninndb_url": {"type": "string", "maxLength": 500},
+                        "muninndb_vault": {"type": "string", "maxLength": 255},
+                        "muninndb_token_env": {
+                            "type": "string",
+                            "pattern": "^[A-Z][A-Z0-9_]*$",
+                            "maxLength": 100,
+                        },
                     },
                     "additionalProperties": False,
                 },

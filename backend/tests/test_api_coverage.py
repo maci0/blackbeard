@@ -15,7 +15,6 @@ import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -372,10 +371,10 @@ spec:
 
 def test_collaboration_non_dict_message_ignored():
     """WebSocket that sends non-dict JSON should have message ignored."""
+    from fastapi import FastAPI
     from starlette.testclient import TestClient
 
     from blackbeard.api.collaboration import _rooms, router
-    from fastapi import FastAPI
 
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
