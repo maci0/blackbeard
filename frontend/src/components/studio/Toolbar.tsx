@@ -9,6 +9,7 @@ import {
   Redo2,
   Keyboard,
   FileCode2,
+  LayoutGrid,
 } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { toResourceName } from '@/lib/utils'
@@ -37,6 +38,8 @@ export function Toolbar({
   redo,
   yamlOpen,
   onYamlToggle,
+  onAutoLayout,
+  layouting,
 }: {
   crewName: string
   onCrewNameChange: (v: string) => void
@@ -57,6 +60,8 @@ export function Toolbar({
   redo: () => void
   yamlOpen: boolean
   onYamlToggle: () => void
+  onAutoLayout: () => void
+  layouting?: boolean
 }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
@@ -238,6 +243,21 @@ export function Toolbar({
           }`}
         >
           <FileCode2 className="h-3.5 w-3.5" />
+        </button>
+
+        {/* Auto layout */}
+        <button
+          onClick={onAutoLayout}
+          disabled={layouting}
+          aria-label="Auto-arrange nodes"
+          title="Auto layout"
+          className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        >
+          {layouting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <LayoutGrid className="h-3.5 w-3.5" />
+          )}
         </button>
 
         {/* Keyboard shortcuts */}

@@ -15,6 +15,7 @@ import type { RunStatus } from '@/lib/types'
 import { RunDialog, type RunParams } from '@/components/studio/RunDialog'
 import { Toolbar } from '@/components/studio/Toolbar'
 import { YamlEditor } from '@/components/studio/YamlEditor'
+import { autoLayout } from '@/components/studio/autoLayout'
 import type { Node, Edge } from '@xyflow/react'
 import type { Resource } from '@/lib/types'
 
@@ -59,6 +60,7 @@ function StudioInner() {
   const [crewsLoading, setCrewsLoading] = useState(false)
   const [pendingLoadCrew, setPendingLoadCrew] = useState<string | null>(null)
   const [yamlOpen, setYamlOpen] = useState(false)
+  const [layouting, setLayouting] = useState(false)
 
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -169,8 +171,15 @@ function StudioInner() {
             } satisfies Edge
           })
 
-        setNodes([...agentNodes, ...taskNodes])
-        setEdges(edges)
+        const allNodes = [...agentNodes, ...taskNodes]
+        try {
+          const laid = await autoLayout(allNodes, edges)
+          setNodes(laid.nodes)
+          setEdges(laid.edges)
+        } catch {
+          setNodes(allNodes)
+          setEdges(edges)
+        }
         setCrewName(crew.metadata.name)
         markClean()
         applyStatus('success', `Loaded "${name}"`)
@@ -384,6 +393,22 @@ function StudioInner() {
     applyStatus('success', 'Example crew loaded')
   }, [applyStatus, markClean, setEdges, setNodes])
 
+  const handleAutoLayout = useCallback(async () => {
+    const { nodes, edges } = useStudioStore.getState()
+    if (nodes.length === 0) return
+    setLayouting(true)
+    try {
+      const result = await autoLayout(nodes, edges)
+      setNodes(result.nodes)
+      setEdges(result.edges)
+      applyStatus('success', 'Layout applied')
+    } catch {
+      applyStatus('error', 'Auto layout failed')
+    } finally {
+      setLayouting(false)
+    }
+  }, [applyStatus, setNodes, setEdges])
+
   return (
     <div className="flex h-full flex-col">
       <h1 className="sr-only">Studio</h1>
@@ -409,6 +434,8 @@ function StudioInner() {
         redo={redo}
         yamlOpen={yamlOpen}
         onYamlToggle={() => setYamlOpen((v) => !v)}
+        onAutoLayout={() => void handleAutoLayout()}
+        layouting={layouting}
       />
 
       <div className="relative flex flex-1 overflow-hidden">
