@@ -531,6 +531,38 @@ ROLE_BINDING_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+AUTOMATION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["target", "trigger"],
+    "properties": {
+        "description": {"type": "string", "maxLength": 5000},
+        "target": {
+            "type": "object",
+            "required": ["kind", "name"],
+            "properties": {
+                "kind": {"type": "string", "enum": ["Crew", "Flow"]},
+                "name": {"type": "string", "maxLength": 255},
+            },
+            "additionalProperties": False,
+        },
+        "trigger": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+                "type": {"type": "string", "enum": ["cron", "webhook", "api"]},
+                "cron": {"type": "string", "maxLength": 100},
+                "webhook_secret": {"type": "string", "maxLength": 255},
+            },
+            "additionalProperties": False,
+        },
+        "inputs": {"type": "object", "maxProperties": 100},
+        "enabled": {"type": "boolean", "default": True},
+        "max_concurrent": {"type": "integer", "minimum": 1, "maximum": 10, "default": 1},
+        "namespace": {"type": "string", "maxLength": 255},
+    },
+    "additionalProperties": False,
+}
+
 KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "Agent": AGENT_SCHEMA,
     "Task": TASK_SCHEMA,
@@ -543,6 +575,7 @@ KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "KnowledgeSource": KNOWLEDGE_SOURCE_SCHEMA,
     "Role": ROLE_SCHEMA,
     "RoleBinding": ROLE_BINDING_SCHEMA,
+    "Automation": AUTOMATION_SCHEMA,
 }
 
 # Verify all kinds have schemas — catches missing schemas at import time

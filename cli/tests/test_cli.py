@@ -17,7 +17,7 @@ from click.testing import CliRunner
 
 from blackbeard_cli.__main__ import cli
 
-runner = CliRunner(mix_stderr=False)
+runner = CliRunner()
 
 # Path to example resources shipped with the repo
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -255,7 +255,7 @@ def test_health_no_server():
         cli, ["-s", "http://localhost:99999", "health"]
     )
     assert result.exit_code != 0
-    assert "error" in result.stderr.lower() or "cannot reach" in result.stderr.lower()
+    assert "error" in result.output.lower() or "cannot reach" in result.output.lower()
 
 
 def test_health_ready_no_server():
@@ -279,7 +279,7 @@ def test_list_no_auth():
         catch_exceptions=False,
     )
     assert result.exit_code == 2
-    assert "auth" in result.stderr.lower() or "login" in result.stderr.lower()
+    assert "auth" in result.output.lower() or "login" in result.output.lower()
 
 
 def test_get_no_auth():
