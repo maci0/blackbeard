@@ -8,8 +8,8 @@ since CrewAI callbacks run on a separate thread.
 from __future__ import annotations
 
 import hashlib
-import hmac as _hmac_mod
-import json as _json_mod
+import hmac
+import json
 import logging
 import threading
 from datetime import UTC, datetime
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy import Engine
 
-from blackbeard.http_client import get_sync_client as _get_sync_client
+from blackbeard.http_client import get_sync_client
 from blackbeard.logging_config import request_id_var
 from blackbeard.models import ExecutionEvent, ExecutionTask, TaskStatus
 
@@ -202,7 +202,7 @@ def _deliver_webhooks_sync(
     if not webhooks:
         return
 
-    payload = _json_mod.dumps(
+    payload = json.dumps(
         {
             "event_type": event_type,
             "execution_id": execution_id,
@@ -211,13 +211,13 @@ def _deliver_webhooks_sync(
         default=str,
     )
 
-    client = _get_sync_client("webhook-deliver", timeout=10)
+    client = get_sync_client("webhook-deliver", timeout=10)
 
     for webhook in webhooks:
         if webhook.events and event_type not in webhook.events:
             continue
         try:
-            sig = _hmac_mod.new(
+            sig = hmac.new(
                 webhook.secret.encode(), payload.encode(), hashlib.sha256
             ).hexdigest()
             resp = client.post(

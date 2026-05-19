@@ -1420,10 +1420,6 @@ async def record_hitl_response(
         except IntegrityError:
             if attempt == max_attempts - 1:
                 raise
-    else:
-        raise ExecutionError(
-            f"Failed to record HITL response for execution {execution_id}"
-        )
 
     logger.info(
         "HITL response recorded: execution_id=%s seq=%d",

@@ -88,7 +88,7 @@ def test_webhook_hmac_signature_correct():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.engine.execution_listener._get_sync_client",
+            "blackbeard.engine.execution_listener.get_sync_client",
             return_value=mock_client,
         ),
     ):
@@ -161,7 +161,7 @@ def test_webhook_event_filter_matches():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.engine.execution_listener._get_sync_client",
+            "blackbeard.engine.execution_listener.get_sync_client",
             return_value=mock_client,
         ),
     ):
@@ -195,7 +195,7 @@ def test_webhook_event_filter_no_match():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.engine.execution_listener._get_sync_client",
+            "blackbeard.engine.execution_listener.get_sync_client",
             return_value=mock_client,
         ),
     ):
@@ -233,7 +233,7 @@ def test_webhook_empty_events_receives_all():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.engine.execution_listener._get_sync_client",
+            "blackbeard.engine.execution_listener.get_sync_client",
             return_value=mock_client,
         ),
     ):
@@ -275,7 +275,7 @@ def test_webhook_delivery_failure_doesnt_crash():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.engine.execution_listener._get_sync_client",
+            "blackbeard.engine.execution_listener.get_sync_client",
             return_value=mock_client,
         ),
     ):
@@ -312,7 +312,7 @@ def test_webhook_delivery_exception_doesnt_crash():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.engine.execution_listener._get_sync_client",
+            "blackbeard.engine.execution_listener.get_sync_client",
             return_value=mock_client,
         ),
     ):
@@ -370,7 +370,7 @@ def test_webhook_no_webhooks_is_noop():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.engine.execution_listener._get_sync_client",
+            "blackbeard.engine.execution_listener.get_sync_client",
             return_value=mock_client,
         ),
     ):

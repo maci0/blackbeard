@@ -738,7 +738,7 @@ class TestWebhookDelivery:
         listener_mod.invalidate_webhook_cache()
 
         try:
-            with patch.object(listener_mod, "_get_sync_client", return_value=mock_client):
+            with patch.object(listener_mod, "get_sync_client", return_value=mock_client):
                 listener_mod._deliver_webhooks_sync(
                     "crew_started",
                     {"crew_name": "test"},

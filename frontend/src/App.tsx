@@ -1,8 +1,9 @@
-import { Suspense, lazy, useEffect, type ReactNode } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
+import { useDocumentTitle } from '@/hooks'
 import { useOnboarding } from '@/hooks/useOnboarding'
 import { Spinner } from '@/components/ui/Spinner'
 import { ToastContainer } from '@/components/ui/Toast'
@@ -21,16 +22,6 @@ const Users = lazy(() => import('@/pages/Users'))
 const Roles = lazy(() => import('@/pages/Roles'))
 const Marketplace = lazy(() => import('@/pages/Marketplace'))
 
-function DocumentTitle({ title, children }: { title: string; children: ReactNode }) {
-  useEffect(() => {
-    document.title = `${title} — Blackbeard`
-    return () => {
-      document.title = 'Blackbeard'
-    }
-  }, [title])
-  return <>{children}</>
-}
-
 const PUBLIC_PATHS = new Set(['/login', '/register'])
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -42,6 +33,37 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>
+}
+
+function NotFound() {
+  useDocumentTitle('Page not found')
+  return (
+    <div className="flex flex-1 items-center justify-center">
+      <div className="text-center">
+        <p className="mb-2 text-6xl font-bold text-muted-foreground/20" aria-hidden="true">
+          404
+        </p>
+        <h1 className="mb-1 text-lg font-semibold">Page not found</h1>
+        <p className="mb-4 text-sm text-muted-foreground">
+          The page you're looking for doesn't exist or may have been moved.
+        </p>
+        <div className="flex items-center justify-center gap-3">
+          <Link
+            to="/studio"
+            className="inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            Go to Studio
+          </Link>
+          <Link
+            to="/resources"
+            className="inline-flex rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            Browse Resources
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function App() {
@@ -90,41 +112,7 @@ function App() {
                 <Route path="users" element={<Users />} />
                 <Route path="roles" element={<Roles />} />
                 <Route path="marketplace" element={<Marketplace />} />
-                <Route
-                  path="*"
-                  element={
-                    <DocumentTitle title="Page not found">
-                      <div className="flex flex-1 items-center justify-center">
-                        <div className="text-center">
-                          <p
-                            className="mb-2 text-6xl font-bold text-muted-foreground/20"
-                            aria-hidden="true"
-                          >
-                            404
-                          </p>
-                          <h1 className="mb-1 text-lg font-semibold">Page not found</h1>
-                          <p className="mb-4 text-sm text-muted-foreground">
-                            The page you're looking for doesn't exist or may have been moved.
-                          </p>
-                          <div className="flex items-center justify-center gap-3">
-                            <Link
-                              to="/studio"
-                              className="inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                            >
-                              Go to Studio
-                            </Link>
-                            <Link
-                              to="/resources"
-                              className="inline-flex rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                            >
-                              Browse Resources
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
-                    </DocumentTitle>
-                  }
-                />
+                <Route path="*" element={<NotFound />} />
               </Route>
             </Routes>
           </AuthGuard>

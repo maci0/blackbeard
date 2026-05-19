@@ -11,6 +11,8 @@ import {
 } from '@xyflow/react'
 
 const MAX_HISTORY = 30
+const HISTORY_DEBOUNCE_MS = 100
+const NODE_DATA_DEBOUNCE_MS = 500
 
 interface HistorySnapshot {
   nodes: Node[]
@@ -46,7 +48,7 @@ export const useStudioStore = create<StudioState>()((set, get) => {
 
   function pushHistory() {
     const now = Date.now()
-    if (now - lastHistoryPush < 100) return
+    if (now - lastHistoryPush < HISTORY_DEBOUNCE_MS) return
     lastHistoryPush = now
 
     const { nodes, edges, history, historyIndex } = get()
@@ -120,7 +122,7 @@ export const useStudioStore = create<StudioState>()((set, get) => {
 
     updateNodeData: (id, data) => {
       const now = Date.now()
-      if (now - lastHistoryPush > 500) {
+      if (now - lastHistoryPush > NODE_DATA_DEBOUNCE_MS) {
         pushHistory()
         lastHistoryPush = now
       }
