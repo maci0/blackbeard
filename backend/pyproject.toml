@@ -69,7 +69,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ANN", "E402"]
+"tests/**" = ["ANN", "E402", "PT011", "B017", "TC002", "E501"]
 "alembic/**" = ["ANN", "UP", "E501", "I", "F401"]
 "blackbeard/api/**" = ["B008", "TCH", "PT"]  # FastAPI needs types at runtime; test_crew endpoint is not a pytest test
 "blackbeard/auth/**" = ["B008", "TCH"]  # FastAPI dependencies need types at runtime
