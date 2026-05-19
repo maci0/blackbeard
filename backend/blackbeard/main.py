@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from blackbeard import __version__
 from blackbeard.api.audit import router as audit_router
 from blackbeard.api.auth import router as auth_router
+from blackbeard.api.automations import router as automations_router
 from blackbeard.api.chat import router as chat_router
 from blackbeard.api.executions import router as executions_router
 from blackbeard.api.health import router as health_router
@@ -178,6 +179,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         },
     )
     recovered = await recover_stale_executions()
+
+    # Start automation scheduler for cron-triggered automations
+    from blackbeard.engine.scheduler import AutomationScheduler
+
+    scheduler = AutomationScheduler()
+    await scheduler.start()
+
+    # Start gRPC server alongside FastAPI
+    grpc_server = None
+    try:
+        from blackbeard.grpc.server import start_grpc_server
+
+        grpc_port = int(os.environ.get("GRPC_PORT", "50051"))
+        grpc_server = await start_grpc_server(port=grpc_port)
+        logger.info(
+            "gRPC server started on port %d",
+            grpc_port,
+            extra={"event": "grpc_server_started", "port": grpc_port},
+        )
+    except Exception:
+        logger.warning(
+            "gRPC server failed to start — continuing without gRPC",
+            exc_info=True,
+            extra={"event": "grpc_server_start_failed"},
+        )
+
     startup_ms = round((time.monotonic() - t0_startup) * 1000, 1)
     logger.info(
         "Blackbeard %s ready to accept traffic (%.0fms, %d stale executions recovered)",
@@ -195,6 +222,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     t0 = time.monotonic()
     logger.info("Shutdown starting", extra={"event": "app_shutdown_start"})
     try:
+        await scheduler.stop()
+        if grpc_server is not None:
+            await grpc_server.stop(grace=5)
+            logger.info("gRPC server stopped", extra={"event": "grpc_server_stopped"})
         shutdown_executor()
         logger.info("Executor shut down", extra={"event": "executor_shutdown"})
         shutdown_webhook_executor()
@@ -258,6 +289,10 @@ app = FastAPI(
             "name": "webhooks",
             "description": "Webhook registration for execution event delivery",
         },
+        {
+            "name": "automations",
+            "description": "Automation triggers: cron, webhook, and API-triggered executions",
+        },
     ],
 )
 
@@ -289,4 +324,5 @@ app.include_router(chat_router, prefix="/api/v1")
 app.include_router(executions_router, prefix="/api/v1")
 app.include_router(marketplace_router, prefix="/api/v1")
 app.include_router(webhooks_router, prefix="/api/v1")
+app.include_router(automations_router, prefix="/api/v1")
 app.include_router(resources_router, prefix="/api/v1")

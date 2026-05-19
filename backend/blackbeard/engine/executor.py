@@ -813,6 +813,52 @@ def _resolve_eval_llm(
     return "gpt-4o"
 
 
+def _call_hook(
+    loader: ResourceLoader,
+    hook_path: str,
+    arg: Any,
+    hook_name: str,
+) -> None:
+    """Resolve and call a hook callable, logging warnings on failure."""
+    try:
+        fn = loader._import_callable(hook_path)
+        if fn is not None:
+            fn(arg)
+            logger.info(
+                "Hook '%s' executed: %s",
+                hook_name,
+                hook_path,
+                extra={
+                    "event": "hook_executed",
+                    "hook_name": hook_name,
+                    "hook_path": hook_path,
+                },
+            )
+        else:
+            logger.warning(
+                "Hook '%s' could not be imported: %s",
+                hook_name,
+                hook_path,
+                extra={
+                    "event": "hook_import_failed",
+                    "hook_name": hook_name,
+                    "hook_path": hook_path,
+                },
+            )
+    except Exception:
+        logger.warning(
+            "Hook '%s' raised an exception: %s",
+            hook_name,
+            hook_path,
+            exc_info=True,
+            extra={
+                "event": "hook_execution_failed",
+                "hook_name": hook_name,
+                "hook_path": hook_path,
+            },
+        )
+
+
 def _run_flow_steps(
     loader: Any,
     resource_snapshot: dict[str, dict[str, Any]],
@@ -839,6 +885,7 @@ def _run_flow_steps(
     for step in steps:
         step_name = step.get("name", "unnamed")
         step_type = step.get("type", "crew")
+        step_hooks = step.get("hooks", {})
 
         if step_type == "crew":
             crew_ref = step.get("crew")
@@ -857,7 +904,21 @@ def _run_flow_steps(
 
             crew = loader.build_crew(crew_ref.split("/")[-1] if "/" in crew_ref else crew_ref)
             step_inputs = {**inputs, **step_outputs}
-            result = crew.kickoff(inputs=step_inputs)
+
+            if step_hooks.get("before"):
+                _call_hook(loader, step_hooks["before"], step_inputs, f"step:{step_name}:before")
+
+            try:
+                result = crew.kickoff(inputs=step_inputs)
+            except Exception as step_exc:
+                if step_hooks.get("on_error"):
+                    _call_hook(
+                        loader,
+                        step_hooks["on_error"],
+                        step_exc,
+                        f"step:{step_name}:on_error",
+                    )
+                raise
 
             if isinstance(result, CrewOutput):
                 step_outputs[step_name] = result.raw
@@ -865,6 +926,9 @@ def _run_flow_steps(
             else:
                 step_outputs[step_name] = str(result) if result else ""
                 last_result = result
+
+            if step_hooks.get("after"):
+                _call_hook(loader, step_hooks["after"], last_result, f"step:{step_name}:after")
 
             logger.info(
                 "Flow step '%s' completed (crew=%s)",
@@ -938,21 +1002,121 @@ def _run_flow_steps(
                         )
                         step_outputs[step_name] = "error: step execution failed"
 
-        elif step_type in ("router", "condition"):
-            logger.info(
-                "Flow step '%s' (type=%s) — routing not yet implemented, continuing",
-                step_name,
-                step_type,
-                extra={
-                    "event": "flow_step_skipped",
-                    "flow_name": flow_name,
-                    "step_name": step_name,
-                    "step_type": step_type,
-                    "reason": "not_implemented",
-                },
-            )
+        elif step_type == "router":
+            fn_path = step.get("function_path", "")
+            routes = step.get("routes", {})
+            if fn_path and ":" in fn_path:
+                fn = ResourceLoader._import_callable(fn_path)
+                if fn:
+                    try:
+                        route_key = str(fn({**inputs, **step_outputs}))
+                        step_outputs[step_name] = route_key
+                        next_step = routes.get(route_key)
+                        if next_step:
+                            logger.info(
+                                "Router '%s' chose route '%s' → '%s'",
+                                step_name,
+                                route_key,
+                                next_step,
+                            )
+                        else:
+                            logger.warning(
+                                "Router '%s' returned unknown route: %s",
+                                step_name,
+                                route_key,
+                            )
+                    except Exception as exc:
+                        logger.warning("Router step '%s' failed: %s", step_name, exc)
+                        step_outputs[step_name] = f"error: {type(exc).__name__}"
+
+        elif step_type == "condition":
+            condition = step.get("condition", "")
+            routes = step.get("routes", {})
+            if condition:
+                result = _evaluate_condition(condition, {**inputs, **step_outputs})
+                route_key = "true" if result else "false"
+                step_outputs[step_name] = result
+                next_step = routes.get(route_key)
+                logger.info(
+                    "Condition '%s' evaluated to %s → '%s'",
+                    step_name,
+                    route_key,
+                    next_step or "(no route)",
+                )
+
+        elif step_type == "transform":
+            wasm_ref = step.get("wasm_module")
+            if wasm_ref:
+                try:
+                    import json as _json
+
+                    from blackbeard.engine.sandbox.wasm_runtime import WasmSandbox
+
+                    sandbox = WasmSandbox()
+                    transform_input = _json.dumps({**inputs, **step_outputs})
+                    wasm_result = sandbox.execute(wasm_ref, transform_input)
+                    step_outputs[step_name] = (
+                        _json.loads(wasm_result.output) if wasm_result.output else {}
+                    )
+                except Exception as exc:
+                    logger.warning("Transform step '%s' failed: %s", step_name, exc)
+                    step_outputs[step_name] = f"error: {type(exc).__name__}"
+            else:
+                logger.warning("Transform step '%s' has no wasm_module — skipped", step_name)
 
     return last_result
+
+
+def _evaluate_condition(expr: str, context: dict[str, Any]) -> bool:
+    """Evaluate a simple condition expression safely (NO eval/exec).
+
+    Supports: key comparisons like "score > 0.8", "status == completed",
+    key existence like "error in outputs", and boolean keys.
+    """
+    expr = expr.strip()
+
+    for op, fn in [
+        (">=", lambda a, b: a >= b),
+        ("<=", lambda a, b: a <= b),
+        ("!=", lambda a, b: a != b),
+        ("==", lambda a, b: a == b),
+        (">", lambda a, b: a > b),
+        ("<", lambda a, b: a < b),
+    ]:
+        if op in expr:
+            left, right = expr.split(op, 1)
+            left_val = _resolve_dotted(left.strip().strip("'\""), context)
+            right_str = right.strip().strip("'\"")
+            try:
+                right_val = float(right_str)
+            except ValueError:
+                right_val = right_str
+            try:
+                return bool(fn(left_val, right_val))
+            except TypeError:
+                return False
+
+    if " in " in expr:
+        key, container = expr.split(" in ", 1)
+        container_val = _resolve_dotted(container.strip(), context)
+        if isinstance(container_val, (dict, list, str)):
+            return key.strip().strip("'\"") in container_val
+        return False
+
+    val = _resolve_dotted(expr, context)
+    return bool(val)
+
+
+def _resolve_dotted(path: str, context: dict[str, Any]) -> Any:
+    """Resolve a dotted path like 'outputs.score' against a context dict."""
+    parts = path.split(".")
+    current: Any = context
+    for part in parts:
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+        else:
+            return None
+    return current
 
 
 async def _run_crew_async(
@@ -1085,6 +1249,11 @@ async def _run_crew_async(
                 db_url=settings.database_url.get_secret_value(),
             )
 
+            # --- Crew hooks ---
+            crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
+            crew_spec = crew_snap.get("spec", {})
+            hooks = crew_spec.get("hooks", {})
+
             if execution_type == ExecutionType.FLOW:
                 result = _run_flow_steps(
                     loader, resource_snapshot, crew_name, inputs, listener
@@ -1105,7 +1274,11 @@ async def _run_crew_async(
                 )
                 result = None
             else:
+                if hooks.get("before_kickoff"):
+                    _call_hook(loader, hooks["before_kickoff"], inputs, "before_kickoff")
                 result = crew.kickoff(inputs=inputs)
+                if hooks.get("after_kickoff"):
+                    _call_hook(loader, hooks["after_kickoff"], result, "after_kickoff")
             listener.flush()
 
             execution = await _get_execution_for_update(session, execution_id)

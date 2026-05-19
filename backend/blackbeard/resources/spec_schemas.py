@@ -173,6 +173,17 @@ CREW_SCHEMA = {
             "default": "hybrid",
         },
         "default_agent_policy": {"type": "string", "maxLength": 500},
+        "hooks": {
+            "type": "object",
+            "properties": {
+                "before_kickoff": {"type": "string", "maxLength": 500},
+                "after_kickoff": {"type": "string", "maxLength": 500},
+                "before_task": {"type": "string", "maxLength": 500},
+                "after_task": {"type": "string", "maxLength": 500},
+                "on_error": {"type": "string", "maxLength": 500},
+            },
+            "additionalProperties": False,
+        },
         "inline": {"type": "object", "maxProperties": 200},
         "a2a": {
             "type": "object",
@@ -367,7 +378,7 @@ FLOW_SCHEMA = {
                     "name": {"type": "string", "minLength": 1, "maxLength": 255},
                     "type": {
                         "type": "string",
-                        "enum": ["crew", "function", "router", "condition"],
+                        "enum": ["crew", "function", "router", "condition", "transform"],
                     },
                     "crew": {"type": "string", "maxLength": 500},
                     "function_path": {
@@ -381,9 +392,20 @@ FLOW_SCHEMA = {
                         "maxItems": 20,
                     },
                     "condition": {"type": "string", "maxLength": 1000},
+                    "wasm_module": {"type": "string", "maxLength": 500},
+                    "transform_config": {"type": "object", "maxProperties": 50},
                     "routes": {
                         "type": "object",
                         "additionalProperties": {"type": "string", "maxLength": 255},
+                    },
+                    "hooks": {
+                        "type": "object",
+                        "properties": {
+                            "before": {"type": "string", "maxLength": 500},
+                            "after": {"type": "string", "maxLength": 500},
+                            "on_error": {"type": "string", "maxLength": 500},
+                        },
+                        "additionalProperties": False,
                     },
                 },
                 "additionalProperties": False,
@@ -524,6 +546,38 @@ ROLE_BINDING_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+AUTOMATION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "required": ["target", "trigger"],
+    "properties": {
+        "description": {"type": "string", "maxLength": 5000},
+        "target": {
+            "type": "object",
+            "required": ["kind", "name"],
+            "properties": {
+                "kind": {"type": "string", "enum": ["Crew", "Flow"]},
+                "name": {"type": "string", "maxLength": 255},
+            },
+            "additionalProperties": False,
+        },
+        "trigger": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+                "type": {"type": "string", "enum": ["cron", "webhook", "api"]},
+                "cron": {"type": "string", "maxLength": 100},
+                "webhook_secret": {"type": "string", "maxLength": 255},
+            },
+            "additionalProperties": False,
+        },
+        "inputs": {"type": "object", "maxProperties": 100},
+        "enabled": {"type": "boolean", "default": True},
+        "max_concurrent": {"type": "integer", "minimum": 1, "maximum": 10, "default": 1},
+        "namespace": {"type": "string", "maxLength": 255},
+    },
+    "additionalProperties": False,
+}
+
 KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "Agent": AGENT_SCHEMA,
     "Task": TASK_SCHEMA,
@@ -536,6 +590,7 @@ KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "KnowledgeSource": KNOWLEDGE_SOURCE_SCHEMA,
     "Role": ROLE_SCHEMA,
     "RoleBinding": ROLE_BINDING_SCHEMA,
+    "Automation": AUTOMATION_SCHEMA,
 }
 
 # Verify all kinds have schemas — catches missing schemas at import time
