@@ -34,7 +34,202 @@ if TYPE_CHECKING:
 from blackbeard.logging_config import request_id_var
 from blackbeard.models import ExecutionEvent, ExecutionTask, TaskStatus
 
+# ---------------------------------------------------------------------------
+# Optional OpenTelemetry integration
+# ---------------------------------------------------------------------------
+try:
+    from opentelemetry import trace
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from opentelemetry.sdk.resources import Resource as OTELResource
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+    HAS_OTEL = True
+except ImportError:
+    HAS_OTEL = False
+
 logger = logging.getLogger(__name__)
+
+_otel_tracer: Any = None
+_otel_setup_lock = threading.Lock()
+_otel_provider: Any = None
+
+
+def _get_otel_tracer() -> Any:
+    """Return a shared OpenTelemetry tracer, initializing the provider on first call.
+
+    Returns ``None`` when OpenTelemetry is not installed or not configured.
+    """
+    global _otel_tracer, _otel_provider
+    if not HAS_OTEL:
+        return None
+    if _otel_tracer is not None:
+        return _otel_tracer
+
+    from blackbeard.config import settings
+
+    endpoint = settings.otel_endpoint
+    if not endpoint:
+        return None
+
+    with _otel_setup_lock:
+        if _otel_tracer is not None:
+            return _otel_tracer
+
+        resource = OTELResource.create({"service.name": "blackbeard"})
+        provider = TracerProvider(resource=resource)
+        exporter = OTLPSpanExporter(endpoint=endpoint)
+        provider.add_span_processor(BatchSpanProcessor(exporter))
+        trace.set_tracer_provider(provider)
+        _otel_provider = provider
+        _otel_tracer = trace.get_tracer("blackbeard.execution")
+        logger.info(
+            "OpenTelemetry tracing enabled: endpoint=%s",
+            endpoint,
+            extra={"event": "otel_enabled", "otel_endpoint": endpoint},
+        )
+        return _otel_tracer
+
+
+def shutdown_otel() -> None:
+    """Shut down the OTEL provider. Called during application shutdown."""
+    global _otel_provider, _otel_tracer
+    with _otel_setup_lock:
+        if _otel_provider is not None:
+            _otel_provider.shutdown()
+            _otel_provider = None
+            _otel_tracer = None
+
+
+_webhook_executor: Any = None
+_webhook_executor_lock = threading.Lock()
+
+
+def _get_webhook_executor() -> Any:
+    """Return a shared ThreadPoolExecutor for fire-and-forget webhook delivery."""
+    global _webhook_executor
+    if _webhook_executor is not None:
+        return _webhook_executor
+    with _webhook_executor_lock:
+        if _webhook_executor is not None:
+            return _webhook_executor
+        from concurrent.futures import ThreadPoolExecutor
+
+        _webhook_executor = ThreadPoolExecutor(
+            max_workers=2, thread_name_prefix="webhook-deliver"
+        )
+        return _webhook_executor
+
+
+def shutdown_webhook_executor() -> None:
+    """Shut down the webhook delivery thread pool."""
+    global _webhook_executor
+    with _webhook_executor_lock:
+        if _webhook_executor is not None:
+            _webhook_executor.shutdown(wait=False)
+            _webhook_executor = None
+
+
+def _deliver_webhooks_sync(
+    event_type: str,
+    data: dict[str, Any],
+    execution_id: str,
+    db_url: str,
+) -> None:
+    """Deliver an event to all matching webhooks (runs in background thread).
+
+    Loads active webhooks from the database, filters by event type, and
+    POSTs the payload with HMAC-SHA256 signature. Failures are logged
+    but never raised — webhook delivery must not block execution.
+    """
+    import hashlib
+    import hmac
+    import json
+
+    from blackbeard.http_client import get_sync_client
+    from blackbeard.models.webhook import Webhook
+
+    session_factory = _get_sync_session_factory(db_url)
+    try:
+        with session_factory() as session:
+            from sqlalchemy import select as sync_select
+
+            result = session.execute(
+                sync_select(Webhook).where(Webhook.active.is_(True))
+            )
+            webhooks = list(result.scalars())
+    except Exception:
+        logger.exception(
+            "Failed to load webhooks for event delivery",
+            extra={"event": "webhook_load_failed", "event_type": event_type},
+        )
+        return
+
+    if not webhooks:
+        return
+
+    payload = json.dumps(
+        {
+            "event_type": event_type,
+            "execution_id": execution_id,
+            "data": data,
+        },
+        default=str,
+    )
+
+    client = get_sync_client("webhook-deliver", timeout=10)
+
+    for webhook in webhooks:
+        # Filter: empty events list means "all events"
+        if webhook.events and event_type not in webhook.events:
+            continue
+        try:
+            sig = hmac.new(
+                webhook.secret.encode(), payload.encode(), hashlib.sha256
+            ).hexdigest()
+            resp = client.post(
+                webhook.url,
+                content=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Webhook-Signature": sig,
+                    "X-Blackbeard-Event": event_type,
+                },
+            )
+            if resp.status_code >= 400:
+                logger.warning(
+                    "Webhook delivery failed: id=%s url=%s status=%d",
+                    webhook.id,
+                    webhook.url,
+                    resp.status_code,
+                    extra={
+                        "event": "webhook_delivery_failed",
+                        "webhook_id": str(webhook.id),
+                        "webhook_url": webhook.url,
+                        "http_status": resp.status_code,
+                        "event_type": event_type,
+                    },
+                )
+            elif logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Webhook delivered: id=%s event=%s",
+                    webhook.id,
+                    event_type,
+                )
+        except Exception:
+            logger.exception(
+                "Webhook delivery error: id=%s url=%s event=%s",
+                webhook.id,
+                webhook.url,
+                event_type,
+                extra={
+                    "event": "webhook_delivery_error",
+                    "webhook_id": str(webhook.id),
+                    "webhook_url": webhook.url,
+                    "event_type": event_type,
+                },
+            )
+
 
 _sync_engine: Engine | None = None
 _sync_session_factory: sessionmaker[Session] | None = None
@@ -95,19 +290,25 @@ class BlackbeardExecutionListener(BaseEventListener):
 
     def __init__(self, execution_id: UUID, db_url: str) -> None:
         self._execution_id = execution_id
+        self._db_url = db_url
         self._seq = 0
         self._task_order = 0  # tracks which task (by order) is currently running
         self._lock = threading.Lock()  # guards _seq, _task_order, and _buffer
         self._session_factory = _get_sync_session_factory(db_url)
         self._buffer: list[ExecutionEvent] = []
         self._flush_timer: threading.Timer | None = None
+        self._otel_tracer = _get_otel_tracer()
+        self._otel_root_span: Any = None
+        self._otel_active_spans: dict[str, Any] = {}
         super().__init__()
         logger.info(
-            "Execution listener created: execution_id=%s",
+            "Execution listener created: execution_id=%s otel=%s",
             execution_id,
+            self._otel_tracer is not None,
             extra={
                 "event": "execution_listener_created",
                 "execution_id": str(execution_id),
+                "otel_enabled": self._otel_tracer is not None,
             },
         )
 
@@ -188,6 +389,42 @@ class BlackbeardExecutionListener(BaseEventListener):
             },
         )
 
+    def _otel_start_span(self, name: str, attributes: dict[str, Any] | None = None) -> Any:
+        """Start an OTEL span if tracing is enabled. Returns the span or None."""
+        if self._otel_tracer is None:
+            return None
+        parent_ctx = None
+        if self._otel_root_span is not None:
+            parent_ctx = trace.set_span_in_context(self._otel_root_span)
+        span = self._otel_tracer.start_span(name, context=parent_ctx, attributes=attributes or {})
+        return span
+
+    def _otel_end_span(self, key: str, attributes: dict[str, Any] | None = None) -> None:
+        """End a previously started span identified by key."""
+        span = self._otel_active_spans.pop(key, None)
+        if span is not None:
+            if attributes:
+                for k, v in attributes.items():
+                    span.set_attribute(k, v)
+            span.end()
+
+    def _dispatch_webhook(self, event_type: str, data: dict[str, Any]) -> None:
+        """Fire webhook delivery in a background thread (fire-and-forget)."""
+        try:
+            executor = _get_webhook_executor()
+            executor.submit(
+                _deliver_webhooks_sync,
+                event_type,
+                data,
+                str(self._execution_id),
+                self._db_url,
+            )
+        except Exception:
+            logger.debug(
+                "Webhook dispatch skipped (executor unavailable): event=%s",
+                event_type,
+            )
+
     def _write_event(self, event_type: str, data: dict[str, Any]) -> None:
         self._ensure_request_id()
         now = datetime.now(UTC)
@@ -210,6 +447,8 @@ class BlackbeardExecutionListener(BaseEventListener):
             self._flush_buffer()
         else:
             self._schedule_flush()
+        # Fire webhook delivery in background
+        self._dispatch_webhook(event_type, data)
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
                 "Event buffered: execution=%s type=%s seq=%d buffer=%d/%d",
@@ -272,6 +511,8 @@ class BlackbeardExecutionListener(BaseEventListener):
                     .values(**values)
                 )
                 session.commit()
+            # Fire webhook delivery in background
+            self._dispatch_webhook(event_type, data)
         except Exception as exc:
             logger.exception(
                 "Failed to write event+task for %s: type=%s order=%d — "
@@ -294,16 +535,34 @@ class BlackbeardExecutionListener(BaseEventListener):
     def setup_listeners(self, crewai_event_bus: Any) -> None:
         @crewai_event_bus.on(CrewKickoffStartedEvent)
         def on_crew_started(source: Any, event: CrewKickoffStartedEvent) -> None:
+            crew_name = event.crew_name or "unknown"
             data = {
-                "crew_name": event.crew_name or "unknown",
+                "crew_name": crew_name,
                 "inputs": event.inputs or {},
             }
             self._write_event("crew_started", data)
+            # OTEL: start root span for crew execution
+            span = self._otel_start_span(
+                f"crew.kickoff/{crew_name}",
+                attributes={
+                    "blackbeard.execution_id": str(self._execution_id),
+                    "blackbeard.crew_name": crew_name,
+                },
+            )
+            if span is not None:
+                self._otel_root_span = span
 
         @crewai_event_bus.on(CrewKickoffCompletedEvent)
         def on_crew_completed(source: Any, event: CrewKickoffCompletedEvent) -> None:
             data = {"total_tokens": event.total_tokens}
             self._write_event("crew_completed", data)
+            # OTEL: end root span
+            if self._otel_root_span is not None:
+                self._otel_root_span.set_attribute(
+                    "blackbeard.total_tokens", event.total_tokens or 0
+                )
+                self._otel_root_span.end()
+                self._otel_root_span = None
 
         @crewai_event_bus.on(TaskStartedEvent)
         def on_task_started(source: Any, event: TaskStartedEvent) -> None:
@@ -322,6 +581,17 @@ class BlackbeardExecutionListener(BaseEventListener):
                 task_status=TaskStatus.RUNNING,
                 task_started_at=now,
             )
+            # OTEL: start task span
+            span = self._otel_start_span(
+                f"task/{task_name}",
+                attributes={
+                    "blackbeard.task_name": task_name,
+                    "blackbeard.agent_role": event.agent_role or "",
+                    "blackbeard.task_order": order,
+                },
+            )
+            if span is not None:
+                self._otel_active_spans[f"task/{task_name}"] = span
 
         @crewai_event_bus.on(TaskCompletedEvent)
         def on_task_completed(source: Any, event: TaskCompletedEvent) -> None:
@@ -343,6 +613,8 @@ class BlackbeardExecutionListener(BaseEventListener):
                 task_output=output,
                 task_completed_at=now,
             )
+            # OTEL: end task span
+            self._otel_end_span(f"task/{task_name}")
 
         @crewai_event_bus.on(ToolUsageStartedEvent)
         def on_tool_started(source: Any, event: ToolUsageStartedEvent) -> None:
@@ -352,6 +624,16 @@ class BlackbeardExecutionListener(BaseEventListener):
                 "agent_role": event.agent_role,
             }
             self._write_event("tool_started", data)
+            # OTEL: start tool span
+            span = self._otel_start_span(
+                f"tool/{event.tool_name}",
+                attributes={
+                    "blackbeard.tool_name": event.tool_name or "",
+                    "blackbeard.agent_role": event.agent_role or "",
+                },
+            )
+            if span is not None:
+                self._otel_active_spans[f"tool/{event.tool_name}"] = span
 
         @crewai_event_bus.on(ToolUsageFinishedEvent)
         def on_tool_finished(source: Any, event: ToolUsageFinishedEvent) -> None:
@@ -362,6 +644,14 @@ class BlackbeardExecutionListener(BaseEventListener):
                 "from_cache": event.from_cache,
             }
             self._write_event("tool_finished", data)
+            # OTEL: end tool span
+            self._otel_end_span(
+                f"tool/{event.tool_name}",
+                attributes={
+                    "blackbeard.duration_ms": duration_ms,
+                    "blackbeard.from_cache": event.from_cache or False,
+                },
+            )
 
         @crewai_event_bus.on(LLMCallStartedEvent)
         def on_llm_started(source: Any, event: LLMCallStartedEvent) -> None:
@@ -370,6 +660,16 @@ class BlackbeardExecutionListener(BaseEventListener):
                 "agent_role": event.agent_role,
             }
             self._write_event("llm_started", data)
+            # OTEL: start LLM span
+            span = self._otel_start_span(
+                f"llm/{event.model or 'unknown'}",
+                attributes={
+                    "blackbeard.model": event.model or "",
+                    "blackbeard.agent_role": event.agent_role or "",
+                },
+            )
+            if span is not None:
+                self._otel_active_spans[f"llm/{event.model or 'unknown'}"] = span
 
         @crewai_event_bus.on(LLMCallCompletedEvent)
         def on_llm_completed(source: Any, event: LLMCallCompletedEvent) -> None:
@@ -388,3 +688,10 @@ class BlackbeardExecutionListener(BaseEventListener):
             if duration_ms is not None:
                 data["duration_ms"] = duration_ms
             self._write_event("llm_completed", data)
+            # OTEL: end LLM span
+            otel_attrs: dict[str, Any] = {
+                "blackbeard.tokens": usage.get("total_tokens", 0) if isinstance(usage, dict) else 0,
+            }
+            if duration_ms is not None:
+                otel_attrs["blackbeard.duration_ms"] = duration_ms
+            self._otel_end_span(f"llm/{event.model or 'unknown'}", attributes=otel_attrs)

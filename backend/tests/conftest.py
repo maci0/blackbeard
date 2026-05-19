@@ -74,7 +74,8 @@ from sqlalchemy.pool import StaticPool
 import blackbeard.models.audit  # registers audit log table
 import blackbeard.models.execution  # registers execution tables
 import blackbeard.models.resource  # registers resource tables
-import blackbeard.models.user  # noqa: F401 — registers user/group tables
+import blackbeard.models.user  # registers user/group tables
+import blackbeard.models.webhook  # noqa: F401 — registers webhook table
 from blackbeard.kinds import ResourceKind
 from blackbeard.main import app
 from blackbeard.models.database import (

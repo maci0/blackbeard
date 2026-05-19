@@ -46,6 +46,7 @@ from blackbeard.models.execution_schemas import (
     ExecutionEventsResponse,
     ExecutionListResponse,
     ExecutionResponse,
+    HITLResponseRequest,
     KickoffRequest,
     TestRequest,
     TrainRequest,
@@ -509,6 +510,56 @@ async def list_execution_events(
         next_sequence=items[-1].sequence if items else after,
         has_more=has_more,
     )
+
+
+@router.post(
+    "/executions/{execution_id}/respond",
+    responses={
+        200: {"description": "HITL response recorded"},
+        404: {"description": "Execution not found"},
+        409: {"description": "Execution is not awaiting human input"},
+    },
+)
+async def respond_to_execution(
+    request: Request,
+    execution_id: UUID = Path(..., description="Execution UUID"),
+    body: HITLResponseRequest = Body(...),
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_current_user),
+) -> dict[str, str]:
+    """Respond to a human-in-the-loop prompt during execution.
+
+    Records the response as an execution event so the execution listener
+    can pick it up. The frontend should poll the events endpoint for
+    ``hitl_request`` events and present them to the user.
+    """
+    status = await _executor_mod.get_execution_status(session, execution_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
+    if status in TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Execution is in terminal status '{status.value}'",
+        )
+
+    await _executor_mod.record_hitl_response(
+        session,
+        execution_id,
+        response=body.response,
+        feedback=body.feedback,
+    )
+
+    await log_audit(
+        session,
+        action="hitl_response",
+        resource_type="Execution",
+        resource_id=str(execution_id),
+        detail={"response": body.response},
+        **audit_from_request(request, user),
+    )
+    await session.commit()
+
+    return {"status": "recorded", "execution_id": str(execution_id)}
 
 
 @router.patch(

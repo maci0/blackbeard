@@ -337,7 +337,7 @@ GUARDRAIL_SCHEMA = {
     "type": "object",
     "required": ["type"],
     "properties": {
-        "type": {"type": "string", "enum": ["function", "llm"]},
+        "type": {"type": "string", "enum": ["function", "llm", "schema"]},
         "description": {"type": "string", "maxLength": 5000},
         "function_path": {
             "type": "string",
@@ -346,6 +346,7 @@ GUARDRAIL_SCHEMA = {
         },
         "llm_prompt": {"type": "string", "maxLength": 50000},
         "llm": {"type": "string", "maxLength": 500},
+        "json_schema": {"type": "object", "maxProperties": 200},
         "on_fail": {"type": "string", "enum": ["reject", "warn", "log"], "default": "reject"},
     },
     "additionalProperties": False,

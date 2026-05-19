@@ -28,6 +28,7 @@ from blackbeard.models.execution import (
 )
 from blackbeard.models.resource import Resource, ResourceRef
 from blackbeard.models.user import Group, GroupMember, User
+from blackbeard.models.webhook import Webhook
 
 __all__ = [
     "TERMINAL_STATUSES",
@@ -45,6 +46,7 @@ __all__ = [
     "ResourceRef",
     "TaskStatus",
     "User",
+    "Webhook",
     "async_session",
     "get_session",
 ]

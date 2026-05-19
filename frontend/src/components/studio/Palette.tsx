@@ -1,5 +1,5 @@
 import type { DragEvent } from 'react'
-import { User, ListChecks, Wrench } from 'lucide-react'
+import { User, ListChecks, Wrench, Workflow } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
 import { getDefaultNodeData } from './defaults'
 
@@ -54,6 +54,16 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-emerald-700 dark:text-emerald-300',
     borderColor:
       'border-emerald-200 hover:border-emerald-400 dark:border-emerald-800 dark:hover:border-emerald-600',
+  },
+  {
+    type: 'flowStep',
+    label: 'Flow Step',
+    icon: Workflow,
+    headerBg: 'bg-gradient-to-r from-amber-600 to-amber-500',
+    iconBg: 'bg-white/20',
+    textColor: 'text-amber-700 dark:text-amber-300',
+    borderColor:
+      'border-amber-200 hover:border-amber-400 dark:border-amber-800 dark:hover:border-amber-600',
   },
 ]
 

@@ -1,0 +1,116 @@
+{{- if .Values.valkey.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "blackbeard.fullname" . }}-valkey
+  labels:
+    {{- include "blackbeard.labels" . | nindent 4 }}
+    {{- include "blackbeard.selectorLabels" (dict "context" . "component" "valkey") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "blackbeard.selectorLabels" (dict "context" . "component" "valkey") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "blackbeard.labels" . | nindent 8 }}
+        {{- include "blackbeard.selectorLabels" (dict "context" . "component" "valkey") | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: valkey
+          image: "{{ .Values.valkey.image.repository }}:{{ .Values.valkey.image.tag }}"
+          imagePullPolicy: {{ .Values.valkey.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - SETGID
+                - SETUID
+          ports:
+            - name: valkey
+              containerPort: 6379
+              protocol: TCP
+          command:
+            - "valkey-server"
+            - "--requirepass"
+            - "$(VALKEY_PASSWORD)"
+            - "--maxmemory"
+            - {{ .Values.valkey.config.maxmemory | quote }}
+            - "--maxmemory-policy"
+            - {{ .Values.valkey.config.maxmemoryPolicy | quote }}
+            - "--save"
+            - "60 1000"
+            - "--save"
+            - "300 100"
+            - "--dir"
+            - "/data"
+          env:
+            - name: VALKEY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "blackbeard.secretsName" . }}
+                  key: valkey-password
+          readinessProbe:
+            exec:
+              command:
+                - "sh"
+                - "-c"
+                - "REDISCLI_AUTH=$VALKEY_PASSWORD valkey-cli ping | grep -q PONG"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            exec:
+              command:
+                - "sh"
+                - "-c"
+                - "REDISCLI_AUTH=$VALKEY_PASSWORD valkey-cli ping | grep -q PONG"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          resources:
+            {{- toYaml .Values.valkey.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "blackbeard.fullname" . }}-valkey-data
+        - name: tmp
+          emptyDir:
+            sizeLimit: 10Mi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "blackbeard.fullname" . }}-valkey-data
+  labels:
+    {{- include "blackbeard.labels" . | nindent 4 }}
+    {{- include "blackbeard.selectorLabels" (dict "context" . "component" "valkey") | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if .Values.valkey.storage.storageClass }}
+  storageClassName: {{ .Values.valkey.storage.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.valkey.storage.size }}
+{{- end }}

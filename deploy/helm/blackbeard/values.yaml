@@ -1,0 +1,189 @@
+# -- Blackbeard Helm Chart Values --
+
+# -- API (FastAPI backend) --
+api:
+  image:
+    repository: blackbeard-api
+    tag: ""  # defaults to Chart.appVersion
+    pullPolicy: IfNotPresent
+  replicas: 2
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2"
+  service:
+    type: ClusterIP
+    port: 8000
+  env: {}
+  # Additional environment variables as key-value pairs:
+  #   DEBUG: "false"
+  #   LOG_LEVEL: "info"
+
+# -- UI (React/Vite + nginx) --
+ui:
+  image:
+    repository: blackbeard-ui
+    tag: ""  # defaults to Chart.appVersion
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+  service:
+    type: ClusterIP
+    port: 3000
+
+# -- PostgreSQL --
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "18-alpine"
+    pullPolicy: IfNotPresent
+  storage:
+    size: 10Gi
+    storageClass: ""  # uses default StorageClass when empty
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "2"
+  service:
+    type: ClusterIP
+    port: 5432
+  config:
+    maxConnections: 200
+    sharedBuffers: "256MB"
+    workMem: "16MB"
+    maintenanceWorkMem: "128MB"
+    effectiveCacheSize: "1GB"
+    randomPageCost: "1.1"
+    checkpointCompletionTarget: "0.9"
+    walBuffers: "16MB"
+    defaultStatisticsTarget: 100
+    logMinDurationStatement: 1000
+    idleInTransactionSessionTimeout: 300000
+    statementTimeout: 300000
+  shmSize: "256Mi"
+
+# -- Valkey (Redis-compatible cache) --
+valkey:
+  enabled: true
+  image:
+    repository: valkey/valkey
+    tag: "9-alpine"
+    pullPolicy: IfNotPresent
+  storage:
+    size: 1Gi
+    storageClass: ""
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "1"
+  service:
+    type: ClusterIP
+    port: 6379
+  config:
+    maxmemory: "256mb"
+    maxmemoryPolicy: "allkeys-lru"
+
+# -- LiteLLM Proxy --
+litellm:
+  enabled: true
+  image:
+    repository: ghcr.io/berriai/litellm
+    tag: "1.84.0"
+    pullPolicy: IfNotPresent
+  masterKey: ""  # set via secrets; falls back to auth.litellmMasterKey
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1"
+  service:
+    type: ClusterIP
+    port: 4000
+  # LiteLLM config.yaml contents — rendered into a ConfigMap
+  config:
+    model_list:
+      - model_name: claude-sonnet-4-6
+        litellm_params:
+          model: vertex_ai/claude-sonnet-4-6
+      - model_name: claude-opus-4-6
+        litellm_params:
+          model: vertex_ai/claude-opus-4-6
+      - model_name: gemini-2.5-pro
+        litellm_params:
+          model: vertex_ai/gemini-2.5-pro
+    litellm_settings:
+      drop_params: true
+      set_verbose: false
+      num_retries: 3
+      request_timeout: 120
+    general_settings:
+      master_key: "os.environ/LITELLM_MASTER_KEY"
+      database_url: "os.environ/DATABASE_URL"
+    router_settings:
+      routing_strategy: simple-shuffle
+
+# -- Ingress --
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  #   nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+  #   cert-manager.io/cluster-issuer: letsencrypt-prod
+  host: blackbeard.local
+  tls: []
+  #   - secretName: blackbeard-tls
+  #     hosts:
+  #       - blackbeard.local
+
+# -- Auth / Secrets --
+auth:
+  apiKey: ""           # BLACKBEARD_API_KEY — required
+  jwtSecret: ""        # JWT_SECRET — required
+  litellmMasterKey: "" # LITELLM_MASTER_KEY — required
+
+# -- Database credentials --
+database:
+  user: blackbeard
+  password: ""  # required — set in secrets
+  name: blackbeard
+
+# -- Valkey credentials --
+valkeyPassword: ""  # required — set in secrets
+
+# -- Image pull secrets --
+imagePullSecrets: []
+
+# -- Global labels applied to all resources --
+commonLabels: {}
+
+# -- Pod security context (applied to all pods) --
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container security context (applied to all containers) --
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL

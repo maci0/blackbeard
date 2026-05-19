@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 7
 
+    otel_endpoint: str | None = None
+
     max_concurrent_executions: int = 4
 
     host: str = "0.0.0.0"

@@ -12,12 +12,14 @@ import {
   type Connection,
   type Edge,
 } from '@xyflow/react'
-import { User, ListChecks, Wrench, Sparkles } from 'lucide-react'
+import { User, ListChecks, Wrench, Workflow, Sparkles } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
 import { DATAFLOW_MARKER_END, getDefaultNodeData } from './defaults'
 import AgentNode from './nodes/AgentNode'
 import TaskNode from './nodes/TaskNode'
 import ToolNode from './nodes/ToolNode'
+import FlowStepNode from './nodes/FlowStepNode'
+import CrewGroupNode from './nodes/CrewGroupNode'
 import DataFlowEdge from './edges/DataFlowEdge'
 import ToolAssignEdge from './edges/ToolAssignEdge'
 
@@ -29,7 +31,11 @@ const NODE_TYPES: NodeTypes = {
   agent: AgentNode,
   task: TaskNode,
   tool: ToolNode,
+  flowStep: FlowStepNode,
+  crewGroup: CrewGroupNode,
 }
+
+const DROPPABLE_TYPES = new Set(['agent', 'task', 'tool', 'flowStep'])
 
 const EDGE_TYPES: EdgeTypes = {
   dataflow: DataFlowEdge,
@@ -56,6 +62,10 @@ function minimapNodeColor(node: Node): string {
       return '#3b82f6'
     case 'tool':
       return '#10b981'
+    case 'flowStep':
+      return '#f59e0b'
+    case 'crewGroup':
+      return '#94a3b8'
     default:
       return '#94a3b8'
   }
@@ -132,7 +142,7 @@ function CanvasInner() {
     (event: DragEvent<HTMLDivElement>) => {
       event.preventDefault()
       const type = event.dataTransfer.getData('application/reactflow')
-      if (!type || !['agent', 'task', 'tool'].includes(type)) return
+      if (!type || !DROPPABLE_TYPES.has(type)) return
 
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY })
 
@@ -216,6 +226,9 @@ function EmptyCanvasOverlay({ onLoadExample }: { onLoadExample?: () => void }) {
           </div>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900">
             <Wrench className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />
+          </div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900">
+            <Workflow className="h-5 w-5 text-amber-500 dark:text-amber-400" />
           </div>
         </div>
 

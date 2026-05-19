@@ -16,6 +16,7 @@ const NODE_SPEC_FIELDS: Record<string, readonly string[]> = {
     'output_file',
   ],
   tool: ['type', 'class_path', 'description', 'sandbox'],
+  flowStep: ['type', 'crew', 'function_path', 'listen_to'],
 }
 
 export function nodeToYaml(

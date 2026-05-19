@@ -7,6 +7,7 @@ LLM connections through LiteLLM Proxy.
 from __future__ import annotations
 
 import importlib
+import json
 import logging
 import re
 import time
@@ -555,6 +556,33 @@ class ResourceLoader:
             logger.warning("Failed to import callable: %s", dotted_path)
             return None
 
+    @staticmethod
+    def _build_schema_guardrail(schema: dict[str, Any], guardrail_name: str) -> Any:
+        """Build a callable guardrail that validates output against a JSON Schema.
+
+        The returned function accepts the agent output string, parses it as JSON,
+        and validates it against ``schema``.  Returns the output unchanged on
+        success; raises ``ValueError`` on validation failure.
+        """
+        import jsonschema
+
+        def _schema_guardrail(output: str) -> str:
+            try:
+                parsed = json.loads(output)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"Schema guardrail '{guardrail_name}': output is not valid JSON: {exc}"
+                ) from exc
+            try:
+                jsonschema.validate(parsed, schema)
+            except jsonschema.ValidationError as exc:
+                raise ValueError(
+                    f"Schema guardrail '{guardrail_name}': {exc.message}"
+                ) from exc
+            return output
+
+        return _schema_guardrail
+
     def _build_guardrails(self, refs: list[str]) -> list[Any]:
         """Build guardrail callables from refs or inline strings.
 
@@ -575,6 +603,11 @@ class ResourceLoader:
                             result.append(fn)
                     elif gspec.get("type") == "llm" and gspec.get("llm_prompt"):
                         result.append(gspec["llm_prompt"])
+                    elif gspec.get("type") == "schema" and gspec.get("json_schema"):
+                        guardrail_fn = self._build_schema_guardrail(
+                            gspec["json_schema"], resource.name
+                        )
+                        result.append(guardrail_fn)
                 except LoaderError:
                     logger.warning("Failed to resolve guardrail ref: %s", ref_str)
             elif "." in ref_str and " " not in ref_str:

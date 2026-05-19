@@ -335,10 +335,135 @@ function ToolForm({
   )
 }
 
+function FlowStepForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  const crewResources = useResourceStore((state) => state.resources['crews']) ?? EMPTY_RESOURCES
+  const hasCrewData = useResourceStore((state) => 'crews' in state.resources)
+  const fetchResources = useResourceStore((state) => state.fetchResources)
+
+  const flowStepNodes = useStudioStore(
+    useShallow((state) => state.nodes.filter((n) => n.type === 'flowStep')),
+  )
+
+  useEffect(() => {
+    if (!hasCrewData) void fetchResources('crews')
+  }, [hasCrewData, fetchResources])
+
+  const stepType = str(data, 'type') || 'crew'
+  const listenTo = (data['listen_to'] as string[] | undefined) ?? []
+  const currentName = str(data, 'name')
+
+  // Other step names for listen_to multi-select (exclude self)
+  const otherStepNames = flowStepNodes
+    .map((n) => (n.data['name'] as string | undefined) ?? '')
+    .filter((n) => n && n !== currentName)
+
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Step Name">
+        <TextInput
+          value={str(data, 'name')}
+          onChange={(v) => onChange('name', v)}
+          placeholder="step-1"
+        />
+      </FieldGroup>
+      <FieldGroup label="Type">
+        <SelectInput
+          value={stepType}
+          onChange={(v) => onChange('type', v)}
+          options={[
+            { label: 'Crew', value: 'crew' },
+            { label: 'Function', value: 'function' },
+            { label: 'Router', value: 'router' },
+            { label: 'Condition', value: 'condition' },
+          ]}
+        />
+      </FieldGroup>
+
+      {stepType === 'crew' && (
+        <FieldGroup label="Crew">
+          {crewResources.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No crews saved yet.</p>
+          ) : (
+            <SelectInput
+              value={str(data, 'crew')}
+              onChange={(v) => onChange('crew', v)}
+              options={[
+                { value: '', label: 'Select crew...' },
+                ...crewResources.map((c) => ({
+                  value: `ref:crews/${c.metadata.name}`,
+                  label: c.metadata.name,
+                })),
+              ]}
+            />
+          )}
+        </FieldGroup>
+      )}
+
+      {stepType === 'function' && (
+        <FieldGroup label="Function Path">
+          <TextInput
+            value={str(data, 'function_path')}
+            onChange={(v) => onChange('function_path', v)}
+            placeholder="my_module.my_function"
+          />
+        </FieldGroup>
+      )}
+
+      {otherStepNames.length > 0 && (
+        <FieldGroup label="Listen To">
+          <div className="space-y-1">
+            {otherStepNames.map((stepName) => (
+              <CheckboxInput
+                key={stepName}
+                label={stepName}
+                checked={listenTo.includes(stepName)}
+                onChange={(checked) => {
+                  const next = checked
+                    ? [...listenTo, stepName]
+                    : listenTo.filter((s) => s !== stepName)
+                  onChange('listen_to', next)
+                }}
+              />
+            ))}
+          </div>
+        </FieldGroup>
+      )}
+    </div>
+  )
+}
+
+function CrewGroupForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Crew Name">
+        <TextInput
+          value={str(data, 'name')}
+          onChange={(v) => onChange('name', v)}
+          placeholder="research-crew"
+        />
+      </FieldGroup>
+    </div>
+  )
+}
+
 const TYPE_META: Record<string, { label: string; accent: string; border: string }> = {
   agent: { label: 'Agent', accent: 'bg-violet-500', border: 'border-violet-200' },
   task: { label: 'Task', accent: 'bg-blue-500', border: 'border-blue-200' },
   tool: { label: 'Tool', accent: 'bg-emerald-500', border: 'border-emerald-200' },
+  flowStep: { label: 'Flow Step', accent: 'bg-amber-500', border: 'border-amber-200' },
+  crewGroup: { label: 'Crew Group', accent: 'bg-slate-500', border: 'border-slate-200' },
 }
 
 export default function PropertyPanel() {
@@ -456,6 +581,10 @@ export default function PropertyPanel() {
             <TaskForm data={data} onChange={onChange} />
           ) : nodeType === 'tool' ? (
             <ToolForm data={data} onChange={onChange} />
+          ) : nodeType === 'flowStep' ? (
+            <FlowStepForm data={data} onChange={onChange} />
+          ) : nodeType === 'crewGroup' ? (
+            <CrewGroupForm data={data} onChange={onChange} />
           ) : (
             <p className="text-xs text-muted-foreground">No properties for this node type.</p>
           )}

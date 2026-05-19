@@ -270,6 +270,22 @@ class ExecutionListResponse(BaseModel):
     has_more: bool = False
 
 
+class HITLResponseRequest(BaseModel):
+    """Request to respond to a human-in-the-loop prompt during execution."""
+
+    response: str = Field(
+        ...,
+        min_length=1,
+        max_length=50_000,
+        description="The human response (e.g. 'approved', 'rejected', or freeform feedback)",
+    )
+    feedback: str | None = Field(
+        default=None,
+        max_length=50_000,
+        description="Optional additional feedback or instructions",
+    )
+
+
 class ExecutionEventItem(BaseModel):
     """Single event from an execution."""
 

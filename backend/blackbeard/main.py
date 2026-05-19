@@ -36,6 +36,7 @@ from blackbeard.api.middleware import (
 )
 from blackbeard.api.resources import router as resources_router
 from blackbeard.api.users import router as users_router
+from blackbeard.api.webhooks import router as webhooks_router
 from blackbeard.config import settings
 from blackbeard.engine import recover_stale_executions, shutdown_executor
 from blackbeard.http_client import close_all_clients
@@ -250,6 +251,10 @@ app = FastAPI(
             "name": "resources",
             "description": "Generic CRUD for all resource kinds (Agent, Task, Crew, etc.)",
         },
+        {
+            "name": "webhooks",
+            "description": "Webhook registration for execution event delivery",
+        },
     ],
 )
 
@@ -283,3 +288,4 @@ app.include_router(chat_router, prefix="/api/v1")
 app.include_router(executions_router, prefix="/api/v1")
 app.include_router(marketplace_router, prefix="/api/v1")
 app.include_router(resources_router, prefix="/api/v1")
+app.include_router(webhooks_router, prefix="/api/v1")

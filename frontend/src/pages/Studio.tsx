@@ -20,6 +20,13 @@ import type { Node, Edge } from '@xyflow/react'
 import type { Resource } from '@/lib/types'
 
 /* ------------------------------------------------------------------ */
+/* Constants                                                           */
+/* ------------------------------------------------------------------ */
+
+/** Padding around child nodes inside a crew group container. */
+const GROUP_PADDING = { top: 40, right: 20, bottom: 20, left: 20 }
+
+/* ------------------------------------------------------------------ */
 /* Resource body builder                                               */
 /* ------------------------------------------------------------------ */
 
@@ -42,6 +49,91 @@ function buildResourceBody(node: Node, crewName: string) {
       labels: { crew: crewName },
     },
     spec,
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Build a Flow resource body from flowStep nodes + edges              */
+/* ------------------------------------------------------------------ */
+
+function buildFlowBody(flowName: string, flowStepNodes: Node[], edges: Edge[]) {
+  const steps = flowStepNodes.map((node) => {
+    const data = node.data
+    const stepName = (data['name'] as string | undefined) ?? ''
+    const stepType = (data['type'] as string | undefined) ?? 'crew'
+    const listenTo = (data['listen_to'] as string[] | undefined) ?? []
+
+    // Derive listen_to from edges too — incoming edges imply dependency
+    const edgeListenTo = edges
+      .filter((e) => e.target === node.id)
+      .map((e) => {
+        const src = flowStepNodes.find((n) => n.id === e.source)
+        return src ? ((src.data['name'] as string | undefined) ?? '') : ''
+      })
+      .filter(Boolean)
+
+    const allListenTo = [...new Set([...listenTo, ...edgeListenTo])]
+
+    const step: Record<string, unknown> = {
+      name: stepName,
+      type: stepType,
+    }
+
+    if (stepType === 'crew' && data['crew']) {
+      step.crew = data['crew']
+    }
+    if (stepType === 'function' && data['function_path']) {
+      step.function_path = data['function_path']
+    }
+    if (allListenTo.length > 0) {
+      step.listen_to = allListenTo
+    }
+
+    return step
+  })
+
+  return {
+    apiVersion: API_VERSION,
+    kind: 'Flow',
+    metadata: { name: toResourceName(flowName) },
+    spec: { steps },
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Build crew group node to encompass child nodes                      */
+/* ------------------------------------------------------------------ */
+
+function buildCrewGroupNode(crewName: string, childNodes: Node[]): Node {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+
+  const nodeWidth = 120
+  const nodeHeight = 120
+
+  for (const n of childNodes) {
+    minX = Math.min(minX, n.position.x)
+    minY = Math.min(minY, n.position.y)
+    maxX = Math.max(maxX, n.position.x + nodeWidth)
+    maxY = Math.max(maxY, n.position.y + nodeHeight)
+  }
+
+  return {
+    id: `crewGroup-${crewName}`,
+    type: 'crewGroup',
+    position: {
+      x: minX - GROUP_PADDING.left,
+      y: minY - GROUP_PADDING.top,
+    },
+    data: { name: crewName },
+    style: {
+      width: maxX - minX + GROUP_PADDING.left + GROUP_PADDING.right,
+      height: maxY - minY + GROUP_PADDING.top + GROUP_PADDING.bottom,
+    },
+    // Group nodes should render behind child nodes
+    zIndex: -1,
   }
 }
 
@@ -171,12 +263,37 @@ function StudioInner() {
             } satisfies Edge
           })
 
-        const allNodes = [...agentNodes, ...taskNodes]
+        const childNodes = [...agentNodes, ...taskNodes]
+        let allNodes: Node[]
         try {
-          const laid = await autoLayout(allNodes, edges)
-          setNodes(laid.nodes)
+          const laid = await autoLayout(childNodes, edges)
+          // Build crew group from laid-out positions
+          const groupNode = buildCrewGroupNode(crew.metadata.name, laid.nodes)
+          // Set parentId on child nodes so they are visually contained
+          const parented = laid.nodes.map((n) => ({
+            ...n,
+            parentId: groupNode.id,
+            extent: 'parent' as const,
+            position: {
+              x: n.position.x - groupNode.position.x,
+              y: n.position.y - groupNode.position.y,
+            },
+          }))
+          allNodes = [groupNode, ...parented]
+          setNodes(allNodes)
           setEdges(laid.edges)
         } catch {
+          const groupNode = buildCrewGroupNode(crew.metadata.name, childNodes)
+          const parented = childNodes.map((n) => ({
+            ...n,
+            parentId: groupNode.id,
+            extent: 'parent' as const,
+            position: {
+              x: n.position.x - groupNode.position.x,
+              y: n.position.y - groupNode.position.y,
+            },
+          }))
+          allNodes = [groupNode, ...parented]
           setNodes(allNodes)
           setEdges(edges)
         }
@@ -208,15 +325,23 @@ function StudioInner() {
     // Read nodes at call time to avoid closing over the array reference,
     // which changes on every position update and would cause this callback
     // (and downstream handleRun) to be recreated on every drag frame.
-    const currentNodes = useStudioStore.getState().nodes
+    const { nodes: currentNodes, edges: currentEdges } = useStudioStore.getState()
     if (currentNodes.length === 0) {
       applyStatus('error', 'Nothing to save — add some nodes first')
       return false
     }
     applyStatus('saving', 'Saving…')
+
+    const flowStepNodes = currentNodes.filter((n) => n.type === 'flowStep')
+    const isFlowMode = flowStepNodes.length > 0
+
     try {
+      // Save individual resource nodes (agent, task, tool — skip crewGroup and flowStep)
+      const resourceNodes = currentNodes.filter(
+        (n) => n.type === 'agent' || n.type === 'task' || n.type === 'tool',
+      )
       await Promise.all(
-        currentNodes.map((node) => {
+        resourceNodes.map((node) => {
           const body = buildResourceBody(node, crewName)
           const plural =
             KIND_TO_PLURAL[capitalize(node.type ?? '')] ?? `${node.type ?? 'resource'}s`
@@ -224,36 +349,48 @@ function StudioInner() {
         }),
       )
 
-      // Synthesize and save the Crew resource
-      const agentNodes = currentNodes.filter((n) => n.type === 'agent')
-      const taskNodes = currentNodes.filter((n) => n.type === 'task')
-      const agentRefs = agentNodes.map((n) => {
-        const d = n.data
-        const raw = (d['role'] as string | undefined) ?? (d['name'] as string | undefined) ?? n.id
-        return `ref:agents/${toResourceName(raw)}`
-      })
-      const taskRefs = taskNodes.map((n) => {
-        const d = n.data
-        const raw = (d['name'] as string | undefined) ?? n.id
-        return `ref:tasks/${toResourceName(raw)}`
-      })
-      const crewBody = {
-        apiVersion: API_VERSION,
-        kind: 'Crew',
-        metadata: { name: toResourceName(crewName) },
-        spec: {
-          process: 'sequential',
-          agents: agentRefs,
-          tasks: taskRefs,
-        },
-      }
-      await api.post('/api/v1/crews', crewBody)
+      if (isFlowMode) {
+        // Save as a Flow resource
+        const flowBody = buildFlowBody(crewName, flowStepNodes, currentEdges)
+        await api.post('/api/v1/flows', flowBody)
 
-      markClean()
-      applyStatus(
-        'success',
-        `Saved ${currentNodes.length} resource${currentNodes.length !== 1 ? 's' : ''} + crew`,
-      )
+        markClean()
+        applyStatus(
+          'success',
+          `Saved ${resourceNodes.length} resource${resourceNodes.length !== 1 ? 's' : ''} + flow`,
+        )
+      } else {
+        // Synthesize and save the Crew resource
+        const agentNodes = currentNodes.filter((n) => n.type === 'agent')
+        const taskNodes = currentNodes.filter((n) => n.type === 'task')
+        const agentRefs = agentNodes.map((n) => {
+          const d = n.data
+          const raw = (d['role'] as string | undefined) ?? (d['name'] as string | undefined) ?? n.id
+          return `ref:agents/${toResourceName(raw)}`
+        })
+        const taskRefs = taskNodes.map((n) => {
+          const d = n.data
+          const raw = (d['name'] as string | undefined) ?? n.id
+          return `ref:tasks/${toResourceName(raw)}`
+        })
+        const crewBody = {
+          apiVersion: API_VERSION,
+          kind: 'Crew',
+          metadata: { name: toResourceName(crewName) },
+          spec: {
+            process: 'sequential',
+            agents: agentRefs,
+            tasks: taskRefs,
+          },
+        }
+        await api.post('/api/v1/crews', crewBody)
+
+        markClean()
+        applyStatus(
+          'success',
+          `Saved ${resourceNodes.length} resource${resourceNodes.length !== 1 ? 's' : ''} + crew`,
+        )
+      }
       return true
     } catch (err) {
       applyStatus('error', err instanceof Error ? err.message : 'Save failed')
@@ -317,7 +454,7 @@ function StudioInner() {
   )
 
   const handleLoadExample = useCallback(() => {
-    const exampleNodes: Node[] = [
+    const childNodes: Node[] = [
       {
         id: 'agent-researcher',
         type: 'agent',
@@ -386,7 +523,20 @@ function StudioInner() {
         markerEnd: DATAFLOW_MARKER_END,
       },
     ]
-    setNodes(exampleNodes)
+
+    // Wrap child nodes in a crew group
+    const groupNode = buildCrewGroupNode('research-crew', childNodes)
+    const parentedNodes = childNodes.map((n) => ({
+      ...n,
+      parentId: groupNode.id,
+      extent: 'parent' as const,
+      position: {
+        x: n.position.x - groupNode.position.x,
+        y: n.position.y - groupNode.position.y,
+      },
+    }))
+
+    setNodes([groupNode, ...parentedNodes])
     setEdges(exampleEdges)
     setCrewName('research-crew')
     markClean()

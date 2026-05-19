@@ -23,6 +23,8 @@ export function getDefaultNodeData(type: string): Record<string, unknown> {
       return { name: 'New Task', description: '', expected_output: '', agent: '' }
     case 'tool':
       return { name: 'New Tool', type: 'python', class_path: '', description: '', sandbox: 'none' }
+    case 'flowStep':
+      return { name: 'step-1', type: 'crew', crew: '', function_path: '', listen_to: [] }
     default:
       return { label: 'New Node' }
   }

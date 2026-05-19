@@ -1,0 +1,17 @@
+apiVersion: v2
+name: blackbeard
+description: Self-hosted Agent Management Platform
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - ai
+  - agents
+  - crewai
+  - llm
+  - management
+home: https://github.com/blackbeard
+sources:
+  - https://github.com/blackbeard
+maintainers:
+  - name: Blackbeard Team

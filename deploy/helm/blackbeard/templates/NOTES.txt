@@ -1,0 +1,26 @@
+Blackbeard has been deployed!
+
+{{- if .Values.ingress.enabled }}
+
+Access the application at:
+  http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.host }}
+
+{{- else }}
+
+To access the UI, run:
+  kubectl port-forward svc/{{ include "blackbeard.fullname" . }}-ui {{ .Values.ui.service.port }}:{{ .Values.ui.service.port }}
+
+To access the API, run:
+  kubectl port-forward svc/{{ include "blackbeard.fullname" . }}-api {{ .Values.api.service.port }}:{{ .Values.api.service.port }}
+
+Then open:
+  UI:  http://localhost:{{ .Values.ui.service.port }}
+  API: http://localhost:{{ .Values.api.service.port }}/api/v1/health
+
+{{- end }}
+
+To check the status of the deployment:
+  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+To view logs:
+  kubectl logs -l app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=api -f

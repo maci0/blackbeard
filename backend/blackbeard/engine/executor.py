@@ -22,6 +22,7 @@ __all__ = [
     "kickoff",
     "list_execution_events",
     "list_executions",
+    "record_hitl_response",
     "recover_stale_executions",
     "run_flow",
     "shutdown_executor",
@@ -1317,6 +1318,55 @@ async def list_execution_events(
         .limit(limit)
     )
     return list(result.scalars())
+
+
+async def record_hitl_response(
+    session: AsyncSession,
+    execution_id: UUID,
+    response: str,
+    feedback: str | None = None,
+) -> ExecutionEvent:
+    """Record a human-in-the-loop response as an execution event.
+
+    The response is stored as an ``hitl_response`` event that the execution
+    listener or CrewAI human_input callback can pick up. For MVP, the
+    frontend polls for ``hitl_request`` events and submits responses via
+    this function.
+    """
+    # Determine the next sequence number for this execution
+    result = await session.execute(
+        select(func.coalesce(func.max(ExecutionEvent.sequence), -1)).where(
+            ExecutionEvent.execution_id == execution_id
+        )
+    )
+    max_seq = result.scalar() or -1
+    next_seq = max_seq + 1
+
+    event_data: dict[str, Any] = {"response": response}
+    if feedback is not None:
+        event_data["feedback"] = feedback
+
+    event = ExecutionEvent(
+        execution_id=execution_id,
+        sequence=next_seq,
+        event_type="hitl_response",
+        timestamp=datetime.now(UTC),
+        data=event_data,
+    )
+    session.add(event)
+    await session.flush()
+
+    logger.info(
+        "HITL response recorded: execution_id=%s seq=%d",
+        execution_id,
+        next_seq,
+        extra={
+            "event": "hitl_response_recorded",
+            "execution_id": str(execution_id),
+            "sequence": next_seq,
+        },
+    )
+    return event
 
 
 async def cancel_execution(session: AsyncSession, execution_id: UUID) -> Execution | None:
