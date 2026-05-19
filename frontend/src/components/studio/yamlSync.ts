@@ -22,10 +22,21 @@ const NODE_SPEC_FIELDS: Record<string, readonly string[]> = {
     'output_file',
   ],
   tool: ['type', 'class_path', 'description', 'sandbox'],
+  pii: ['type', 'pii_entities', 'pii_action', 'backend', 'model'],
 }
 
 /** Internal fields that should not appear in YAML spec output. */
 const INTERNAL_DATA_KEYS = new Set(['name'])
+
+/** Maps node type to resource kind for serialization. */
+const NODE_KIND: Record<string, string> = {
+  pii: 'Guardrail',
+}
+
+/** Maps internal node data keys to YAML spec field names. */
+const FIELD_REMAP: Record<string, Record<string, string>> = {
+  pii: { entities: 'pii_entities', action: 'pii_action' },
+}
 
 /* ------------------------------------------------------------------ */
 /* Canvas -> YAML                                                      */
@@ -39,7 +50,8 @@ export function canvasToYaml(nodes: Node[]): string {
   for (const node of nodes) {
     const data = node.data
     const nodeType = node.type ?? 'unknown'
-    const kind = capitalize(nodeType)
+    const kind = NODE_KIND[nodeType] ?? capitalize(nodeType)
+    const remap = FIELD_REMAP[nodeType] ?? {}
 
     const rawName =
       (data['role'] as string | undefined) ?? (data['name'] as string | undefined) ?? node.id
@@ -49,16 +61,22 @@ export function canvasToYaml(nodes: Node[]): string {
     const spec: Record<string, unknown> = {}
 
     for (const f of fields) {
-      if (data[f] !== undefined && data[f] !== '' && data[f] !== null) {
-        spec[f] = data[f]
+      // Look up the source key: the spec field might be a remapped name
+      const sourceKey = Object.entries(remap).find(([, v]) => v === f)?.[0] ?? f
+      if (data[sourceKey] !== undefined && data[sourceKey] !== '' && data[sourceKey] !== null) {
+        spec[f] = data[sourceKey]
       }
     }
+
+    // Collect remapped source keys to exclude them from extra fields
+    const remapSourceKeys = new Set(Object.keys(remap))
 
     // Include any extra data fields not in the known list and not internal
     for (const [key, value] of Object.entries(data)) {
       if (
         !fields.includes(key) &&
         !INTERNAL_DATA_KEYS.has(key) &&
+        !remapSourceKeys.has(key) &&
         value !== undefined &&
         value !== '' &&
         value !== null
@@ -117,20 +135,39 @@ export function yamlToCanvas(
 
   const nodes: Node[] = []
   const edges: Edge[] = []
-  const kindCounts: Record<string, number> = { agent: 0, task: 0, tool: 0 }
+  const kindCounts: Record<string, number> = { agent: 0, task: 0, tool: 0, pii: 0 }
 
   for (const raw of docs) {
     if (!raw || typeof raw !== 'object') continue
     const doc = raw as ParsedDoc
 
-    const kind = doc.kind?.toLowerCase()
-    if (!kind || !['agent', 'task', 'tool'].includes(kind)) continue
+    let kind = doc.kind?.toLowerCase()
+    if (!kind) continue
+
+    // Map Guardrail with type=pii to the pii node type
+    const spec = doc.spec ?? {}
+    if (kind === 'guardrail' && spec['type'] === 'pii') {
+      kind = 'pii'
+    }
+
+    if (!['agent', 'task', 'tool', 'pii'].includes(kind)) continue
 
     const name = doc.metadata?.name ?? `${kind}-${crypto.randomUUID().slice(0, 8)}`
-    const spec = doc.spec ?? {}
 
-    // Build node data from spec
+    // Build node data from spec, remapping Guardrail fields to node data fields
     const data: Record<string, unknown> = { ...spec }
+    if (kind === 'pii') {
+      // Remap pii_entities -> entities, pii_action -> action
+      if (data['pii_entities'] !== undefined) {
+        data['entities'] = data['pii_entities']
+        delete data['pii_entities']
+      }
+      if (data['pii_action'] !== undefined) {
+        data['action'] = data['pii_action']
+        delete data['pii_action']
+      }
+      data['name'] = name
+    }
     if (kind === 'task' || kind === 'tool') {
       data['name'] = name
     }
@@ -139,7 +176,7 @@ export function yamlToCanvas(
     const count = kindCounts[kind] ?? 0
     kindCounts[kind] = count + 1
 
-    const xOffsets: Record<string, number> = { agent: 80, task: 360, tool: 640 }
+    const xOffsets: Record<string, number> = { agent: 80, task: 360, tool: 640, pii: 920 }
     const defaultPosition = {
       x: xOffsets[kind] ?? 80,
       y: 60 + count * 200,

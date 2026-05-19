@@ -17,6 +17,19 @@ const NODE_SPEC_FIELDS: Record<string, readonly string[]> = {
   ],
   tool: ['type', 'class_path', 'description', 'sandbox'],
   flowStep: ['type', 'crew', 'function_path', 'listen_to'],
+  pii: ['type', 'pii_entities', 'pii_action', 'backend', 'model'],
+}
+
+/** Maps node type to resource kind. Most types use capitalized node type,
+ *  but PII nodes map to the Guardrail resource kind. */
+const NODE_KIND: Record<string, string> = {
+  pii: 'Guardrail',
+}
+
+/** Maps internal node data keys to YAML spec field names for types that
+ *  differ between canvas representation and persisted resource spec. */
+const FIELD_REMAP: Record<string, Record<string, string>> = {
+  pii: { entities: 'pii_entities', action: 'pii_action' },
 }
 
 export function nodeToYaml(
@@ -24,16 +37,19 @@ export function nodeToYaml(
   nodeId: string,
   data: Record<string, unknown>,
 ): string {
-  const kind = capitalize(nodeType)
+  const kind = NODE_KIND[nodeType] ?? capitalize(nodeType)
   const rawName =
     (data['role'] as string | undefined) ?? (data['name'] as string | undefined) ?? nodeId
   const name = toResourceName(rawName)
 
   const fields = NODE_SPEC_FIELDS[nodeType] ?? []
+  const remap = FIELD_REMAP[nodeType] ?? {}
   const spec: Record<string, unknown> = {}
   for (const f of fields) {
-    if (data[f] !== undefined && data[f] !== '' && data[f] !== null) {
-      spec[f] = data[f]
+    // Look up the source key: the spec field might be a remapped name
+    const sourceKey = Object.entries(remap).find(([, v]) => v === f)?.[0] ?? f
+    if (data[sourceKey] !== undefined && data[sourceKey] !== '' && data[sourceKey] !== null) {
+      spec[f] = data[sourceKey]
     }
   }
 

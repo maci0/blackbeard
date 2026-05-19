@@ -422,14 +422,49 @@ function StudioInner() {
       const resourceNodes = currentNodes.filter(
         (n) => n.type === 'agent' || n.type === 'task' || n.type === 'tool',
       )
-      await Promise.all(
-        resourceNodes.map((node) => {
+
+      // Save PII nodes as Guardrail resources
+      const piiNodes = currentNodes.filter((n) => n.type === 'pii')
+
+      await Promise.all([
+        ...resourceNodes.map((node) => {
           const body = buildResourceBody(node, crewName)
           const plural =
             KIND_TO_PLURAL[capitalize(node.type ?? '')] ?? `${node.type ?? 'resource'}s`
           return api.post(`/api/v1/${plural}`, body)
         }),
-      )
+        ...piiNodes.map((node) => {
+          const data = node.data
+          const rawName = (data['name'] as string | undefined) ?? node.id
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { name: _unused, ...rest } = data
+          const spec: Record<string, unknown> = {
+            type: 'pii',
+            ...rest,
+          }
+          // Remap canvas data keys to Guardrail spec keys
+          if (spec['entities'] !== undefined) {
+            spec['pii_entities'] = spec['entities']
+            delete spec['entities']
+          }
+          if (spec['action'] !== undefined) {
+            spec['pii_action'] = spec['action']
+            delete spec['action']
+          }
+          const body = {
+            apiVersion: API_VERSION,
+            kind: 'Guardrail',
+            metadata: {
+              name: toResourceName(rawName),
+              labels: { crew: crewName },
+            },
+            spec,
+          }
+          return api.post('/api/v1/guardrails', body)
+        }),
+      ])
+
+      const totalSaved = resourceNodes.length + piiNodes.length
 
       if (isFlowMode) {
         // Save as a Flow resource
@@ -437,10 +472,7 @@ function StudioInner() {
         await api.post('/api/v1/flows', flowBody)
 
         markClean()
-        applyStatus(
-          'success',
-          `Saved ${resourceNodes.length} resource${resourceNodes.length !== 1 ? 's' : ''} + flow`,
-        )
+        applyStatus('success', `Saved ${totalSaved} resource${totalSaved !== 1 ? 's' : ''} + flow`)
       } else {
         // Synthesize and save the Crew resource
         const agentNodes = currentNodes.filter((n) => n.type === 'agent')
@@ -468,10 +500,7 @@ function StudioInner() {
         await api.post('/api/v1/crews', crewBody)
 
         markClean()
-        applyStatus(
-          'success',
-          `Saved ${resourceNodes.length} resource${resourceNodes.length !== 1 ? 's' : ''} + crew`,
-        )
+        applyStatus('success', `Saved ${totalSaved} resource${totalSaved !== 1 ? 's' : ''} + crew`)
       }
       return true
     } catch (err) {

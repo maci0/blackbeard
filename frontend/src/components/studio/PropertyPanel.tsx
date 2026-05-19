@@ -438,6 +438,79 @@ function FlowStepForm({
   )
 }
 
+const PII_ENTITIES = [
+  'PERSON',
+  'EMAIL_ADDRESS',
+  'PHONE_NUMBER',
+  'CREDIT_CARD',
+  'US_SSN',
+  'IP_ADDRESS',
+  'LOCATION',
+  'DATE_TIME',
+] as const
+
+function PIIForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  const entities = (data['entities'] as string[] | undefined) ?? []
+  const backend = str(data, 'backend') || 'default'
+
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Entities">
+        <div className="space-y-1">
+          {PII_ENTITIES.map((entity) => (
+            <CheckboxInput
+              key={entity}
+              label={entity.replace(/_/g, ' ')}
+              checked={entities.includes(entity)}
+              onChange={(checked) => {
+                const next = checked ? [...entities, entity] : entities.filter((e) => e !== entity)
+                onChange('entities', next)
+              }}
+            />
+          ))}
+        </div>
+      </FieldGroup>
+      <FieldGroup label="Action">
+        <SelectInput
+          value={str(data, 'action') || 'redact'}
+          onChange={(v) => onChange('action', v)}
+          options={[
+            { label: 'Redact', value: 'redact' },
+            { label: 'Reject', value: 'reject' },
+            { label: 'Warn', value: 'warn' },
+          ]}
+        />
+      </FieldGroup>
+      <FieldGroup label="Backend">
+        <SelectInput
+          value={backend}
+          onChange={(v) => onChange('backend', v)}
+          options={[
+            { label: 'Default', value: 'default' },
+            { label: 'Presidio NLP', value: 'presidio-nlp' },
+            { label: 'LiteLLM', value: 'litellm' },
+          ]}
+        />
+      </FieldGroup>
+      {backend === 'litellm' && (
+        <FieldGroup label="Model">
+          <TextInput
+            value={str(data, 'model')}
+            onChange={(v) => onChange('model', v)}
+            placeholder="gpt-4o-mini"
+          />
+        </FieldGroup>
+      )}
+    </div>
+  )
+}
+
 function CrewGroupForm({
   data,
   onChange,
@@ -463,6 +536,7 @@ const TYPE_META: Record<string, { label: string; accent: string; border: string 
   task: { label: 'Task', accent: 'bg-blue-500', border: 'border-blue-200' },
   tool: { label: 'Tool', accent: 'bg-emerald-500', border: 'border-emerald-200' },
   flowStep: { label: 'Flow Step', accent: 'bg-amber-500', border: 'border-amber-200' },
+  pii: { label: 'PII Redaction', accent: 'bg-rose-500', border: 'border-rose-200' },
   crewGroup: { label: 'Crew Group', accent: 'bg-slate-500', border: 'border-slate-200' },
 }
 
@@ -583,6 +657,8 @@ export default function PropertyPanel() {
             <ToolForm data={data} onChange={onChange} />
           ) : nodeType === 'flowStep' ? (
             <FlowStepForm data={data} onChange={onChange} />
+          ) : nodeType === 'pii' ? (
+            <PIIForm data={data} onChange={onChange} />
           ) : nodeType === 'crewGroup' ? (
             <CrewGroupForm data={data} onChange={onChange} />
           ) : (

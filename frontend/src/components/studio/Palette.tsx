@@ -1,5 +1,5 @@
 import type { DragEvent } from 'react'
-import { User, ListChecks, Wrench, Workflow } from 'lucide-react'
+import { User, ListChecks, Wrench, Workflow, ShieldCheck } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
 import { getDefaultNodeData } from './defaults'
 
@@ -64,6 +64,16 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-amber-700 dark:text-amber-300',
     borderColor:
       'border-amber-200 hover:border-amber-400 dark:border-amber-800 dark:hover:border-amber-600',
+  },
+  {
+    type: 'pii',
+    label: 'PII Filter',
+    icon: ShieldCheck,
+    headerBg: 'bg-gradient-to-r from-rose-600 to-red-500',
+    iconBg: 'bg-white/20',
+    textColor: 'text-rose-700 dark:text-rose-300',
+    borderColor:
+      'border-rose-200 hover:border-rose-400 dark:border-rose-800 dark:hover:border-rose-600',
   },
 ]
 

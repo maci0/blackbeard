@@ -25,6 +25,13 @@ export function getDefaultNodeData(type: string): Record<string, unknown> {
       return { name: 'New Tool', type: 'python', class_path: '', description: '', sandbox: 'none' }
     case 'flowStep':
       return { name: 'step-1', type: 'crew', crew: '', function_path: '', listen_to: [] }
+    case 'pii':
+      return {
+        type: 'pii',
+        entities: ['PERSON', 'EMAIL_ADDRESS', 'PHONE_NUMBER', 'CREDIT_CARD'],
+        action: 'redact',
+        backend: 'default',
+      }
     default:
       return { label: 'New Node' }
   }

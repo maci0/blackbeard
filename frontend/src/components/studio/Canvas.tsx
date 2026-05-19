@@ -12,7 +12,7 @@ import {
   type Connection,
   type Edge,
 } from '@xyflow/react'
-import { User, ListChecks, Wrench, Workflow, Sparkles } from 'lucide-react'
+import { User, ListChecks, Wrench, Workflow, ShieldCheck, Sparkles } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useStudioStore } from '@/stores/studioStore'
 import { DATAFLOW_MARKER_END, getDefaultNodeData } from './defaults'
@@ -20,6 +20,7 @@ import AgentNode from './nodes/AgentNode'
 import TaskNode from './nodes/TaskNode'
 import ToolNode from './nodes/ToolNode'
 import FlowStepNode from './nodes/FlowStepNode'
+import PIINode from './nodes/PIINode'
 import CrewGroupNode from './nodes/CrewGroupNode'
 import DataFlowEdge from './edges/DataFlowEdge'
 import ToolAssignEdge from './edges/ToolAssignEdge'
@@ -33,10 +34,11 @@ const NODE_TYPES: NodeTypes = {
   task: TaskNode,
   tool: ToolNode,
   flowStep: FlowStepNode,
+  pii: PIINode,
   crewGroup: CrewGroupNode,
 }
 
-const DROPPABLE_TYPES = new Set(['agent', 'task', 'tool', 'flowStep'])
+const DROPPABLE_TYPES = new Set(['agent', 'task', 'tool', 'flowStep', 'pii'])
 
 const EDGE_TYPES: EdgeTypes = {
   dataflow: DataFlowEdge,
@@ -65,6 +67,8 @@ function minimapNodeColor(node: Node): string {
       return '#10b981'
     case 'flowStep':
       return '#f59e0b'
+    case 'pii':
+      return '#f43f5e'
     case 'crewGroup':
       return '#94a3b8'
     default:
@@ -235,6 +239,9 @@ function EmptyCanvasOverlay({ onLoadExample }: { onLoadExample?: () => void }) {
           </div>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900">
             <Workflow className="h-5 w-5 text-amber-500 dark:text-amber-400" />
+          </div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-900">
+            <ShieldCheck className="h-5 w-5 text-rose-500 dark:text-rose-400" />
           </div>
         </div>
 
