@@ -13,7 +13,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 try:
-    from muninn import MuninnClient
+    import muninn  # noqa: F401 — presence check only
 
     HAS_MUNINN = True
 except ImportError:
@@ -59,16 +59,22 @@ class MuninnMemoryBackend:
         self._vault = vault or namespace
         self._token = token
 
-    def _make_client(self) -> MuninnClient:  # type: ignore[name-defined]
+    def _make_client(self) -> Any:
         """Create a new MuninnClient instance.
 
         Each call creates a fresh client to avoid holding open connections
         across the executor thread pool boundary.
+
+        Returns:
+            A ``MuninnClient`` instance (typed as ``Any`` because the
+            ``muninn`` package is an optional dependency).
         """
+        from muninn import MuninnClient as _MuninnClient
+
         kwargs: dict[str, Any] = {"url": self._url}
         if self._token:
             kwargs["token"] = self._token
-        return MuninnClient(**kwargs)  # type: ignore[no-any-return]
+        return _MuninnClient(**kwargs)
 
     async def store(
         self,
