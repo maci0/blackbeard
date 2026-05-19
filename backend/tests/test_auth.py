@@ -206,10 +206,11 @@ async def test_login_deactivated_user(client: AsyncClient):
         "/api/v1/auth/login",
         json=_login_payload(),
     )
-    assert resp.status_code == 403
-    detail = resp.json()["detail"].lower()
-    assert "deactivat" in detail or "disabled" in detail or "active" in detail, (
-        f"403 response should mention account deactivation, got: {detail!r}"
+    assert resp.status_code == 401
+    detail = resp.json()["detail"]
+    assert detail == "Invalid email or password", (
+        f"Deactivated account login must return same error as invalid credentials "
+        f"to prevent account state enumeration, got: {detail!r}"
     )
 
 

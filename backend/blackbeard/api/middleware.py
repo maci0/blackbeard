@@ -350,6 +350,7 @@ SECURITY_HEADERS = {
     "X-Permitted-Cross-Domain-Policies": "none",
     "X-DNS-Prefetch-Control": "off",
     "X-Robots-Tag": "noindex, nofollow",
+    "X-Download-Options": "noopen",
 }
 
 

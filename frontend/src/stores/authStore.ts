@@ -105,12 +105,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return
     }
     try {
-      const result = await api.post<{ access_token: string }>('/api/v1/auth/refresh', {
+      const result = await api.post<{
+        access_token: string
+        refresh_token?: string
+      }>('/api/v1/auth/refresh', {
         refresh_token: currentRefresh,
       })
       localStorage.setItem(TOKEN_KEY, result.access_token)
       api.setToken(result.access_token)
-      set({ token: result.access_token })
+      if (result.refresh_token) {
+        localStorage.setItem(REFRESH_KEY, result.refresh_token)
+        set({ token: result.access_token, refreshToken: result.refresh_token })
+      } else {
+        set({ token: result.access_token })
+      }
     } catch {
       get().logout()
     }

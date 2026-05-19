@@ -99,9 +99,10 @@ class AuthResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """Token refresh response."""
+    """Token refresh response (includes rotated refresh token)."""
 
     access_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
 
 
@@ -244,7 +245,11 @@ async def login(
             ip_address=ip,
         )
         await session.commit()
-        raise HTTPException(status_code=403, detail="Account is deactivated")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     user.last_login_at = datetime.now(UTC)
     await log_audit(
@@ -348,6 +353,7 @@ async def refresh(
         )
 
     access_token = create_access_token(str(user.id), user.email)
+    new_refresh_token = create_refresh_token(str(user.id))
     logger.info(
         "Token refreshed: %s",
         user.email,
@@ -357,7 +363,7 @@ async def refresh(
             "request_id": request_id_var.get("-"),
         },
     )
-    return TokenResponse(access_token=access_token)
+    return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)
 
 
 @router.get(

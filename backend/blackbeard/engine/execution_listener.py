@@ -198,6 +198,10 @@ def _deliver_webhooks_sync(
     POSTs the payload with HMAC-SHA256 signature. Failures are logged
     but never raised — webhook delivery must not block execution.
     """
+    from urllib.parse import urlparse
+
+    from blackbeard.resources.validator import is_internal_host
+
     webhooks = _get_cached_webhooks(db_url)
     if not webhooks:
         return
@@ -215,6 +219,24 @@ def _deliver_webhooks_sync(
 
     for webhook in webhooks:
         if webhook.events and event_type not in webhook.events:
+            continue
+        # Re-validate hostname at delivery time to mitigate TOCTOU SSRF
+        # (DNS rebinding between webhook creation and event delivery).
+        parsed = urlparse(webhook.url)
+        hostname = parsed.hostname or ""
+        if is_internal_host(hostname):
+            logger.warning(
+                "Webhook delivery blocked (SSRF): id=%s url=%s hostname=%s",
+                webhook.id,
+                webhook.url,
+                hostname,
+                extra={
+                    "event": "webhook_delivery_ssrf_blocked",
+                    "webhook_id": str(webhook.id),
+                    "webhook_url": webhook.url,
+                    "hostname": hostname,
+                },
+            )
             continue
         try:
             sig = hmac.new(
