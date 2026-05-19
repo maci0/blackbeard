@@ -494,6 +494,7 @@ async def list_group_members(
         .where(GroupMember.group_id == group_id)
         .options(defer(User.password_hash))
         .order_by(User.email)
+        .limit(1000)
     )
     users = list(result.scalars().all())
     return GroupMemberListResponse(

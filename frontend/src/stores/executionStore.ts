@@ -44,7 +44,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       const result = await api.get<{ items: Execution[]; total: number }>(executionsPath(crewName))
       set({ executions: result.items, loading: false })
     } catch (err) {
-      set({ error: (err as Error).message, loading: false })
+      const message = err instanceof Error ? err.message : 'Failed to fetch executions'
+      set({ error: message, loading: false })
     }
   },
 
@@ -61,7 +62,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       const execution = await api.get<Execution>(`/api/v1/executions/${id}`)
       set({ currentExecution: execution, loading: false })
     } catch (err) {
-      set({ error: (err as Error).message, loading: false })
+      const message = err instanceof Error ? err.message : 'Failed to fetch execution'
+      set({ error: message, loading: false })
     }
   },
 

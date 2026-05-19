@@ -90,13 +90,16 @@ async def list_audit_logs(
     if resource_id is not None:
         query = query.where(AuditLog.resource_id == resource_id)
 
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await session.execute(count_query)
-    total = total_result.scalar_one()
-
-    query = query.order_by(AuditLog.timestamp.desc()).limit(limit).offset(offset)
-    result = await session.execute(query)
+    data_query = query.order_by(AuditLog.timestamp.desc()).limit(limit).offset(offset)
+    result = await session.execute(data_query)
     logs = list(result.scalars().all())
+
+    if len(logs) < limit and (len(logs) > 0 or offset == 0):
+        total = offset + len(logs)
+    else:
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await session.execute(count_query)
+        total = total_result.scalar_one()
 
     return AuditLogListResponse(
         items=[

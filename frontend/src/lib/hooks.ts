@@ -41,7 +41,7 @@ export type ThemePreference = 'system' | 'dark' | 'light'
 
 function readStoredTheme(): ThemePreference {
   if (typeof window === 'undefined') return 'system'
-  const stored = localStorage.getItem('theme')
+  const stored = localStorage.getItem('blackbeard_theme')
   if (stored === 'dark' || stored === 'light') return stored
   return 'system'
 }
@@ -70,7 +70,7 @@ export function useDarkMode(): { isDark: boolean; preference: ThemePreference; c
     setPreference((prev) => {
       const next: ThemePreference =
         prev === 'system' ? 'dark' : prev === 'dark' ? 'light' : 'system'
-      localStorage.setItem('theme', next)
+      localStorage.setItem('blackbeard_theme', next)
       return next
     })
   }

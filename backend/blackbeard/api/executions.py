@@ -814,7 +814,7 @@ async def ws_execution(
 
     import jwt as pyjwt
 
-    from blackbeard.api.middleware import _EXPECTED_API_KEY
+    from blackbeard.api.middleware import _EXPECTED_API_KEY, _record_auth_failure
     from blackbeard.auth.jwt import decode_token
 
     token = websocket.query_params.get("token", "")
@@ -832,6 +832,8 @@ async def ws_execution(
         authenticated = True
 
     if not authenticated:
+        client_ip = websocket.client.host if websocket.client else "unknown"
+        _record_auth_failure(client_ip)
         await websocket.close(code=4401, reason="Authentication required")
         return
 

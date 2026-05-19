@@ -13,6 +13,7 @@ from blackbeard.resources.service import ResourceService
 from blackbeard.resources.validator import (
     ALLOWED_TOOL_MODULE_PREFIXES,
     BLOCKED_TOOL_SUBMODULES,
+    is_internal_host,
     validate_resource,
 )
 
@@ -26,6 +27,7 @@ __all__ = [
     "ValidationError",
     "build_adjacency",
     "detect_cycles",
+    "is_internal_host",
     "parse_ref",
     "validate_resource",
 ]

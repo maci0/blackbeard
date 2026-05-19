@@ -32,6 +32,7 @@ __all__ = [
 
 from crewai.crews.crew_output import CrewOutput
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import defer, load_only, selectinload
 
 from blackbeard.config import settings
@@ -1280,7 +1281,6 @@ async def list_executions(
                 Execution.prompt_tokens,
                 Execution.completion_tokens,
                 Execution.cost_usd,
-                Execution.litellm_key,
                 Execution.initiated_by,
                 Execution.principal_chain,
                 Execution.created_at,
@@ -1333,28 +1333,41 @@ async def record_hitl_response(
     frontend polls for ``hitl_request`` events and submits responses via
     this function.
     """
-    # Determine the next sequence number for this execution
-    result = await session.execute(
-        select(func.coalesce(func.max(ExecutionEvent.sequence), -1)).where(
-            ExecutionEvent.execution_id == execution_id
-        )
-    )
-    max_seq = result.scalar() or -1
-    next_seq = max_seq + 1
-
     event_data: dict[str, Any] = {"response": response}
     if feedback is not None:
         event_data["feedback"] = feedback
 
-    event = ExecutionEvent(
-        execution_id=execution_id,
-        sequence=next_seq,
-        event_type="hitl_response",
-        timestamp=datetime.now(UTC),
-        data=event_data,
-    )
-    session.add(event)
-    await session.flush()
+    # Retry loop: the execution listener thread may insert events concurrently,
+    # causing sequence collisions on the unique constraint.
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        result = await session.execute(
+            select(func.coalesce(func.max(ExecutionEvent.sequence), -1)).where(
+                ExecutionEvent.execution_id == execution_id
+            )
+        )
+        max_seq = result.scalar() or -1
+        next_seq = max_seq + 1
+
+        event = ExecutionEvent(
+            execution_id=execution_id,
+            sequence=next_seq,
+            event_type="hitl_response",
+            timestamp=datetime.now(UTC),
+            data=event_data,
+        )
+        try:
+            async with session.begin_nested():
+                session.add(event)
+                await session.flush()
+            break
+        except IntegrityError:
+            if attempt == max_attempts - 1:
+                raise
+    else:
+        raise ExecutionError(
+            f"Failed to record HITL response for execution {execution_id}"
+        )
 
     logger.info(
         "HITL response recorded: execution_id=%s seq=%d",

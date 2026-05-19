@@ -73,13 +73,13 @@ export default function Layout() {
   const [tourKey, setTourKey] = useState(0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem('sidebar_collapsed') === 'true',
+    () => localStorage.getItem('blackbeard_sidebar_collapsed') === 'true',
   )
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
-    localStorage.setItem('sidebar_collapsed', String(collapsed))
+    localStorage.setItem('blackbeard_sidebar_collapsed', String(collapsed))
   }, [collapsed])
 
   useEffect(() => {

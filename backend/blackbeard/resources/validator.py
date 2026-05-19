@@ -150,7 +150,7 @@ def _is_internal_ip(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool
     )
 
 
-def _is_internal_host(hostname: str) -> bool:
+def is_internal_host(hostname: str) -> bool:
     hostname_lower = hostname.lower().rstrip(".")
     if hostname_lower in _INTERNAL_HOSTNAMES:
         return True
@@ -233,7 +233,7 @@ def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError])
             errors.append(ValidationError(field_name, "URL must not contain embedded credentials."))
         else:
             hostname = parsed.hostname or ""
-            if _is_internal_host(hostname):
+            if is_internal_host(hostname):
                 errors.append(
                     ValidationError(
                         field_name,

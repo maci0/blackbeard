@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import secrets
 from typing import Any
+from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path
@@ -12,8 +13,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from blackbeard.config import settings
 from blackbeard.models.database import get_session
 from blackbeard.models.webhook import Webhook
+from blackbeard.resources.validator import is_internal_host
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +79,27 @@ async def create_webhook(
     session: AsyncSession = Depends(get_session),
 ) -> WebhookCreateResponse:
     """Register a new webhook for execution event delivery."""
+    parsed = urlparse(body.url)
+
+    if not settings.debug and parsed.scheme != "https":
+        raise HTTPException(
+            status_code=422,
+            detail="Webhook URL must use HTTPS in production.",
+        )
+
+    if parsed.username or parsed.password:
+        raise HTTPException(
+            status_code=422,
+            detail="Webhook URL must not contain embedded credentials.",
+        )
+
+    hostname = parsed.hostname or ""
+    if is_internal_host(hostname):
+        raise HTTPException(
+            status_code=422,
+            detail="Webhook URL must not point to internal or private network addresses.",
+        )
+
     signing_secret = body.secret or secrets.token_urlsafe(32)
 
     webhook = Webhook(
@@ -121,7 +145,7 @@ async def list_webhooks(
 ) -> list[dict[str, Any]]:
     """List all registered webhooks (secrets are not returned)."""
     result = await session.execute(
-        select(Webhook).order_by(Webhook.created_at.desc())
+        select(Webhook).order_by(Webhook.created_at.desc()).limit(1000)
     )
     webhooks = list(result.scalars())
     return [w.to_dict() for w in webhooks]

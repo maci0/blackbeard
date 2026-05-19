@@ -56,7 +56,8 @@ export const useResourceStore = create<ResourceState>((set, get) => ({
       set((state) => {
         const next = new Set(state.loadingKinds)
         next.delete(kindPlural)
-        return { error: (err as Error).message, loadingKinds: next, loading: next.size > 0 }
+        const message = err instanceof Error ? err.message : 'Failed to fetch resources'
+        return { error: message, loadingKinds: next, loading: next.size > 0 }
       })
     }
   },

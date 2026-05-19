@@ -20,7 +20,7 @@ Targeted areas:
   - Loader: output_file length > 255 rejected
   - _validate_tool_extra: command substitution via backtick
   - _validate_tool_extra: $() command substitution
-  - _is_internal_host: shared address space (100.64.x.x)
+  - is_internal_host: shared address space (100.64.x.x)
   - ModuleCache: put same key doesn't increase size
 """
 
@@ -55,10 +55,10 @@ from blackbeard.resources.exceptions import (
 from blackbeard.resources.refs import _MAX_REF_WALK_DEPTH, RefInfo, extract_refs
 from blackbeard.resources.service import _parse_kind
 from blackbeard.resources.validator import (
-    _is_internal_host,
     _is_path_traversal,
     _validate_tool_extra,
     _validate_url_ssrf,
+    is_internal_host,
     validate_resource,
 )
 from tests.conftest import (
@@ -510,19 +510,19 @@ def test_tool_env_blocks_dollar_paren_command_substitution():
 
 
 # ---------------------------------------------------------------------------
-# _is_internal_host: shared address space
+# is_internal_host: shared address space
 # ---------------------------------------------------------------------------
 
 
-def test_is_internal_host_shared_address_space():
+def testis_internal_host_shared_address_space():
     """100.64.0.0/10 (shared address space) should be detected as internal."""
-    assert _is_internal_host("100.64.0.1") is True
-    assert _is_internal_host("100.127.255.254") is True
+    assert is_internal_host("100.64.0.1") is True
+    assert is_internal_host("100.127.255.254") is True
 
 
-def test_is_internal_host_just_outside_shared():
+def testis_internal_host_just_outside_shared():
     """100.128.0.1 is outside 100.64.0.0/10 shared address space — public IP."""
-    assert _is_internal_host("100.128.0.1") is False
+    assert is_internal_host("100.128.0.1") is False
 
 
 # ---------------------------------------------------------------------------
@@ -699,18 +699,18 @@ def test_build_knowledge_source_string_type():
 
 
 # ---------------------------------------------------------------------------
-# _is_internal_host: IPv6 mapped IPv4
+# is_internal_host: IPv6 mapped IPv4
 # ---------------------------------------------------------------------------
 
 
-def test_is_internal_host_ipv6_mapped_ipv4():
+def testis_internal_host_ipv6_mapped_ipv4():
     """IPv6-mapped IPv4 loopback (::ffff:127.0.0.1) should be internal."""
-    assert _is_internal_host("::ffff:127.0.0.1") is True
+    assert is_internal_host("::ffff:127.0.0.1") is True
 
 
-def test_is_internal_host_ipv6_mapped_private():
+def testis_internal_host_ipv6_mapped_private():
     """IPv6-mapped private IP should be internal."""
-    assert _is_internal_host("::ffff:10.0.0.1") is True
+    assert is_internal_host("::ffff:10.0.0.1") is True
 
 
 # ---------------------------------------------------------------------------

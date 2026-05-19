@@ -552,62 +552,62 @@ def test_validation_error_to_dict():
 
 
 # ---------------------------------------------------------------------------
-# _is_internal_host edge cases (SSRF bypass prevention)
+# is_internal_host edge cases (SSRF bypass prevention)
 # ---------------------------------------------------------------------------
 
 
-from blackbeard.resources.validator import _is_internal_host
+from blackbeard.resources.validator import is_internal_host
 
 
-def test_is_internal_host_localhost():
-    assert _is_internal_host("localhost") is True
+def testis_internal_host_localhost():
+    assert is_internal_host("localhost") is True
 
 
-def test_is_internal_host_loopback_ip():
-    assert _is_internal_host("127.0.0.1") is True
+def testis_internal_host_loopback_ip():
+    assert is_internal_host("127.0.0.1") is True
 
 
-def test_is_internal_host_metadata_google():
-    assert _is_internal_host("metadata.google.internal") is True
+def testis_internal_host_metadata_google():
+    assert is_internal_host("metadata.google.internal") is True
 
 
-def test_is_internal_host_k8s_svc():
-    assert _is_internal_host("service.default.svc.cluster.local") is True
+def testis_internal_host_k8s_svc():
+    assert is_internal_host("service.default.svc.cluster.local") is True
 
 
-def test_is_internal_host_trailing_dot():
+def testis_internal_host_trailing_dot():
     """Trailing dot normalization should still detect internal hosts."""
-    assert _is_internal_host("localhost.") is True
+    assert is_internal_host("localhost.") is True
 
 
-def test_is_internal_host_case_insensitive():
+def testis_internal_host_case_insensitive():
     """SSRF check should be case-insensitive."""
-    assert _is_internal_host("LOCALHOST") is True
-    assert _is_internal_host("Metadata.Google.Internal") is True
+    assert is_internal_host("LOCALHOST") is True
+    assert is_internal_host("Metadata.Google.Internal") is True
 
 
-def test_is_internal_host_external_ok():
-    assert _is_internal_host("api.openai.com") is False
+def testis_internal_host_external_ok():
+    assert is_internal_host("api.openai.com") is False
 
 
-def test_is_internal_host_private_10():
-    assert _is_internal_host("10.0.0.1") is True
+def testis_internal_host_private_10():
+    assert is_internal_host("10.0.0.1") is True
 
 
-def test_is_internal_host_private_172():
-    assert _is_internal_host("172.16.0.1") is True
+def testis_internal_host_private_172():
+    assert is_internal_host("172.16.0.1") is True
 
 
-def test_is_internal_host_private_192():
-    assert _is_internal_host("192.168.1.1") is True
+def testis_internal_host_private_192():
+    assert is_internal_host("192.168.1.1") is True
 
 
-def test_is_internal_host_link_local():
-    assert _is_internal_host("169.254.169.254") is True
+def testis_internal_host_link_local():
+    assert is_internal_host("169.254.169.254") is True
 
 
-def test_is_internal_host_ipv6_loopback():
-    assert _is_internal_host("::1") is True
+def testis_internal_host_ipv6_loopback():
+    assert is_internal_host("::1") is True
 
 
 # ---------------------------------------------------------------------------

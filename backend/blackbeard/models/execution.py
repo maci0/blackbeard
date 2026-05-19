@@ -150,6 +150,7 @@ class Execution(Base):
         Index("ix_execution_ns_status_created", "crew_namespace", "status", created_at.desc()),
         Index("ix_execution_status_created", "status", "created_at"),
         Index("ix_execution_created_at", "created_at"),
+        Index("ix_execution_initiated_by", "initiated_by"),
         CheckConstraint("total_tokens >= 0", name="ck_execution_total_tokens_nonneg"),
         CheckConstraint("prompt_tokens >= 0", name="ck_execution_prompt_tokens_nonneg"),
         CheckConstraint("completion_tokens >= 0", name="ck_execution_completion_tokens_nonneg"),
