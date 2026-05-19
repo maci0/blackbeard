@@ -775,7 +775,10 @@ def test_llm_connection_blocks_exact_env_var():
     errors = []
     spec = {"provider": "openai", "model": "gpt-4o", "api_key_env": "OPENAI_API_KEY"}
     _validate_llm_connection_extra(spec, errors)
-    assert any("internal" in e.message.lower() for e in errors)
+    assert len(errors) >= 1, "Expected at least one validation error"
+    assert any(
+        "api_key_env" in e.field and "internal" in e.message.lower() for e in errors
+    ), f"Expected error on api_key_env field, got: {errors}"
 
 
 def test_llm_connection_allows_custom_env_var():

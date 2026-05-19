@@ -56,6 +56,12 @@ def test_fuzz_validate_resource_known_kinds(kind, spec):
     assert isinstance(errors, list)
     # refs is either a list or None
     assert _refs is None or isinstance(_refs, list)
+    # Every error must have field and message attributes
+    for e in errors:
+        assert hasattr(e, "field"), f"Error missing 'field': {e!r}"
+        assert hasattr(e, "message"), f"Error missing 'message': {e!r}"
+        assert isinstance(e.field, str)
+        assert isinstance(e.message, str)
 
 
 # ---------------------------------------------------------------------------

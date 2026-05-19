@@ -9,3 +9,8 @@ data:
   litellm-config.yaml: |
     {{- .Values.litellm.config | toYaml | nindent 4 }}
   {{- end }}
+  {{- if .Values.postgres.enabled }}
+  create-databases.sql: |
+    CREATE DATABASE litellm;
+    CREATE DATABASE langfuse;
+  {{- end }}

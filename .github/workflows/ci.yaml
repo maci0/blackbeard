@@ -92,7 +92,7 @@ jobs:
         run: uv run blackbeard --help
 
       - name: Verify offline validation
-        run: uv run blackbeard validate -f ../../examples/research-crew/
+        run: uv run blackbeard validate -f ../examples/research-crew/
 
   sdk-python:
     runs-on: ubuntu-latest
@@ -136,8 +136,16 @@ jobs:
         with:
           bun-version: "1.2.17"
 
+      - name: Cache Bun dependencies
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('sdks/typescript/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Type check
         run: bunx tsc --noEmit
@@ -150,8 +158,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Helm
-        run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: "v3.17.3"
 
       - name: Lint Helm chart
         run: helm lint deploy/helm/blackbeard/

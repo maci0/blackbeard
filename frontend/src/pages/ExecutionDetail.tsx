@@ -11,7 +11,7 @@ import {
   Terminal,
   BarChart3,
 } from 'lucide-react'
-import { useDocumentTitle, usePolling } from '@/lib/hooks'
+import { useDocumentTitle, usePolling } from '@/hooks'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { useShallow } from 'zustand/react/shallow'
 import { useExecutionStore } from '@/stores/executionStore'

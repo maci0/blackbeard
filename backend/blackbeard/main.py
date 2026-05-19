@@ -39,6 +39,7 @@ from blackbeard.api.users import router as users_router
 from blackbeard.api.webhooks import router as webhooks_router
 from blackbeard.config import settings
 from blackbeard.engine import recover_stale_executions, shutdown_executor
+from blackbeard.engine.execution_listener import shutdown_otel, shutdown_webhook_executor
 from blackbeard.http_client import close_all_clients
 from blackbeard.logging_config import configure_logging
 from blackbeard.models.database import engine
@@ -196,6 +197,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     try:
         shutdown_executor()
         logger.info("Executor shut down", extra={"event": "executor_shutdown"})
+        shutdown_webhook_executor()
+        shutdown_otel()
     finally:
         try:
             await shutdown_health_clients()

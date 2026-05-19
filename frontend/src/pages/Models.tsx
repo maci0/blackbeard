@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useDocumentTitle } from '@/lib/hooks'
+import { useShallow } from 'zustand/react/shallow'
+import { useDocumentTitle } from '@/hooks'
 import { API_VERSION } from '@/lib/kinds'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
@@ -123,7 +124,7 @@ function ModelCard({
               onDelete()
             }}
             onKeyDown={(e) => e.stopPropagation()}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-muted-foreground opacity-60 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
             title={`Delete ${resource.metadata.name}`}
             aria-label={`Delete connection ${resource.metadata.name}`}
           >
@@ -400,7 +401,7 @@ function AddModelDialog({
                 aria-busy={submitting}
                 className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {submitting && <Spinner size="sm" className="text-white" />}
+                {submitting && <Spinner size="sm" className="text-current" />}
                 Add connection
               </button>
             </div>
@@ -419,12 +420,17 @@ const EMPTY_MODELS: Resource[] = []
 
 export default function Models() {
   const navigate = useNavigate()
-  const models = useResourceStore((s) => s.resources['llm-connections'] ?? EMPTY_MODELS)
-  const loading = useResourceStore((s) => s.loading)
-  const error = useResourceStore((s) => s.error)
-  const fetchResources = useResourceStore((s) => s.fetchResources)
-  const createResource = useResourceStore((s) => s.createResource)
-  const deleteResource = useResourceStore((s) => s.deleteResource)
+  const { models, loading, error, fetchResources, createResource, deleteResource } =
+    useResourceStore(
+      useShallow((s) => ({
+        models: s.resources['llm-connections'] ?? EMPTY_MODELS,
+        loading: s.loading,
+        error: s.error,
+        fetchResources: s.fetchResources,
+        createResource: s.createResource,
+        deleteResource: s.deleteResource,
+      })),
+    )
 
   const toasts = useToastStore()
 

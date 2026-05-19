@@ -1,6 +1,6 @@
-"""Canonical resource kind registry — single source of truth.
+"""Resource kind registry — copied from backend/blackbeard/kinds.py.
 
-All kind-to-plural mappings should import from here.
+Keep in sync with the backend's canonical registry.
 """
 
 from __future__ import annotations

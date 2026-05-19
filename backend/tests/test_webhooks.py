@@ -18,11 +18,22 @@ import uuid
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from blackbeard.engine.execution_listener import (
     _deliver_webhooks_sync,
     _get_webhook_executor,
+    invalidate_webhook_cache,
     shutdown_webhook_executor,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_webhook_cache():
+    """Ensure each test starts with a clean webhook cache."""
+    invalidate_webhook_cache()
+    yield
+    invalidate_webhook_cache()
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -77,7 +88,7 @@ def test_webhook_hmac_signature_correct():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.http_client.get_sync_client",
+            "blackbeard.engine.execution_listener._get_sync_client",
             return_value=mock_client,
         ),
     ):
@@ -111,6 +122,17 @@ def test_webhook_hmac_signature_correct():
     assert headers["Content-Type"] == "application/json"
 
 
+def test_webhook_hmac_wrong_secret_produces_different_signature():
+    """HMAC signature with wrong secret must differ — tampering must be detectable."""
+    payload = json.dumps(
+        {"event_type": "execution_completed", "execution_id": "exec-1", "data": {}},
+        default=str,
+    )
+    sig_correct = hmac.new(b"real-secret", payload.encode(), hashlib.sha256).hexdigest()
+    sig_wrong = hmac.new(b"wrong-secret", payload.encode(), hashlib.sha256).hexdigest()
+    assert sig_correct != sig_wrong, "Different secrets must produce different signatures"
+
+
 # ---------------------------------------------------------------------------
 # Tests -- Event filtering
 # ---------------------------------------------------------------------------
@@ -139,7 +161,7 @@ def test_webhook_event_filter_matches():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.http_client.get_sync_client",
+            "blackbeard.engine.execution_listener._get_sync_client",
             return_value=mock_client,
         ),
     ):
@@ -173,7 +195,7 @@ def test_webhook_event_filter_no_match():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.http_client.get_sync_client",
+            "blackbeard.engine.execution_listener._get_sync_client",
             return_value=mock_client,
         ),
     ):
@@ -211,7 +233,7 @@ def test_webhook_empty_events_receives_all():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.http_client.get_sync_client",
+            "blackbeard.engine.execution_listener._get_sync_client",
             return_value=mock_client,
         ),
     ):
@@ -253,7 +275,7 @@ def test_webhook_delivery_failure_doesnt_crash():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.http_client.get_sync_client",
+            "blackbeard.engine.execution_listener._get_sync_client",
             return_value=mock_client,
         ),
     ):
@@ -290,7 +312,7 @@ def test_webhook_delivery_exception_doesnt_crash():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.http_client.get_sync_client",
+            "blackbeard.engine.execution_listener._get_sync_client",
             return_value=mock_client,
         ),
     ):
@@ -348,7 +370,7 @@ def test_webhook_no_webhooks_is_noop():
             return_value=mock_factory,
         ),
         patch(
-            "blackbeard.http_client.get_sync_client",
+            "blackbeard.engine.execution_listener._get_sync_client",
             return_value=mock_client,
         ),
     ):
@@ -378,6 +400,9 @@ def test_shutdown_webhook_executor_when_none():
         listener_mod._webhook_executor = None
         # Should NOT raise
         shutdown_webhook_executor()
+        assert listener_mod._webhook_executor is None, (
+            "shutdown should leave _webhook_executor as None when it was already None"
+        )
     finally:
         listener_mod._webhook_executor = original
 

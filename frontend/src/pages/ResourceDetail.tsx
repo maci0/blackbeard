@@ -5,11 +5,12 @@ import { Trash2, Pencil, Save, X, AlertTriangle, Play, Info } from 'lucide-react
 import { modKey } from '@/lib/platform'
 
 import { CodeBlock } from '@/components/ui/CodeBlock'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { useResourceStore } from '@/stores/resourceStore'
 import type { Resource } from '@/lib/types'
 import { api } from '@/api/client'
 import { cn } from '@/lib/utils'
-import { useDocumentTitle } from '@/lib/hooks'
+import { useDocumentTitle } from '@/hooks'
 import { resourceToYaml, parseYaml } from '@/lib/yaml'
 import { formatDate } from '@/lib/formatters'
 import { KindBadge } from '@/components/ui/KindBadge'
@@ -400,7 +401,7 @@ export default function ResourceDetail() {
                   className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? (
-                    <Spinner size="sm" className="text-white" />
+                    <Spinner size="sm" className="text-current" />
                   ) : (
                     <Save className="h-3.5 w-3.5" />
                   )}
@@ -583,19 +584,13 @@ export default function ResourceDetail() {
         loading={deleting}
       />
       {deleteError && (
-        <div
-          role="alert"
-          className="fixed bottom-6 left-1/2 z-50 flex w-full max-w-sm -translate-x-1/2 items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-lg"
-        >
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          {deleteError}
-          <button
-            onClick={() => setDeleteError(null)}
-            className="ml-auto flex h-[44px] w-[44px] items-center justify-center rounded transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Dismiss error"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+        <div className="mx-auto max-w-4xl px-6 pb-4">
+          <ErrorAlert
+            message={deleteError}
+            actionLabel="Dismiss"
+            onAction={() => setDeleteError(null)}
+            ariaLabel="Dismiss delete error"
+          />
         </div>
       )}
 

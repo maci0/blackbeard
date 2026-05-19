@@ -4,19 +4,24 @@ from __future__ import annotations
 
 import logging
 import secrets
-from typing import Any
+from datetime import datetime
 from urllib.parse import urlparse
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
+from blackbeard.audit import audit_from_request, log_audit
+from blackbeard.auth.dependencies import get_current_user
 from blackbeard.config import settings
+from blackbeard.engine.execution_listener import invalidate_webhook_cache
 from blackbeard.models.database import get_session
+from blackbeard.models.user import User
 from blackbeard.models.webhook import Webhook
-from blackbeard.resources.validator import is_internal_host
+from blackbeard.resources import check_url_ssrf
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +61,7 @@ class WebhookResponse(BaseModel):
     url: str
     events: list[str]
     active: bool
-    created_at: str | None = None
+    created_at: datetime | None = None
 
 
 class WebhookCreateResponse(WebhookResponse):
@@ -75,8 +80,11 @@ class WebhookCreateResponse(WebhookResponse):
     },
 )
 async def create_webhook(
+    request: Request,
+    response: Response,
     body: WebhookCreateRequest = Body(...),
     session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_current_user),
 ) -> WebhookCreateResponse:
     """Register a new webhook for execution event delivery."""
     parsed = urlparse(body.url)
@@ -93,12 +101,9 @@ async def create_webhook(
             detail="Webhook URL must not contain embedded credentials.",
         )
 
-    hostname = parsed.hostname or ""
-    if is_internal_host(hostname):
-        raise HTTPException(
-            status_code=422,
-            detail="Webhook URL must not point to internal or private network addresses.",
-        )
+    ssrf_error = check_url_ssrf(body.url)
+    if ssrf_error:
+        raise HTTPException(status_code=422, detail=ssrf_error)
 
     signing_secret = body.secret or secrets.token_urlsafe(32)
 
@@ -123,7 +128,17 @@ async def create_webhook(
             "event_types": webhook.events,
         },
     )
+    await log_audit(
+        session,
+        action="webhook_created",
+        resource_type="Webhook",
+        resource_id=str(webhook.id),
+        detail={"url": webhook.url, "events": webhook.events},
+        **audit_from_request(request, user),
+    )
     await session.commit()
+    invalidate_webhook_cache()
+    response.headers["Location"] = f"/api/v1/webhooks/{webhook.id}"
 
     return WebhookCreateResponse(
         id=str(webhook.id),
@@ -131,7 +146,7 @@ async def create_webhook(
         events=webhook.events,
         active=webhook.active,
         secret=signing_secret,
-        created_at=webhook.created_at.isoformat() if webhook.created_at else None,
+        created_at=webhook.created_at,
     )
 
 
@@ -142,13 +157,25 @@ async def create_webhook(
 )
 async def list_webhooks(
     session: AsyncSession = Depends(get_session),
-) -> list[dict[str, Any]]:
+) -> list[WebhookResponse]:
     """List all registered webhooks (secrets are not returned)."""
     result = await session.execute(
-        select(Webhook).order_by(Webhook.created_at.desc()).limit(1000)
+        select(Webhook)
+        .options(defer(Webhook.secret))
+        .order_by(Webhook.created_at.desc())
+        .limit(1000)
     )
     webhooks = list(result.scalars())
-    return [w.to_dict() for w in webhooks]
+    return [
+        WebhookResponse(
+            id=str(w.id),
+            url=w.url,
+            events=w.events,
+            active=w.active,
+            created_at=w.created_at,
+        )
+        for w in webhooks
+    ]
 
 
 @router.delete(
@@ -160,19 +187,30 @@ async def list_webhooks(
     },
 )
 async def delete_webhook(
+    request: Request,
     webhook_id: UUID = Path(..., description="Webhook UUID"),
     session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_current_user),
 ) -> None:
     """Remove a registered webhook."""
     result = await session.execute(
-        select(Webhook).where(Webhook.id == webhook_id)
+        select(Webhook).where(Webhook.id == webhook_id).options(defer(Webhook.secret))
     )
     webhook = result.scalar_one_or_none()
     if webhook is None:
         raise HTTPException(status_code=404, detail=f"Webhook '{webhook_id}' not found")
 
     await session.delete(webhook)
+    await log_audit(
+        session,
+        action="webhook_deleted",
+        resource_type="Webhook",
+        resource_id=str(webhook_id),
+        detail={"url": webhook.url},
+        **audit_from_request(request, user),
+    )
     await session.commit()
+    invalidate_webhook_cache()
 
     logger.info(
         "Webhook deleted: id=%s url=%s",

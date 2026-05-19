@@ -514,13 +514,13 @@ def test_tool_env_blocks_dollar_paren_command_substitution():
 # ---------------------------------------------------------------------------
 
 
-def testis_internal_host_shared_address_space():
+def test_is_internal_host_shared_address_space():
     """100.64.0.0/10 (shared address space) should be detected as internal."""
     assert is_internal_host("100.64.0.1") is True
     assert is_internal_host("100.127.255.254") is True
 
 
-def testis_internal_host_just_outside_shared():
+def test_is_internal_host_just_outside_shared():
     """100.128.0.1 is outside 100.64.0.0/10 shared address space — public IP."""
     assert is_internal_host("100.128.0.1") is False
 
@@ -703,12 +703,12 @@ def test_build_knowledge_source_string_type():
 # ---------------------------------------------------------------------------
 
 
-def testis_internal_host_ipv6_mapped_ipv4():
+def test_is_internal_host_ipv6_mapped_ipv4():
     """IPv6-mapped IPv4 loopback (::ffff:127.0.0.1) should be internal."""
     assert is_internal_host("::ffff:127.0.0.1") is True
 
 
-def testis_internal_host_ipv6_mapped_private():
+def test_is_internal_host_ipv6_mapped_private():
     """IPv6-mapped private IP should be internal."""
     assert is_internal_host("::ffff:10.0.0.1") is True
 

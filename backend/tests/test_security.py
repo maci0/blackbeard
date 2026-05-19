@@ -117,6 +117,7 @@ async def test_openapi_json_no_auth(client):
 
 async def test_security_headers_present(client):
     """Every response should include all hardened security headers."""
+    assert len(SECURITY_HEADERS) > 0, "SECURITY_HEADERS must not be empty"
     response = await client.get("/api/v1/agents", headers=API_KEY_HEADER)
     for header_name, expected_value in SECURITY_HEADERS.items():
         actual = response.headers.get(header_name)
@@ -144,6 +145,7 @@ async def test_request_id_returned(client):
     request_id = response.headers.get("X-Request-Id")
     assert request_id is not None
     assert len(request_id) > 0
+    assert len(request_id) <= 64, "Request ID should not exceed max length"
 
 
 async def test_client_request_id_echoed(client):

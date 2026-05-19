@@ -33,11 +33,12 @@ describe('fuzz: ApiError', () => {
     )
   })
 
-  it('preserves detail of any type', () => {
+  it('preserves detail of any type and survives toString()', () => {
     fc.assert(
       fc.property(fc.anything(), (detail) => {
         const err = new ApiError('test', 500, detail)
         expect(err.detail).toBe(detail)
+        expect(() => String(err)).not.toThrow()
       }),
       { numRuns: NUM_RUNS },
     )

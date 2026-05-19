@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import NoReturn
+from typing import Any, NoReturn
 
 import click
 import httpx
@@ -119,22 +119,6 @@ def require_auth(ctx: click.Context) -> dict[str, str]:
     raise SystemExit(2)
 
 
-def auth_headers(ctx: click.Context) -> dict[str, str] | None:
-    """Like require_auth but returns None instead of exiting."""
-    from blackbeard_cli.credentials import get_valid_token
-
-    api_key = ctx.obj.get("api_key")
-    if api_key:
-        return {"X-API-Key": api_key}
-
-    server = ctx.obj["server"]
-    timeout = ctx.obj.get("timeout", 30.0)
-    token = get_valid_token(server, timeout)
-    if token:
-        return {"Authorization": f"Bearer {token}"}
-
-    return None
-
 
 def validate_name(name: str) -> None:
     """Exit with code 2 if name doesn't match resource naming rules."""
@@ -167,6 +151,34 @@ def warn_unused_interval(
             f"[yellow]Warning:[/] --interval/-i has no effect without {watch_flag}."
             f" Try: [bold]{cmd_hint} {watch_short} -i {interval}[/]"
         )
+
+
+def parse_key_value_inputs(items: tuple[str, ...], flag_name: str = "--input") -> dict[str, Any]:
+    """Parse KEY=VALUE pairs from a repeatable CLI option.
+
+    Values are parsed as JSON when valid, otherwise kept as strings.
+    """
+    import json as _json
+
+    result: dict[str, Any] = {}
+    for item in items:
+        if "=" not in item:
+            console.print(
+                f"[red bold]Error:[/] Invalid {flag_name}: expected KEY=VALUE, got: {item!r}"
+            )
+            console.print(f'[dim]Example: {flag_name} topic="AI agents"[/]')
+            raise SystemExit(2)
+        key, _, value = item.partition("=")
+        if not key:
+            console.print(
+                f"[red bold]Error:[/] Invalid {flag_name}: key cannot be empty in {item!r}"
+            )
+            raise SystemExit(2)
+        try:
+            result[key] = _json.loads(value)
+        except (ValueError, _json.JSONDecodeError):
+            result[key] = value
+    return result
 
 
 def make_client(ctx: click.Context) -> httpx.Client:

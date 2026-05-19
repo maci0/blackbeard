@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Play, ChevronRight, RefreshCw } from 'lucide-react'
-import { useDocumentTitle, usePolling } from '@/lib/hooks'
+import { useDocumentTitle, usePolling } from '@/hooks'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { useShallow } from 'zustand/react/shallow'
 import { useExecutionStore } from '@/stores/executionStore'

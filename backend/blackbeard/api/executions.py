@@ -47,12 +47,15 @@ from blackbeard.models.execution_schemas import (
     ExecutionListResponse,
     ExecutionResponse,
     HITLResponseRequest,
+    HITLResponseResult,
     KickoffRequest,
     TestRequest,
     TrainRequest,
 )
 
 logger = logging.getLogger(__name__)
+
+_MAX_STREAM_POLLS = 400  # ~32 min with progressive backoff (2s→3s→5s)
 
 router = APIRouter(tags=["executions"])
 
@@ -514,6 +517,7 @@ async def list_execution_events(
 
 @router.post(
     "/executions/{execution_id}/respond",
+    response_model=HITLResponseResult,
     responses={
         200: {"description": "HITL response recorded"},
         404: {"description": "Execution not found"},
@@ -526,7 +530,7 @@ async def respond_to_execution(
     body: HITLResponseRequest = Body(...),
     session: AsyncSession = Depends(get_session),
     user: User | None = Depends(get_current_user),
-) -> dict[str, str]:
+) -> HITLResponseResult:
     """Respond to a human-in-the-loop prompt during execution.
 
     Records the response as an execution event so the execution listener
@@ -559,7 +563,7 @@ async def respond_to_execution(
     )
     await session.commit()
 
-    return {"status": "recorded", "execution_id": str(execution_id)}
+    return HITLResponseResult(status="recorded", execution_id=str(execution_id))
 
 
 @router.patch(
@@ -584,7 +588,7 @@ async def cancel_execution(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ExecutionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    if not execution:
+    if execution is None:
         raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
     await log_audit(
         session,
@@ -610,31 +614,12 @@ async def stream_execution(
     execution_id: UUID = Path(..., description="Execution UUID"),
 ) -> EventSourceResponse:
     """SSE stream of execution status events."""
-    if sse_state.semaphore.locked():
-        logger.warning(
-            "SSE stream rejected: max concurrent streams reached (%d/%d)",
-            sse_state.MAX_CONCURRENT_SSE,
-            sse_state.MAX_CONCURRENT_SSE,
-            extra={
-                "event": "sse_stream_rejected",
-                "execution_id": str(execution_id),
-                "active_streams": sse_state.MAX_CONCURRENT_SSE,
-                "max_concurrent_sse": sse_state.MAX_CONCURRENT_SSE,
-            },
-        )
-        raise HTTPException(
-            status_code=429,
-            detail="Too many concurrent SSE streams",
-            headers={"Retry-After": "5"},
-        )
-
     # Lightweight status-only query to avoid loading full execution before SSE starts
     async with async_session() as check_session:
         check = await _executor_mod.get_execution_status(check_session, execution_id)
     if check is None:
         raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
 
-    max_polls = 400  # ~32 min with progressive backoff (2s→3s→5s)
     logger.info(
         "SSE stream opened: execution_id=%s active=%d/%d",
         execution_id,
@@ -650,8 +635,6 @@ async def stream_execution(
 
     async def event_generator() -> AsyncGenerator[dict[str, str]]:
         # Non-blocking acquire: fail fast if all SSE slots are taken.
-        # The locked() check in the handler is a fast-path optimization, but
-        # between that check and this acquire, other streams can start (TOCTOU).
         acquired = False
         try:
             await asyncio.wait_for(sse_state.semaphore.acquire(), timeout=0)
@@ -667,7 +650,7 @@ async def stream_execution(
         polls = 0
         try:
             try:
-                while polls < max_polls:
+                while polls < _MAX_STREAM_POLLS:
                     polls += 1
                     async with async_session() as session:
                         if last_status is None:
@@ -834,6 +817,16 @@ async def ws_execution(
     if not authenticated:
         client_ip = websocket.client.host if websocket.client else "unknown"
         _record_auth_failure(client_ip)
+        logger.warning(
+            "WebSocket auth failed: execution_id=%s from %s",
+            execution_id,
+            client_ip,
+            extra={
+                "event": "ws_auth_failure",
+                "execution_id": str(execution_id),
+                "client_ip": client_ip,
+            },
+        )
         await websocket.close(code=4401, reason="Authentication required")
         return
 
@@ -849,10 +842,9 @@ async def ws_execution(
     last_status: ExecutionStatus | None = None
     last_event_seq = -1
     polls = 0
-    max_polls = 400
 
     try:
-        while polls < max_polls:
+        while polls < _MAX_STREAM_POLLS:
             polls += 1
             async with async_session() as session:
                 if last_status is None:
@@ -863,7 +855,7 @@ async def ws_execution(
                         )
                         break
                     current_status = execution.status
-                    data = json.loads(ExecutionResponse.from_db(execution).model_dump_json())
+                    data = ExecutionResponse.from_db(execution).model_dump(mode="json")
                     await websocket.send_json({"event": "status", "data": data})
                     last_status = current_status
                 else:
@@ -879,9 +871,7 @@ async def ws_execution(
                     if current_status != last_status or current_status in TERMINAL_STATUSES:
                         execution = await _executor_mod.get_execution(session, execution_id)
                         if execution:
-                            data = json.loads(
-                                ExecutionResponse.from_db(execution).model_dump_json()
-                            )
+                            data = ExecutionResponse.from_db(execution).model_dump(mode="json")
                             await websocket.send_json({"event": "status", "data": data})
                         last_status = current_status
                     else:
@@ -915,10 +905,12 @@ async def ws_execution(
             "WS stream error: execution_id=%s error=%s",
             execution_id,
             e,
+            exc_info=True,
             extra={
                 "event": "ws_stream_error",
                 "execution_id": str(execution_id),
                 "error_type": type(e).__name__,
+                "error_message": str(e)[:500],
             },
         )
         with contextlib.suppress(Exception):

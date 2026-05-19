@@ -16,11 +16,10 @@ describe('formatDate', () => {
 
   it('formats a valid date string', () => {
     const result = formatDate('2024-06-15T10:30:00Z')
-    // The exact output depends on locale, but it should contain month and day
-    expect(result).toBeTruthy()
     expect(result).not.toBe('—')
-    // Should contain "Jun" or "15" depending on locale
-    expect(result.length).toBeGreaterThan(2)
+    // Must contain year and day regardless of locale
+    expect(result).toContain('2024')
+    expect(result).toContain('15')
   })
 })
 

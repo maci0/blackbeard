@@ -116,8 +116,9 @@ describe('ApiClient', () => {
 
       const [, init] = fetchMock.mock.calls[0]!
       const headers = init?.headers as Record<string, string>
-      expect(headers['X-Request-Id']).toBeDefined()
-      expect(typeof headers['X-Request-Id']).toBe('string')
+      expect(headers['X-Request-Id']).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      )
     })
 
     it('handles 204 No Content', async () => {

@@ -7,6 +7,9 @@ since CrewAI callbacks run on a separate thread.
 
 from __future__ import annotations
 
+import hashlib
+import hmac as _hmac_mod
+import json as _json_mod
 import logging
 import threading
 from datetime import UTC, datetime
@@ -31,6 +34,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy import Engine
 
+from blackbeard.http_client import get_sync_client as _get_sync_client
 from blackbeard.logging_config import request_id_var
 from blackbeard.models import ExecutionEvent, ExecutionTask, TaskStatus
 
@@ -130,6 +134,58 @@ def shutdown_webhook_executor() -> None:
             _webhook_executor = None
 
 
+_webhook_cache: list[Any] | None = None
+_webhook_cache_time: float = 0.0
+_webhook_cache_lock = threading.Lock()
+_WEBHOOK_CACHE_TTL = 30.0
+
+
+def _get_cached_webhooks(db_url: str) -> list[Any]:
+    """Return active webhooks, cached for 30s to avoid DB hit per event."""
+    global _webhook_cache, _webhook_cache_time
+    import time as _time
+
+    now = _time.monotonic()
+    if _webhook_cache is not None and (now - _webhook_cache_time) < _WEBHOOK_CACHE_TTL:
+        return _webhook_cache
+
+    with _webhook_cache_lock:
+        if _webhook_cache is not None and (now - _webhook_cache_time) < _WEBHOOK_CACHE_TTL:
+            return _webhook_cache
+
+        from blackbeard.models.webhook import Webhook
+
+        session_factory = _get_sync_session_factory(db_url)
+        try:
+            with session_factory() as session:
+                from sqlalchemy import select as sync_select
+
+                result = session.execute(
+                    sync_select(Webhook).where(Webhook.active.is_(True))
+                )
+                cached = list(result.scalars())
+                # Detach from session so they can be used outside
+                session.expunge_all()
+        except Exception:
+            logger.exception(
+                "Failed to load webhooks for event delivery",
+                extra={"event": "webhook_load_failed"},
+            )
+            return []
+
+        _webhook_cache = cached
+        _webhook_cache_time = _time.monotonic()
+        return cached
+
+
+def invalidate_webhook_cache() -> None:
+    """Clear the webhook cache (call after webhook create/update/delete)."""
+    global _webhook_cache, _webhook_cache_time
+    with _webhook_cache_lock:
+        _webhook_cache = None
+        _webhook_cache_time = 0.0
+
+
 def _deliver_webhooks_sync(
     event_type: str,
     data: dict[str, Any],
@@ -138,37 +194,15 @@ def _deliver_webhooks_sync(
 ) -> None:
     """Deliver an event to all matching webhooks (runs in background thread).
 
-    Loads active webhooks from the database, filters by event type, and
+    Uses a 30s cache for webhook list to avoid DB query per event.
     POSTs the payload with HMAC-SHA256 signature. Failures are logged
     but never raised — webhook delivery must not block execution.
     """
-    import hashlib
-    import hmac
-    import json
-
-    from blackbeard.http_client import get_sync_client
-    from blackbeard.models.webhook import Webhook
-
-    session_factory = _get_sync_session_factory(db_url)
-    try:
-        with session_factory() as session:
-            from sqlalchemy import select as sync_select
-
-            result = session.execute(
-                sync_select(Webhook).where(Webhook.active.is_(True))
-            )
-            webhooks = list(result.scalars())
-    except Exception:
-        logger.exception(
-            "Failed to load webhooks for event delivery",
-            extra={"event": "webhook_load_failed", "event_type": event_type},
-        )
-        return
-
+    webhooks = _get_cached_webhooks(db_url)
     if not webhooks:
         return
 
-    payload = json.dumps(
+    payload = _json_mod.dumps(
         {
             "event_type": event_type,
             "execution_id": execution_id,
@@ -177,14 +211,13 @@ def _deliver_webhooks_sync(
         default=str,
     )
 
-    client = get_sync_client("webhook-deliver", timeout=10)
+    client = _get_sync_client("webhook-deliver", timeout=10)
 
     for webhook in webhooks:
-        # Filter: empty events list means "all events"
         if webhook.events and event_type not in webhook.events:
             continue
         try:
-            sig = hmac.new(
+            sig = _hmac_mod.new(
                 webhook.secret.encode(), payload.encode(), hashlib.sha256
             ).hexdigest()
             resp = client.post(
@@ -420,9 +453,15 @@ class BlackbeardExecutionListener(BaseEventListener):
                 self._db_url,
             )
         except Exception:
-            logger.debug(
+            logger.warning(
                 "Webhook dispatch skipped (executor unavailable): event=%s",
                 event_type,
+                exc_info=True,
+                extra={
+                    "event": "webhook_dispatch_skipped",
+                    "event_type": event_type,
+                    "execution_id": str(self._execution_id),
+                },
             )
 
     def _write_event(self, event_type: str, data: dict[str, Any]) -> None:

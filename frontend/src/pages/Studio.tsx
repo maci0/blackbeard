@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useNavigate } from 'react-router-dom'
+import { useShallow } from 'zustand/react/shallow'
 import { useStudioStore } from '@/stores/studioStore'
 import { api } from '@/api/client'
 import { capitalize, toResourceName, parseRef } from '@/lib/utils'
-import { useDocumentTitle } from '@/lib/hooks'
+import { useDocumentTitle } from '@/hooks'
 import { API_VERSION, KIND_TO_PLURAL } from '@/lib/kinds'
 import { DATAFLOW_MARKER_END } from '@/components/studio/defaults'
 import Palette, { MobilePalette } from '@/components/studio/Palette'
@@ -156,18 +157,22 @@ function StudioInner() {
 
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Select individual slices to avoid re-rendering on every node position change.
   // NOTE: nodes is NOT subscribed here — handleSave reads it via getState() at
   // call time, avoiding re-renders on every drag frame.
-  const selectedNodeId = useStudioStore((s) => s.selectedNodeId)
-  const setNodes = useStudioStore((s) => s.setNodes)
-  const setEdges = useStudioStore((s) => s.setEdges)
-  const markClean = useStudioStore((s) => s.markClean)
-  const dirty = useStudioStore((s) => s.dirty)
-  const canUndo = useStudioStore((s) => s.canUndo)
-  const canRedo = useStudioStore((s) => s.canRedo)
-  const undo = useStudioStore((s) => s.undo)
-  const redo = useStudioStore((s) => s.redo)
+  const { selectedNodeId, setNodes, setEdges, markClean, dirty, canUndo, canRedo, undo, redo } =
+    useStudioStore(
+      useShallow((s) => ({
+        selectedNodeId: s.selectedNodeId,
+        setNodes: s.setNodes,
+        setEdges: s.setEdges,
+        markClean: s.markClean,
+        dirty: s.dirty,
+        canUndo: s.canUndo,
+        canRedo: s.canRedo,
+        undo: s.undo,
+        redo: s.redo,
+      })),
+    )
 
   useDocumentTitle('Studio')
 

@@ -19,7 +19,7 @@ import {
   Monitor,
   LogOut,
 } from 'lucide-react'
-import { useDarkMode } from '@/lib/hooks'
+import { useDarkMode } from '@/hooks'
 import { useAuthStore } from '@/stores/authStore'
 import WelcomeDialog from './onboarding/WelcomeDialog'
 import GuidedTour from './onboarding/GuidedTour'

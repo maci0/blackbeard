@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Anchor, LogIn } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
-import { useDocumentTitle } from '@/lib/hooks'
+import { useDocumentTitle } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 
@@ -21,6 +21,7 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+  const clearError = () => setLocalError(null)
 
   const error = localError ?? storeError
 
@@ -68,10 +69,14 @@ export default function Login() {
                 id="login-email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  clearError()
+                }}
                 autoComplete="email"
                 autoFocus
                 required
+                aria-invalid={!!error || undefined}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="you@example.com"
               />
@@ -85,9 +90,13 @@ export default function Login() {
                 id="login-password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  clearError()
+                }}
                 autoComplete="current-password"
                 required
+                aria-invalid={!!error || undefined}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="Enter your password"
               />

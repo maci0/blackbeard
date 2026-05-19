@@ -68,14 +68,6 @@ blackbeard kickoff research-crew --input topic="AI agents" --wait
 
 > See [docs/quickstart.md](docs/quickstart.md) for a full walkthrough.
 
-## Screenshots
-
-<!-- TODO: Add screenshots -->
-<!-- Screenshot 1: Studio with a loaded crew -- agents and tasks connected on the canvas -->
-<!-- Screenshot 2: Resources list page showing all resource kinds -->
-<!-- Screenshot 3: Roles management page with predefined RBAC roles -->
-<!-- Screenshot 4: Dark mode view of the Studio editor -->
-
 ## Architecture
 
 ```

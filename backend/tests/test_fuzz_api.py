@@ -62,8 +62,8 @@ async def test_fuzz_resource_creation(client, kind, name, spec):
         json=body,
         headers=API_KEY_HEADER,
     )
-    assert resp.status_code != 500, (
-        f"500 on POST /api/v1/{_kind_plural(kind)} "
+    assert resp.status_code in (200, 201, 400, 401, 403, 404, 409, 413, 422, 429), (
+        f"Unexpected {resp.status_code} on POST /api/v1/{_kind_plural(kind)} "
         f"with name={name!r}, spec keys={list(spec.keys())}"
     )
 
@@ -248,7 +248,9 @@ async def test_fuzz_webhook_creation(client, url, events):
         json={"url": url, "events": events},
         headers=API_KEY_HEADER,
     )
-    assert resp.status_code != 500, f"500 on webhook create url={url!r}"
+    assert resp.status_code in (201, 400, 401, 403, 404, 409, 413, 422, 429), (
+        f"Unexpected status {resp.status_code} on webhook create url={url!r}"
+    )
 
 
 # ---------------------------------------------------------------------------

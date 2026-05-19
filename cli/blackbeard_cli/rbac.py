@@ -32,7 +32,14 @@ def role(ctx: click.Context) -> None:
     ctx.ensure_object(dict)
 
 
-@role.command("list")
+@role.command(
+    "list",
+    epilog="""\b
+Examples:
+  blackbeard role list
+  blackbeard role list --json
+""",
+)
 @click.option(
     "--limit",
     default=100,
@@ -89,7 +96,14 @@ def role_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
     out.print(f"[dim]{len(items)} role(s)[/]")
 
 
-@role.command("describe")
+@role.command(
+    "describe",
+    epilog="""\b
+Examples:
+  blackbeard role describe admin
+  blackbeard role describe viewer --json
+""",
+)
 @click.argument("name")
 @json_opt
 @click.pass_context
@@ -167,7 +181,14 @@ def rolebinding(ctx: click.Context) -> None:
     ctx.ensure_object(dict)
 
 
-@rolebinding.command("list")
+@rolebinding.command(
+    "list",
+    epilog="""\b
+Examples:
+  blackbeard rolebinding list
+  blackbeard rolebinding list --json
+""",
+)
 @click.option(
     "--limit",
     default=100,
@@ -225,7 +246,14 @@ def rolebinding_list(ctx: click.Context, limit: int, output_json: bool = False) 
     out.print(f"[dim]{len(items)} binding(s)[/]")
 
 
-@rolebinding.command("create")
+@rolebinding.command(
+    "create",
+    epilog="""\b
+Examples:
+  blackbeard rolebinding create dev-binding -r developer -s User:dev@example.com
+  blackbeard rolebinding create team-binding -r admin -s Group:backend-team
+""",
+)
 @click.argument("name")
 @click.option("--role", "-r", "role_name", required=True, help="Role to bind")
 @click.option(

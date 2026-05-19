@@ -24,7 +24,13 @@ from blackbeard.config import settings
 from blackbeard.engine.policy import AgentPolicy, resolve_policy
 from blackbeard.kinds import ResourceKind
 from blackbeard.litellm import apply_model_params, apply_vertex_params
-from blackbeard.resources import ALLOWED_TOOL_MODULE_PREFIXES, BLOCKED_TOOL_SUBMODULES, parse_ref
+from blackbeard.resources import (
+    ALLOWED_CALLABLE_MODULE_PREFIXES,
+    ALLOWED_TOOL_MODULE_PREFIXES,
+    BLOCKED_CALLABLE_MODULES,
+    BLOCKED_TOOL_SUBMODULES,
+    parse_ref,
+)
 
 if TYPE_CHECKING:
     from blackbeard.models import Resource
@@ -545,15 +551,39 @@ class ResourceLoader:
 
     @staticmethod
     def _import_callable(dotted_path: str) -> Any | None:
-        """Import a callable by dotted Python path (e.g. 'mymodule.my_func')."""
+        """Import a callable by dotted Python path (e.g. 'mymodule.my_func').
+
+        Enforces a module allowlist to prevent arbitrary code execution via
+        dynamic imports from task guardrails or output_pydantic fields.
+        """
         if "." not in dotted_path:
+            return None
+        top_module = dotted_path.split(".")[0]
+        if top_module in BLOCKED_CALLABLE_MODULES:
+            logger.warning(
+                "Blocked import from dangerous module: %s",
+                dotted_path,
+                extra={"event": "callable_import_blocked", "dotted_path": dotted_path},
+            )
+            return None
+        if not dotted_path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
+            logger.warning(
+                "Blocked import from unapproved module: %s",
+                dotted_path,
+                extra={"event": "callable_import_blocked", "dotted_path": dotted_path},
+            )
             return None
         module_path, attr_name = dotted_path.rsplit(".", 1)
         try:
             module = importlib.import_module(module_path)
             return getattr(module, attr_name)
         except Exception:
-            logger.warning("Failed to import callable: %s", dotted_path)
+            logger.warning(
+                "Failed to import callable: %s",
+                dotted_path,
+                exc_info=True,
+                extra={"event": "callable_import_failed", "dotted_path": dotted_path},
+            )
             return None
 
     @staticmethod
@@ -566,6 +596,8 @@ class ResourceLoader:
         """
         import jsonschema
 
+        validator = jsonschema.Draft7Validator(schema)
+
         def _schema_guardrail(output: str) -> str:
             try:
                 parsed = json.loads(output)
@@ -573,12 +605,11 @@ class ResourceLoader:
                 raise ValueError(
                     f"Schema guardrail '{guardrail_name}': output is not valid JSON: {exc}"
                 ) from exc
-            try:
-                jsonschema.validate(parsed, schema)
-            except jsonschema.ValidationError as exc:
+            errors = list(validator.iter_errors(parsed))
+            if errors:
                 raise ValueError(
-                    f"Schema guardrail '{guardrail_name}': {exc.message}"
-                ) from exc
+                    f"Schema guardrail '{guardrail_name}': {errors[0].message}"
+                )
             return output
 
         return _schema_guardrail

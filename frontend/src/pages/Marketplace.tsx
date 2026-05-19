@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { useDocumentTitle } from '@/lib/hooks'
+import { useDocumentTitle } from '@/hooks'
 import { Store, ExternalLink, Download, Tag, Lock } from 'lucide-react'
 import { api, ApiError } from '@/api/client'
 import { useToastStore } from '@/stores/toastStore'
@@ -131,6 +131,7 @@ function RepoCard({
         <button
           onClick={() => onImport(repo.url)}
           disabled={isComingSoon || importing}
+          aria-busy={importing || undefined}
           aria-label={isComingSoon ? `${repo.name} is coming soon` : `Import ${repo.name}`}
           className={cn(
             'inline-flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -284,6 +285,7 @@ export default function Marketplace() {
             <button
               onClick={handleUrlImport}
               disabled={!url.trim() || importing}
+              aria-busy={importing || undefined}
               className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
               {importing ? (

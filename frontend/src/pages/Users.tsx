@@ -18,7 +18,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/formatters'
-import { useDocumentTitle } from '@/lib/hooks'
+import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
 
 /* ------------------------------------------------------------------ */

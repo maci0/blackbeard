@@ -25,23 +25,29 @@ from blackbeard.models.user_schemas import UserResponse, user_response
 logger = logging.getLogger(__name__)
 
 
-def _register_litellm_user(user_id: str, email: str) -> None:
+async def _register_litellm_user(user_id: str, email: str) -> None:
     """Register user in LiteLLM for per-user spend tracking (best-effort)."""
-    import httpx
-
     try:
         from blackbeard.config import settings
+        from blackbeard.http_client import get_client
 
         url = f"{settings.litellm_proxy_url}/user/new"
         master_key = settings.litellm_master_key.get_secret_value()
-        with httpx.Client(timeout=5.0) as client:
-            client.post(
-                url,
-                json={"user_id": user_id, "user_email": email},
-                headers={"Authorization": f"Bearer {master_key}"},
-            )
+        client = get_client(
+            "litellm-user-reg",
+            timeout=5,
+            headers={"Authorization": f"Bearer {master_key}"},
+        )
+        await client.post(
+            url,
+            json={"user_id": user_id, "user_email": email},
+        )
     except Exception:
-        logger.debug("Could not register user in LiteLLM (proxy may not be running)")
+        logger.debug(
+            "Could not register user in LiteLLM (proxy may not be running)",
+            exc_info=True,
+            extra={"event": "litellm_user_registration_failed", "user_id": user_id},
+        )
 
 
 # Pre-computed bcrypt hash used to equalize timing when a login attempt
@@ -165,7 +171,7 @@ async def register(
         },
     )
 
-    _register_litellm_user(str(user.id), user.email)
+    await _register_litellm_user(str(user.id), user.email)
 
     response.headers["Location"] = f"/api/v1/users/{user.id}"
     return _auth_response(user)

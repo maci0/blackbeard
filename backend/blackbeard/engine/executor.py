@@ -82,20 +82,33 @@ _CREW_RELEVANT_KINDS = (
 )
 
 _NAMESPACE_RESOURCE_LIMIT = 500
+_MAX_ERROR_LENGTH = 500
 
 
 def _sanitize_error(error_msg: str) -> str:
     """Return a user-safe error string, redacting internal details."""
     if error_msg.startswith(_SAFE_ERROR_PREFIXES):
-        if len(error_msg) > 500:
-            return error_msg[:500] + "..."
+        if len(error_msg) > _MAX_ERROR_LENGTH:
+            return error_msg[:_MAX_ERROR_LENGTH] + "..."
         return error_msg
     return "Execution failed — check server logs for details"
+
+
+def _extract_policy_specs(
+    resource_snapshot: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Extract AgentPolicy specs from a resource snapshot (policy name → spec)."""
+    return {
+        snap["name"]: snap.get("spec", {})
+        for snap in resource_snapshot.values()
+        if snap.get("kind") == "AgentPolicy"
+    }
 
 
 def _derive_budget_limits(
     resource_snapshot: dict[str, dict[str, Any]],
     crew_name: str,
+    policy_specs: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[float | None, int | None]:
     """Derive the most restrictive budget limits from applicable policies.
 
@@ -112,11 +125,8 @@ def _derive_budget_limits(
     crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
     crew_spec = crew_snap.get("spec", {})
 
-    # Build a dict of policy name → spec for lookup
-    policy_specs: dict[str, dict[str, Any]] = {}
-    for _key, snap in resource_snapshot.items():
-        if snap.get("kind") == "AgentPolicy":
-            policy_specs[snap["name"]] = snap.get("spec", {})
+    if policy_specs is None:
+        policy_specs = _extract_policy_specs(resource_snapshot)
 
     budgets: list[float] = []
     token_limits: list[int] = []
@@ -792,6 +802,11 @@ def _resolve_eval_llm(
                 llm = loader.build_llm(llm_ref)
                 return llm.model
             except Exception:
+                logger.debug(
+                    "Failed to resolve agent LLM '%s' for eval — trying next agent",
+                    llm_ref,
+                    exc_info=True,
+                )
                 continue
 
     # Last resort: use a reasonable default
@@ -828,7 +843,16 @@ def _run_flow_steps(
         if step_type == "crew":
             crew_ref = step.get("crew")
             if not crew_ref:
-                logger.warning("Flow step '%s' has no crew ref — skipped", step_name)
+                logger.warning(
+                    "Flow step '%s' has no crew ref — skipped",
+                    step_name,
+                    extra={
+                        "event": "flow_step_skipped",
+                        "flow_name": flow_name,
+                        "step_name": step_name,
+                        "reason": "no_crew_ref",
+                    },
+                )
                 continue
 
             crew = loader.build_crew(crew_ref.split("/")[-1] if "/" in crew_ref else crew_ref)
@@ -858,24 +882,36 @@ def _run_flow_steps(
             fn_path = step.get("function_path", "")
             if fn_path and ":" in fn_path:
                 module_path, fn_name = fn_path.rsplit(":", 1)
-                from blackbeard.resources.validator import (
-                    _ALLOWED_FUNCTION_MODULE_PREFIXES,
-                    _BLOCKED_FUNCTION_MODULES,
+                from blackbeard.resources import (
+                    ALLOWED_CALLABLE_MODULE_PREFIXES,
+                    BLOCKED_CALLABLE_MODULES,
                 )
 
                 top_module = module_path.split(".")[0]
-                if top_module in _BLOCKED_FUNCTION_MODULES:
+                if top_module in BLOCKED_CALLABLE_MODULES:
                     logger.warning(
                         "Flow step '%s' blocked: module '%s' is not allowed",
                         step_name,
                         top_module,
+                        extra={
+                            "event": "flow_step_blocked",
+                            "flow_name": flow_name,
+                            "step_name": step_name,
+                            "blocked_module": top_module,
+                        },
                     )
                     step_outputs[step_name] = "error: blocked module"
-                elif not fn_path.startswith(_ALLOWED_FUNCTION_MODULE_PREFIXES):
+                elif not fn_path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
                     logger.warning(
                         "Flow step '%s' blocked: function_path '%s' not in allowlist",
                         step_name,
                         fn_path,
+                        extra={
+                            "event": "flow_step_blocked",
+                            "flow_name": flow_name,
+                            "step_name": step_name,
+                            "function_path": fn_path,
+                        },
                     )
                     step_outputs[step_name] = "error: function not in allowlist"
                 else:
@@ -887,7 +923,19 @@ def _run_flow_steps(
                         step_result = fn({**inputs, **step_outputs})
                         step_outputs[step_name] = step_result
                     except Exception as exc:
-                        logger.warning("Flow function step '%s' failed: %s", step_name, exc)
+                        logger.warning(
+                            "Flow function step '%s' failed: %s",
+                            step_name,
+                            exc,
+                            exc_info=True,
+                            extra={
+                                "event": "flow_function_step_failed",
+                                "flow_name": flow_name,
+                                "step_name": step_name,
+                                "function_path": fn_path,
+                                "error_type": type(exc).__name__,
+                            },
+                        )
                         step_outputs[step_name] = "error: step execution failed"
 
         elif step_type in ("router", "condition"):
@@ -895,6 +943,13 @@ def _run_flow_steps(
                 "Flow step '%s' (type=%s) — routing not yet implemented, continuing",
                 step_name,
                 step_type,
+                extra={
+                    "event": "flow_step_skipped",
+                    "flow_name": flow_name,
+                    "step_name": step_name,
+                    "step_type": step_type,
+                    "reason": "not_implemented",
+                },
             )
 
     return last_result
@@ -971,7 +1026,10 @@ async def _run_crew_async(
 
             # --- Budget enforcement via LiteLLM virtual keys ---
             virtual_api_key: str | None = None
-            max_budget, max_tokens = _derive_budget_limits(resource_snapshot, crew_name)
+            policy_specs = _extract_policy_specs(resource_snapshot)
+            max_budget, max_tokens = _derive_budget_limits(
+                resource_snapshot, crew_name, policy_specs
+            )
             has_budget = max_budget is not None or max_tokens is not None
 
             if has_budget:
@@ -1015,12 +1073,6 @@ async def _run_crew_async(
                         },
                     )
                     virtual_api_key = None
-
-            # Extract policy specs for runtime enforcement
-            policy_specs: dict[str, dict[str, Any]] = {}
-            for _key, snap in resource_snapshot.items():
-                if snap.get("kind") == "AgentPolicy":
-                    policy_specs[snap["name"]] = snap.get("spec", {})
 
             loader = ResourceLoader(
                 mock_resources, api_key=virtual_api_key, policies=policy_specs
@@ -1123,9 +1175,10 @@ async def _run_crew_async(
                 else None
             )
             logger.info(
-                "Execution %s completed: crew=%s tokens=%d duration_s=%.1f",
+                "Execution %s completed: crew=%s type=%s tokens=%d duration_s=%.1f",
                 execution_id,
                 crew_name,
+                execution_type.value,
                 execution.total_tokens or 0,
                 duration_s or 0,
                 extra={
@@ -1133,6 +1186,7 @@ async def _run_crew_async(
                     "execution_id": str(execution_id),
                     "crew_name": crew_name,
                     "namespace": execution.crew_namespace,
+                    "execution_type": execution_type.value,
                     "total_tokens": execution.total_tokens or 0,
                     "prompt_tokens": execution.prompt_tokens or 0,
                     "completion_tokens": execution.completion_tokens or 0,
@@ -1152,8 +1206,9 @@ async def _run_crew_async(
             crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
             task_count = len(crew_snap.get("spec", {}).get("tasks", []))
             logger.exception(
-                "Execution %s failed: %s (duration_s=%.1f)",
+                "Execution %s failed: type=%s %s (duration_s=%.1f)",
                 execution_id,
+                execution_type.value,
                 e,
                 duration_s or 0,
                 extra={
@@ -1161,6 +1216,7 @@ async def _run_crew_async(
                     "execution_id": str(execution_id),
                     "crew_name": crew_name,
                     "namespace": running_namespace,
+                    "execution_type": execution_type.value,
                     "task_count": task_count,
                     "error_type": type(e).__name__,
                     "error_message": str(e)[:500],

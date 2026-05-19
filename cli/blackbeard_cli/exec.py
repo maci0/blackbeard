@@ -12,7 +12,6 @@ from rich.table import Table
 from blackbeard_cli.helpers import (
     STATUS_COLORS,
     console,
-    extract_detail,
     handle_http_error,
     handle_request_error,
     json_opt,
@@ -23,7 +22,16 @@ from blackbeard_cli.helpers import (
 )
 
 
-@click.command("executions")
+@click.command(
+    "executions",
+    epilog="""\b
+Examples:
+  blackbeard executions
+  blackbeard executions --crew research-crew
+  blackbeard executions --status running
+  blackbeard executions --json
+""",
+)
 @click.option("--crew", "-c", default=None, help="Filter by crew name")
 @click.option(
     "--status",
@@ -111,7 +119,15 @@ def executions_list(
         out.print(f"[dim]{len(items)} execution(s)[/]")
 
 
-@click.command()
+@click.command(
+    epilog="""\b
+Examples:
+  blackbeard events abc-123
+  blackbeard events abc-123 --follow
+  blackbeard events abc-123 -f -i 5
+  blackbeard events abc-123 --json
+""",
+)
 @click.argument("execution_id")
 @click.option("--follow", "-f", is_flag=True, default=False, help="Follow events in real-time")
 @click.option(
@@ -119,7 +135,7 @@ def executions_list(
     "-i",
     default=2,
     show_default=True,
-    type=click.IntRange(1, 30),
+    type=click.IntRange(1, 60),
     metavar="SECONDS",
     help="Polling interval in seconds (used with --follow)",
 )
@@ -230,13 +246,20 @@ def _event_summary(event_type: str, data: dict[str, Any]) -> str:
     return " ".join(parts) if parts else ""
 
 
-@click.command()
+@click.command(
+    epilog="""\b
+Examples:
+  blackbeard cancel abc-123
+  blackbeard cancel abc-123 -y
+  blackbeard cancel abc-123 --json
+""",
+)
 @click.argument("execution_id")
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation")
 @json_opt
 @click.pass_context
 def cancel(ctx: click.Context, execution_id: str, yes: bool, output_json: bool = False) -> None:
-    """Cancel a running execution."""
+    """Cancel an execution."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
@@ -258,9 +281,7 @@ def cancel(ctx: click.Context, execution_id: str, yes: bool, output_json: bool =
         handle_request_error(server, exc)
 
     if resp.status_code != 200:
-        detail = extract_detail(resp)
-        console.print(f"[red bold]Error:[/] {detail}")
-        raise SystemExit(1)
+        handle_http_error(resp)
 
     data = resp.json()
 

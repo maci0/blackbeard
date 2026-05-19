@@ -13,6 +13,7 @@ import {
   type Edge,
 } from '@xyflow/react'
 import { User, ListChecks, Wrench, Workflow, Sparkles } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { useStudioStore } from '@/stores/studioStore'
 import { DATAFLOW_MARKER_END, getDefaultNodeData } from './defaults'
 import AgentNode from './nodes/AgentNode'
@@ -84,13 +85,18 @@ function CanvasInner() {
     })
     return () => observer.disconnect()
   }, [])
-  const nodes = useStudioStore((s) => s.nodes)
-  const edges = useStudioStore((s) => s.edges)
-  const onNodesChange = useStudioStore((s) => s.onNodesChange)
-  const onEdgesChange = useStudioStore((s) => s.onEdgesChange)
-  const onConnect = useStudioStore((s) => s.onConnect)
-  const addNode = useStudioStore((s) => s.addNode)
-  const setSelectedNode = useStudioStore((s) => s.setSelectedNode)
+  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, setSelectedNode } =
+    useStudioStore(
+      useShallow((s) => ({
+        nodes: s.nodes,
+        edges: s.edges,
+        onNodesChange: s.onNodesChange,
+        onEdgesChange: s.onEdgesChange,
+        onConnect: s.onConnect,
+        addNode: s.addNode,
+        setSelectedNode: s.setSelectedNode,
+      })),
+    )
   const nodesRef = useRef(nodes)
   nodesRef.current = nodes
 
@@ -203,7 +209,7 @@ function CanvasInner() {
       <MiniMap
         nodeColor={minimapNodeColor}
         nodeStrokeWidth={1}
-        className="!rounded-lg !border !border-border opacity-50 !shadow-md transition-opacity duration-200 hover:opacity-100"
+        className="!rounded-lg !border !border-border opacity-70 !shadow-md transition-opacity duration-200 hover:opacity-100"
         maskColor={isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(248, 250, 252, 0.85)'}
         style={MINIMAP_STYLE}
         pannable

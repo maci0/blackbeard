@@ -67,11 +67,22 @@ class GroupMemberAddRequest(BaseModel):
     user_id: str = Field(..., min_length=1, max_length=36)
 
 
+class GroupMemberAddResponse(BaseModel):
+    """Response after adding a user to a group."""
+
+    group_id: str
+    user_id: str
+    status: str
+
+
 class GroupMemberListResponse(BaseModel):
     """List of group members."""
 
     items: list[UserResponse]
     total: int
+    limit: int = 1000
+    offset: int = 0
+    has_more: bool = False
 
 
 class GroupListResponse(BaseModel):
@@ -478,11 +489,12 @@ async def delete_group(
 )
 async def list_group_members(
     group_id: uuid.UUID,
+    limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
+    offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     _current_user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ) -> GroupMemberListResponse:
     """List members of a group."""
-    # Verify group exists
     group_result = await session.execute(select(Group).where(Group.id == group_id))
     group = group_result.scalar_one_or_none()
     if group is None:
@@ -494,17 +506,31 @@ async def list_group_members(
         .where(GroupMember.group_id == group_id)
         .options(defer(User.password_hash))
         .order_by(User.email)
-        .limit(1000)
+        .limit(limit)
+        .offset(offset)
     )
     users = list(result.scalars().all())
+    if len(users) < limit and (len(users) > 0 or offset == 0):
+        total = offset + len(users)
+    else:
+        total_result = await session.execute(
+            select(func.count())
+            .select_from(GroupMember)
+            .where(GroupMember.group_id == group_id)
+        )
+        total = total_result.scalar_one()
     return GroupMemberListResponse(
         items=[user_response(u) for u in users],
-        total=len(users),
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=(offset + limit) < total,
     )
 
 
 @router.post(
     "/groups/{group_id}/members",
+    response_model=GroupMemberAddResponse,
     status_code=201,
     responses={
         401: {"description": "Authentication required"},
@@ -518,7 +544,7 @@ async def add_group_member(
     request: Request,
     current_user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
-) -> dict:
+) -> GroupMemberAddResponse:
     """Add a user to a group."""
     # Validate user_id is a valid UUID
     try:
@@ -570,7 +596,7 @@ async def add_group_member(
             "actor_user_id": str(current_user.id),
         },
     )
-    return {"group_id": str(group_id), "user_id": data.user_id, "status": "added"}
+    return GroupMemberAddResponse(group_id=str(group_id), user_id=data.user_id, status="added")
 
 
 @router.delete(

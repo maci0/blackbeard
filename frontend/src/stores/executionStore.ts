@@ -87,14 +87,24 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     const execution = await api.get<Execution>(`/api/v1/executions/${id}`)
     set((state) => {
       const prev = state.currentExecution
-      const unchanged =
+      if (
         prev?.id === id &&
         prev.status === execution.status &&
         prev.total_tokens === execution.total_tokens &&
         prev.error === execution.error &&
-        (prev.tasks?.length ?? 0) === (execution.tasks?.length ?? 0) &&
-        (prev.tasks ?? []).every((t, i) => t.status === execution.tasks?.[i]?.status)
-      if (unchanged) return state
+        (prev.tasks?.length ?? 0) === (execution.tasks?.length ?? 0)
+      ) {
+        const prevTasks = prev.tasks ?? []
+        const nextTasks = execution.tasks ?? []
+        let tasksMatch = true
+        for (let i = 0; i < prevTasks.length; i++) {
+          if (prevTasks[i]?.status !== nextTasks[i]?.status) {
+            tasksMatch = false
+            break
+          }
+        }
+        if (tasksMatch) return state
+      }
       return {
         currentExecution: execution,
         executions: state.executions.map((e) => (e.id === id ? execution : e)),

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
-from sqlalchemy import JSON, DateTime, Index, String, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, Index, String, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from blackbeard.models.database import Base
@@ -30,15 +31,15 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(50), nullable=False)
     resource_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     resource_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    detail: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     request_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
 
     __table_args__ = (
         Index("ix_audit_timestamp", "timestamp"),
-        Index("ix_audit_actor", "actor_id"),
-        Index("ix_audit_action", "action"),
-        Index("ix_audit_resource", "resource_type", "resource_id"),
+        Index("ix_audit_actor_time", "actor_id", timestamp.desc()),
+        Index("ix_audit_action_time", "action", timestamp.desc()),
+        Index("ix_audit_resource_time", "resource_type", "resource_id", timestamp.desc()),
     )
 
     def __repr__(self) -> str:

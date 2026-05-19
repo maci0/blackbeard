@@ -64,6 +64,7 @@ def test_get_executor_concurrent_calls():
         for t in threads:
             t.join(timeout=5)
 
+        assert all(not t.is_alive() for t in threads), "Some threads did not complete"
         assert len(errors) == 0, f"Errors: {errors}"
         assert len(results) == 10
 
@@ -151,10 +152,14 @@ def test_pool_status_with_executor():
 
         status = get_pool_status()
         assert isinstance(status["active_threads"], int)
+        assert status["active_threads"] >= 0
         assert isinstance(status["max_workers"], int)
-        assert isinstance(status["queued_tasks"], int)
-        assert isinstance(status["saturated"], bool)
         assert status["max_workers"] > 0
+        assert isinstance(status["queued_tasks"], int)
+        assert status["queued_tasks"] >= 0
+        assert status["saturated"] is False, (
+            "Idle pool with no submitted tasks should not be saturated"
+        )
     finally:
         if executor_mod._executor is not None and executor_mod._executor is not original:
             executor_mod._executor.shutdown(wait=False)

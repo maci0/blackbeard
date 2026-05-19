@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { useDocumentTitle } from '@/lib/hooks'
+import { useDocumentTitle } from '@/hooks'
 import { Wrench, Search, RefreshCw, Code2, Box, Shield, X } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { useResourceStore } from '@/stores/resourceStore'
 import type { Resource } from '@/lib/types'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -182,10 +183,14 @@ function ToolCard({ resource }: { resource: Resource }) {
 const EMPTY_TOOLS: Resource[] = []
 
 export default function Tools() {
-  const tools = useResourceStore((s) => s.resources['tools'] ?? EMPTY_TOOLS)
-  const loading = useResourceStore((s) => s.loading)
-  const error = useResourceStore((s) => s.error)
-  const fetchResources = useResourceStore((s) => s.fetchResources)
+  const { tools, loading, error, fetchResources } = useResourceStore(
+    useShallow((s) => ({
+      tools: s.resources['tools'] ?? EMPTY_TOOLS,
+      loading: s.loading,
+      error: s.error,
+      fetchResources: s.fetchResources,
+    })),
+  )
   const [search, setSearch] = useState('')
 
   useDocumentTitle('Tools')

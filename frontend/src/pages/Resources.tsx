@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Database, Search, ChevronRight, RefreshCw, X } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { useResourceStore } from '@/stores/resourceStore'
 import type { Resource } from '@/lib/types'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -11,7 +12,7 @@ import { TableSkeleton } from '@/components/ui/Skeleton'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/formatters'
 import { KIND_TO_PLURAL } from '@/lib/kinds'
-import { useDocumentTitle } from '@/lib/hooks'
+import { useDocumentTitle } from '@/hooks'
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
@@ -28,10 +29,14 @@ const FILTER_OPTIONS = [
 
 export default function Resources() {
   const navigate = useNavigate()
-  const resources = useResourceStore((s) => s.resources)
-  const loading = useResourceStore((s) => s.loading)
-  const error = useResourceStore((s) => s.error)
-  const fetchAllResources = useResourceStore((s) => s.fetchAllResources)
+  const { resources, loading, error, fetchAllResources } = useResourceStore(
+    useShallow((s) => ({
+      resources: s.resources,
+      loading: s.loading,
+      error: s.error,
+      fetchAllResources: s.fetchAllResources,
+    })),
+  )
   const [kindFilter, setKindFilter] = useState('')
   const [search, setSearch] = useState('')
 

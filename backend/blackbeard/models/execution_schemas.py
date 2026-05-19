@@ -286,6 +286,13 @@ class HITLResponseRequest(BaseModel):
     )
 
 
+class HITLResponseResult(BaseModel):
+    """Response after recording a HITL response."""
+
+    status: str
+    execution_id: str
+
+
 class ExecutionEventItem(BaseModel):
     """Single event from an execution."""
 

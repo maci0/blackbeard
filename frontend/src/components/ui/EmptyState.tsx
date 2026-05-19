@@ -17,8 +17,8 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
       <div aria-hidden="true" className="mb-4 text-muted-foreground/60 [&>svg]:h-12 [&>svg]:w-12">
         {icon}
       </div>
-      <h2 className="text-sm font-medium text-foreground">{title}</h2>
-      <p className="mt-1 max-w-xs text-xs text-muted-foreground">{description}</p>
+      <h2 className="text-base font-medium text-foreground">{title}</h2>
+      <p className="mt-1 max-w-xs text-sm text-muted-foreground">{description}</p>
       {action &&
         (action.href ? (
           <Link to={action.href} className={actionClass}>
@@ -26,7 +26,7 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
           </Link>
         ) : (
           action.onClick && (
-            <button onClick={action.onClick} className={actionClass}>
+            <button type="button" onClick={action.onClick} className={actionClass}>
               {action.label}
             </button>
           )

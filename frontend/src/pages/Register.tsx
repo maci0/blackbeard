@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Anchor, UserPlus } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
-import { useDocumentTitle } from '@/lib/hooks'
+import { useDocumentTitle } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 
@@ -20,6 +20,7 @@ export default function Register() {
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+  const clearError = () => setLocalError(null)
 
   const error = localError ?? storeError
 
@@ -75,10 +76,14 @@ export default function Register() {
                 id="register-display-name"
                 type="text"
                 value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                onChange={(e) => {
+                  setDisplayName(e.target.value)
+                  clearError()
+                }}
                 autoComplete="name"
                 autoFocus
                 required
+                aria-invalid={!!error || undefined}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="Your name"
               />
@@ -92,9 +97,13 @@ export default function Register() {
                 id="register-email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  clearError()
+                }}
                 autoComplete="email"
                 required
+                aria-invalid={!!error || undefined}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="you@example.com"
               />
@@ -108,10 +117,14 @@ export default function Register() {
                 id="register-password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  clearError()
+                }}
                 autoComplete="new-password"
                 required
                 minLength={8}
+                aria-invalid={!!error || undefined}
                 aria-describedby="register-password-hint"
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="Min 8 characters"

@@ -70,7 +70,7 @@ export function ToastContainer() {
     <div
       role="region"
       aria-label="Notifications"
-      className="pointer-events-none fixed bottom-4 right-4 z-[100] flex flex-col-reverse gap-2"
+      className="pointer-events-none fixed bottom-4 left-4 right-4 z-[100] flex flex-col-reverse items-end gap-2 sm:left-auto"
     >
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} />

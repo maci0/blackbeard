@@ -27,7 +27,15 @@ def user(ctx: click.Context) -> None:
     ctx.ensure_object(dict)
 
 
-@user.command("list")
+@user.command(
+    "list",
+    epilog="""\b
+Examples:
+  blackbeard user list
+  blackbeard user list --limit 10
+  blackbeard user list --json
+""",
+)
 @click.option(
     "--limit",
     default=100,
@@ -84,7 +92,14 @@ def user_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
     out.print(f"[dim]{total} user(s)[/]")
 
 
-@user.command("invite")
+@user.command(
+    "invite",
+    epilog="""\b
+Examples:
+  blackbeard user invite -e user@example.com -d "Jane Doe"
+  blackbeard user invite -e user@example.com -d "Jane Doe" --json
+""",
+)
 @click.option("--email", "-e", required=True, help="Email address")
 @click.option(
     "--password",
@@ -147,7 +162,15 @@ def group(ctx: click.Context) -> None:
     ctx.ensure_object(dict)
 
 
-@group.command("list")
+@group.command(
+    "list",
+    epilog="""\b
+Examples:
+  blackbeard group list
+  blackbeard group list --limit 10
+  blackbeard group list --json
+""",
+)
 @click.option(
     "--limit",
     default=100,
@@ -201,7 +224,14 @@ def group_list(ctx: click.Context, limit: int, output_json: bool = False) -> Non
     out.print(f"[dim]{total} group(s)[/]")
 
 
-@group.command("create")
+@group.command(
+    "create",
+    epilog="""\b
+Examples:
+  blackbeard group create backend-team
+  blackbeard group create backend-team -d "Backend engineers"
+""",
+)
 @click.argument("name")
 @click.option("--description", "-d", default="", help="Group description")
 @json_opt
@@ -238,7 +268,14 @@ def group_create(
     out.print(f"[green]Created[/] group [bold]{name}[/]")
 
 
-@group.command("delete")
+@group.command(
+    "delete",
+    epilog="""\b
+Examples:
+  blackbeard group delete 1
+  blackbeard group delete 1 -y
+""",
+)
 @click.argument("group_id")
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation")
 @json_opt

@@ -77,7 +77,16 @@ def _resources_to_yaml(resources: list[dict[str, Any]]) -> str:
     return "\n---\n".join(docs) + "\n" if docs else ""
 
 
-@click.command("export")
+@click.command(
+    "export",
+    epilog="""\b
+Examples:
+  blackbeard export Agent researcher          # single resource
+  blackbeard export Agent                     # all agents
+  blackbeard export --all                     # everything
+  blackbeard export --all -o backup/          # to directory
+""",
+)
 @click.argument(
     "kind",
     required=False,
@@ -96,15 +105,7 @@ def export_cmd(
     output_path: str | None,
     output_json: bool = False,
 ) -> None:
-    """Export resources as YAML.
-
-    \b
-    Examples:
-      blackbeard export Agent researcher          # single resource
-      blackbeard export Agent                     # all agents
-      blackbeard export --all                     # everything
-      blackbeard export --all -o backup/          # to directory
-    """
+    """Export resources as YAML."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)

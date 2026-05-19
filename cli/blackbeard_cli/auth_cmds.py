@@ -20,7 +20,14 @@ from blackbeard_cli.helpers import (
 )
 
 
-@click.command()
+@click.command(
+    epilog="""\b
+Examples:
+  blackbeard login
+  blackbeard login -e user@example.com
+  blackbeard -s http://prod:8000 login
+"""
+)
 @click.option("--email", "-e", prompt=True, help="Account email address")
 @click.option("--password", "-p", prompt=True, hide_input=True, help="Account password")
 @json_opt
@@ -63,18 +70,37 @@ def login(ctx: click.Context, email: str, password: str, output_json: bool = Fal
     )
 
 
-@click.command()
+@click.command(
+    epilog="""\b
+Examples:
+  blackbeard logout
+  blackbeard logout --json
+"""
+)
+@json_opt
 @click.pass_context
-def logout(ctx: click.Context) -> None:
+def logout(ctx: click.Context, output_json: bool = False) -> None:
     """Clear stored credentials."""
+    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     existed = clear_credentials()
+
+    if ctx.obj["json"]:
+        print_json({"status": "logged_out" if existed else "no_credentials"})
+        return
+
     if existed:
         out.print("[green]Logged out.[/] Credentials cleared.")
     else:
         out.print("[dim]No stored credentials found.[/]")
 
 
-@click.command()
+@click.command(
+    epilog="""\b
+Examples:
+  blackbeard whoami
+  blackbeard whoami --json
+"""
+)
 @json_opt
 @click.pass_context
 def whoami(ctx: click.Context, output_json: bool = False) -> None:
@@ -117,7 +143,13 @@ def whoami(ctx: click.Context, output_json: bool = False) -> None:
     out.print(table)
 
 
-@click.command()
+@click.command(
+    epilog="""\b
+Examples:
+  blackbeard register
+  blackbeard register -e user@example.com -d "Jane Doe"
+"""
+)
 @click.option("--email", "-e", prompt=True, help="Account email address")
 @click.option(
     "--password", "-p", prompt=True, hide_input=True, confirmation_prompt=True, help="Password"

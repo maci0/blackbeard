@@ -26,6 +26,7 @@ from blackbeard_cli.helpers import (
     handle_request_error,
     json_opt,
     out,
+    parse_key_value_inputs,
     print_json,
     require_auth,
     validate_name,
@@ -863,20 +864,7 @@ def kickoff(
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     validate_name(crew_name)
 
-    parsed_inputs: dict[str, Any] = {}
-    for item in inputs:
-        if "=" not in item:
-            console.print(f"[red bold]Error:[/] Invalid --input: expected KEY=VALUE, got: {item!r}")
-            console.print('[dim]Example: --input topic="AI agents"[/]')
-            raise SystemExit(2)
-        key, _, value = item.partition("=")
-        if not key:
-            console.print(f"[red bold]Error:[/] Invalid --input: key cannot be empty in {item!r}")
-            raise SystemExit(2)
-        try:
-            parsed_inputs[key] = json.loads(value)
-        except (json.JSONDecodeError, ValueError):
-            parsed_inputs[key] = value
+    parsed_inputs = parse_key_value_inputs(inputs)
 
     server = ctx.obj["server"]
 
@@ -1005,20 +993,7 @@ def train(
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     validate_name(crew_name)
 
-    parsed_inputs: dict[str, Any] = {}
-    for item in inputs:
-        if "=" not in item:
-            console.print(f"[red bold]Error:[/] Invalid --input: expected KEY=VALUE, got: {item!r}")
-            console.print('[dim]Example: --input topic="AI agents"[/]')
-            raise SystemExit(2)
-        key, _, value = item.partition("=")
-        if not key:
-            console.print(f"[red bold]Error:[/] Invalid --input: key cannot be empty in {item!r}")
-            raise SystemExit(2)
-        try:
-            parsed_inputs[key] = json.loads(value)
-        except (json.JSONDecodeError, ValueError):
-            parsed_inputs[key] = value
+    parsed_inputs = parse_key_value_inputs(inputs)
 
     server = ctx.obj["server"]
     namespace = ctx.obj["namespace"]
@@ -1142,20 +1117,7 @@ def test_crew_cmd(
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     validate_name(crew_name)
 
-    parsed_inputs: dict[str, Any] = {}
-    for item in inputs:
-        if "=" not in item:
-            console.print(f"[red bold]Error:[/] Invalid --input: expected KEY=VALUE, got: {item!r}")
-            console.print('[dim]Example: --input topic="AI agents"[/]')
-            raise SystemExit(2)
-        key, _, value = item.partition("=")
-        if not key:
-            console.print(f"[red bold]Error:[/] Invalid --input: key cannot be empty in {item!r}")
-            raise SystemExit(2)
-        try:
-            parsed_inputs[key] = json.loads(value)
-        except (json.JSONDecodeError, ValueError):
-            parsed_inputs[key] = value
+    parsed_inputs = parse_key_value_inputs(inputs)
 
     server = ctx.obj["server"]
     namespace = ctx.obj["namespace"]
@@ -1267,9 +1229,6 @@ def status(
     url = f"{server}/api/v1/executions/{execution_id}"
     headers = require_auth(ctx)
 
-    def _status_color(s: str) -> str:
-        return STATUS_COLORS.get(s, "dim")
-
     with httpx.Client(timeout=ctx.obj["timeout"]) as client:
 
         def fetch() -> dict[str, Any]:
@@ -1285,7 +1244,7 @@ def status(
 
         def render(data: dict[str, Any]) -> None:
             status_val = data.get("status", "unknown")
-            color = _status_color(status_val)
+            color = STATUS_COLORS.get(status_val, "dim")
 
             table = Table(show_header=False, box=None, padding=(0, 2))
             table.add_column("Key", style="bold dim", width=14)
@@ -1347,7 +1306,7 @@ def status(
 
                 for t in tasks:
                     t_status = t.get("status", "—")
-                    t_color = _status_color(t_status)
+                    t_color = STATUS_COLORS.get(t_status, "dim")
                     t_tokens = t.get("tokens_used")
                     task_table.add_row(
                         str(t.get("order", "—")),
@@ -1429,7 +1388,7 @@ def pull(ctx: click.Context, source: str, output_json: bool) -> None:
     headers = require_auth(ctx)
 
     try:
-        with httpx.Client(timeout=60.0) as client:
+        with httpx.Client(timeout=max(ctx.obj["timeout"], 60.0)) as client:
             resp = client.post(
                 f"{server}/api/v1/marketplace/import",
                 json={"url": source},

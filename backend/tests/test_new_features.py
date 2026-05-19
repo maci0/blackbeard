@@ -425,12 +425,10 @@ class TestOtelListener:
         listener_mod._otel_provider = None
         try:
             result = _get_otel_tracer()
-            # Without OTEL installed or without config, returns None
-            if not listener_mod.HAS_OTEL:
-                assert result is None
-            else:
-                # HAS_OTEL is True but otel_endpoint is None (default)
-                assert result is None
+            assert result is None, (
+                "Without otel_endpoint configured, tracer must be None "
+                f"(HAS_OTEL={listener_mod.HAS_OTEL})"
+            )
         finally:
             listener_mod._otel_tracer = old_tracer
             listener_mod._otel_provider = old_provider
@@ -737,9 +735,10 @@ class TestWebhookDelivery:
 
         old_factory = listener_mod._sync_session_factory
         listener_mod._sync_session_factory = mock_factory
+        listener_mod.invalidate_webhook_cache()
 
         try:
-            with patch("blackbeard.http_client.get_sync_client", return_value=mock_client):
+            with patch.object(listener_mod, "_get_sync_client", return_value=mock_client):
                 listener_mod._deliver_webhooks_sync(
                     "crew_started",
                     {"crew_name": "test"},
@@ -754,3 +753,4 @@ class TestWebhookDelivery:
             assert "X-Webhook-Signature" in call_kwargs[1]["headers"]
         finally:
             listener_mod._sync_session_factory = old_factory
+            listener_mod.invalidate_webhook_cache()

@@ -244,7 +244,7 @@ describe('studioStore', () => {
       }
 
       const state = useStudioStore.getState()
-      expect(state.history.length).toBeLessThanOrEqual(30)
+      expect(state.history.length).toBe(30)
 
       vi.useRealTimers()
     })
