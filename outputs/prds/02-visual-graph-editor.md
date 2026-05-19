@@ -6,9 +6,9 @@ Provide a browser-based drag-and-drop canvas where users compose agents, tasks, 
 
 ### 1.1 MVP Scope
 
-**Implemented:** Canvas with Agent/Task/Tool nodes, edges for context and tool assignment, property panel with spec fields, YAML editor with bidirectional sync (Monaco), save to API, Run/Train/Test mode selector triggering crew execution, FlowStep nodes, CrewGroup compound nodes (bounding box for grouping agents and tasks), ELK.js auto-layout, undo/redo (30-snapshot history), basic execution view with status badges.
+**Implemented:** Canvas with Agent/Task/Tool nodes, edges for context and tool assignment, property panel with spec fields, YAML editor with bidirectional sync (Monaco), save to API, Run/Train/Test mode selector, FlowStep nodes, CrewGroup compound nodes (bounding box), ELK.js auto-layout, undo/redo (30 snapshots), execution view with status badges. AI Copilot (prompt-to-crew via LiteLLM, Sparkles button + dialog). Live collaboration (WebSocket rooms, participant count, node/edge sync, auto-reconnect).
 
-**Deferred to post-MVP:** AI Copilot, Export ZIP/PNG/SVG/React, drag reparenting, live collaboration, accessibility beyond basic keyboard nav.
+**Deferred to post-MVP:** Export ZIP/PNG/SVG/React, drag reparenting, cursor presence (showing other users' cursors).
 
 ---
 

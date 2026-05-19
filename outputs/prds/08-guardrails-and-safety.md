@@ -8,7 +8,9 @@ Provide configurable safety mechanisms that validate, filter, and redact agent o
 
 **Implemented:** Task-level guardrails wired through CrewAI's built-in guardrail system, supporting three types: function-based (Python callable), LLM-based (string description evaluated by the agent's LLM), and schema-based (JSON Schema validation). The `Guardrail` resource kind is fully working with CRUD and reference resolution.
 
-**Deferred to post-MVP:** Hallucination detection (section 3), PII redaction via Presidio (section 4), namespace-level and crew-level guardrails, composite guardrail chains.
+**Implemented additionally:** PII redaction via Microsoft Presidio with configurable backends (default regex, presidio-nlp with spaCy, litellm for local LLM-based detection via GLiNER/HydroX). PII guardrail type (redact/reject/warn actions). AgentPolicy pii config (per-policy enable, entity selection, output + event redaction). PII never reaches the database.
+
+**Deferred to post-MVP:** Hallucination detection, namespace-level and crew-level guardrails, composite guardrail chains.
 
 ---
 
