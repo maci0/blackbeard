@@ -6,9 +6,9 @@ Define the public API surface, webhook streaming protocol, plugin SDK, and exten
 
 ### 1.1 MVP Scope
 
-**Implemented:** REST CRUD for all 11 resource kinds, execution lifecycle endpoints (kickoff, status, cancel, stream, events), auth endpoints (register, login, refresh, whoami), health check endpoints (liveness and readiness), audit log API, marketplace import, webhook endpoint configuration, HITL respond endpoint, OpenAPI schema auto-generated at `/api/v1/docs`. SDKs: Python SDK and TypeScript SDK (both auto-generated from the OpenAPI spec). CLI fully implemented as a standalone package with 25+ commands and credential storage.
+**Implemented:** REST CRUD for all 12 resource kinds (including Automation), execution lifecycle endpoints (kickoff, train, test, flow run, status, cancel, stream, events), auth endpoints (register, login, refresh, whoami), health check endpoints, audit log API, marketplace import, webhook configuration, HITL respond endpoint, automation trigger endpoints (cron, webhook, API), gRPC API on :50051 (ListResources, GetResource, CreateResource, DeleteResource, Kickoff, GetExecution, StreamEvents, Health). OpenAPI schema at `/api/v1/docs`. SDKs: Python + TypeScript. CLI: standalone package, 25+ commands.
 
-**Deferred to post-MVP:** gRPC API, React component export (`@blackbeard/react` widget), Plugin SDK (`blackbeard-plugin-sdk` package), AsyncAPI spec for webhook events.
+**Deferred to post-MVP:** React component export (`@blackbeard/react` widget), Plugin SDK, AsyncAPI spec for webhook events.
 
 ## 2. REST API
 

@@ -6,9 +6,9 @@ Manage the full lifecycle of deployed crews and flows: build, deploy, version, r
 
 ### 1.1 MVP Scope
 
-**Implemented:** Docker Compose deployment (`docker compose up` with 5 containers: api, ui, postgres, valkey, litellm) and a Helm chart for Kubernetes deployment. Crews are kicked off directly via `POST /api/v1/crews/{name}/kickoff`.
+**Implemented:** Docker Compose deployment + Helm chart for Kubernetes. Automation resource kind with cron, webhook, and API triggers. Background cron scheduler runs in FastAPI lifespan. Webhook trigger endpoint validates HMAC secrets. Crews and Flows can be automated with configurable inputs and max concurrency.
 
-**Deferred to post-MVP:** The Automation resource, deployment lifecycle (build/deploy/version/rollback), triggers (cron, webhook, custom), A2A protocol endpoints, versioning strategies, and the Automations Dashboard UI. These remain the full scope of this PRD for post-MVP work.
+**Deferred to post-MVP:** Deployment lifecycle (build/deploy/version/rollback), versioning strategies, blue-green/canary deployments, A2A protocol endpoints, Automations Dashboard UI, replica scaling.
 
 ## 2. Automation Resource
 

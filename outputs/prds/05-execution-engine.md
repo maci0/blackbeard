@@ -6,9 +6,9 @@ The Execution Engine is the runtime that loads YAML resource definitions, resolv
 
 ### 1.1 MVP Scope
 
-**Implemented:** Sequential and hierarchical crew execution, flow execution (sequential steps of type crew and function), train and test modes via CrewAI native APIs, budget enforcement via LiteLLM virtual keys (per-execution), guardrails (function-based, LLM-based, and schema-based) wired through CrewAI's built-in guardrail system, AgentPolicy enforcement (tool allowlist/denylist, sandbox tier promotion), HITL respond endpoint, event streaming via both SSE and WebSocket, webhooks for execution events, `none` and `wasm` sandbox tiers. In-process execution backend using `ThreadPoolExecutor`.
+**Implemented:** Sequential and hierarchical crew execution. Flow execution with all step types: crew, function, router (Python function dispatch), condition (safe expression eval), and transform (WASM data massaging). Train and test modes via CrewAI native APIs. Budget enforcement via LiteLLM virtual keys. Guardrails (function, LLM, schema). AgentPolicy enforcement (tool allowlist/denylist, delegation, sandbox tier). Workflow hooks (before/after kickoff, before/after task, before/after flow step, on_error). HITL respond endpoint. SSE + WebSocket streaming. Webhooks. Automation triggers (cron, webhook, API). gRPC API on :50051. WASM sandbox tier.
 
-**Deferred to post-MVP:** Temporal workflow backend, Docker and MicroVM sandbox tiers, flow router/condition steps, dynamic task creation in hierarchical mode, warm container/VM pools.
+**Deferred to post-MVP:** Temporal workflow backend, Docker and MicroVM sandbox tiers, dynamic task creation in hierarchical mode, warm container/VM pools.
 
 ## 2. Architecture
 

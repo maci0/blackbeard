@@ -8,9 +8,9 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 
 | Feature | Scope for MVP |
 |---------|---------------|
-| Resource model | All 11 kinds registered with full CRUD: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding, Flow (CRUD + sequential step execution), KnowledgeSource (CRUD, limited execution wiring). No EnvironmentVariable, Namespace, or standalone ServiceAccount resource yet. |
+| Resource model | All 12 kinds: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding, Flow (all step types: crew/function/router/condition/transform), KnowledgeSource, Automation (cron/webhook/API triggers). No EnvironmentVariable, Namespace, or standalone ServiceAccount. |
 | Visual editor | Canvas with Agent/Task/Tool/FlowStep nodes, CrewGroup compound nodes, edges for context/tool assignment, property panel, YAML editor (Monaco, bidirectional sync), ELK.js auto-layout, Run/Train/Test mode selector, undo/redo (30 snapshots) |
-| Execution | Sequential and hierarchical crews, sequential flow steps (crew/function). Train and test via CrewAI native. HITL respond endpoint. No flow router/condition steps. |
+| Execution | Sequential + hierarchical crews. Flow steps: crew, function, router (Python dispatch), condition (safe eval), transform (WASM). Train/test via CrewAI native. HITL. Workflow hooks (before/after kickoff, task, flow step). Automation scheduler (cron). gRPC API on :50051. |
 | LLM routing | Fully implemented: LiteLLM Proxy with config generation, virtual keys, spend tracking, per-user registration |
 | Sandbox | `none` and `wasm` tiers (no Docker/MicroVM sandbox) |
 | Tools | Python tools (`BaseTool`), WASM tools, MCP tools (stdio + HTTP), builtin tools. Tool discovery. Marketplace import from git. No Composio, no OAuth connectors, no tool compilation CLI |
