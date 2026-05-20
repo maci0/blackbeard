@@ -55,8 +55,8 @@ class Settings(BaseSettings):
     # gVisor sandbox settings
     gvisor_enabled: bool = False
 
-    # MicroVM sandbox settings
-    microvm_enabled: bool = False
+    # MicroVM sandbox settings (requires crun-krun + /dev/kvm)
+    microvm_enabled: bool = True
 
     # MuninnDB cognitive memory settings
     muninndb_url: str = "http://localhost:8475"

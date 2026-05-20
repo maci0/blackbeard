@@ -1,0 +1,23 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: check-style
+  namespace: default
+spec:
+  description: >
+    Review the following code diff for style and quality:
+
+    {code_diff}
+
+    Check for:
+    1. Naming conventions and readability
+    2. Function complexity and length
+    3. Proper error handling patterns
+    4. Missing or inadequate documentation
+    5. Code duplication or missed abstraction opportunities
+    6. Test coverage gaps
+  expected_output: >
+    A list of style and quality findings, each with importance
+    (required, suggested, nitpick), the affected code location,
+    and a concrete improvement suggestion.
+  agent: "ref:agents/style-checker"

@@ -1,0 +1,23 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: scan-vulnerabilities
+  namespace: default
+spec:
+  description: >
+    Review the following code diff for security vulnerabilities:
+
+    {code_diff}
+
+    Check for:
+    1. Injection vulnerabilities (SQL, command, XSS)
+    2. Authentication and authorization issues
+    3. Hardcoded secrets or credentials
+    4. Insecure data handling (missing encryption, logging sensitive data)
+    5. Path traversal or file access issues
+    6. Missing input validation or sanitization
+  expected_output: >
+    A list of security findings, each with severity (critical, high,
+    medium, low), the affected code location, a description of the
+    vulnerability, and a recommended fix.
+  agent: "ref:agents/security-scanner"

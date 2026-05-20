@@ -1,0 +1,23 @@
+apiVersion: blackbeard/v1
+kind: Crew
+metadata:
+  name: code-review-crew
+  namespace: default
+  labels:
+    type: devtools
+spec:
+  description: "Automated code review with security scanning, style checking, and PR summary"
+  process: sequential
+  agents:
+    - "ref:agents/security-scanner"
+    - "ref:agents/style-checker"
+    - "ref:agents/pr-summarizer"
+  tasks:
+    - "ref:tasks/scan-vulnerabilities"
+    - "ref:tasks/check-style"
+    - "ref:tasks/write-pr-summary"
+  verbose: true
+  inputs:
+    - name: code_diff
+      description: "The code diff to review (unified diff format)"
+      required: true

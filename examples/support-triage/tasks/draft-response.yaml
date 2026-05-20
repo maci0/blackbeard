@@ -1,0 +1,21 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: draft-response
+  namespace: default
+spec:
+  description: >
+    Draft an initial customer response for the support ticket.
+
+    Use the classification and routing information to:
+    1. Acknowledge the specific issue
+    2. Set expectations for resolution timeline based on the SLA tier
+    3. Provide any immediate self-service steps if applicable
+    4. Match tone to customer sentiment (empathetic for negative/angry)
+  expected_output: >
+    A professional, empathetic customer-facing email response ready
+    for review by the assigned support agent before sending.
+  agent: "ref:agents/draft-responder"
+  context:
+    - "ref:tasks/classify-ticket"
+    - "ref:tasks/route-ticket"

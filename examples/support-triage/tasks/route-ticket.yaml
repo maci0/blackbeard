@@ -1,0 +1,19 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: route-ticket
+  namespace: default
+spec:
+  description: >
+    Based on the ticket classification, determine the routing:
+
+    1. Assign to the correct team
+    2. Set the SLA tier based on priority
+    3. Flag for escalation if sentiment is angry and priority is high/critical
+    4. Add any relevant internal notes for the assigned team
+  expected_output: >
+    A routing decision with assigned team, SLA tier, escalation status,
+    and internal notes to help the support agent handle the ticket.
+  agent: "ref:agents/ticket-router"
+  context:
+    - "ref:tasks/classify-ticket"

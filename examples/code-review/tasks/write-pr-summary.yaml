@@ -1,0 +1,23 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: write-pr-summary
+  namespace: default
+spec:
+  description: >
+    Synthesize the security scan and style review findings into a
+    comprehensive PR review summary.
+
+    Organize the summary as:
+    1. Overall assessment (approve, request changes, or needs discussion)
+    2. Required changes (blocking issues that must be fixed)
+    3. Suggested improvements (non-blocking but recommended)
+    4. Positive observations (good patterns worth highlighting)
+  expected_output: >
+    A well-structured PR review summary in markdown format, ready
+    to post as a review comment. Include an overall verdict and
+    prioritized action items.
+  agent: "ref:agents/pr-summarizer"
+  context:
+    - "ref:tasks/scan-vulnerabilities"
+    - "ref:tasks/check-style"

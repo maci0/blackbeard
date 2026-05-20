@@ -42,6 +42,30 @@ const FEATURED_REPOS: FeaturedRepo[] = [
     url: 'coming-soon',
     tags: ['content', 'pipeline'],
   },
+  {
+    name: 'Customer Support Triage',
+    description: 'AI-powered support ticket classification and routing with sentiment analysis',
+    url: 'coming-soon',
+    tags: ['support', 'classification', 'sentiment'],
+  },
+  {
+    name: 'Code Review Pipeline',
+    description: 'Automated code review with security scanning, style checking, and PR summary',
+    url: 'coming-soon',
+    tags: ['devtools', 'code-review', 'security'],
+  },
+  {
+    name: 'Data Analysis Crew',
+    description: 'Multi-agent data analysis: cleaner, analyst, and visualizer working together',
+    url: 'coming-soon',
+    tags: ['data', 'analysis', 'visualization'],
+  },
+  {
+    name: 'SEO Content Writer',
+    description: 'Research keywords, write SEO-optimized articles, and generate meta descriptions',
+    url: 'coming-soon',
+    tags: ['content', 'seo', 'marketing'],
+  },
 ]
 
 /* ------------------------------------------------------------------ */
@@ -57,6 +81,26 @@ const TAG_CLASSES: Record<string, string> = {
     'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800',
   pipeline:
     'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-800',
+  support:
+    'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/40 dark:text-rose-300 dark:border-rose-800',
+  classification:
+    'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/40 dark:text-sky-300 dark:border-sky-800',
+  sentiment:
+    'bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-900/40 dark:text-pink-300 dark:border-pink-800',
+  devtools:
+    'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/40 dark:text-slate-300 dark:border-slate-800',
+  'code-review':
+    'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/40 dark:text-cyan-300 dark:border-cyan-800',
+  security:
+    'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-800',
+  data: 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-800',
+  analysis:
+    'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:border-teal-800',
+  visualization:
+    'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200 dark:bg-fuchsia-900/40 dark:text-fuchsia-300 dark:border-fuchsia-800',
+  seo: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-800',
+  marketing:
+    'bg-lime-100 text-lime-700 border-lime-200 dark:bg-lime-900/40 dark:text-lime-300 dark:border-lime-800',
 }
 
 function TagBadge({ tag }: { tag: string }) {

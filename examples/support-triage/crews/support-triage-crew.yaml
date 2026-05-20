@@ -1,0 +1,23 @@
+apiVersion: blackbeard/v1
+kind: Crew
+metadata:
+  name: support-triage-crew
+  namespace: default
+  labels:
+    type: support
+spec:
+  description: "Classifies, routes, and drafts responses for incoming support tickets"
+  process: sequential
+  agents:
+    - "ref:agents/ticket-classifier"
+    - "ref:agents/ticket-router"
+    - "ref:agents/draft-responder"
+  tasks:
+    - "ref:tasks/classify-ticket"
+    - "ref:tasks/route-ticket"
+    - "ref:tasks/draft-response"
+  verbose: true
+  inputs:
+    - name: ticket_content
+      description: "The full text of the incoming support ticket"
+      required: true

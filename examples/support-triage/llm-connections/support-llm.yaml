@@ -1,0 +1,14 @@
+apiVersion: blackbeard/v1
+kind: LLMConnection
+metadata:
+  name: support-llm
+  namespace: default
+  labels:
+    provider: vertex-ai
+    tier: standard
+spec:
+  provider: vertex_ai
+  model: claude-sonnet-4-6
+  parameters:
+    temperature: 0.3
+    max_tokens: 2048

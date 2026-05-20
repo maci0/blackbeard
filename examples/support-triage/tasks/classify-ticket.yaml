@@ -1,0 +1,20 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: classify-ticket
+  namespace: default
+spec:
+  description: >
+    Classify the following support ticket:
+
+    {ticket_content}
+
+    Determine:
+    1. Category (billing, technical, feature-request, account, general)
+    2. Priority (critical, high, medium, low)
+    3. Sentiment (positive, neutral, negative, angry)
+    4. Key topics mentioned
+  expected_output: >
+    A structured classification with category, priority, sentiment,
+    and a brief justification for each classification decision.
+  agent: "ref:agents/ticket-classifier"

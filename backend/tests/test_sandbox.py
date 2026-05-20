@@ -13,9 +13,11 @@ from blackbeard.engine.sandbox.container_runtime import (
     ContainerTimeoutError,
 )
 from blackbeard.engine.sandbox.microvm_runtime import (
-    MicroVMError,
     MicroVMResult,
+    MicroVMRuntimeError,
     MicroVMSandbox,
+    MicroVMTimeoutError,
+    is_krun_available,
 )
 from blackbeard.engine.sandbox.selector import TIER_ORDER, select_sandbox, tier_rank
 from blackbeard.engine.sandbox.wasm_runtime import (
@@ -478,55 +480,251 @@ class TestMicroVMResult:
 # ---------------------------------------------------------------------------
 
 
-class TestMicroVMSandbox:
-    def test_detect_firecracker(self):
+class TestMicroVMSandboxDetection:
+    def test_detect_podman_preferred(self):
+        """Auto-detect prefers podman over docker."""
+        with patch("shutil.which", side_effect=lambda cmd: f"/usr/bin/{cmd}"):
+            sandbox = MicroVMSandbox(container_runtime="auto")
+            assert sandbox.runtime == "podman"
+
+    def test_detect_docker_fallback(self):
+        """Falls back to docker when podman is not available."""
         def _which(cmd):
-            return "/usr/bin/firecracker" if cmd == "firecracker" else None
+            if cmd == "docker":
+                return "/usr/bin/docker"
+            if cmd in ("krun", "crun"):
+                return "/usr/bin/crun"
+            return None
 
         with patch("shutil.which", side_effect=_which):
-            sandbox = MicroVMSandbox(hypervisor="auto")
-            assert sandbox.hypervisor == "firecracker"
-
-    def test_detect_cloud_hypervisor(self):
-        def _which(cmd):
-            return "/usr/bin/cloud-hypervisor" if cmd == "cloud-hypervisor" else None
-
-        with patch("shutil.which", side_effect=_which):
-            sandbox = MicroVMSandbox(hypervisor="auto")
-            assert sandbox.hypervisor == "cloud-hypervisor"
+            sandbox = MicroVMSandbox(container_runtime="auto")
+            assert sandbox.runtime == "docker"
 
     def test_detect_none_raises(self):
+        """Raises when no container runtime is available."""
         with (
             patch("shutil.which", return_value=None),
-            pytest.raises(MicroVMError, match="No MicroVM hypervisor found"),
+            pytest.raises(MicroVMRuntimeError, match="No container runtime found"),
         ):
-            MicroVMSandbox(hypervisor="auto")
+            MicroVMSandbox(container_runtime="auto")
 
-    def test_explicit_hypervisor(self):
-        with patch("shutil.which", return_value="/usr/bin/firecracker"):
-            sandbox = MicroVMSandbox(hypervisor="firecracker")
-            assert sandbox.hypervisor == "firecracker"
+    def test_explicit_podman(self):
+        with patch("shutil.which", side_effect=lambda cmd: f"/usr/bin/{cmd}"):
+            sandbox = MicroVMSandbox(container_runtime="podman")
+            assert sandbox.runtime == "podman"
+
+    def test_explicit_docker(self):
+        with patch("shutil.which", side_effect=lambda cmd: f"/usr/bin/{cmd}"):
+            sandbox = MicroVMSandbox(container_runtime="docker")
+            assert sandbox.runtime == "docker"
 
     def test_explicit_missing_raises(self):
         with (
             patch("shutil.which", return_value=None),
-            pytest.raises(MicroVMError, match="not found on PATH"),
+            pytest.raises(MicroVMRuntimeError, match="not found on PATH"),
         ):
-            MicroVMSandbox(hypervisor="firecracker")
+            MicroVMSandbox(container_runtime="docker")
+
+
+class TestMicroVMSandboxCommand:
+    def _make_sandbox(self, runtime: str = "docker") -> MicroVMSandbox:
+        with patch("shutil.which", side_effect=lambda cmd: f"/usr/bin/{cmd}"):
+            return MicroVMSandbox(container_runtime=runtime)
+
+    def test_basic_command_uses_krun(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("python:3.13-slim", ["python", "-c", "print('hi')"])
+        assert cmd[0] == "docker"
+        assert "run" in cmd
+        assert "--rm" in cmd
+        assert "--runtime=krun" in cmd
+        assert "python:3.13-slim" in cmd
+        assert cmd[-3:] == ["python", "-c", "print('hi')"]
+
+    def test_security_defaults(self):
+        """Verify all security flags are present by default."""
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"])
+        assert "--cap-drop" in cmd
+        idx = cmd.index("--cap-drop")
+        assert cmd[idx + 1] == "ALL"
+        assert "--security-opt" in cmd
+        sec_idx = cmd.index("--security-opt")
+        assert cmd[sec_idx + 1] == "no-new-privileges:true"
+        assert "--network" in cmd
+        net_idx = cmd.index("--network")
+        assert cmd[net_idx + 1] == "none"
+        assert "--read-only" in cmd
+
+    def test_default_memory_512m(self):
+        """MicroVM default memory is 512m (higher than container tier)."""
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"])
+        idx = cmd.index("--memory")
+        assert cmd[idx + 1] == "512m"
+
+    def test_custom_memory_limit(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"], memory_limit="1g")
+        idx = cmd.index("--memory")
+        assert cmd[idx + 1] == "1g"
+
+    def test_cpu_limit(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"], cpu_limit=2.5)
+        assert "--cpus=2.5" in cmd
+
+    def test_env_vars(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"], env={"FOO": "bar", "BAZ": "qux"})
+        env_pairs = []
+        for i, part in enumerate(cmd):
+            if part == "-e":
+                env_pairs.append(cmd[i + 1])
+        assert "BAZ=qux" in env_pairs
+        assert "FOO=bar" in env_pairs
+
+    def test_stdin_flag(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"], input_data="hello")
+        assert "-i" in cmd
+
+    def test_no_stdin_flag_without_input(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"], input_data=None)
+        assert "-i" not in cmd
+
+    def test_podman_runtime(self):
+        sandbox = self._make_sandbox("podman")
+        cmd = sandbox._build_command("img", ["cmd"])
+        assert cmd[0] == "podman"
+        assert "--runtime=krun" in cmd
+
+
+class TestMicroVMSandboxExecution:
+    def _make_sandbox(self, runtime: str = "docker") -> MicroVMSandbox:
+        with patch("shutil.which", side_effect=lambda cmd: f"/usr/bin/{cmd}"):
+            return MicroVMSandbox(container_runtime=runtime)
 
     @pytest.mark.asyncio
-    async def test_execute_raises_not_implemented(self):
-        with patch("shutil.which", return_value="/usr/bin/firecracker"):
-            sandbox = MicroVMSandbox(hypervisor="firecracker")
-            with pytest.raises(NotImplementedError, match="requires kernel and rootfs"):
-                await sandbox.execute("echo hello")
+    async def test_execute_success(self):
+        sandbox = self._make_sandbox()
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(b"output", b""))
+        mock_proc.returncode = 0
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await sandbox.execute("python:3.13-slim", ["echo", "hi"])
+            assert result.exit_code == 0
+            assert result.stdout == "output"
+            assert result.stderr == ""
 
     @pytest.mark.asyncio
-    async def test_execute_suggests_alternatives(self):
-        with patch("shutil.which", return_value="/usr/bin/firecracker"):
-            sandbox = MicroVMSandbox(hypervisor="firecracker")
-            with pytest.raises(NotImplementedError, match=r"docker.*podman"):
-                await sandbox.execute("echo hello")
+    async def test_execute_with_input(self):
+        sandbox = self._make_sandbox()
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(b"processed", b""))
+        mock_proc.returncode = 0
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await sandbox.execute(
+                "python:3.13-slim",
+                ["python", "-c", "import sys; print(sys.stdin.read())"],
+                input_data="test input",
+            )
+            assert result.exit_code == 0
+            assert result.stdout == "processed"
+            mock_proc.communicate.assert_called_once_with(b"test input")
+
+    @pytest.mark.asyncio
+    async def test_execute_nonzero_exit(self):
+        sandbox = self._make_sandbox()
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(b"", b"error msg"))
+        mock_proc.returncode = 1
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await sandbox.execute("img", ["cmd"])
+            assert result.exit_code == 1
+            assert result.stderr == "error msg"
+
+    @pytest.mark.asyncio
+    async def test_execute_timeout(self):
+        sandbox = self._make_sandbox()
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(side_effect=TimeoutError)
+        mock_proc.kill = MagicMock()
+        mock_proc.wait = AsyncMock()
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch("asyncio.wait_for", side_effect=TimeoutError),
+            pytest.raises(MicroVMTimeoutError, match="timed out after 10s"),
+        ):
+            await sandbox.execute("img", ["cmd"], timeout=10)
+
+    @pytest.mark.asyncio
+    async def test_execute_default_timeout_60s(self):
+        """MicroVM default timeout is 60s (higher than container tier)."""
+        sandbox = self._make_sandbox()
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(side_effect=TimeoutError)
+        mock_proc.kill = MagicMock()
+        mock_proc.wait = AsyncMock()
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch("asyncio.wait_for", side_effect=TimeoutError),
+            pytest.raises(MicroVMTimeoutError, match="timed out after 60s"),
+        ):
+            await sandbox.execute("img", ["cmd"])
+
+    @pytest.mark.asyncio
+    async def test_execute_runtime_not_found(self):
+        sandbox = self._make_sandbox()
+
+        with (
+            patch(
+                "asyncio.create_subprocess_exec",
+                side_effect=FileNotFoundError("docker"),
+            ),
+            pytest.raises(MicroVMRuntimeError, match="not found"),
+        ):
+            await sandbox.execute("img", ["cmd"])
+
+
+class TestIsKrunAvailable:
+    def test_krun_available(self):
+        def _which(cmd):
+            return "/usr/bin/krun" if cmd == "krun" else None
+
+        with patch(
+            "blackbeard.engine.sandbox.microvm_runtime.shutil.which",
+            side_effect=_which,
+        ):
+            assert is_krun_available() is True
+
+    def test_crun_available(self):
+        def _which(cmd):
+            return "/usr/bin/crun" if cmd == "crun" else None
+
+        with patch(
+            "blackbeard.engine.sandbox.microvm_runtime.shutil.which",
+            side_effect=_which,
+        ):
+            assert is_krun_available() is True
+
+    def test_neither_available(self):
+        with patch(
+            "blackbeard.engine.sandbox.microvm_runtime.shutil.which",
+            return_value=None,
+        ):
+            assert is_krun_available() is False
 
 
 # ---------------------------------------------------------------------------

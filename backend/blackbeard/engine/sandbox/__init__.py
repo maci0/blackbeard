@@ -18,7 +18,10 @@ from blackbeard.engine.sandbox.gvisor_runtime import (
 from blackbeard.engine.sandbox.microvm_runtime import (
     MicroVMError,
     MicroVMResult,
+    MicroVMRuntimeError,
     MicroVMSandbox,
+    MicroVMTimeoutError,
+    is_krun_available,
 )
 from blackbeard.engine.sandbox.selector import TIER_ORDER, select_sandbox, tier_rank
 
@@ -34,8 +37,11 @@ __all__ = [
     "GVisorTimeoutError",
     "MicroVMError",
     "MicroVMResult",
+    "MicroVMRuntimeError",
     "MicroVMSandbox",
+    "MicroVMTimeoutError",
     "is_gvisor_available",
+    "is_krun_available",
     "select_sandbox",
     "tier_rank",
 ]
