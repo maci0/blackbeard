@@ -8,6 +8,7 @@ metadata:
     {{- include "blackbeard.selectorLabels" (dict "context" . "component" "valkey") | nindent 4 }}
 spec:
   replicas: 1
+  revisionHistoryLimit: 5
   strategy:
     type: Recreate
   selector:

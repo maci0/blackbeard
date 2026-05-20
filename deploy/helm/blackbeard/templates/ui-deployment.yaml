@@ -7,6 +7,12 @@ metadata:
     {{- include "blackbeard.selectorLabels" (dict "context" . "component" "ui") | nindent 4 }}
 spec:
   replicas: {{ .Values.ui.replicas }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       {{- include "blackbeard.selectorLabels" (dict "context" . "component" "ui") | nindent 6 }}

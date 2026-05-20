@@ -48,6 +48,11 @@ def set_api_key(key: str) -> None:
     _EXPECTED_API_KEY = key
 
 
+def get_api_key() -> str:
+    """Return the currently active API key."""
+    return _EXPECTED_API_KEY
+
+
 # Allowlist pattern for client-supplied request IDs — prevents header injection
 _REQUEST_ID_PATTERN = re.compile(r"^[a-zA-Z0-9\-]{1,64}$")
 
@@ -115,25 +120,23 @@ def _check_rate_limit(request: Request, request_id: str, client_ip: str) -> JSON
     return response
 
 
-def _record_auth_failure(client_ip: str) -> None:
+_AUTH_FAIL_MAX_IPS = 200
+
+
+def record_auth_failure(client_ip: str) -> None:
     """Record an authentication failure for rate limiting and prune stale entries."""
     now = time.monotonic()
     if client_ip not in _auth_failures:
         _auth_failures[client_ip] = collections.deque(maxlen=_AUTH_FAIL_MAX + 10)
     _auth_failures[client_ip].append(now)
-    if len(_auth_failures) > 200:
+    if len(_auth_failures) > _AUTH_FAIL_MAX_IPS:
         cutoff = now - _AUTH_FAIL_WINDOW_S
         stale = [ip for ip, dq in _auth_failures.items() if not dq or dq[-1] < cutoff]
         for ip in stale:
             _auth_failures.pop(ip, None)
-        if len(_auth_failures) > 200:
-            to_evict = len(_auth_failures) - 200
-            by_recency = sorted(
-                _auth_failures,
-                key=lambda k: _auth_failures[k][-1] if _auth_failures[k] else 0,
-            )
-            for ip in by_recency[:to_evict]:
-                _auth_failures.pop(ip, None)
+        # Hard cap: evict oldest entries to prevent unbounded growth under DDoS
+        while len(_auth_failures) > _AUTH_FAIL_MAX_IPS:
+            _auth_failures.pop(next(iter(_auth_failures)), None)
 
 
 def get_request_id(request: Request) -> str:
@@ -163,7 +166,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         response.headers["X-Request-Id"] = request_id
 
         if path in _AUTH_PATHS and response.status_code in (401, 403):
-            _record_auth_failure(client_ip)
+            record_auth_failure(client_ip)
 
         _log_request(request, response, start)
         return response
@@ -199,7 +202,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
                 raise pyjwt.InvalidTokenError("Not an access token")
             user_id_var.set(payload.get("sub", ""))
         except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError) as jwt_exc:
-            _record_auth_failure(client_ip)
+            record_auth_failure(client_ip)
             duration_ms = (time.monotonic() - start) * 1000
             jwt_reason = type(jwt_exc).__name__
             logger.warning(
@@ -243,7 +246,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     if not api_key and path.endswith("/stream"):
         api_key = request.query_params.get("api_key", "")
     if not api_key or not hmac.compare_digest(api_key, _EXPECTED_API_KEY):
-        _record_auth_failure(client_ip)
+        record_auth_failure(client_ip)
 
         response = JSONResponse(
             status_code=401,
@@ -346,7 +349,7 @@ SECURITY_HEADERS = {
         "default-src 'none'; frame-ancestors 'none'; "
         "base-uri 'none'; form-action 'none'; object-src 'none'"
     ),
-    "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
     "Cache-Control": "no-store",
     "Cross-Origin-Opener-Policy": "same-origin",
     "Cross-Origin-Resource-Policy": "same-origin",
@@ -356,6 +359,11 @@ SECURITY_HEADERS = {
     "X-Download-Options": "noopen",
 }
 
+_SECURITY_HEADERS_LIST = list(SECURITY_HEADERS.items())
+_SECURITY_HEADERS_NO_CSP = [
+    (k, v) for k, v in _SECURITY_HEADERS_LIST if k != "Content-Security-Policy"
+]
+
 
 async def security_headers_middleware(
     request: Request,
@@ -364,10 +372,9 @@ async def security_headers_middleware(
     """Add security headers to every response."""
     response = await call_next(request)
     skip_csp = settings.debug and request.url.path in _DOCS_PATHS
-    for name, value in SECURITY_HEADERS.items():
+    headers = _SECURITY_HEADERS_NO_CSP if skip_csp else _SECURITY_HEADERS_LIST
+    for name, value in headers:
         if name not in response.headers:
-            if skip_csp and name == "Content-Security-Policy":
-                continue
             response.headers[name] = value
     return response
 

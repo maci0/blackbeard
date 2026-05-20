@@ -96,7 +96,9 @@ export function RunStatusBadge({
 
   const baseClass = `flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all duration-300 ${cfg.cls}`
 
-  const slideClass = animating ? 'animate-in slide-in-from-right-4 fade-in duration-300' : ''
+  const slideClass = animating
+    ? 'animate-in slide-in-from-right-4 fade-in duration-300 motion-reduce:animate-none'
+    : ''
 
   if (isNavigable) {
     return (
@@ -110,5 +112,9 @@ export function RunStatusBadge({
     )
   }
 
-  return <div className={`${baseClass} ${slideClass}`}>{inner}</div>
+  return (
+    <div role="status" aria-live="polite" className={`${baseClass} ${slideClass}`}>
+      {inner}
+    </div>
+  )
 }

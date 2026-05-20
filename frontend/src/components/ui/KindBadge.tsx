@@ -10,6 +10,7 @@ const KIND_BADGE_CLASSES: Record<string, string> = {
   KnowledgeSource: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',
   Role: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
   RoleBinding: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
+  Automation: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
 }
 
 const KIND_DISPLAY: Record<string, string> = {

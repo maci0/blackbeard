@@ -123,7 +123,10 @@ describe('Login', () => {
 
   describe('login flow', () => {
     it('shows error on invalid credentials', async () => {
-      const mockLogin = vi.fn().mockRejectedValue(new Error('Invalid credentials'))
+      const mockLogin = vi.fn().mockImplementation(() => {
+        useAuthStore.setState({ error: 'Invalid credentials' })
+        return Promise.reject(new Error('Invalid credentials'))
+      })
       useAuthStore.setState({ login: mockLogin, error: null })
 
       renderLogin()
@@ -131,12 +134,6 @@ describe('Login', () => {
       const user = userEvent.setup()
       await user.type(screen.getByLabelText(/email/i), 'bad@example.com')
       await user.type(screen.getByLabelText(/password/i), 'wrong')
-
-      // Manually set the error after the login call, simulating what the real store does
-      mockLogin.mockImplementation(() => {
-        useAuthStore.setState({ error: 'Invalid credentials' })
-        return Promise.reject(new Error('Invalid credentials'))
-      })
 
       await user.click(screen.getByRole('button', { name: /sign in/i }))
 

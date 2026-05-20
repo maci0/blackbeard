@@ -993,6 +993,10 @@ def train(
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     validate_name(crew_name)
 
+    if not filename.endswith(".pkl"):
+        console.print(f"[red bold]Error:[/] --filename must end with .pkl, got: {filename!r}")
+        raise SystemExit(2)
+
     parsed_inputs = parse_key_value_inputs(inputs)
 
     server = ctx.obj["server"]

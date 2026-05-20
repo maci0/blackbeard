@@ -24,7 +24,7 @@ const mockApi = api as unknown as {
 function resetStore() {
   useResourceStore.setState({
     resources: {},
-    loadingKinds: new Set<string>(),
+    loadingKinds: {},
     loading: false,
     error: null,
   })

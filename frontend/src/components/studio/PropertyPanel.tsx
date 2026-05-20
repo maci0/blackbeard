@@ -111,7 +111,7 @@ function CheckboxInput({
   onChange: (v: boolean) => void
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2">
+    <label className="flex min-h-[44px] cursor-pointer items-center gap-2 sm:min-h-0">
       <input
         type="checkbox"
         className="h-3.5 w-3.5 rounded border-border accent-primary"
@@ -136,6 +136,31 @@ function FieldGroup({ label, children }: { label: string; children: React.ReactN
 }
 
 const EMPTY_RESOURCES: Resource[] = []
+
+function LLMSelect({
+  value,
+  onChange,
+  connections,
+}: {
+  value: string
+  onChange: (v: string) => void
+  connections: Resource[]
+}) {
+  const options = useMemo(
+    () => [
+      { value: '', label: 'Select LLM connection...' },
+      ...connections.map((conn) => {
+        const model = (conn.spec.model as string | undefined) ?? ''
+        return {
+          value: `ref:llm-connections/${conn.metadata.name}`,
+          label: model ? `${conn.metadata.name} (${model})` : conn.metadata.name,
+        }
+      }),
+    ],
+    [connections],
+  )
+  return <SelectInput value={value} onChange={onChange} options={options} />
+}
 
 const str = (data: Record<string, unknown>, key: string) => (data[key] as string | undefined) ?? ''
 const bool = (data: Record<string, unknown>, key: string) =>
@@ -191,19 +216,10 @@ function AgentForm({
             </Link>
           </p>
         ) : (
-          <SelectInput
+          <LLMSelect
             value={str(data, 'llm')}
             onChange={(v) => onChange('llm', v)}
-            options={[
-              { value: '', label: 'Select LLM connection...' },
-              ...llmConnections.map((conn) => {
-                const model = (conn.spec.model as string | undefined) ?? ''
-                return {
-                  value: `ref:llm-connections/${conn.metadata.name}`,
-                  label: model ? `${conn.metadata.name} (${model})` : conn.metadata.name,
-                }
-              }),
-            ]}
+            connections={llmConnections}
           />
         )}
       </FieldGroup>
@@ -225,6 +241,27 @@ function TaskForm({
 }) {
   const agentNodes = useStudioStore(
     useShallow((state) => state.nodes.filter((n) => n.type === 'agent')),
+  )
+
+  const agentOptions = useMemo(
+    () => [
+      { value: '', label: 'Select agent...' },
+      ...agentNodes.map((node) => {
+        const nodeData = node.data
+        const role = (nodeData.role as string | undefined) ?? ''
+        const kebabName =
+          (nodeData.name as string | undefined) ||
+          role
+            .toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9-]/g, '')
+        return {
+          value: `ref:agents/${kebabName}`,
+          label: role || node.id,
+        }
+      }),
+    ],
+    [agentNodes],
   )
 
   return (
@@ -256,23 +293,7 @@ function TaskForm({
         <SelectInput
           value={str(data, 'agent')}
           onChange={(v) => onChange('agent', v)}
-          options={[
-            { value: '', label: 'Select agent...' },
-            ...agentNodes.map((node) => {
-              const nodeData = node.data
-              const role = (nodeData.role as string | undefined) ?? ''
-              const kebabName =
-                (nodeData.name as string | undefined) ||
-                role
-                  .toLowerCase()
-                  .replace(/\s+/g, '-')
-                  .replace(/[^a-z0-9-]/g, '')
-              return {
-                value: `ref:agents/${kebabName}`,
-                label: role || node.id,
-              }
-            }),
-          ]}
+          options={agentOptions}
         />
       </FieldGroup>
     </div>
@@ -358,10 +379,24 @@ function FlowStepForm({
   const listenTo = (data['listen_to'] as string[] | undefined) ?? []
   const currentName = str(data, 'name')
 
-  // Other step names for listen_to multi-select (exclude self)
-  const otherStepNames = flowStepNodes
-    .map((n) => (n.data['name'] as string | undefined) ?? '')
-    .filter((n) => n && n !== currentName)
+  const otherStepNames = useMemo(
+    () =>
+      flowStepNodes
+        .map((n) => (n.data['name'] as string | undefined) ?? '')
+        .filter((n) => n && n !== currentName),
+    [flowStepNodes, currentName],
+  )
+
+  const crewOptions = useMemo(
+    () => [
+      { value: '', label: 'Select crew...' },
+      ...crewResources.map((c) => ({
+        value: `ref:crews/${c.metadata.name}`,
+        label: c.metadata.name,
+      })),
+    ],
+    [crewResources],
+  )
 
   return (
     <div className="space-y-3">
@@ -393,13 +428,7 @@ function FlowStepForm({
             <SelectInput
               value={str(data, 'crew')}
               onChange={(v) => onChange('crew', v)}
-              options={[
-                { value: '', label: 'Select crew...' },
-                ...crewResources.map((c) => ({
-                  value: `ref:crews/${c.metadata.name}`,
-                  label: c.metadata.name,
-                })),
-              ]}
+              options={crewOptions}
             />
           )}
         </FieldGroup>
@@ -681,7 +710,7 @@ export default function PropertyPanel() {
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
         title="Delete Node"
-        description={`Delete this ${meta.label.toLowerCase()} node and all its connections? You can undo with ${modKey}+Z.`}
+        description={`Delete the ${meta.label.toLowerCase()} "${(data['role'] as string | undefined) ?? (data['name'] as string | undefined) ?? selectedNode.id}" and all its connections? You can undo with ${modKey}+Z.`}
         confirmLabel="Delete"
         confirmVariant="destructive"
         onConfirm={() => {

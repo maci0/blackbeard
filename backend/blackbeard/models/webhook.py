@@ -43,9 +43,16 @@ class Webhook(Base):
         default=lambda: datetime.now(UTC),
         server_default=text("now()"),
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        server_default=text("now()"),
+    )
 
     __table_args__ = (
-        Index("ix_webhook_active", "active"),
+        Index("ix_webhook_active", "active", postgresql_where=text("active IS TRUE")),
         CheckConstraint("length(url) >= 1", name="ck_webhook_url_nonempty"),
         CheckConstraint("length(secret) >= 1", name="ck_webhook_secret_nonempty"),
     )

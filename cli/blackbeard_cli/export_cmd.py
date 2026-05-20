@@ -17,6 +17,7 @@ from blackbeard_cli.helpers import (
     out,
     print_json,
     require_auth,
+    validate_name,
 )
 from blackbeard_cli.kinds import ALL_KINDS, KIND_TO_PLURAL
 
@@ -58,10 +59,12 @@ def _fetch_resources(
 
     try:
         resp = client.get(f"{server}/api/v1/{plural}", headers=headers, params=params)
-    except httpx.RequestError:
+    except httpx.RequestError as exc:
+        console.print(f"[yellow]Warning:[/] Failed to fetch {kind}: {exc}")
         return []
 
     if resp.status_code != 200:
+        console.print(f"[yellow]Warning:[/] Failed to fetch {kind}: HTTP {resp.status_code}")
         return []
 
     data = resp.json()
@@ -114,6 +117,19 @@ def export_cmd(
     if not export_all and not kind:
         console.print("[red bold]Error:[/] Specify a Kind or use --all.")
         raise SystemExit(2)
+
+    if export_all and kind:
+        console.print(
+            f"[yellow]Warning:[/] --all ignores Kind argument '{kind}'."
+            " Exporting all resource kinds."
+        )
+    if export_all and name:
+        console.print(
+            f"[yellow]Warning:[/] --all ignores Name argument '{name}'. Exporting all resources."
+        )
+
+    if name:
+        validate_name(name)
 
     with httpx.Client(timeout=ctx.obj["timeout"]) as client:
         if export_all:

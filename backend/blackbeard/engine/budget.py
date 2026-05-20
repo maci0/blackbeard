@@ -1,6 +1,5 @@
 """Budget and policy helpers for crew execution.
 
-Extracted from executor.py to reduce module size and improve cohesion.
 Handles budget limit derivation, policy spec extraction, and PII config.
 """
 

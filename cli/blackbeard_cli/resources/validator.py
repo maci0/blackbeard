@@ -150,7 +150,7 @@ def _is_internal_ip(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool
     )
 
 
-def _is_internal_host(hostname: str) -> bool:
+def is_internal_host(hostname: str) -> bool:
     hostname_lower = hostname.lower().rstrip(".")
     if hostname_lower in _INTERNAL_HOSTNAMES:
         return True
@@ -198,6 +198,13 @@ def _is_blocked_env_name(name: str) -> bool:
     return upper.startswith(_BLOCKED_ENV_PREFIXES) or upper in _BLOCKED_ENV_EXACT
 
 
+def check_url_ssrf(url: str) -> str | None:
+    """Check a URL for SSRF risks. Returns an error message or None if safe."""
+    errors: list[ValidationError] = []
+    _validate_url_ssrf(url, "url", errors)
+    return errors[0].message if errors else None
+
+
 def _is_path_traversal(path: str) -> bool:
     """Check if a file path contains traversal or escapes the working directory."""
     if "\x00" in path:
@@ -233,7 +240,7 @@ def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError])
             errors.append(ValidationError(field_name, "URL must not contain embedded credentials."))
         else:
             hostname = parsed.hostname or ""
-            if _is_internal_host(hostname):
+            if is_internal_host(hostname):
                 errors.append(
                     ValidationError(
                         field_name,
@@ -462,7 +469,7 @@ def _validate_tool_extra(spec: dict[str, Any], errors: list[ValidationError]) ->
 
 # Allowlist for function_path in guardrails and flow steps.
 # Prevents arbitrary code execution via dynamic imports.
-_ALLOWED_FUNCTION_MODULE_PREFIXES = (
+ALLOWED_FUNCTION_MODULE_PREFIXES = (
     "crewai.",
     "crewai_tools.",
     "langchain.",
@@ -472,7 +479,7 @@ _ALLOWED_FUNCTION_MODULE_PREFIXES = (
 )
 
 # Explicitly blocked modules -- dangerous even with prefix allowlist
-_BLOCKED_FUNCTION_MODULES = frozenset(
+BLOCKED_FUNCTION_MODULES = frozenset(
     {
         "os",
         "sys",
@@ -504,7 +511,7 @@ def _validate_function_path(
         return
     # Check for blocked top-level modules
     top_module = func_path.split(".")[0].split(":")[0]
-    if top_module in _BLOCKED_FUNCTION_MODULES:
+    if top_module in BLOCKED_FUNCTION_MODULES:
         errors.append(
             ValidationError(
                 field_name,
@@ -512,12 +519,12 @@ def _validate_function_path(
             )
         )
         return
-    if not func_path.startswith(_ALLOWED_FUNCTION_MODULE_PREFIXES):
+    if not func_path.startswith(ALLOWED_FUNCTION_MODULE_PREFIXES):
         errors.append(
             ValidationError(
                 field_name,
                 f"Function path '{func_path}' is not in the allowed module list. "
-                f"Permitted prefixes: {', '.join(_ALLOWED_FUNCTION_MODULE_PREFIXES)}",
+                f"Permitted prefixes: {', '.join(ALLOWED_FUNCTION_MODULE_PREFIXES)}",
             )
         )
 

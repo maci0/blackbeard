@@ -7,6 +7,7 @@ since CrewAI callbacks run on a separate thread.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import hmac
 import json
@@ -119,9 +120,7 @@ def _get_webhook_executor() -> Any:
             return _webhook_executor
         from concurrent.futures import ThreadPoolExecutor
 
-        _webhook_executor = ThreadPoolExecutor(
-            max_workers=2, thread_name_prefix="webhook-deliver"
-        )
+        _webhook_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="webhook-deliver")
         return _webhook_executor
 
 
@@ -160,9 +159,7 @@ def _get_cached_webhooks(db_url: str) -> list[Any]:
             with session_factory() as session:
                 from sqlalchemy import select as sync_select
 
-                result = session.execute(
-                    sync_select(Webhook).where(Webhook.active.is_(True))
-                )
+                result = session.execute(sync_select(Webhook).where(Webhook.active.is_(True)))
                 cached = list(result.scalars())
                 # Detach from session so they can be used outside
                 session.expunge_all()
@@ -186,25 +183,84 @@ def invalidate_webhook_cache() -> None:
         _webhook_cache_time = 0.0
 
 
-def _deliver_webhooks_sync(
+def _deliver_single_webhook(
+    webhook: Any,
+    payload: str,
+    event_type: str,
+    execution_id: str = "",
+) -> None:
+    """Deliver a single webhook (called concurrently via ThreadPoolExecutor)."""
+    try:
+        client = get_sync_client("webhook-deliver", timeout=10, follow_redirects=False)
+        sig = hmac.new(webhook.secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        resp = client.post(
+            webhook.url,
+            content=payload,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": sig,
+                "X-Blackbeard-Event": event_type,
+            },
+        )
+        if resp.status_code >= 400:
+            logger.warning(
+                "Webhook delivery failed: id=%s url=%s status=%d",
+                webhook.id,
+                webhook.url,
+                resp.status_code,
+                extra={
+                    "event": "webhook_delivery_failed",
+                    "webhook_id": str(webhook.id),
+                    "webhook_url": webhook.url,
+                    "http_status": resp.status_code,
+                    "event_type": event_type,
+                    "execution_id": execution_id,
+                },
+            )
+        else:
+            logger.info(
+                "Webhook delivered: id=%s event=%s status=%d",
+                webhook.id,
+                event_type,
+                resp.status_code,
+                extra={
+                    "event": "webhook_delivered",
+                    "webhook_id": str(webhook.id),
+                    "http_status": resp.status_code,
+                    "event_type": event_type,
+                    "execution_id": execution_id,
+                },
+            )
+    except Exception:
+        logger.exception(
+            "Webhook delivery error: id=%s url=%s event=%s",
+            webhook.id,
+            webhook.url,
+            event_type,
+            extra={
+                "event": "webhook_delivery_error",
+                "webhook_id": str(webhook.id),
+                "webhook_url": webhook.url,
+                "event_type": event_type,
+                "execution_id": execution_id,
+            },
+        )
+
+
+def _prepare_webhook_targets(
     event_type: str,
     data: dict[str, Any],
     execution_id: str,
     db_url: str,
-) -> None:
-    """Deliver an event to all matching webhooks (runs in background thread).
-
-    Uses a 30s cache for webhook list to avoid DB query per event.
-    POSTs the payload with HMAC-SHA256 signature. Failures are logged
-    but never raised — webhook delivery must not block execution.
-    """
+) -> tuple[str, list[Any]]:
+    """Resolve webhooks and build payload. Returns (payload, targets)."""
     from urllib.parse import urlparse
 
     from blackbeard.resources.validator import is_internal_host
 
     webhooks = _get_cached_webhooks(db_url)
     if not webhooks:
-        return
+        return "", []
 
     payload = json.dumps(
         {
@@ -215,13 +271,10 @@ def _deliver_webhooks_sync(
         default=str,
     )
 
-    client = get_sync_client("webhook-deliver", timeout=10)
-
+    targets = []
     for webhook in webhooks:
         if webhook.events and event_type not in webhook.events:
             continue
-        # Re-validate hostname at delivery time to mitigate TOCTOU SSRF
-        # (DNS rebinding between webhook creation and event delivery).
         parsed = urlparse(webhook.url)
         hostname = parsed.hostname or ""
         if is_internal_host(hostname):
@@ -238,52 +291,26 @@ def _deliver_webhooks_sync(
                 },
             )
             continue
-        try:
-            sig = hmac.new(
-                webhook.secret.encode(), payload.encode(), hashlib.sha256
-            ).hexdigest()
-            resp = client.post(
-                webhook.url,
-                content=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Webhook-Signature": sig,
-                    "X-Blackbeard-Event": event_type,
-                },
-            )
-            if resp.status_code >= 400:
-                logger.warning(
-                    "Webhook delivery failed: id=%s url=%s status=%d",
-                    webhook.id,
-                    webhook.url,
-                    resp.status_code,
-                    extra={
-                        "event": "webhook_delivery_failed",
-                        "webhook_id": str(webhook.id),
-                        "webhook_url": webhook.url,
-                        "http_status": resp.status_code,
-                        "event_type": event_type,
-                    },
-                )
-            elif logger.isEnabledFor(logging.DEBUG):
-                logger.debug(
-                    "Webhook delivered: id=%s event=%s",
-                    webhook.id,
-                    event_type,
-                )
-        except Exception:
-            logger.exception(
-                "Webhook delivery error: id=%s url=%s event=%s",
-                webhook.id,
-                webhook.url,
-                event_type,
-                extra={
-                    "event": "webhook_delivery_error",
-                    "webhook_id": str(webhook.id),
-                    "webhook_url": webhook.url,
-                    "event_type": event_type,
-                },
-            )
+        targets.append(webhook)
+
+    return payload, targets
+
+
+def _deliver_webhooks_sync(
+    event_type: str,
+    data: dict[str, Any],
+    execution_id: str,
+    db_url: str,
+) -> None:
+    """Deliver an event to all matching webhooks sequentially.
+
+    Kept for backward compatibility and direct-call use (e.g. tests).
+    The live dispatch path uses ``_dispatch_webhook`` which fans out
+    individual deliveries to the shared webhook executor.
+    """
+    payload, targets = _prepare_webhook_targets(event_type, data, execution_id, db_url)
+    for wh in targets:
+        _deliver_single_webhook(wh, payload, event_type, execution_id=execution_id)
 
 
 _sync_engine: Engine | None = None
@@ -441,14 +468,25 @@ class BlackbeardExecutionListener(BaseEventListener):
         if self._flush_timer is not None:
             self._flush_timer.cancel()
         self._flush_buffer()
+        orphaned = len(self._otel_active_spans)
+        for span in self._otel_active_spans.values():
+            with contextlib.suppress(Exception):
+                span.end()
+        self._otel_active_spans.clear()
+        if self._otel_root_span is not None:
+            with contextlib.suppress(Exception):
+                self._otel_root_span.end()
+            self._otel_root_span = None
         logger.info(
-            "Execution listener flushed: execution_id=%s total_events=%d",
+            "Execution listener flushed: execution_id=%s total_events=%d orphaned_spans=%d",
             self._execution_id,
             self._seq,
+            orphaned,
             extra={
                 "event": "execution_listener_flushed",
                 "execution_id": str(self._execution_id),
                 "total_events": self._seq,
+                "orphaned_spans": orphaned,
             },
         )
 
@@ -472,16 +510,26 @@ class BlackbeardExecutionListener(BaseEventListener):
             span.end()
 
     def _dispatch_webhook(self, event_type: str, data: dict[str, Any]) -> None:
-        """Fire webhook delivery in a background thread (fire-and-forget)."""
+        """Fire webhook delivery in background threads (fire-and-forget).
+
+        Each matching webhook is delivered concurrently via the shared
+        webhook executor, so a slow endpoint cannot block others.
+        """
         try:
-            executor = _get_webhook_executor()
-            executor.submit(
-                _deliver_webhooks_sync,
+            payload, targets = _prepare_webhook_targets(
                 event_type,
                 data,
                 str(self._execution_id),
                 self._db_url,
             )
+            if not targets:
+                return
+            exec_id = str(self._execution_id)
+            executor = _get_webhook_executor()
+            for wh in targets:
+                executor.submit(
+                    _deliver_single_webhook, wh, payload, event_type, execution_id=exec_id
+                )
         except Exception:
             logger.warning(
                 "Webhook dispatch skipped (executor unavailable): event=%s",

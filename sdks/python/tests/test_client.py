@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 from unittest.mock import patch
 
 import httpx
@@ -12,58 +11,7 @@ import pytest
 from blackbeard_sdk import BlackbeardClient
 from blackbeard_sdk.resources import KIND_TO_PLURAL, _kind_plural
 
-
-# -- Helpers ------------------------------------------------------------------
-
-
-def _mock_response(
-    status_code: int = 200,
-    json_data: Any = None,
-) -> httpx.Response:
-    """Build a mock httpx.Response."""
-    content = json.dumps(json_data).encode() if json_data is not None else b""
-    return httpx.Response(
-        status_code=status_code,
-        content=content,
-        headers={"content-type": "application/json"},
-    )
-
-
-class MockTransport(httpx.BaseTransport):
-    """Records requests and returns canned responses."""
-
-    def __init__(self) -> None:
-        self.requests: list[httpx.Request] = []
-        self.responses: list[httpx.Response] = []
-        self._response_queue: list[httpx.Response] = []
-
-    def queue(self, resp: httpx.Response) -> None:
-        self._response_queue.append(resp)
-
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
-        self.requests.append(request)
-        if self._response_queue:
-            resp = self._response_queue.pop(0)
-        else:
-            resp = _mock_response(200, {"status": "ok"})
-        resp.request = request
-        return resp
-
-
-@pytest.fixture
-def transport() -> MockTransport:
-    return MockTransport()
-
-
-@pytest.fixture
-def client(transport: MockTransport) -> BlackbeardClient:
-    c = BlackbeardClient(base_url="http://test:8000", api_key="test-key")
-    c._http = httpx.Client(
-        base_url="http://test:8000",
-        headers={"X-API-Key": "test-key"},
-        transport=transport,
-    )
-    return c
+from .conftest import MockTransport, _mock_response
 
 
 # -- Auth tests ---------------------------------------------------------------
@@ -362,13 +310,14 @@ class TestHealth:
 class TestClientLifecycle:
     def test_context_manager(self, transport: MockTransport) -> None:
         with BlackbeardClient(base_url="http://test:8000", api_key="k") as c:
-            c._http = httpx.Client(
+            inner_http = httpx.Client(
                 base_url="http://test:8000",
                 transport=transport,
             )
+            c._http = inner_http
             transport.queue(_mock_response(200, {"status": "ok"}))
             c.health()
-        # After context exit, client should be closed
+        assert inner_http.is_closed, "HTTP client should be closed after context exit"
 
     def test_repr(self) -> None:
         c = BlackbeardClient(base_url="http://localhost:8000")

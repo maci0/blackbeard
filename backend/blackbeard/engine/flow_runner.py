@@ -1,6 +1,5 @@
 """Flow execution: runs multi-step Flow resources sequentially.
 
-Extracted from executor.py to reduce module size and improve cohesion.
 Handles step types: crew, function, router, condition, transform.
 """
 
@@ -14,7 +13,7 @@ from blackbeard.engine.loader import LoaderError, ResourceLoader
 logger = logging.getLogger(__name__)
 
 
-def _call_hook(
+def call_hook(
     loader: ResourceLoader,
     hook_path: str,
     arg: Any,
@@ -22,7 +21,7 @@ def _call_hook(
 ) -> None:
     """Resolve and call a hook callable, logging warnings on failure."""
     try:
-        fn = loader._import_callable(hook_path)
+        fn = loader.import_callable(hook_path)
         if fn is not None:
             fn(arg)
             logger.info(
@@ -82,8 +81,9 @@ def run_flow_steps(
     steps = flow_spec.get("steps", [])
     step_outputs: dict[str, Any] = {}
     last_result: Any = None
+    total_steps = len(steps)
 
-    for step in steps:
+    for step_index, step in enumerate(steps):
         step_name = step.get("name", "unnamed")
         step_type = step.get("type", "crew")
         step_hooks = step.get("hooks", {})
@@ -107,13 +107,13 @@ def run_flow_steps(
             step_inputs = {**inputs, **step_outputs}
 
             if step_hooks.get("before"):
-                _call_hook(loader, step_hooks["before"], step_inputs, f"step:{step_name}:before")
+                call_hook(loader, step_hooks["before"], step_inputs, f"step:{step_name}:before")
 
             try:
                 result = crew.kickoff(inputs=step_inputs)
             except Exception as step_exc:
                 if step_hooks.get("on_error"):
-                    _call_hook(
+                    call_hook(
                         loader,
                         step_hooks["on_error"],
                         step_exc,
@@ -129,17 +129,21 @@ def run_flow_steps(
                 last_result = result
 
             if step_hooks.get("after"):
-                _call_hook(loader, step_hooks["after"], last_result, f"step:{step_name}:after")
+                call_hook(loader, step_hooks["after"], last_result, f"step:{step_name}:after")
 
             logger.info(
-                "Flow step '%s' completed (crew=%s)",
+                "Flow step '%s' completed (crew=%s, step %d/%d)",
                 step_name,
                 crew_ref,
+                step_index + 1,
+                total_steps,
                 extra={
                     "event": "flow_step_completed",
                     "flow_name": flow_name,
                     "step_name": step_name,
                     "crew_ref": crew_ref,
+                    "step_index": step_index,
+                    "total_steps": total_steps,
                 },
             )
 
@@ -207,7 +211,7 @@ def run_flow_steps(
             fn_path = step.get("function_path", "")
             routes = step.get("routes", {})
             if fn_path and ":" in fn_path:
-                fn = ResourceLoader._import_callable(fn_path)
+                fn = ResourceLoader.import_callable(fn_path)
                 if fn:
                     try:
                         route_key = str(fn({**inputs, **step_outputs}))
@@ -219,15 +223,40 @@ def run_flow_steps(
                                 step_name,
                                 route_key,
                                 next_step,
+                                extra={
+                                    "event": "flow_router_resolved",
+                                    "flow_name": flow_name,
+                                    "step_name": step_name,
+                                    "route_key": route_key,
+                                    "next_step": next_step,
+                                },
                             )
                         else:
                             logger.warning(
                                 "Router '%s' returned unknown route: %s",
                                 step_name,
                                 route_key,
+                                extra={
+                                    "event": "flow_router_unknown_route",
+                                    "flow_name": flow_name,
+                                    "step_name": step_name,
+                                    "route_key": route_key,
+                                    "available_routes": sorted(routes.keys()),
+                                },
                             )
                     except Exception as exc:
-                        logger.warning("Router step '%s' failed: %s", step_name, exc)
+                        logger.warning(
+                            "Router step '%s' failed: %s",
+                            step_name,
+                            exc,
+                            exc_info=True,
+                            extra={
+                                "event": "flow_router_step_failed",
+                                "flow_name": flow_name,
+                                "step_name": step_name,
+                                "error_type": type(exc).__name__,
+                            },
+                        )
                         step_outputs[step_name] = f"error: {type(exc).__name__}"
 
         elif step_type == "condition":
@@ -243,6 +272,13 @@ def run_flow_steps(
                     step_name,
                     route_key,
                     next_step or "(no route)",
+                    extra={
+                        "event": "flow_condition_evaluated",
+                        "flow_name": flow_name,
+                        "step_name": step_name,
+                        "route_key": route_key,
+                        "next_step": next_step,
+                    },
                 )
 
         elif step_type == "transform":
@@ -260,11 +296,47 @@ def run_flow_steps(
                         _json.loads(wasm_result.output) if wasm_result.output else {}
                     )
                 except Exception as exc:
-                    logger.warning("Transform step '%s' failed: %s", step_name, exc)
+                    logger.warning(
+                        "Transform step '%s' failed: %s",
+                        step_name,
+                        exc,
+                        exc_info=True,
+                        extra={
+                            "event": "flow_transform_step_failed",
+                            "flow_name": flow_name,
+                            "step_name": step_name,
+                            "wasm_module": wasm_ref,
+                            "error_type": type(exc).__name__,
+                        },
+                    )
                     step_outputs[step_name] = f"error: {type(exc).__name__}"
             else:
-                logger.warning("Transform step '%s' has no wasm_module — skipped", step_name)
+                logger.warning(
+                    "Transform step '%s' has no wasm_module — skipped",
+                    step_name,
+                    extra={
+                        "event": "flow_step_skipped",
+                        "flow_name": flow_name,
+                        "step_name": step_name,
+                        "reason": "no_wasm_module",
+                    },
+                )
 
+    completed_steps = [
+        s.get("name", "unnamed") for s in steps if s.get("name", "unnamed") in step_outputs
+    ]
+    logger.info(
+        "Flow '%s' completed: %d/%d steps produced output",
+        flow_name,
+        len(completed_steps),
+        total_steps,
+        extra={
+            "event": "flow_completed",
+            "flow_name": flow_name,
+            "total_steps": total_steps,
+            "completed_steps": len(completed_steps),
+        },
+    )
     return last_result
 
 

@@ -18,9 +18,7 @@ from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.config import settings
 from blackbeard.engine.execution_listener import invalidate_webhook_cache
-from blackbeard.models.database import get_session
-from blackbeard.models.user import User
-from blackbeard.models.webhook import Webhook
+from blackbeard.models import User, Webhook, get_session
 from blackbeard.resources import check_url_ssrf
 
 logger = logging.getLogger(__name__)
@@ -194,7 +192,10 @@ async def delete_webhook(
 ) -> None:
     """Remove a registered webhook."""
     result = await session.execute(
-        select(Webhook).where(Webhook.id == webhook_id).options(defer(Webhook.secret))
+        select(Webhook)
+        .where(Webhook.id == webhook_id)
+        .options(defer(Webhook.secret))
+        .with_for_update()
     )
     webhook = result.scalar_one_or_none()
     if webhook is None:

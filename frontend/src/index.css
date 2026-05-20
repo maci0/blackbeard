@@ -116,6 +116,12 @@
   .page-enter {
     animation: none;
   }
+
+  /* Disable Radix dialog open/close animations for motion-sensitive users */
+  [data-state='open'][class*='animate-in'],
+  [data-state='closed'][class*='animate-out'] {
+    animation-duration: 0.01ms !important;
+  }
 }
 
 @layer base {

@@ -12,7 +12,6 @@ Covers:
 from __future__ import annotations
 
 import json
-from typing import Any
 from unittest.mock import patch
 
 import httpx
@@ -21,58 +20,7 @@ import pytest
 from blackbeard_sdk import BlackbeardClient
 from blackbeard_sdk.resources import KIND_TO_PLURAL, _kind_plural
 
-
-# -- Helpers ------------------------------------------------------------------
-
-
-def _mock_response(
-    status_code: int = 200,
-    json_data: Any = None,
-) -> httpx.Response:
-    """Build a mock httpx.Response."""
-    content = json.dumps(json_data).encode() if json_data is not None else b""
-    return httpx.Response(
-        status_code=status_code,
-        content=content,
-        headers={"content-type": "application/json"},
-    )
-
-
-class MockTransport(httpx.BaseTransport):
-    """Records requests and returns canned responses."""
-
-    def __init__(self) -> None:
-        self.requests: list[httpx.Request] = []
-        self.responses: list[httpx.Response] = []
-        self._response_queue: list[httpx.Response] = []
-
-    def queue(self, resp: httpx.Response) -> None:
-        self._response_queue.append(resp)
-
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
-        self.requests.append(request)
-        if self._response_queue:
-            resp = self._response_queue.pop(0)
-        else:
-            resp = _mock_response(200, {"status": "ok"})
-        resp.request = request
-        return resp
-
-
-@pytest.fixture
-def transport() -> MockTransport:
-    return MockTransport()
-
-
-@pytest.fixture
-def client(transport: MockTransport) -> BlackbeardClient:
-    c = BlackbeardClient(base_url="http://test:8000", api_key="test-key")
-    c._http = httpx.Client(
-        base_url="http://test:8000",
-        headers={"X-API-Key": "test-key"},
-        transport=transport,
-    )
-    return c
+from .conftest import MockTransport, _mock_response
 
 
 # -- Error handling tests -----------------------------------------------------
@@ -429,10 +377,8 @@ class TestExportAll:
 
 class TestKindPluralEdge:
     def test_automation_kind(self) -> None:
-        """Automation is not in SDK's KIND_TO_PLURAL — should raise."""
-        # Automation is a backend-only kind not in the SDK
-        with pytest.raises(ValueError, match="Unknown resource kind"):
-            _kind_plural("Automation")
+        """Automation kind resolves to its plural."""
+        assert _kind_plural("Automation") == "automations"
 
     def test_all_known_kinds_resolve(self) -> None:
         for kind, expected_plural in KIND_TO_PLURAL.items():

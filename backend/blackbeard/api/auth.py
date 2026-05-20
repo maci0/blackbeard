@@ -157,6 +157,7 @@ async def register(
         resource_type="User",
         resource_id=str(user.id),
         ip_address=request.client.host if request.client else None,
+        request_id=request_id_var.get("-"),
     )
     await session.commit()
     await session.refresh(user)
@@ -198,7 +199,9 @@ async def login(
     user = result.scalar_one_or_none()
 
     password_hash = user.password_hash if user else _DUMMY_HASH
-    if password_hash == "OIDC_USER_NO_PASSWORD":
+    if not password_hash.startswith("$2"):
+        # OIDC user or corrupted hash — run bcrypt on dummy to equalize timing
+        verify_password(data.password, _DUMMY_HASH)
         valid = False
     else:
         valid = verify_password(data.password, password_hash) and user is not None
@@ -219,6 +222,7 @@ async def login(
             actor_id=email,
             detail={"reason": "invalid_credentials"},
             ip_address=ip,
+            request_id=request_id_var.get("-"),
         )
         await session.commit()
         raise HTTPException(
@@ -246,6 +250,7 @@ async def login(
             actor_email=user.email,
             detail={"reason": "account_deactivated"},
             ip_address=ip,
+            request_id=request_id_var.get("-"),
         )
         await session.commit()
         raise HTTPException(
@@ -264,6 +269,7 @@ async def login(
         resource_type="User",
         resource_id=str(user.id),
         ip_address=ip,
+        request_id=request_id_var.get("-"),
     )
     await session.commit()
     await session.refresh(user)

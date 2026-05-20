@@ -60,6 +60,8 @@ def _check_path_safety(path: str, context: str) -> None:
     """Raise LoaderError if path contains traversal characters or targets sensitive directories."""
     if any(ind in path for ind in _PATH_TRAVERSAL_INDICATORS):
         raise LoaderError(f"{context}: path traversal characters not allowed")
+    if path.startswith(("/", "\\")):
+        raise LoaderError(f"{context}: absolute paths are not allowed")
     if path.startswith(_SENSITIVE_PATH_PREFIXES):
         raise LoaderError(f"{context}: access to '{path}' is not allowed")
 
@@ -78,6 +80,16 @@ def _validate_tool_config(config: dict[str, Any], tool_name: str) -> None:
                 f"({len(val)} > {_MAX_CONFIG_VALUE_LEN})"
             )
         _check_path_safety(val, f"Tool '{tool_name}' config.{key}")
+
+
+_KS_TYPE_MAP: dict[str, tuple[str, str]] = {
+    "text": ("crewai.knowledge.source.text_file_knowledge_source", "TextFileKnowledgeSource"),
+    "pdf": ("crewai.knowledge.source.pdf_knowledge_source", "PDFKnowledgeSource"),
+    "csv": ("crewai.knowledge.source.csv_knowledge_source", "CSVKnowledgeSource"),
+    "json": ("crewai.knowledge.source.json_knowledge_source", "JSONKnowledgeSource"),
+    "string": ("crewai.knowledge.source.string_knowledge_source", "StringKnowledgeSource"),
+}
+_ks_class_cache: dict[str, type] = {}
 
 
 class LoaderError(Exception):
@@ -213,36 +225,7 @@ class ResourceLoader:
                 _check_path_safety(fp, f"KnowledgeSource '{resource.name}'")
             content = spec.get("content", "")
 
-            # Lazy-import map: type string → (module_path, class_name, kwargs)
-            ks_types: dict[str, tuple[str, str, dict[str, Any]]] = {
-                "text": (
-                    "crewai.knowledge.source.text_file_knowledge_source",
-                    "TextFileKnowledgeSource",
-                    {"file_paths": file_paths},
-                ),
-                "pdf": (
-                    "crewai.knowledge.source.pdf_knowledge_source",
-                    "PDFKnowledgeSource",
-                    {"file_paths": file_paths},
-                ),
-                "csv": (
-                    "crewai.knowledge.source.csv_knowledge_source",
-                    "CSVKnowledgeSource",
-                    {"file_paths": file_paths},
-                ),
-                "json": (
-                    "crewai.knowledge.source.json_knowledge_source",
-                    "JSONKnowledgeSource",
-                    {"file_paths": file_paths},
-                ),
-                "string": (
-                    "crewai.knowledge.source.string_knowledge_source",
-                    "StringKnowledgeSource",
-                    {"content": content},
-                ),
-            }
-
-            entry = ks_types.get(ks_type)
+            entry = _KS_TYPE_MAP.get(ks_type)
             if entry is None:
                 logger.warning(
                     "Knowledge source type '%s' not supported",
@@ -255,9 +238,17 @@ class ResourceLoader:
                 )
                 return None
 
-            module_path, class_name, kwargs = entry
-            module = importlib.import_module(module_path)
-            cls = getattr(module, class_name)
+            module_path, class_name = entry
+            cache_key = f"{module_path}.{class_name}"
+            cls = _ks_class_cache.get(cache_key)
+            if cls is None:
+                module = importlib.import_module(module_path)
+                cls = getattr(module, class_name)
+                _ks_class_cache[cache_key] = cls
+
+            kwargs: dict[str, Any] = (
+                {"content": content} if ks_type == "string" else {"file_paths": file_paths}
+            )
             return cls(**kwargs)
         except Exception as exc:
             logger.exception(
@@ -550,7 +541,7 @@ class ResourceLoader:
         return agent
 
     @staticmethod
-    def _import_callable(dotted_path: str) -> Any | None:
+    def import_callable(dotted_path: str) -> Any | None:
         """Import a callable by dotted Python path (e.g. 'mymodule.my_func').
 
         Enforces a module allowlist to prevent arbitrary code execution via
@@ -629,7 +620,7 @@ class ResourceLoader:
                     resource = self._resolve_ref(ref_str)
                     gspec = resource.spec
                     if gspec.get("type") == "function" and gspec.get("function_path"):
-                        fn = self._import_callable(gspec["function_path"])
+                        fn = self.import_callable(gspec["function_path"])
                         if fn:
                             result.append(fn)
                     elif gspec.get("type") == "llm" and gspec.get("llm_prompt"):
@@ -640,9 +631,17 @@ class ResourceLoader:
                         )
                         result.append(guardrail_fn)
                 except LoaderError:
-                    logger.warning("Failed to resolve guardrail ref: %s", ref_str)
+                    logger.warning(
+                        "Failed to resolve guardrail ref: %s",
+                        ref_str,
+                        exc_info=True,
+                        extra={
+                            "event": "guardrail_ref_failed",
+                            "ref": ref_str,
+                        },
+                    )
             elif "." in ref_str and " " not in ref_str:
-                fn = self._import_callable(ref_str)
+                fn = self.import_callable(ref_str)
                 if fn:
                     result.append(fn)
             else:
@@ -682,7 +681,7 @@ class ResourceLoader:
             task_kwargs["output_file"] = output_file
 
         if spec.get("output_pydantic"):
-            pydantic_cls = self._import_callable(spec["output_pydantic"])
+            pydantic_cls = self.import_callable(spec["output_pydantic"])
             if pydantic_cls:
                 task_kwargs["output_pydantic"] = pydantic_cls
         elif spec.get("output_json"):

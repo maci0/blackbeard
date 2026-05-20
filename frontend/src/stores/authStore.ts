@@ -24,8 +24,8 @@ interface AuthState {
   hydrate: () => void
 }
 
-const TOKEN_KEY = 'blackbeard_token'
-const REFRESH_KEY = 'blackbeard_refresh_token'
+export const TOKEN_KEY = 'blackbeard_token'
+export const REFRESH_KEY = 'blackbeard_refresh_token'
 
 function applyAuthResult(
   result: { access_token: string; refresh_token: string; user: User },

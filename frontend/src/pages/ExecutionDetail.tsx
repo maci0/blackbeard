@@ -117,7 +117,7 @@ const TaskRow = memo(function TaskRow({ task, index }: { task: ExecutionTask; in
           {needsExpand && (
             <button
               onClick={() => setExpanded((v) => !v)}
-              className="mt-1 text-xs text-primary hover:underline"
+              className="mt-1 min-h-[44px] rounded px-1 text-xs text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
               aria-expanded={expanded}
               aria-label={
                 expanded
@@ -338,7 +338,7 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
         </table>
       </div>
       <details className="mt-2">
-        <summary className="cursor-pointer rounded text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <summary className="inline-flex min-h-[44px] cursor-pointer items-center rounded px-1 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0">
           Raw JSON
         </summary>
         <div className="mt-2">
@@ -511,7 +511,7 @@ export default function ExecutionDetail() {
   if (loading && !currentExecution) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <div className="flex items-center gap-2 text-muted-foreground">
+        <div role="status" className="flex items-center gap-2 text-muted-foreground">
           <Spinner size="sm" className="text-muted-foreground" />
           <span className="text-sm">Loading execution…</span>
         </div>
@@ -553,7 +553,10 @@ export default function ExecutionDetail() {
         <nav aria-label="Breadcrumb" className="mb-5">
           <ol className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <li>
-              <Link to="/executions" className="transition-colors hover:text-foreground">
+              <Link
+                to="/executions"
+                className="rounded transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 Executions
               </Link>
             </li>
@@ -587,7 +590,10 @@ export default function ExecutionDetail() {
                 </span>
               )}
               <h1 className="text-2xl font-semibold tracking-tight">
-                <Link to={`/resources/crews/${execution.crew_name}`} className="hover:underline">
+                <Link
+                  to={`/resources/crews/${execution.crew_name}`}
+                  className="rounded hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   {execution.crew_name}
                 </Link>
               </h1>

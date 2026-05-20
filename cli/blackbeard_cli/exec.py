@@ -29,6 +29,7 @@ Examples:
   blackbeard executions
   blackbeard executions --crew research-crew
   blackbeard executions --status running
+  blackbeard executions --crew research-crew --status failed
   blackbeard executions --json
 """,
 )
@@ -57,7 +58,7 @@ def executions_list(
     limit: int,
     output_json: bool = False,
 ) -> None:
-    """List all executions."""
+    """List executions with optional crew and status filters."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
@@ -126,6 +127,7 @@ Examples:
   blackbeard events abc-123 --follow
   blackbeard events abc-123 -f -i 5
   blackbeard events abc-123 --json
+  blackbeard events abc-123 --follow --json   # JSONL stream
 """,
 )
 @click.argument("execution_id")
@@ -148,7 +150,10 @@ def events(
     interval: int,
     output_json: bool = False,
 ) -> None:
-    """Show execution events."""
+    """Show execution events.
+
+    EXECUTION_ID is the UUID returned by the kickoff command.
+    """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
@@ -259,7 +264,10 @@ Examples:
 @json_opt
 @click.pass_context
 def cancel(ctx: click.Context, execution_id: str, yes: bool, output_json: bool = False) -> None:
-    """Cancel an execution."""
+    """Cancel a running execution.
+
+    EXECUTION_ID is the UUID returned by the kickoff command.
+    """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
@@ -267,7 +275,7 @@ def cancel(ctx: click.Context, execution_id: str, yes: bool, output_json: bool =
     if (
         not yes
         and not ctx.obj["json"]
-        and not click.confirm(f"Cancel execution {execution_id[:8]}...?", default=False)
+        and not click.confirm(f"Cancel execution {execution_id}?", default=False)
     ):
         console.print("[yellow]Aborted.[/]")
         return

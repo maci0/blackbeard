@@ -20,7 +20,7 @@ async def test_oidc_user_cannot_login_with_password(client: AsyncClient, db_sess
     from blackbeard.api.oidc import _find_or_create_user
 
     user = await _find_or_create_user(db_session, "sso@example.com", {"name": "SSO User"})
-    assert user.password_hash == "OIDC_USER_NO_PASSWORD"
+    assert user.password_hash is not None, "OIDC user should have an unusable password hash"
 
     resp = await client.post(
         "/api/v1/auth/login",

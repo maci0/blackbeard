@@ -107,44 +107,44 @@ async def test_flow_step_hooks_invalid_additional_prop(client):
 
 
 def test_call_hook_success():
-    """_call_hook calls the resolved function."""
-    from blackbeard.engine.executor import _call_hook
+    """call_hook calls the resolved function."""
+    from blackbeard.engine.executor import call_hook
     from blackbeard.engine.loader import ResourceLoader
 
     mock_fn = MagicMock()
     loader = MagicMock(spec=ResourceLoader)
-    loader._import_callable.return_value = mock_fn
+    loader.import_callable.return_value = mock_fn
 
-    _call_hook(loader, "blackbeard.hooks.my_fn", {"key": "val"}, "before_kickoff")
+    call_hook(loader, "blackbeard.hooks.my_fn", {"key": "val"}, "before_kickoff")
 
-    loader._import_callable.assert_called_once_with("blackbeard.hooks.my_fn")
+    loader.import_callable.assert_called_once_with("blackbeard.hooks.my_fn")
     mock_fn.assert_called_once_with({"key": "val"})
 
 
 def test_call_hook_import_fails_does_not_crash():
-    """_call_hook logs warning when import fails but does not raise."""
-    from blackbeard.engine.executor import _call_hook
+    """call_hook logs warning when import fails but does not raise."""
+    from blackbeard.engine.executor import call_hook
     from blackbeard.engine.loader import ResourceLoader
 
     loader = MagicMock(spec=ResourceLoader)
-    loader._import_callable.return_value = None
+    loader.import_callable.return_value = None
 
     # Should not raise
-    _call_hook(loader, "nonexistent.module.fn", {}, "before_kickoff")
-    loader._import_callable.assert_called_once()
+    call_hook(loader, "nonexistent.module.fn", {}, "before_kickoff")
+    loader.import_callable.assert_called_once()
 
 
 def test_call_hook_exception_does_not_crash():
-    """_call_hook logs warning when hook raises but does not propagate."""
-    from blackbeard.engine.executor import _call_hook
+    """call_hook logs warning when hook raises but does not propagate."""
+    from blackbeard.engine.executor import call_hook
     from blackbeard.engine.loader import ResourceLoader
 
     mock_fn = MagicMock(side_effect=RuntimeError("hook broke"))
     loader = MagicMock(spec=ResourceLoader)
-    loader._import_callable.return_value = mock_fn
+    loader.import_callable.return_value = mock_fn
 
     # Should not raise
-    _call_hook(loader, "blackbeard.hooks.broken", {}, "after_kickoff")
+    call_hook(loader, "blackbeard.hooks.broken", {}, "after_kickoff")
     mock_fn.assert_called_once()
 
 
@@ -163,7 +163,7 @@ def test_flow_step_hooks_called():
     mock_loader.build_crew.return_value = mock_crew
 
     hook_fn = MagicMock()
-    mock_loader._import_callable.return_value = hook_fn
+    mock_loader.import_callable.return_value = hook_fn
 
     resource_snapshot = {
         "Flow/test-flow": {
@@ -205,7 +205,7 @@ def test_flow_step_hooks_called():
     )
 
     # Both before and after hooks should have been called
-    assert mock_loader._import_callable.call_count >= 2
+    assert mock_loader.import_callable.call_count >= 2
     assert hook_fn.call_count >= 2
 
 

@@ -11,6 +11,7 @@ coverage/
 *.spec.ts
 *.spec.tsx
 __tests__/
+e2e/
 .eslintcache
 *.md
 .DS_Store
@@ -19,6 +20,7 @@ __tests__/
 eslint.config.js
 vitest.config.ts
 tsconfig.tsbuildinfo
+tsconfig.*.tsbuildinfo
 Dockerfile*
 .claude/
 .sisyphus/

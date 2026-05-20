@@ -317,7 +317,7 @@ export default function ResourceDetail() {
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <div className="flex items-center gap-2 text-muted-foreground">
+        <div role="status" className="flex items-center gap-2 text-muted-foreground">
           <Spinner size="md" className="text-muted-foreground" />
           <span className="text-sm">Loading resource…</span>
         </div>
@@ -357,7 +357,10 @@ export default function ResourceDetail() {
         <nav aria-label="Breadcrumb" className="mb-5">
           <ol className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <li>
-              <Link to="/resources" className="transition-colors hover:text-foreground">
+              <Link
+                to="/resources"
+                className="rounded transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 Resources
               </Link>
             </li>
@@ -398,6 +401,7 @@ export default function ResourceDetail() {
                 <button
                   onClick={() => void handleSave()}
                   disabled={saving}
+                  aria-busy={saving}
                   className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? (

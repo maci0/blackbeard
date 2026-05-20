@@ -9,7 +9,6 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
-    JSON,
     CheckConstraint,
     DateTime,
     Enum,
@@ -120,7 +119,7 @@ class Execution(Base):
         default=None,
     )
     principal_chain: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON, nullable=True, default=None
+        JSONB, nullable=True, default=None
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -176,6 +175,10 @@ class Execution(Base):
         CheckConstraint(
             "status != 'queued' OR started_at IS NULL",
             name="ck_execution_queued_no_started_at",
+        ),
+        CheckConstraint(
+            "training_file IS NULL OR length(training_file) >= 1",
+            name="ck_execution_training_file_nonempty",
         ),
     )
 
@@ -255,6 +258,14 @@ class ExecutionTask(Base):
         CheckConstraint(
             "error IS NULL OR status = 'failed'",
             name="ck_exec_task_error_only_failed",
+        ),
+        CheckConstraint(
+            "status != 'pending' OR started_at IS NULL",
+            name="ck_exec_task_pending_no_started_at",
+        ),
+        CheckConstraint(
+            "agent_name IS NULL OR length(agent_name) >= 1",
+            name="ck_exec_task_agent_name_nonempty",
         ),
     )
 

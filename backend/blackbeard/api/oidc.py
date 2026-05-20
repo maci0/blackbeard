@@ -1,13 +1,14 @@
 """OIDC / SSO authentication endpoints.
 
 Generic OIDC client — works with any provider (Google, Azure AD, Okta,
-Keycloak, Authentik). Configured via OIDC_ISSUER, OIDC_CLIENT_ID,
-OIDC_CLIENT_SECRET environment variables.
+Keycloak, Authentik). Required env vars: OIDC_ISSUER, OIDC_CLIENT_ID,
+OIDC_CLIENT_SECRET.  Optional: OIDC_REDIRECT_URI, OIDC_SCOPES.
 """
 
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,15 +19,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
+from blackbeard.audit import log_audit
 from blackbeard.auth.jwt import create_access_token, create_refresh_token
+from blackbeard.auth.passwords import hash_password
 from blackbeard.config import settings
+from blackbeard.logging_config import request_id_var
 from blackbeard.models import User, get_session
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth/oidc", tags=["auth"])
 
-_OIDC_PASSWORD_PLACEHOLDER = "OIDC_USER_NO_PASSWORD"
+_OIDC_PASSWORD_PLACEHOLDER = hash_password(secrets.token_urlsafe(64))
 
 _oauth: OAuth | None = None
 
@@ -41,9 +45,7 @@ def _get_oauth() -> OAuth:
 
     oauth = OAuth()
     client_secret = (
-        settings.oidc_client_secret.get_secret_value()
-        if settings.oidc_client_secret
-        else None
+        settings.oidc_client_secret.get_secret_value() if settings.oidc_client_secret else None
     )
     oauth.register(
         name="provider",
@@ -75,21 +77,68 @@ async def oidc_callback(
     try:
         token: dict[str, Any] = await oauth.provider.authorize_access_token(request)
     except Exception as exc:
-        logger.warning("OIDC token exchange failed: %s", exc)
+        logger.warning(
+            "OIDC token exchange failed: %s",
+            exc,
+            exc_info=True,
+            extra={
+                "event": "oidc_token_exchange_failed",
+                "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
+                "request_id": request_id_var.get("-"),
+            },
+        )
         raise HTTPException(401, "OIDC authentication failed") from None
 
     userinfo = token.get("userinfo")
     if not userinfo:
         try:
             userinfo = await oauth.provider.userinfo(token=token)
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "OIDC userinfo fetch failed — proceeding with empty profile: %s",
+                exc,
+                exc_info=True,
+                extra={
+                    "event": "oidc_userinfo_failed",
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc)[:500],
+                    "request_id": request_id_var.get("-"),
+                },
+            )
             userinfo = {}
 
     email = (userinfo.get("email") or "").lower().strip()
     if not email:
         raise HTTPException(400, "OIDC provider did not return an email address")
 
+    if not userinfo.get("email_verified", False):
+        logger.warning(
+            "OIDC login rejected: email not verified: %s",
+            email,
+            extra={
+                "event": "oidc_email_not_verified",
+                "email": email,
+                "request_id": request_id_var.get("-"),
+            },
+        )
+        raise HTTPException(403, "OIDC provider reports email is not verified")
+
     user = await _find_or_create_user(session, email, userinfo)
+
+    ip = request.client.host if request.client else None
+    await log_audit(
+        session,
+        action="oidc_login",
+        actor_type="user",
+        actor_id=str(user.id),
+        actor_email=user.email,
+        resource_type="User",
+        resource_id=str(user.id),
+        ip_address=ip,
+        request_id=request_id_var.get("-"),
+    )
+    await session.commit()
 
     access_token = create_access_token(str(user.id), user.email)
     refresh_token = create_refresh_token(str(user.id))
@@ -100,7 +149,7 @@ async def oidc_callback(
         extra={"event": "oidc_login", "user_id": str(user.id), "email": user.email},
     )
 
-    frontend_url = f"/?token={access_token}&refresh={refresh_token}"
+    frontend_url = f"/#token={access_token}&refresh={refresh_token}"
     return RedirectResponse(url=frontend_url, status_code=302)
 
 
@@ -114,22 +163,19 @@ async def _find_or_create_user(
     user = result.scalar_one_or_none()
 
     if user:
+        if not user.is_active:
+            raise HTTPException(401, "Account is deactivated")
         user.last_login_at = datetime.now(UTC)
-        await session.commit()
         return user
 
-    display_name = (
-        userinfo.get("name")
-        or userinfo.get("preferred_username")
-        or email.split("@")[0]
-    )
+    display_name = userinfo.get("name") or userinfo.get("preferred_username") or email.split("@")[0]
     user = User(
         email=email,
         display_name=display_name,
         password_hash=_OIDC_PASSWORD_PLACEHOLDER,
     )
     session.add(user)
-    await session.commit()
+    await session.flush()
     await session.refresh(user)
 
     logger.info(

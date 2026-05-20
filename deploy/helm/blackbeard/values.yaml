@@ -1,5 +1,8 @@
 # -- Blackbeard Helm Chart Values --
 
+nameOverride: ""
+fullnameOverride: ""
+
 # -- API (FastAPI backend) --
 api:
   image:

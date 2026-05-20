@@ -68,9 +68,14 @@ def _add_llm_recognizer(
     config: dict[str, Any],
 ) -> None:
     """Register an :class:`LLMPIIRecognizer` on *analyzer*."""
+    from blackbeard.config import settings
+
     model = config.get("model", "ollama/gliner-pii")
-    proxy_url = config.get("proxy_url")
-    recognizer = LLMPIIRecognizer(model=model, proxy_url=proxy_url)
+    proxy_url = config.get("proxy_url") or settings.litellm_proxy_url
+    master_key = settings.litellm_master_key.get_secret_value()
+    recognizer = LLMPIIRecognizer(
+        model=model, proxy_url=proxy_url, master_key=master_key
+    )
     analyzer.registry.add_recognizer(recognizer)
     logger.info(
         "LLM PII recognizer added: model=%s",
@@ -106,9 +111,11 @@ class LLMPIIRecognizer(EntityRecognizer):
         self,
         model: str = "ollama/gliner-pii",
         proxy_url: str | None = None,
+        master_key: str | None = None,
     ) -> None:
         self._model = model
         self._proxy_url = proxy_url
+        self._master_key = master_key
         super().__init__(
             supported_entities=self.ENTITIES,
             name="LLM_PII",
@@ -128,9 +135,16 @@ class LLMPIIRecognizer(EntityRecognizer):
         regex_flags: int | None = None,
     ) -> list[RecognizerResult]:
         """Call the LLM to identify PII entities in *text*."""
-        from blackbeard.config import settings
+        from blackbeard.http_client import get_sync_client
 
-        proxy_url = self._proxy_url or settings.litellm_proxy_url
+        proxy_url = self._proxy_url
+        master_key = self._master_key
+
+        if not proxy_url or not master_key:
+            from blackbeard.config import settings
+
+            proxy_url = proxy_url or settings.litellm_proxy_url
+            master_key = master_key or settings.litellm_master_key.get_secret_value()
 
         prompt = (
             "Identify all PII (personally identifiable information) in the "
@@ -140,22 +154,18 @@ class LLMPIIRecognizer(EntityRecognizer):
             "CREDIT_CARD, US_SSN, IP_ADDRESS.\n\nText: " + text
         )
 
-        import httpx
-
         try:
-            with httpx.Client(timeout=10) as client:
-                resp = client.post(
-                    f"{proxy_url}/v1/chat/completions",
-                    json={
-                        "model": self._model,
-                        "messages": [{"role": "user", "content": prompt}],
-                    },
-                    headers={
-                        "Authorization": (
-                            f"Bearer {settings.litellm_master_key.get_secret_value()}"
-                        ),
-                    },
-                )
+            client = get_sync_client("pii-llm", timeout=10)
+            resp = client.post(
+                f"{proxy_url}/v1/chat/completions",
+                json={
+                    "model": self._model,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+                headers={
+                    "Authorization": f"Bearer {master_key}",
+                },
+            )
             if resp.status_code != 200:
                 logger.warning(
                     "LLM PII recognizer got HTTP %d from proxy",
@@ -264,31 +274,17 @@ def _redact_value(
     if isinstance(value, str):
         return redact_text(value, entities=entities, config=config)
 
+    def recurse(v: Any) -> Any:
+        return _redact_value(
+            v, entities=entities, config=config, depth=depth + 1, max_depth=max_depth
+        )
+
     if isinstance(value, dict):
-        return {
-            k: _redact_value(
-                v,
-                entities=entities,
-                config=config,
-                depth=depth + 1,
-                max_depth=max_depth,
-            )
-            for k, v in value.items()
-        }
+        return {k: recurse(v) for k, v in value.items()}
 
     if isinstance(value, list):
-        return [
-            _redact_value(
-                item,
-                entities=entities,
-                config=config,
-                depth=depth + 1,
-                max_depth=max_depth,
-            )
-            for item in value
-        ]
+        return [recurse(item) for item in value]
 
-    # int, float, bool, None -- pass through
     return value
 
 

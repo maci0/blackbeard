@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Index, String, text
+from sqlalchemy import CheckConstraint, DateTime, Index, String, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -40,6 +40,9 @@ class AuditLog(Base):
         Index("ix_audit_actor_time", "actor_id", timestamp.desc()),
         Index("ix_audit_action_time", "action", timestamp.desc()),
         Index("ix_audit_resource_time", "resource_type", "resource_id", timestamp.desc()),
+        CheckConstraint("length(actor_type) >= 1", name="ck_audit_actor_type_nonempty"),
+        CheckConstraint("length(actor_id) >= 1", name="ck_audit_actor_id_nonempty"),
+        CheckConstraint("length(action) >= 1", name="ck_audit_action_nonempty"),
     )
 
     def __repr__(self) -> str:

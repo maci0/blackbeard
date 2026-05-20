@@ -36,6 +36,7 @@ from blackbeard.kinds import NAME_PATTERN
 from blackbeard.logging_config import request_id_var
 from blackbeard.models import (
     TERMINAL_STATUSES,
+    Execution,
     ExecutionStatus,
     User,
     async_session,
@@ -55,17 +56,47 @@ from blackbeard.models.execution_schemas import (
 
 logger = logging.getLogger(__name__)
 
-# Progressive poll backoff — balances responsiveness with DB load.
-# Phase 1 (polls 1-30, ~30s): 1s interval — fast feedback at start
-# Phase 2 (polls 31-60, ~90s): 3s interval — medium cadence
-# Phase 3 (polls 61+):         5s interval — steady state
-# Total ~37 min before timeout.
-#
-# TODO(perf): Replace DB polling with Valkey pub/sub. After writing an
-# execution event to the DB, publish to a ``exec:{execution_id}`` channel.
-# The SSE/WS handler subscribes instead of polling. This would give
-# near-instant delivery with zero DB load per connected client.
+# TODO(perf): Replace DB polling with Valkey pub/sub for near-instant
+# delivery with zero DB load per connected client.
 _MAX_STREAM_POLLS = 400
+
+_RETRY_AFTER_30 = {"Retry-After": "30"}
+
+# Phase thresholds for progressive poll backoff (shared by SSE + WS).
+_PHASE2_THRESHOLD = 30
+_PHASE3_THRESHOLD = 60
+
+
+def _poll_backoff(polls: int) -> int:
+    """Return sleep seconds for progressive backoff: 1s → 3s → 5s."""
+    if polls < _PHASE2_THRESHOLD:
+        return 1
+    if polls < _PHASE3_THRESHOLD:
+        return 3
+    return 5
+
+
+async def _require_execution(
+    session: AsyncSession,
+    execution_id: UUID,
+) -> Execution:
+    """Load an execution or raise 404."""
+    execution = await _executor_mod.get_execution(session, execution_id)
+    if not execution:
+        raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
+    return execution
+
+
+async def _require_execution_status(
+    session: AsyncSession,
+    execution_id: UUID,
+) -> ExecutionStatus:
+    """Load execution status or raise 404."""
+    status = await _executor_mod.get_execution_status(session, execution_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
+    return status
+
 
 router = APIRouter(tags=["executions"])
 
@@ -337,6 +368,7 @@ async def run_flow_endpoint(
             "Flow run failed for '%s': %s",
             flow_name,
             exc,
+            exc_info=True,
             extra={
                 "event": "flow_run_error",
                 "flow_name": flow_name,
@@ -416,9 +448,7 @@ async def get_execution(
     session: AsyncSession = Depends(get_session),
 ) -> ExecutionResponse:
     """Get execution details by ID."""
-    execution = await _executor_mod.get_execution(session, execution_id)
-    if not execution:
-        raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
+    execution = await _require_execution(session, execution_id)
     return ExecutionResponse.from_db(execution)
 
 
@@ -435,9 +465,7 @@ async def get_execution_spend(
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     """Get LiteLLM spend data for an execution's requests."""
-    status = await _executor_mod.get_execution_status(session, execution_id)
-    if status is None:
-        raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
+    await _require_execution_status(session, execution_id)
 
     try:
         client = _get_spend_client()
@@ -461,7 +489,7 @@ async def get_execution_spend(
         raise HTTPException(
             status_code=502,
             detail=f"Spend service returned status {resp.status_code}",
-            headers={"Retry-After": "30"},
+            headers=_RETRY_AFTER_30,
         )
     except HTTPException:
         raise
@@ -481,7 +509,7 @@ async def get_execution_spend(
         raise HTTPException(
             status_code=502,
             detail="Spend service is unavailable. Try again later.",
-            headers={"Retry-After": "30"},
+            headers=_RETRY_AFTER_30,
         ) from e
 
 
@@ -500,9 +528,7 @@ async def list_execution_events(
     session: AsyncSession = Depends(get_session),
 ) -> ExecutionEventsResponse:
     """List execution events, optionally after a given sequence number."""
-    exec_check = await _executor_mod.get_execution_status(session, execution_id)
-    if exec_check is None:
-        raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
+    await _require_execution_status(session, execution_id)
 
     items = await _executor_mod.list_execution_events(
         session, execution_id, after=after, limit=limit + 1
@@ -547,9 +573,7 @@ async def respond_to_execution(
     can pick it up. The frontend should poll the events endpoint for
     ``hitl_request`` events and present them to the user.
     """
-    status = await _executor_mod.get_execution_status(session, execution_id)
-    if status is None:
-        raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
+    status = await _require_execution_status(session, execution_id)
     if status in TERMINAL_STATUSES:
         raise HTTPException(
             status_code=409,
@@ -599,9 +623,7 @@ async def retry_execution(
     original. Only terminal executions (completed, failed, cancelled) can be
     retried. Returns the new execution immediately with status=queued.
     """
-    original = await _executor_mod.get_execution(session, execution_id)
-    if not original:
-        raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
+    original = await _require_execution(session, execution_id)
     if original.status not in TERMINAL_STATUSES:
         raise HTTPException(
             status_code=409,
@@ -704,11 +726,8 @@ async def stream_execution(
     execution_id: UUID = Path(..., description="Execution UUID"),
 ) -> EventSourceResponse:
     """SSE stream of execution status events."""
-    # Lightweight status-only query to avoid loading full execution before SSE starts
     async with async_session() as check_session:
-        check = await _executor_mod.get_execution_status(check_session, execution_id)
-    if check is None:
-        raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
+        await _require_execution_status(check_session, execution_id)
 
     logger.info(
         "SSE stream opened: execution_id=%s active=%d/%d",
@@ -816,8 +835,7 @@ async def stream_execution(
                             )
                             break
 
-                    # Progressive backoff: 1s (first 30s) → 3s (30s-2min) → 5s (2min+)
-                    await asyncio.sleep(1 if polls < 30 else 3 if polls < 60 else 5)
+                    await asyncio.sleep(_poll_backoff(polls))
                 else:
                     logger.warning(
                         "SSE stream timeout: execution_id=%s polls=%d",
@@ -885,30 +903,15 @@ async def ws_execution(
     cannot set custom headers, so credentials must be passed via query
     string.
     """
-    import hmac
-
-    import jwt as pyjwt
-
-    from blackbeard.api.middleware import _EXPECTED_API_KEY, _record_auth_failure
-    from blackbeard.auth.jwt import decode_token
+    from blackbeard.api.collaboration import validate_ws_auth
+    from blackbeard.api.middleware import record_auth_failure
 
     token = websocket.query_params.get("token", "")
     api_key = websocket.query_params.get("api_key", "")
 
-    authenticated = False
-    if token:
-        try:
-            payload = decode_token(token)
-            if payload.get("type") == "access":
-                authenticated = True
-        except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError):
-            pass
-    if not authenticated and api_key and hmac.compare_digest(api_key, _EXPECTED_API_KEY):
-        authenticated = True
-
-    if not authenticated:
+    if not validate_ws_auth(token, api_key):
         client_ip = websocket.client.host if websocket.client else "unknown"
-        _record_auth_failure(client_ip)
+        record_auth_failure(client_ip)
         logger.warning(
             "WebSocket auth failed: execution_id=%s from %s",
             execution_id,
@@ -989,7 +992,7 @@ async def ws_execution(
                     break
 
             # Progressive backoff: 1s (first 30s) → 3s (30s-2min) → 5s (2min+)
-            await asyncio.sleep(1 if polls < 30 else 3 if polls < 60 else 5)
+            await asyncio.sleep(_poll_backoff(polls))
 
     except WebSocketDisconnect:
         pass

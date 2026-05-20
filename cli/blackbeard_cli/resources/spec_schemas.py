@@ -1,6 +1,7 @@
 """JSON Schema definitions for each resource kind.
 
 Used to validate the `spec` field of resources on create/update.
+Copied from backend/blackbeard/resources/spec_schemas.py — keep in sync.
 """
 
 from __future__ import annotations
@@ -130,10 +131,17 @@ CREW_SCHEMA = {
                         "enabled": {"type": "boolean", "default": True},
                         "provider": {
                             "type": "string",
-                            "enum": ["lancedb", "chromadb", "qdrant"],
+                            "enum": ["lancedb", "chromadb", "qdrant", "muninndb"],
                             "default": "lancedb",
                         },
                         "config": {"type": "object", "maxProperties": 50},
+                        "muninndb_url": {"type": "string", "maxLength": 500},
+                        "muninndb_vault": {"type": "string", "maxLength": 255},
+                        "muninndb_token_env": {
+                            "type": "string",
+                            "pattern": "^[A-Z][A-Z0-9_]*$",
+                            "maxLength": 100,
+                        },
                     },
                     "additionalProperties": False,
                 },
@@ -173,6 +181,17 @@ CREW_SCHEMA = {
             "default": "hybrid",
         },
         "default_agent_policy": {"type": "string", "maxLength": 500},
+        "hooks": {
+            "type": "object",
+            "properties": {
+                "before_kickoff": {"type": "string", "maxLength": 500},
+                "after_kickoff": {"type": "string", "maxLength": 500},
+                "before_task": {"type": "string", "maxLength": 500},
+                "after_task": {"type": "string", "maxLength": 500},
+                "on_error": {"type": "string", "maxLength": 500},
+            },
+            "additionalProperties": False,
+        },
         "inline": {"type": "object", "maxProperties": 200},
         "a2a": {
             "type": "object",
@@ -336,6 +355,26 @@ AGENT_POLICY_SCHEMA = {
             },
             "additionalProperties": False,
         },
+        "pii": {
+            "type": "object",
+            "properties": {
+                "enabled": {"type": "boolean", "default": False},
+                "backend": {
+                    "type": "string",
+                    "enum": ["default", "presidio-nlp", "litellm"],
+                    "default": "default",
+                },
+                "model": {"type": "string", "maxLength": 255},
+                "entities": {
+                    "type": "array",
+                    "items": {"type": "string", "maxLength": 50},
+                    "maxItems": 30,
+                },
+                "redact_outputs": {"type": "boolean", "default": True},
+                "redact_events": {"type": "boolean", "default": True},
+            },
+            "additionalProperties": False,
+        },
     },
     "additionalProperties": False,
 }
@@ -344,7 +383,7 @@ GUARDRAIL_SCHEMA = {
     "type": "object",
     "required": ["type"],
     "properties": {
-        "type": {"type": "string", "enum": ["function", "llm", "schema"]},
+        "type": {"type": "string", "enum": ["function", "llm", "schema", "pii"]},
         "description": {"type": "string", "maxLength": 5000},
         "function_path": {
             "type": "string",
@@ -355,6 +394,16 @@ GUARDRAIL_SCHEMA = {
         "llm": {"type": "string", "maxLength": 500},
         "json_schema": {"type": "object", "maxProperties": 200},
         "on_fail": {"type": "string", "enum": ["reject", "warn", "log"], "default": "reject"},
+        "pii_entities": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 50},
+            "maxItems": 30,
+        },
+        "pii_action": {
+            "type": "string",
+            "enum": ["redact", "reject", "warn"],
+            "default": "redact",
+        },
     },
     "additionalProperties": False,
 }
@@ -374,7 +423,7 @@ FLOW_SCHEMA = {
                     "name": {"type": "string", "minLength": 1, "maxLength": 255},
                     "type": {
                         "type": "string",
-                        "enum": ["crew", "function", "router", "condition"],
+                        "enum": ["crew", "function", "router", "condition", "transform"],
                     },
                     "crew": {"type": "string", "maxLength": 500},
                     "function_path": {
@@ -388,9 +437,20 @@ FLOW_SCHEMA = {
                         "maxItems": 20,
                     },
                     "condition": {"type": "string", "maxLength": 1000},
+                    "wasm_module": {"type": "string", "maxLength": 500},
+                    "transform_config": {"type": "object", "maxProperties": 50},
                     "routes": {
                         "type": "object",
                         "additionalProperties": {"type": "string", "maxLength": 255},
+                    },
+                    "hooks": {
+                        "type": "object",
+                        "properties": {
+                            "before": {"type": "string", "maxLength": 500},
+                            "after": {"type": "string", "maxLength": 500},
+                            "on_error": {"type": "string", "maxLength": 500},
+                        },
+                        "additionalProperties": False,
                     },
                 },
                 "additionalProperties": False,

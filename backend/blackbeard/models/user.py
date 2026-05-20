@@ -97,7 +97,10 @@ class Group(Base):
         lazy="raise",
     )
 
-    __table_args__ = (CheckConstraint("length(name) >= 1", name="ck_group_name_nonempty"),)
+    __table_args__ = (
+        Index("ix_groups_name_lower", text("lower(name)"), unique=True),
+        CheckConstraint("length(name) >= 1", name="ck_group_name_nonempty"),
+    )
 
     def __repr__(self) -> str:
         return f"<Group {self.name}>"

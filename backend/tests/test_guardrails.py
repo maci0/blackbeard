@@ -168,7 +168,7 @@ def test_build_guardrails_function_ref():
     loader = ResourceLoader(_resource_map(guardrail_res))
 
     mock_fn = MagicMock()
-    with patch.object(ResourceLoader, "_import_callable", return_value=mock_fn):
+    with patch.object(ResourceLoader, "import_callable", return_value=mock_fn):
         guardrails = loader._build_guardrails(["ref:guardrails/pii-check"])
 
     assert len(guardrails) == 1
@@ -199,7 +199,7 @@ def test_build_guardrails_dotted_path():
     loader = ResourceLoader({})
 
     mock_fn = MagicMock()
-    with patch.object(ResourceLoader, "_import_callable", return_value=mock_fn):
+    with patch.object(ResourceLoader, "import_callable", return_value=mock_fn):
         guardrails = loader._build_guardrails(["blackbeard.guardrails.check.validate"])
 
     assert len(guardrails) == 1
@@ -254,7 +254,7 @@ def test_build_guardrails_failed_import_skipped():
     """Dotted path that fails to import should be skipped."""
     loader = ResourceLoader({})
 
-    with patch.object(ResourceLoader, "_import_callable", return_value=None):
+    with patch.object(ResourceLoader, "import_callable", return_value=None):
         guardrails = loader._build_guardrails(["some.module.function"])
 
     assert len(guardrails) == 0

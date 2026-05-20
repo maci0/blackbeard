@@ -95,7 +95,7 @@ function RoleCard({
         </span>
         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
           <UsersIcon className="h-3 w-3" aria-hidden="true" />
-          {role.bound_subjects} bound
+          {role.bound_subjects} {role.bound_subjects === 1 ? 'user' : 'users'}
         </span>
       </div>
     </button>
@@ -173,7 +173,7 @@ function RoleDetail({
                 {rule.resources.map((r) => (
                   <span
                     key={r}
-                    className="inline-flex rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                    className="inline-flex rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200"
                   >
                     {r}
                   </span>
@@ -184,7 +184,7 @@ function RoleDetail({
                 {rule.verbs.map((v) => (
                   <span
                     key={v}
-                    className="inline-flex rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+                    className="inline-flex rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
                   >
                     {v}
                   </span>
@@ -196,7 +196,7 @@ function RoleDetail({
                   {rule.resourceNames.map((n) => (
                     <span
                       key={n}
-                      className="inline-flex rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                      className="inline-flex rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-200"
                     >
                       {n}
                     </span>
@@ -212,7 +212,7 @@ function RoleDetail({
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title="Delete role"
-        description={`Are you sure you want to delete the role "${role.name}"? This action cannot be undone.`}
+        description={`Are you sure you want to delete the role "${role.name}"?${role.bound_subjects > 0 ? ` ${role.bound_subjects} ${role.bound_subjects === 1 ? 'user is' : 'users are'} currently assigned this role.` : ''} This action cannot be undone.`}
         confirmLabel="Delete"
         confirmVariant="destructive"
         onConfirm={() => void handleDelete()}
@@ -491,7 +491,7 @@ export default function Roles() {
                 <button
                   onClick={() => setSearch('')}
                   aria-label="Clear search"
-                  className="inline-flex items-center gap-1 rounded text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex min-h-[44px] items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="h-3.5 w-3.5" />
                   Clear search

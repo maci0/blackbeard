@@ -41,7 +41,7 @@ from blackbeard.engine.budget import derive_budget_limits as _derive_budget_limi
 from blackbeard.engine.budget import extract_policy_specs as _extract_policy_specs
 from blackbeard.engine.budget import get_pii_config as _get_pii_config
 from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-from blackbeard.engine.flow_runner import _call_hook
+from blackbeard.engine.flow_runner import call_hook
 from blackbeard.engine.flow_runner import run_flow_steps as _run_flow_steps
 from blackbeard.engine.loader import ResourceLoader
 from blackbeard.kinds import ResourceKind
@@ -103,7 +103,7 @@ def _sanitize_error(error_msg: str) -> str:
 _executor: ThreadPoolExecutor | None = None
 _executor_lock = threading.Lock()
 
-# Shared database engine for background executor threads (Issue #5).
+# Shared database engine for background executor threads.
 # Each thread still creates its own event loop, but they all share one
 # connection pool instead of each thread creating a separate engine.
 _bg_engine: AsyncEngine | None = None
@@ -182,7 +182,7 @@ def _get_bg_engine() -> AsyncEngine:
 
 
 def shutdown_executor(wait: bool = False) -> None:
-    """Shutdown the thread pool executor and dispose the sync DB engine."""
+    """Shutdown the thread pool executor and dispose all background DB engines."""
     global _executor, _bg_engine
     with _executor_lock:
         if _executor is not None:
@@ -404,7 +404,7 @@ async def kickoff(
 
     await session.commit()
 
-    resource_snapshot = {key: _snapshot_resource(r) for key, r in resources.items()}
+    resource_snapshot = _snapshot_crew_resources(resources, crew_name)
 
     execution_id = execution.id
     loop = asyncio.get_running_loop()
@@ -457,7 +457,7 @@ async def _submit_execution(
     n_iterations: int | None = None,
     training_file: str | None = None,
 ) -> Execution:
-    """Shared logic for creating and submitting train/test executions."""
+    """Shared logic for creating and submitting train/test/flow executions."""
     resources = await _load_crew_resources(session, crew_name, namespace)
     crew_key = f"Crew/{crew_name}"
     crew_resource = resources[crew_key]
@@ -519,7 +519,7 @@ async def _submit_execution(
 
     await session.commit()
 
-    resource_snapshot = {key: _snapshot_resource(r) for key, r in resources.items()}
+    resource_snapshot = _snapshot_crew_resources(resources, crew_name)
 
     execution_id = execution.id
     loop = asyncio.get_running_loop()
@@ -623,8 +623,8 @@ async def run_flow(
     """Start a flow execution.
 
     Loads the Flow resource, resolves all referenced crews, and executes
-    each step sequentially (or by dependency graph). Returns the execution
-    record immediately (status=queued).
+    each step sequentially. Returns the execution record immediately
+    (status=queued).
     """
     return await _submit_execution(
         session,
@@ -671,6 +671,69 @@ def _snapshot_resource(resource: Resource) -> dict[str, Any]:
         "namespace": resource.namespace,
         "spec": dict(resource.spec or {}),
     }
+
+
+def _snapshot_crew_resources(
+    resources: dict[str, Resource],
+    crew_name: str,
+) -> dict[str, dict[str, Any]]:
+    """Snapshot only resources reachable from the crew via ref resolution.
+
+    Walks crew → agents/tasks → tools/llms/knowledge_sources/guardrails/context
+    recursively, snapshotting only what the crew actually needs instead of the
+    entire namespace (which could be hundreds of resources).
+    """
+    needed: dict[str, dict[str, Any]] = {}
+
+    def _collect(key: str) -> None:
+        if key in needed:
+            return
+        resource = resources.get(key)
+        if resource is None:
+            return
+        needed[key] = _snapshot_resource(resource)
+        spec = resource.spec or {}
+        for field in ("agents", "tasks", "tools", "context", "knowledge_sources", "guardrails"):
+            for ref_str in spec.get(field, []):
+                ref = parse_ref(ref_str)
+                if ref:
+                    _collect(f"{ref.kind.value}/{ref.name}")
+        for field in ("agent", "llm", "manager_llm", "manager_agent", "default_agent_policy"):
+            ref_str = spec.get(field)
+            if ref_str and isinstance(ref_str, str):
+                ref = parse_ref(ref_str)
+                if ref:
+                    _collect(f"{ref.kind.value}/{ref.name}")
+        # Flow steps reference crews
+        for step in spec.get("steps", []):
+            crew_ref = step.get("crew") if isinstance(step, dict) else None
+            if crew_ref and isinstance(crew_ref, str):
+                ref = parse_ref(crew_ref)
+                if ref:
+                    _collect(f"{ref.kind.value}/{ref.name}")
+        # Agent policy ref on agent spec
+        policy_ref = spec.get("policy")
+        if policy_ref and isinstance(policy_ref, str):
+            ref = parse_ref(policy_ref)
+            if ref:
+                _collect(f"{ref.kind.value}/{ref.name}")
+
+    _collect(f"Crew/{crew_name}")
+
+    # Always include AgentPolicy resources referenced by any collected agent
+    for key in list(needed):
+        if key.startswith("Agent/"):
+            spec = needed[key].get("spec", {})
+            for field in ("policy",):
+                ref_str = spec.get(field)
+                if ref_str and isinstance(ref_str, str):
+                    ref = parse_ref(ref_str)
+                    if ref and f"{ref.kind.value}/{ref.name}" not in needed:
+                        resource = resources.get(f"{ref.kind.value}/{ref.name}")
+                        if resource:
+                            needed[f"{ref.kind.value}/{ref.name}"] = _snapshot_resource(resource)
+
+    return needed
 
 
 def _run_crew_sync(
@@ -770,8 +833,7 @@ def _resolve_eval_llm(
 ) -> str:
     """Resolve an eval LLM model string for crew.test().
 
-    Uses the crew's manager_llm if defined, otherwise falls back to
-    the first agent's LLM. Returns a model string (e.g. 'gpt-4o').
+    Resolution order: crew's manager_llm → first agent's LLM → 'gpt-4o'.
     """
     crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
     crew_spec = crew_snap.get("spec", {})
@@ -786,6 +848,12 @@ def _resolve_eval_llm(
             logger.warning(
                 "Failed to resolve manager_llm '%s' for eval — trying agent LLMs",
                 manager_ref,
+                exc_info=True,
+                extra={
+                    "event": "eval_llm_manager_fallback",
+                    "crew_name": crew_name,
+                    "manager_ref": manager_ref,
+                },
             )
 
     # Fall back to first agent's LLM
@@ -809,6 +877,15 @@ def _resolve_eval_llm(
                 continue
 
     # Last resort: use a reasonable default
+    logger.info(
+        "No eval LLM resolved for crew '%s' — falling back to gpt-4o",
+        crew_name,
+        extra={
+            "event": "eval_llm_default_fallback",
+            "crew_name": crew_name,
+            "fallback_model": "gpt-4o",
+        },
+    )
     return "gpt-4o"
 
 
@@ -935,7 +1012,6 @@ async def _run_crew_async(
             loader = ResourceLoader(mock_resources, api_key=virtual_api_key, policies=policy_specs)
             crew = loader.build_crew(crew_name)
 
-            # Wire up execution event listener for real-time streaming.
             listener_pii_config = _get_pii_config(resource_snapshot, crew_name)
             listener = BlackbeardExecutionListener(
                 execution_id=execution_id,
@@ -967,10 +1043,10 @@ async def _run_crew_async(
                 result = None
             else:
                 if hooks.get("before_kickoff"):
-                    _call_hook(loader, hooks["before_kickoff"], inputs, "before_kickoff")
+                    call_hook(loader, hooks["before_kickoff"], inputs, "before_kickoff")
                 result = crew.kickoff(inputs=inputs)
                 if hooks.get("after_kickoff"):
-                    _call_hook(loader, hooks["after_kickoff"], result, "after_kickoff")
+                    call_hook(loader, hooks["after_kickoff"], result, "after_kickoff")
             listener.flush()
 
             execution = await _get_execution_for_update(session, execution_id)
@@ -1016,7 +1092,7 @@ async def _run_crew_async(
                     "result_type": type(result).__name__ if result is not None else "None",
                 }
             elif execution_type == ExecutionType.TEST:
-                # crew.test() returns test metrics; store them in outputs
+                # crew.test() prints metrics to stdout; result is None here.
                 if isinstance(result, dict):
                     execution.outputs = {
                         "execution_type": "test",
@@ -1034,7 +1110,7 @@ async def _run_crew_async(
                 execution.outputs = {"raw": repr(result), "result_type": type(result).__name__}
 
             # --- PII redaction on outputs ---
-            pii_config = _get_pii_config(resource_snapshot, crew_name)
+            pii_config = listener_pii_config
             if pii_config and pii_config.get("redact_outputs", True) and execution.outputs:
                 from blackbeard.pii import redact_dict
 
@@ -1158,6 +1234,17 @@ async def _run_crew_async(
                             "execution_id": str(execution_id),
                             "crew_name": crew_name,
                         },
+                    )
+                try:
+                    exec_row = await _get_execution_for_update(session, execution_id)
+                    if exec_row is not None:
+                        exec_row.litellm_key = None
+                        await session.commit()
+                except Exception:
+                    logger.debug(
+                        "Could not clear litellm_key column for execution %s",
+                        execution_id,
+                        exc_info=True,
                     )
 
 
@@ -1307,6 +1394,18 @@ async def record_hitl_response(
         except IntegrityError:
             if attempt == max_attempts - 1:
                 raise
+            logger.info(
+                "HITL response sequence collision for execution %s (attempt %d/%d), retrying",
+                execution_id,
+                attempt + 1,
+                max_attempts,
+                extra={
+                    "event": "hitl_sequence_collision",
+                    "execution_id": str(execution_id),
+                    "attempt": attempt + 1,
+                    "max_attempts": max_attempts,
+                },
+            )
 
     logger.info(
         "HITL response recorded: execution_id=%s seq=%d",
@@ -1322,7 +1421,11 @@ async def record_hitl_response(
 
 
 async def cancel_execution(session: AsyncSession, execution_id: UUID) -> Execution | None:
-    """Cancel a queued or running execution."""
+    """Cancel a queued or running execution.
+
+    Does NOT commit — the caller is responsible for committing so that
+    the cancellation and any audit log entry are in the same transaction.
+    """
     # Lock the row to prevent race conditions with background executor
     result = await session.execute(
         select(Execution)
@@ -1344,7 +1447,7 @@ async def cancel_execution(session: AsyncSession, execution_id: UUID) -> Executi
                 task.status = TaskStatus.FAILED
                 task.error = "Execution cancelled"
                 task.completed_at = now
-        await session.commit()
+        await session.flush()
         logger.info(
             "Execution %s cancelled: crew=%s previous_status=%s",
             execution_id,
@@ -1378,6 +1481,10 @@ async def cleanup_orphaned_keys() -> int:
     from blackbeard.litellm.key_manager import VirtualKeyManager
 
     keys_deleted = 0
+    key_mgr = VirtualKeyManager(
+        proxy_url=settings.litellm_proxy_url,
+        master_key=settings.litellm_master_key.get_secret_value(),
+    )
     async with async_session() as session:
         stale = await session.execute(
             select(Execution).where(
@@ -1386,10 +1493,6 @@ async def cleanup_orphaned_keys() -> int:
             )
         )
         for execution in stale.scalars():
-            key_mgr = VirtualKeyManager(
-                proxy_url=settings.litellm_proxy_url,
-                master_key=settings.litellm_master_key.get_secret_value(),
-            )
             try:
                 deleted = await key_mgr.delete_key(execution.litellm_key)
                 if deleted:

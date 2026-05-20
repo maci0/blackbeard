@@ -185,11 +185,19 @@ async def import_from_url(
         raw_resources, parse_errors = _parse_yaml_resources(yaml_files)
         error_details.extend(parse_errors)
     else:
-        # Validate URL scheme
+        # Validate URL scheme and reject embedded credentials
         if not any(url.startswith(scheme) for scheme in _ALLOWED_URL_SCHEMES):
             raise HTTPException(
                 status_code=422,
                 detail="Only HTTPS git URLs are allowed",
+            )
+        from urllib.parse import urlparse as _urlparse
+
+        _parsed = _urlparse(url)
+        if _parsed.username or _parsed.password:
+            raise HTTPException(
+                status_code=422,
+                detail="Git URL must not contain embedded credentials",
             )
 
         # Clone to temp dir

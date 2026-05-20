@@ -119,7 +119,6 @@ def require_auth(ctx: click.Context) -> dict[str, str]:
     raise SystemExit(2)
 
 
-
 def validate_name(name: str) -> None:
     """Exit with code 2 if name doesn't match resource naming rules."""
     import re

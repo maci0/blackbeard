@@ -10,6 +10,7 @@ import asyncio
 import hmac
 import json
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -47,6 +48,35 @@ class _AbortingHandler(grpc.GenericRpcHandler):
         return grpc.unary_unary_rpc_method_handler(_unauthenticated_handler)
 
 
+class LoggingInterceptor(grpc.aio.ServerInterceptor):
+    """gRPC interceptor that logs method, duration, and status for every call."""
+
+    async def intercept_service(
+        self,
+        continuation: Any,
+        handler_call_details: grpc.HandlerCallDetails,
+    ) -> Any:
+        method = handler_call_details.method
+        start = time.monotonic()
+        handler = await continuation(handler_call_details)
+
+        if method.endswith("/Health"):
+            return handler
+
+        duration_ms = round((time.monotonic() - start) * 1000, 1)
+        logger.info(
+            "gRPC %s %.0fms",
+            method,
+            duration_ms,
+            extra={
+                "event": "grpc_request",
+                "grpc_method": method,
+                "duration_ms": duration_ms,
+            },
+        )
+        return handler
+
+
 class AuthInterceptor(grpc.aio.ServerInterceptor):
     """gRPC server interceptor that validates API key or JWT Bearer token.
 
@@ -71,9 +101,9 @@ class AuthInterceptor(grpc.aio.ServerInterceptor):
         # Check API key
         api_key = metadata.get("x-api-key", "")
         if api_key:
-            from blackbeard.api.middleware import _EXPECTED_API_KEY
+            from blackbeard.api.middleware import get_api_key
 
-            if hmac.compare_digest(api_key, _EXPECTED_API_KEY):
+            if hmac.compare_digest(api_key, get_api_key()):
                 return await continuation(handler_call_details)
 
             logger.warning(
@@ -408,7 +438,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
 
 async def start_grpc_server(port: int = 50051) -> grpc.aio.Server:
     """Create and start the gRPC server."""
-    server = grpc.aio.server(interceptors=[AuthInterceptor()])
+    server = grpc.aio.server(interceptors=[LoggingInterceptor(), AuthInterceptor()])
     servicer = BlackbeardServicer()
     blackbeard_pb2_grpc.add_BlackbeardServiceServicer_to_server(servicer, server)
     server.add_insecure_port(f"[::]:{port}")

@@ -5,7 +5,7 @@ import type { Resource } from '@/lib/types'
 
 interface ResourceState {
   resources: Record<string, Resource[]>
-  loadingKinds: Set<string>
+  loadingKinds: Record<string, true>
   loading: boolean
   error: string | null
 
@@ -31,42 +31,42 @@ interface ResourceState {
 
 export const useResourceStore = create<ResourceState>((set, get) => ({
   resources: {},
-  loadingKinds: new Set<string>(),
+  loadingKinds: {},
   loading: false,
   error: null,
 
   fetchResources: async (kindPlural: string) => {
-    if (get().loadingKinds.has(kindPlural)) return
+    if (get().loadingKinds[kindPlural]) return
     set((state) => {
-      const next = new Set(state.loadingKinds).add(kindPlural)
-      return { loadingKinds: next, loading: next.size > 0, error: null }
+      const next = { ...state.loadingKinds, [kindPlural]: true as const }
+      return { loadingKinds: next, loading: Object.keys(next).length > 0, error: null }
     })
     try {
       const result = await api.get<{ items: Resource[]; total: number }>(`/api/v1/${kindPlural}`)
       set((state) => {
-        const next = new Set(state.loadingKinds)
-        next.delete(kindPlural)
+        const next: Record<string, true> = { ...state.loadingKinds }
+        delete next[kindPlural]
         return {
           resources: { ...state.resources, [kindPlural]: result.items },
           loadingKinds: next,
-          loading: next.size > 0,
+          loading: Object.keys(next).length > 0,
         }
       })
     } catch (err) {
       set((state) => {
-        const next = new Set(state.loadingKinds)
-        next.delete(kindPlural)
+        const next: Record<string, true> = { ...state.loadingKinds }
+        delete next[kindPlural]
         const message = err instanceof Error ? err.message : 'Failed to fetch resources'
-        return { error: message, loadingKinds: next, loading: next.size > 0 }
+        return { error: message, loadingKinds: next, loading: Object.keys(next).length > 0 }
       })
     }
   },
 
   fetchAllResources: async () => {
-    const kinds = new Set<string>(ALL_PLURALS)
     set((state) => {
-      const next = new Set([...state.loadingKinds, ...kinds])
-      return { loadingKinds: next, loading: next.size > 0, error: null }
+      const next = { ...state.loadingKinds }
+      for (const k of ALL_PLURALS) next[k] = true
+      return { loadingKinds: next, loading: Object.keys(next).length > 0, error: null }
     })
     const results = await Promise.allSettled(
       ALL_PLURALS.map((kind) =>
@@ -82,12 +82,12 @@ export const useResourceStore = create<ResourceState>((set, get) => ({
       }
     }
     set((state) => {
-      const next = new Set(state.loadingKinds)
-      for (const k of kinds) next.delete(k)
+      const next = { ...state.loadingKinds }
+      for (const k of ALL_PLURALS) delete next[k]
       return {
         resources: { ...state.resources, ...updated },
         loadingKinds: next,
-        loading: next.size > 0,
+        loading: Object.keys(next).length > 0,
       }
     })
   },

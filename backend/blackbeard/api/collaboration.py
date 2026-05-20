@@ -7,16 +7,14 @@ import hmac
 import json
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+import re
+from typing import Any
 
 import jwt as pyjwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from blackbeard.api.middleware import _EXPECTED_API_KEY, _record_auth_failure
+from blackbeard.api import middleware as _auth_mw
 from blackbeard.auth.jwt import decode_token
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +30,9 @@ if os.environ.get("WEB_CONCURRENCY", "1") != "1":
     )
 
 router = APIRouter(tags=["collaboration"])
+
+_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9\-]*$")
+_MAX_CREW_NAME_LEN = 255
 
 ALLOWED_MESSAGE_TYPES = frozenset(
     {
@@ -161,7 +162,14 @@ def _get_valkey_backend() -> ValkeyCollabBackend | None:
             return None
         _valkey_backend = ValkeyCollabBackend()
         return _valkey_backend
-    except (ImportError, Exception):
+    except ImportError:
+        return None
+    except Exception:
+        logger.warning(
+            "Valkey collaboration backend init failed — cross-replica collaboration will not work",
+            exc_info=True,
+            extra={"event": "valkey_collab_init_failed"},
+        )
         return None
 
 
@@ -189,6 +197,17 @@ async def _broadcast_local(
 
     if dead:
         participants.difference_update(dead)
+        logger.debug(
+            "Removed %d dead WebSocket connections from room %s",
+            len(dead),
+            room,
+            extra={
+                "event": "collab_dead_connections_removed",
+                "room": room,
+                "dead_count": len(dead),
+                "remaining": len(participants),
+            },
+        )
 
 
 async def _broadcast(
@@ -209,7 +228,7 @@ async def _broadcast(
         await backend.publish(room, message)
 
 
-def _validate_ws_auth(token: str, api_key: str) -> bool:
+def validate_ws_auth(token: str, api_key: str) -> bool:
     """Validate WebSocket authentication credentials.
 
     Accepts either a JWT access token or an API key.
@@ -223,7 +242,7 @@ def _validate_ws_auth(token: str, api_key: str) -> bool:
         except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError):
             pass
 
-    return bool(api_key and hmac.compare_digest(api_key, _EXPECTED_API_KEY))
+    return bool(api_key and hmac.compare_digest(api_key, _auth_mw.get_api_key()))
 
 
 @router.websocket("/ws/collab/{crew_name}")
@@ -245,12 +264,16 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
     - On join/leave: server sends ``participant_joined`` / ``participant_left``
       to remaining participants.
     """
+    if len(crew_name) > _MAX_CREW_NAME_LEN or not _NAME_RE.match(crew_name):
+        await websocket.close(code=4422, reason="Invalid crew name")
+        return
+
     token = websocket.query_params.get("token", "")
     api_key = websocket.query_params.get("api_key", "")
 
-    if not _validate_ws_auth(token, api_key):
+    if not validate_ws_auth(token, api_key):
         client_ip = websocket.client.host if websocket.client else "unknown"
-        _record_auth_failure(client_ip)
+        _auth_mw.record_auth_failure(client_ip)
         logger.warning(
             "Collaboration WebSocket auth failed: crew=%s from %s",
             crew_name,
@@ -303,9 +326,14 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
 
     try:
         while True:
-            message = await websocket.receive_json()
+            raw = await websocket.receive_text()
+            if len(raw) > 65_536:
+                continue
+            try:
+                message = json.loads(raw)
+            except (json.JSONDecodeError, ValueError):
+                continue
 
-            # Validate message structure
             if not isinstance(message, dict):
                 continue
 
@@ -313,7 +341,6 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
             if msg_type not in ALLOWED_MESSAGE_TYPES:
                 continue
 
-            # Broadcast to all other clients in the room
             await _broadcast(crew_name, websocket, message)
     except WebSocketDisconnect:
         pass

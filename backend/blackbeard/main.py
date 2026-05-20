@@ -347,7 +347,10 @@ if settings.oidc_issuer:
     from starlette.middleware.sessions import SessionMiddleware
 
     app.add_middleware(
-        SessionMiddleware, secret_key=settings.jwt_secret.get_secret_value()
+        SessionMiddleware,
+        secret_key=settings.jwt_secret.get_secret_value(),
+        https_only=not settings.debug,
+        same_site="lax",
     )
 
 app.include_router(resources_router, prefix="/api/v1")

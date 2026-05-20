@@ -263,11 +263,9 @@ class TestLLMPIIRecognizer:
         }
 
         mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
         mock_client.post.return_value = mock_response
 
-        with patch("httpx.Client", return_value=mock_client):
+        with patch("blackbeard.http_client.get_sync_client", return_value=mock_client):
             results = recognizer.analyze("john.doe@example.com", entities=["EMAIL_ADDRESS"])
 
         assert len(results) == 1
@@ -285,11 +283,9 @@ class TestLLMPIIRecognizer:
         mock_response.status_code = 500
 
         mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
         mock_client.post.return_value = mock_response
 
-        with patch("httpx.Client", return_value=mock_client):
+        with patch("blackbeard.http_client.get_sync_client", return_value=mock_client):
             results = recognizer.analyze("some text", entities=["PERSON"])
 
         assert results == []
@@ -300,11 +296,9 @@ class TestLLMPIIRecognizer:
         recognizer = LLMPIIRecognizer(model="test-model", proxy_url="http://localhost:4000")
 
         mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
         mock_client.post.side_effect = ConnectionError("Connection refused")
 
-        with patch("httpx.Client", return_value=mock_client):
+        with patch("blackbeard.http_client.get_sync_client", return_value=mock_client):
             results = recognizer.analyze("some text", entities=["PERSON"])
 
         assert results == []
@@ -321,11 +315,9 @@ class TestLLMPIIRecognizer:
         }
 
         mock_client = MagicMock()
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
         mock_client.post.return_value = mock_response
 
-        with patch("httpx.Client", return_value=mock_client):
+        with patch("blackbeard.http_client.get_sync_client", return_value=mock_client):
             results = recognizer.analyze("some text", entities=["PERSON"])
 
         assert results == []

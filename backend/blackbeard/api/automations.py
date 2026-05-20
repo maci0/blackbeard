@@ -207,9 +207,9 @@ async def webhook_trigger(
             "target_kind": target.get("kind"),
             "target_name": target.get("name"),
         },
-        user_id=None,
-        ip_address=request.client.host if request.client else "unknown",
-        user_agent=request.headers.get("user-agent", ""),
+        actor_type="webhook",
+        actor_id=f"webhook:{name}",
+        ip_address=request.client.host if request.client else None,
     )
     await session.commit()
 

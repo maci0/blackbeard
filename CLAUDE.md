@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Blackbeard
 
-Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding) with a visual graph editor, async execution engine, RBAC, and LiteLLM proxy for model routing (with built-in spend/token/latency tracking).
+Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation) with a visual graph editor, async execution engine, RBAC, and LiteLLM proxy for model routing (with built-in spend/token/latency tracking).
 
 ## Commands
 
@@ -64,9 +64,9 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Auth & RBAC**: Built-in email/password with JWT (access 15min + refresh 7d). User/Group models in `models/user.py`. Role and RoleBinding as resource kinds. Predefined roles seeded by `deploy/seed.sh`. Auth middleware accepts both `X-API-Key` and `Authorization: Bearer <jwt>`. Agent execution tracks principal chain: User → Crew → Agent (ServiceAccount via `spec.serviceAccount`, defaults to `sa-<name>`).
 
-**Middleware stack** (outermost → innermost): CORS (`CORSMiddleware` via `add_middleware`) → security headers → API key auth (hmac.compare_digest or JWT Bearer) + request ID → body size limiter (10MB). The three `app.middleware("http")` middlewares are registered LIFO in `main.py`. Auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`) and health checks are public (no auth required).
+**Middleware stack** (outermost → innermost): CORS (`CORSMiddleware` via `add_middleware`) → security headers → API key auth (hmac.compare_digest or JWT Bearer) + request ID → body size limiter (10MB). The three `app.middleware("http")` middlewares are registered LIFO in `main.py`. Auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), and health checks are public (no auth required).
 
-**CLI** (`cli/` — separate package `blackbeard-cli`): Standalone binary with no server deps (click, httpx, rich, pyyaml, jsonschema only). 22 commands across 7 modules. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
+**CLI** (`cli/` — separate package `blackbeard-cli`): Standalone binary with no server deps (click, httpx, rich, pyyaml, jsonschema only). 23 top-level commands (including 4 groups with subcommands) across 6 modules. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
 
 **HITL (Human-in-the-Loop)**: Tasks with `human_input: true` pause execution. Frontend polls for `hitl_request` events and submits responses via `POST /executions/{id}/respond`. Response recorded as `hitl_response` event.
 
@@ -94,7 +94,7 @@ DB schema is managed in `backend/entrypoint.sh`: first creates PostgreSQL enum t
 
 **SDKs**: Python (`sdks/python/`) and TypeScript (`sdks/typescript/`) — thin wrappers over httpx/fetch. Cover auth, resources, executions, train/test/flow.
 
-**CI**: GitHub Actions — 7 jobs: backend (ruff + mypy + pytest) → CLI (lint + validate) → Python SDK (pytest) → TypeScript SDK (tsc) → Helm lint → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (parallel, cached).
+**CI**: GitHub Actions — 8 jobs: backend (ruff check + ruff format + mypy + pytest + pip-audit) → CLI (lint + validate) → Python SDK (pytest) → TypeScript SDK (tsc) → Helm lint → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (docker-api after backend, docker-ui after frontend, cached).
 
 **Webhooks**: Register webhook URLs via `POST /api/v1/webhooks`. Execution events delivered with HMAC-SHA256 signature. Fire-and-forget delivery.
 

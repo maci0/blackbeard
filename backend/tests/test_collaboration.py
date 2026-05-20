@@ -12,9 +12,9 @@ from blackbeard.api.collaboration import (
     ALLOWED_MESSAGE_TYPES,
     _broadcast_local,
     _rooms,
-    _validate_ws_auth,
     get_room_stats,
     router,
+    validate_ws_auth,
 )
 from blackbeard.api.middleware import _EXPECTED_API_KEY
 from blackbeard.auth.jwt import create_access_token
@@ -26,6 +26,14 @@ from blackbeard.auth.jwt import create_access_token
 # ---------------------------------------------------------------------------
 _ws_app = FastAPI()
 _ws_app.include_router(router, prefix="/api/v1")
+
+
+@pytest.fixture(autouse=True)
+def _clear_rooms():
+    """Ensure room state is clean before and after every test."""
+    _rooms.clear()
+    yield
+    _rooms.clear()
 
 
 def _auth_qs() -> str:
@@ -48,28 +56,28 @@ def _jwt_qs() -> str:
 
 class TestValidateWsAuth:
     def test_valid_api_key(self) -> None:
-        assert _validate_ws_auth("", _EXPECTED_API_KEY) is True
+        assert validate_ws_auth("", _EXPECTED_API_KEY) is True
 
     def test_invalid_api_key(self) -> None:
-        assert _validate_ws_auth("", "wrong-key") is False
+        assert validate_ws_auth("", "wrong-key") is False
 
     def test_empty_credentials(self) -> None:
-        assert _validate_ws_auth("", "") is False
+        assert validate_ws_auth("", "") is False
 
     def test_valid_jwt(self) -> None:
         token = create_access_token(
             user_id=str(uuid.uuid4()), email="test@example.com"
         )
-        assert _validate_ws_auth(token, "") is True
+        assert validate_ws_auth(token, "") is True
 
     def test_invalid_jwt(self) -> None:
-        assert _validate_ws_auth("invalid.jwt.token", "") is False
+        assert validate_ws_auth("invalid.jwt.token", "") is False
 
     def test_refresh_token_rejected(self) -> None:
         from blackbeard.auth.jwt import create_refresh_token
 
         token = create_refresh_token(user_id=str(uuid.uuid4()))
-        assert _validate_ws_auth(token, "") is False
+        assert validate_ws_auth(token, "") is False
 
 
 # ---------------------------------------------------------------------------
@@ -79,12 +87,9 @@ class TestValidateWsAuth:
 
 class TestGetRoomStats:
     def test_empty_rooms(self) -> None:
-        _rooms.clear()
         assert get_room_stats() == {}
 
     def test_room_with_participants(self) -> None:
-        _rooms.clear()
-
         class FakeWS:
             pass
 
@@ -92,13 +97,10 @@ class TestGetRoomStats:
         _rooms["crew-b"] = {FakeWS()}  # type: ignore[arg-type]
         stats = get_room_stats()
         assert stats == {"crew-a": 2, "crew-b": 1}
-        _rooms.clear()
 
     def test_empty_room_excluded(self) -> None:
-        _rooms.clear()
         _rooms["crew-empty"] = set()
         assert get_room_stats() == {}
-        _rooms.clear()
 
 
 class TestAllowedMessageTypes:
@@ -141,7 +143,6 @@ class FakeWebSocket:
 class TestBroadcast:
     @pytest.mark.asyncio
     async def test_broadcast_sends_to_others(self) -> None:
-        _rooms.clear()
         sender = FakeWebSocket()
         other1 = FakeWebSocket()
         other2 = FakeWebSocket()
@@ -153,22 +154,18 @@ class TestBroadcast:
         assert msg in other1.sent
         assert msg in other2.sent
         assert len(sender.sent) == 0
-        _rooms.clear()
 
     @pytest.mark.asyncio
     async def test_broadcast_skips_sender(self) -> None:
-        _rooms.clear()
         sender = FakeWebSocket()
         _rooms["test-crew"] = {sender}  # type: ignore[arg-type]
 
         await _broadcast_local("test-crew", sender, {"type": "node_add", "data": {}})  # type: ignore[arg-type]
 
         assert len(sender.sent) == 0
-        _rooms.clear()
 
     @pytest.mark.asyncio
     async def test_broadcast_removes_dead_connections(self) -> None:
-        _rooms.clear()
         sender = FakeWebSocket()
         dead = FakeWebSocket(fail=True)
         alive = FakeWebSocket()
@@ -180,15 +177,12 @@ class TestBroadcast:
         assert dead not in _rooms["test-crew"]
         assert alive in _rooms["test-crew"]  # type: ignore[operator]
         assert sender in _rooms["test-crew"]  # type: ignore[operator]
-        _rooms.clear()
 
     @pytest.mark.asyncio
     async def test_broadcast_empty_room(self) -> None:
-        _rooms.clear()
         sender = FakeWebSocket()
         # Room doesn't exist — should not raise
         await _broadcast_local("nonexistent", sender, {"type": "node_add", "data": {}})  # type: ignore[arg-type]
-        _rooms.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -198,46 +192,38 @@ class TestBroadcast:
 
 def test_websocket_rejects_no_auth() -> None:
     """WebSocket connection without credentials should be rejected with 4401."""
-    _rooms.clear()
     with TestClient(_ws_app) as tc:
         with pytest.raises(Exception):
             with tc.websocket_connect("/api/v1/ws/collab/test-crew"):
                 pass  # Should not reach here
-    _rooms.clear()
 
 
 def test_websocket_rejects_invalid_api_key() -> None:
     """WebSocket connection with wrong API key should be rejected."""
-    _rooms.clear()
     with TestClient(_ws_app) as tc:
         with pytest.raises(Exception):
             with tc.websocket_connect(
                 "/api/v1/ws/collab/test-crew?api_key=wrong-key"
             ):
                 pass
-    _rooms.clear()
 
 
 def test_websocket_accepts_valid_api_key() -> None:
     """WebSocket connection with valid API key should be accepted."""
-    _rooms.clear()
     with TestClient(_ws_app) as tc, tc.websocket_connect(
         f"/api/v1/ws/collab/test-crew{_auth_qs()}"
     ) as ws:
         msg = ws.receive_json()
         assert msg["type"] == "room_state"
-    _rooms.clear()
 
 
 def test_websocket_accepts_valid_jwt() -> None:
     """WebSocket connection with valid JWT should be accepted."""
-    _rooms.clear()
     with TestClient(_ws_app) as tc, tc.websocket_connect(
         f"/api/v1/ws/collab/test-crew{_jwt_qs()}"
     ) as ws:
         msg = ws.receive_json()
         assert msg["type"] == "room_state"
-    _rooms.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -248,19 +234,16 @@ def test_websocket_accepts_valid_jwt() -> None:
 
 def test_websocket_connect_and_room_state() -> None:
     """Client connects and receives room_state with participant count."""
-    _rooms.clear()
     with TestClient(_ws_app) as tc, tc.websocket_connect(
         f"/api/v1/ws/collab/test-crew{_auth_qs()}"
     ) as ws:
         msg = ws.receive_json()
         assert msg["type"] == "room_state"
         assert msg["data"]["participants"] == 1
-    _rooms.clear()
 
 
 def test_two_clients_broadcast() -> None:
     """Two clients in same room: messages from one are received by the other."""
-    _rooms.clear()
     with TestClient(_ws_app) as tc, tc.websocket_connect(
         f"/api/v1/ws/collab/crew-x{_auth_qs()}"
     ) as ws1:
@@ -284,12 +267,10 @@ def test_two_clients_broadcast() -> None:
             received = ws2.receive_json()
             assert received["type"] == "node_move"
             assert received["data"]["id"] == "n1"
-    _rooms.clear()
 
 
 def test_invalid_message_type_ignored() -> None:
     """Messages with invalid types are silently ignored (not broadcast)."""
-    _rooms.clear()
     with TestClient(_ws_app) as tc, tc.websocket_connect(
         f"/api/v1/ws/collab/crew-y{_auth_qs()}"
     ) as ws1:
@@ -313,12 +294,10 @@ def test_invalid_message_type_ignored() -> None:
             received = ws2.receive_json()
             # Should only get the valid message, not the invalid one
             assert received["type"] == "node_add"
-    _rooms.clear()
 
 
 def test_different_crews_are_isolated() -> None:
     """Messages in one crew room are not received in another crew room."""
-    _rooms.clear()
     with (
         TestClient(_ws_app) as tc,
         tc.websocket_connect(
@@ -341,12 +320,10 @@ def test_different_crews_are_isolated() -> None:
             stats = get_room_stats()
             assert stats.get("crew-alpha") == 1
             assert stats.get("crew-beta") == 1
-    _rooms.clear()
 
 
 def test_disconnect_updates_participant_count() -> None:
     """When a client disconnects, remaining clients get participant_left."""
-    _rooms.clear()
     with TestClient(_ws_app) as tc, tc.websocket_connect(
         f"/api/v1/ws/collab/crew-dc{_auth_qs()}"
     ) as ws1:
@@ -362,12 +339,10 @@ def test_disconnect_updates_participant_count() -> None:
         left_msg = ws1.receive_json()
         assert left_msg["type"] == "participant_left"
         assert left_msg["data"]["count"] == 1
-    _rooms.clear()
 
 
 def test_room_cleanup_on_last_disconnect() -> None:
     """Room is removed from _rooms when the last participant disconnects."""
-    _rooms.clear()
     with (
         TestClient(_ws_app) as tc,
         tc.websocket_connect(
@@ -379,12 +354,10 @@ def test_room_cleanup_on_last_disconnect() -> None:
 
     # After disconnect, room should be cleaned up
     assert "crew-cleanup" not in _rooms
-    _rooms.clear()
 
 
 def test_all_message_types_broadcast() -> None:
     """All valid message types are properly broadcast."""
-    _rooms.clear()
     with (
         TestClient(_ws_app) as tc,
         tc.websocket_connect(
@@ -403,4 +376,3 @@ def test_all_message_types_broadcast() -> None:
                 ws1.send_json({"type": msg_type, "data": {"test": True}})
                 received = ws2.receive_json()
                 assert received["type"] == msg_type
-    _rooms.clear()

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Anchor, UserPlus } from 'lucide-react'
+import { Anchor, UserPlus, Eye, EyeOff } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useDocumentTitle } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
@@ -20,9 +20,18 @@ export default function Register() {
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
   const clearError = () => setLocalError(null)
 
   const error = localError ?? storeError
+  const validationField =
+    localError === 'Email is required.'
+      ? 'email'
+      : localError === 'Display name is required.'
+        ? 'displayName'
+        : localError === 'Password must be at least 8 characters.'
+          ? 'password'
+          : null
 
   useDocumentTitle('Create Account')
 
@@ -83,7 +92,11 @@ export default function Register() {
                 autoComplete="name"
                 autoFocus
                 required
-                aria-invalid={!!error || undefined}
+                aria-invalid={
+                  validationField === 'displayName' ||
+                  (!validationField && !!storeError) ||
+                  undefined
+                }
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="Your name"
               />
@@ -103,7 +116,9 @@ export default function Register() {
                 }}
                 autoComplete="email"
                 required
-                aria-invalid={!!error || undefined}
+                aria-invalid={
+                  validationField === 'email' || (!validationField && !!storeError) || undefined
+                }
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="you@example.com"
               />
@@ -113,22 +128,36 @@ export default function Register() {
               <label htmlFor="register-password" className="mb-1.5 block text-sm font-medium">
                 Password <span className="text-destructive">*</span>
               </label>
-              <input
-                id="register-password"
-                type="password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value)
-                  clearError()
-                }}
-                autoComplete="new-password"
-                required
-                minLength={8}
-                aria-invalid={!!error || undefined}
-                aria-describedby="register-password-hint"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                placeholder="Min 8 characters"
-              />
+              <div className="relative">
+                <input
+                  id="register-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    clearError()
+                  }}
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                  aria-invalid={
+                    validationField === 'password' ||
+                    (!validationField && !!storeError) ||
+                    undefined
+                  }
+                  aria-describedby="register-password-hint"
+                  className="w-full rounded-md border bg-background px-3 py-2 pr-10 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  placeholder="Min 8 characters"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-1 top-1/2 flex h-[44px] w-[44px] -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               {password.length > 0 && password.length < 8 ? (
                 <p
                   id="register-password-hint"

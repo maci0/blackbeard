@@ -18,7 +18,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-_CONFIG_DIR = Path.home() / ".config" / "blackbeard"
+# Access token lifetime minus safety margin (14 min of 15 min token).
+_ACCESS_TOKEN_LIFETIME_S = 840
+
+_CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "blackbeard"
 _CREDENTIALS_FILE = _CONFIG_DIR / "credentials.json"
 
 
@@ -99,7 +102,7 @@ def _refresh_token(server: str, refresh_token: str, timeout: float) -> StoredCre
             access_token=data["access_token"],
             refresh_token=refresh_token,
             email="",
-            expires_at=time.time() + 840,
+            expires_at=time.time() + _ACCESS_TOKEN_LIFETIME_S,
         )
     except (httpx.RequestError, KeyError, TypeError):
         return None

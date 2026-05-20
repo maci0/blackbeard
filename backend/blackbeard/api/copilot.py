@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,8 +16,7 @@ from blackbeard.engine.copilot import (
     generate_resources,
 )
 from blackbeard.logging_config import request_id_var
-from blackbeard.models.database import get_session
-from blackbeard.models.user import User
+from blackbeard.models import User, get_session
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +85,6 @@ async def generate_crew(
     llm_connection is specified, uses the first available LLMConnection
     in the given namespace.
     """
-    from fastapi import HTTPException
-
     logger.info(
         "Copilot request: prompt_len=%d llm=%s ns=%s user=%s",
         len(body.prompt),

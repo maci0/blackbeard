@@ -80,7 +80,7 @@ class GroupMemberListResponse(BaseModel):
 
     items: list[UserResponse]
     total: int
-    limit: int = 1000
+    limit: int = 100
     offset: int = 0
     has_more: bool = False
 
@@ -102,6 +102,39 @@ def group_response(group: Group) -> GroupResponse:
         description=group.description,
         created_at=group.created_at,
     )
+
+
+async def _require_group(
+    session: AsyncSession, group_id: uuid.UUID, *, for_update: bool = False
+) -> Group:
+    """Load a group or raise 404."""
+    query = select(Group).where(Group.id == group_id)
+    if for_update:
+        query = query.with_for_update()
+    result = await session.execute(query)
+    group = result.scalar_one_or_none()
+    if group is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return group
+
+
+def _require_self_only(
+    current_user: User, user_id: uuid.UUID, action: str
+) -> None:
+    """Raise 403 if current_user is not the target user."""
+    if current_user.id != user_id:
+        logger.warning(
+            "Forbidden: user %s attempted to %s user %s",
+            current_user.id,
+            action,
+            user_id,
+            extra={
+                "event": f"forbidden_user_{action}",
+                "actor_user_id": str(current_user.id),
+                "target_user_id": str(user_id),
+            },
+        )
+        raise HTTPException(status_code=403, detail=f"Cannot {action} other users")
 
 
 @router.get(
@@ -178,18 +211,7 @@ async def update_user(
     session: AsyncSession = Depends(get_session),
 ) -> UserResponse:
     """Update a user (self-only — users can only modify their own profile)."""
-    if current_user.id != user_id:
-        logger.warning(
-            "Forbidden: user %s attempted to modify user %s",
-            current_user.id,
-            user_id,
-            extra={
-                "event": "forbidden_user_modify",
-                "actor_user_id": str(current_user.id),
-                "target_user_id": str(user_id),
-            },
-        )
-        raise HTTPException(status_code=403, detail="Cannot modify other users")
+    _require_self_only(current_user, user_id, "modify")
 
     result = await session.execute(
         select(User).where(User.id == user_id).options(defer(User.password_hash)).with_for_update()
@@ -235,18 +257,7 @@ async def deactivate_user(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Deactivate a user (self-only soft delete)."""
-    if current_user.id != user_id:
-        logger.warning(
-            "Forbidden: user %s attempted to deactivate user %s",
-            current_user.id,
-            user_id,
-            extra={
-                "event": "forbidden_user_deactivate",
-                "actor_user_id": str(current_user.id),
-                "target_user_id": str(user_id),
-            },
-        )
-        raise HTTPException(status_code=403, detail="Cannot deactivate other users")
+    _require_self_only(current_user, user_id, "deactivate")
 
     result = await session.execute(select(User).where(User.id == user_id).with_for_update())
     user = result.scalar_one_or_none()
@@ -367,10 +378,7 @@ async def get_group(
     session: AsyncSession = Depends(get_session),
 ) -> GroupResponse:
     """Get a group by ID."""
-    result = await session.execute(select(Group).where(Group.id == group_id))
-    group = result.scalar_one_or_none()
-    if group is None:
-        raise HTTPException(status_code=404, detail="Group not found")
+    group = await _require_group(session, group_id)
     return group_response(group)
 
 
@@ -390,10 +398,7 @@ async def update_group(
     session: AsyncSession = Depends(get_session),
 ) -> GroupResponse:
     """Update a group."""
-    result = await session.execute(select(Group).where(Group.id == group_id).with_for_update())
-    group = result.scalar_one_or_none()
-    if group is None:
-        raise HTTPException(status_code=404, detail="Group not found")
+    group = await _require_group(session, group_id, for_update=True)
 
     if "description" in data.model_fields_set:
         group.description = data.description
@@ -495,10 +500,7 @@ async def list_group_members(
     session: AsyncSession = Depends(get_session),
 ) -> GroupMemberListResponse:
     """List members of a group."""
-    group_result = await session.execute(select(Group).where(Group.id == group_id))
-    group = group_result.scalar_one_or_none()
-    if group is None:
-        raise HTTPException(status_code=404, detail="Group not found")
+    await _require_group(session, group_id)
 
     result = await session.execute(
         select(User)
@@ -552,11 +554,7 @@ async def add_group_member(
     except ValueError:
         raise HTTPException(status_code=422, detail="Invalid user_id format") from None
 
-    # Verify group exists
-    group_result = await session.execute(select(Group).where(Group.id == group_id))
-    group = group_result.scalar_one_or_none()
-    if group is None:
-        raise HTTPException(status_code=404, detail="Group not found")
+    group = await _require_group(session, group_id)
 
     # Verify user exists
     user_result = await session.execute(select(User).where(User.id == target_user_id))
@@ -615,11 +613,7 @@ async def remove_group_member(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Remove a user from a group."""
-    # Verify group exists
-    group_result = await session.execute(select(Group).where(Group.id == group_id))
-    group = group_result.scalar_one_or_none()
-    if group is None:
-        raise HTTPException(status_code=404, detail="Group not found")
+    group = await _require_group(session, group_id)
 
     result = await session.execute(
         select(GroupMember).where(

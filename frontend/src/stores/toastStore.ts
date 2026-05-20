@@ -19,9 +19,9 @@ interface ToastState {
 let counter = 0
 
 const DURATIONS: Record<Toast['type'], number> = {
-  success: 5000,
+  success: 7000,
   error: 15000,
-  info: 5000,
+  info: 7000,
 }
 
 const timers = new Map<

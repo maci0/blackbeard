@@ -91,8 +91,10 @@ describe('fuzz: yamlToCanvas', () => {
     fc.assert(
       fc.property(fc.string({ maxLength: 5000 }), (yaml) => {
         const result = yamlToCanvas(yaml)
-        // Should return null for invalid YAML or {nodes, edges} for valid
-        expect(result === null || (typeof result === 'object' && 'nodes' in result)).toBe(true)
+        if (result !== null) {
+          expect(Array.isArray(result.nodes)).toBe(true)
+          expect(Array.isArray(result.edges)).toBe(true)
+        }
       }),
       { numRuns: NUM_RUNS },
     )
@@ -130,11 +132,11 @@ describe('fuzz: yamlToCanvas', () => {
         const yaml = canvasToYaml(nodes)
         const result = yamlToCanvas(yaml)
 
-        // If we produced valid YAML, it should parse back
+        // If we produced valid YAML, it should parse back with same node count
         if (yaml.length > 0) {
           expect(result).not.toBeNull()
           if (result) {
-            expect(result.nodes.length).toBeGreaterThanOrEqual(0)
+            expect(result.nodes.length).toBe(nodes.length)
           }
         }
       }),

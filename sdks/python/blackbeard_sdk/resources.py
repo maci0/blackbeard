@@ -20,6 +20,7 @@ KIND_TO_PLURAL: dict[str, str] = {
     "KnowledgeSource": "knowledge-sources",
     "Role": "roles",
     "RoleBinding": "role-bindings",
+    "Automation": "automations",
 }
 
 

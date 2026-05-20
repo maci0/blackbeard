@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, type ChangeEvent } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo, type ChangeEvent } from 'react'
 import { AlertCircle, Check } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
 import { canvasToYaml, yamlToCanvas } from './yamlSync'
@@ -12,6 +12,13 @@ export function YamlEditor() {
   const setNodes = useStudioStore((s) => s.setNodes)
   const setEdges = useStudioStore((s) => s.setEdges)
 
+  // Derive a stable fingerprint from node data only (not positions),
+  // so dragging nodes doesn't trigger expensive YAML re-generation.
+  const nodeDataFingerprint = useMemo(
+    () => nodes.map((n) => `${n.id}:${n.type}:${JSON.stringify(n.data)}`).join('|'),
+    [nodes],
+  )
+
   const [yamlText, setYamlText] = useState(() => canvasToYaml(nodes))
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced')
   const [parseError, setParseError] = useState<string | null>(null)
@@ -19,7 +26,8 @@ export function YamlEditor() {
   const isExternalUpdateRef = useRef(false)
   const isTypingRef = useRef(false)
 
-  // When canvas nodes change externally (not from YAML edits), update the YAML text
+  // When canvas node data changes externally (not from YAML edits), update the YAML text.
+  // Keyed on nodeDataFingerprint so position-only changes (dragging) are ignored.
   useEffect(() => {
     if (isTypingRef.current) return
     const newYaml = canvasToYaml(nodes)
@@ -27,7 +35,8 @@ export function YamlEditor() {
     setYamlText(newYaml)
     setSyncStatus('synced')
     setParseError(null)
-  }, [nodes])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeDataFingerprint])
 
   const handleYamlChange = useCallback(
     (e: ChangeEvent<HTMLTextAreaElement>) => {

@@ -19,6 +19,7 @@ const KIND_PLURALS: Record<string, string> = {
   KnowledgeSource: "knowledge-sources",
   Role: "roles",
   RoleBinding: "role-bindings",
+  Automation: "automations",
 };
 
 export class BlackbeardClient {

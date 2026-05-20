@@ -1,0 +1,71 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "blackbeard.fullname" . }}-postgres
+  labels:
+    {{- include "blackbeard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "blackbeard.selectorLabels" (dict "context" . "component" "postgres") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "blackbeard.selectorLabels" (dict "context" . "component" "api") | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "blackbeard.selectorLabels" (dict "context" . "component" "litellm") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}
+---
+{{- if .Values.valkey.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "blackbeard.fullname" . }}-valkey
+  labels:
+    {{- include "blackbeard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "blackbeard.selectorLabels" (dict "context" . "component" "valkey") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "blackbeard.selectorLabels" (dict "context" . "component" "api") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 6379
+{{- end }}
+---
+{{- if .Values.litellm.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "blackbeard.fullname" . }}-litellm
+  labels:
+    {{- include "blackbeard.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "blackbeard.selectorLabels" (dict "context" . "component" "litellm") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "blackbeard.selectorLabels" (dict "context" . "component" "api") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 4000
+{{- end }}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { Anchor, LogIn, Shield } from 'lucide-react'
-import { useAuthStore } from '@/stores/authStore'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Anchor, LogIn, Shield, Eye, EyeOff } from 'lucide-react'
+import { useAuthStore, TOKEN_KEY, REFRESH_KEY } from '@/stores/authStore'
 import { useDocumentTitle } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -21,8 +21,8 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
   const [oidcEnabled, setOidcEnabled] = useState(false)
-  const [searchParams] = useSearchParams()
   const clearError = () => setLocalError(null)
 
   useEffect(() => {
@@ -33,16 +33,21 @@ export default function Login() {
   }, [])
 
   useEffect(() => {
-    const token = searchParams.get('token')
-    const refresh = searchParams.get('refresh')
+    const hash = window.location.hash.slice(1)
+    if (!hash) return
+    const params = new URLSearchParams(hash)
+    const token = params.get('token')
+    const refresh = params.get('refresh')
     if (token && refresh) {
-      localStorage.setItem('blackbeard_token', token)
-      localStorage.setItem('blackbeard_refresh_token', refresh)
+      localStorage.setItem(TOKEN_KEY, token)
+      localStorage.setItem(REFRESH_KEY, refresh)
+      window.history.replaceState(null, '', window.location.pathname)
       void navigate(redirectTo, { replace: true })
     }
-  }, [searchParams, navigate, redirectTo])
+  }, [navigate, redirectTo])
 
   const error = localError ?? storeError
+  const isFieldError = localError === 'Email and password are required.'
 
   useDocumentTitle('Sign In')
 
@@ -95,7 +100,7 @@ export default function Login() {
                 autoComplete="email"
                 autoFocus
                 required
-                aria-invalid={!!error || undefined}
+                aria-invalid={(isFieldError ? !email.trim() : !!error) || undefined}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="you@example.com"
               />
@@ -105,20 +110,30 @@ export default function Login() {
               <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium">
                 Password <span className="text-destructive">*</span>
               </label>
-              <input
-                id="login-password"
-                type="password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value)
-                  clearError()
-                }}
-                autoComplete="current-password"
-                required
-                aria-invalid={!!error || undefined}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                placeholder="Enter your password"
-              />
+              <div className="relative">
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    clearError()
+                  }}
+                  autoComplete="current-password"
+                  required
+                  aria-invalid={(isFieldError ? !password.trim() : !!error) || undefined}
+                  className="w-full rounded-md border bg-background px-3 py-2 pr-10 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  placeholder="Enter your password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-1 top-1/2 flex h-[44px] w-[44px] -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             <button

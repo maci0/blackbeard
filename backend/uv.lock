@@ -341,7 +341,6 @@ dependencies = [
     { name = "email-validator" },
     { name = "fastapi" },
     { name = "grpcio" },
-    { name = "grpcio-tools" },
     { name = "httpx" },
     { name = "jsonschema" },
     { name = "muninn-python" },
@@ -362,6 +361,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "aiosqlite" },
+    { name = "grpcio-tools" },
     { name = "hypothesis" },
     { name = "mypy" },
     { name = "pip-audit" },
@@ -377,7 +377,7 @@ requires-dist = [
     { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.20,<1" },
     { name = "alembic", specifier = ">=1.15,<2" },
     { name = "asyncpg", specifier = ">=0.30,<1" },
-    { name = "authlib", specifier = ">=1.7.2" },
+    { name = "authlib", specifier = ">=1.7.2,<2" },
     { name = "bcrypt", specifier = ">=4.3,<5" },
     { name = "crewai", specifier = ">=1.14,<2" },
     { name = "crewai-tools", specifier = ">=1.14.4,<2" },
@@ -385,7 +385,7 @@ requires-dist = [
     { name = "email-validator", specifier = ">=2.2,<3" },
     { name = "fastapi", specifier = ">=0.136,<1" },
     { name = "grpcio", specifier = ">=1.70,<2" },
-    { name = "grpcio-tools", specifier = ">=1.70,<2" },
+    { name = "grpcio-tools", marker = "extra == 'dev'", specifier = ">=1.70,<2" },
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100,<7" },
     { name = "jsonschema", specifier = ">=4.23,<5" },

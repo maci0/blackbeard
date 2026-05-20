@@ -296,8 +296,12 @@ function AddModelDialog({
                   autoComplete="off"
                   pattern="[a-z0-9][a-z0-9\-]*"
                   title="Lowercase letters, numbers, and hyphens only (must start with a letter or number)"
+                  aria-describedby="model-name-hint"
                   className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 />
+                <p id="model-name-hint" className="mt-1 text-xs text-muted-foreground">
+                  Lowercase letters, numbers, and hyphens only
+                </p>
               </div>
 
               <div>
