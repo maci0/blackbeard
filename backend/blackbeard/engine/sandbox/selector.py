@@ -24,7 +24,6 @@ The "microvm" tier supports two backends:
 from __future__ import annotations
 
 import logging
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +104,9 @@ def select_microvm_backend() -> str:
         ``"firecracker"``, ``"krun"``, or ``"none"``.
     """
     # Check Firecracker first — it provides stronger isolation
-    firecracker_kernel = os.environ.get("FIRECRACKER_KERNEL", "")
+    from blackbeard.config import settings
+
+    firecracker_kernel = settings.firecracker_kernel
     if firecracker_kernel:
         from blackbeard.engine.sandbox.firecracker import is_firecracker_available
 

@@ -226,12 +226,13 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
         const y = msg.data['y'] as number | undefined
         if (userId && typeof x === 'number' && typeof y === 'number') {
           setRemoteCursors((prev) => {
-            const next = new Map(prev)
-            const existing = next.get(userId)
+            const existing = prev.get(userId)
+            if (existing && existing.x === x && existing.y === y) return prev
             const color =
               existing?.color ??
               CURSOR_COLORS[colorIndexRef.current++ % CURSOR_COLORS.length] ??
               '#6b7280'
+            const next = new Map(prev)
             next.set(userId, {
               userId,
               name: name ?? 'Anonymous',

@@ -19,7 +19,7 @@ interface ToastState {
 let counter = 0
 
 const DURATIONS: Record<Toast['type'], number> = {
-  success: 7000,
+  success: 5000,
   error: 15000,
   info: 7000,
 }

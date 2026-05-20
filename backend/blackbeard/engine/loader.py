@@ -10,6 +10,7 @@ import importlib
 import json
 import logging
 import re
+import threading
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -90,6 +91,7 @@ _KS_TYPE_MAP: dict[str, tuple[str, str]] = {
     "string": ("crewai.knowledge.source.string_knowledge_source", "StringKnowledgeSource"),
 }
 _ks_class_cache: dict[str, type] = {}
+_ks_class_cache_lock = threading.Lock()
 
 
 class LoaderError(Exception):
@@ -240,11 +242,12 @@ class ResourceLoader:
 
             module_path, class_name = entry
             cache_key = f"{module_path}.{class_name}"
-            cls = _ks_class_cache.get(cache_key)
-            if cls is None:
-                module = importlib.import_module(module_path)
-                cls = getattr(module, class_name)
-                _ks_class_cache[cache_key] = cls
+            with _ks_class_cache_lock:
+                cls = _ks_class_cache.get(cache_key)
+                if cls is None:
+                    module = importlib.import_module(module_path)
+                    cls = getattr(module, class_name)
+                    _ks_class_cache[cache_key] = cls
 
             kwargs: dict[str, Any] = (
                 {"content": content} if ks_type == "string" else {"file_paths": file_paths}
@@ -569,8 +572,8 @@ class ResourceLoader:
             module = importlib.import_module(module_path)
             return getattr(module, attr_name)
         except Exception:
-            logger.warning(
-                "Failed to import callable: %s",
+            logger.error(
+                "Failed to import callable: %s — guardrail/output_pydantic will be skipped",
                 dotted_path,
                 exc_info=True,
                 extra={"event": "callable_import_failed", "dotted_path": dotted_path},

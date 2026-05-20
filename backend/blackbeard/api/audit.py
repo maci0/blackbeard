@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from blackbeard.auth.dependencies import require_user
 from blackbeard.models import User, get_session
@@ -20,19 +21,21 @@ router = APIRouter(tags=["audit"])
 
 
 class AuditLogItem(BaseModel):
-    """Single audit log entry returned by the API."""
+    """Single audit log entry returned by the API.
+
+    actor_email and ip_address are stored in the DB for forensics
+    but excluded from API responses to limit PII exposure.
+    """
 
     id: str
     timestamp: datetime
     actor_type: str
     actor_id: str
-    actor_email: str | None = None
     action: str
     resource_type: str | None = None
     resource_id: str | None = None
     detail: dict | None = None
     request_id: str | None = None
-    ip_address: str | None = None
 
 
 class AuditLogListResponse(BaseModel):
@@ -90,7 +93,12 @@ async def list_audit_logs(
     if resource_id is not None:
         query = query.where(AuditLog.resource_id == resource_id)
 
-    data_query = query.order_by(AuditLog.timestamp.desc()).limit(limit).offset(offset)
+    data_query = (
+        query.order_by(AuditLog.timestamp.desc())
+        .options(defer(AuditLog.actor_email), defer(AuditLog.ip_address))
+        .limit(limit)
+        .offset(offset)
+    )
     result = await session.execute(data_query)
     logs = list(result.scalars().all())
 
@@ -108,13 +116,11 @@ async def list_audit_logs(
                 timestamp=entry.timestamp,
                 actor_type=entry.actor_type,
                 actor_id=entry.actor_id,
-                actor_email=entry.actor_email,
                 action=entry.action,
                 resource_type=entry.resource_type,
                 resource_id=entry.resource_id,
                 detail=entry.detail,
                 request_id=entry.request_id,
-                ip_address=entry.ip_address,
             )
             for entry in logs
         ],

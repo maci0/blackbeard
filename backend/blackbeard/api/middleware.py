@@ -6,6 +6,7 @@ import collections
 import hmac
 import logging
 import re
+import threading
 import time
 import uuid
 from typing import TYPE_CHECKING
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
     from fastapi import Request, Response
     from starlette.middleware.base import RequestResponseEndpoint
 
+from blackbeard.auth.api_key import get_api_key
 from blackbeard.auth.jwt import decode_token
 from blackbeard.config import settings
 from blackbeard.logging_config import request_id_var, user_id_var
@@ -29,6 +31,7 @@ logger = logging.getLogger(__name__)
 _AUTH_FAIL_WINDOW_S = 300  # 5-minute window
 _AUTH_FAIL_MAX = 20  # max failures per IP within the window
 _auth_failures: dict[str, collections.deque[float]] = {}
+_auth_failures_lock = threading.Lock()
 
 _HEALTH_PATHS = {"/api/v1/health", "/api/v1/health/ready"}
 _DOCS_PATHS = {"/docs", "/openapi.json", "/redoc"}
@@ -38,27 +41,26 @@ PUBLIC_PATHS = (
     _HEALTH_PATHS | _AUTH_PATHS | _OIDC_PATHS | (_DOCS_PATHS if settings.debug else set())
 )
 
-# Default API key from settings; may be replaced at runtime via set_api_key()
-_EXPECTED_API_KEY = settings.blackbeard_api_key.get_secret_value()
-
-
-def set_api_key(key: str) -> None:
-    """Replace the expected API key (used by startup to inject ephemeral keys)."""
-    global _EXPECTED_API_KEY
-    _EXPECTED_API_KEY = key
-
-
-def get_api_key() -> str:
-    """Return the currently active API key."""
-    return _EXPECTED_API_KEY
-
+_AUTOMATION_WEBHOOK_RE = re.compile(r"^/api/v1/automations/[a-z0-9][a-z0-9\-]*/webhook$")
 
 # Allowlist pattern for client-supplied request IDs — prevents header injection
 _REQUEST_ID_PATTERN = re.compile(r"^[a-zA-Z0-9\-]{1,64}$")
 
 
 _SENSITIVE_QS_PARAMS = frozenset(
-    {"api_key", "token", "secret", "key", "password", "credential", "access_token", "refresh_token"}
+    {
+        "api_key",
+        "token",
+        "secret",
+        "key",
+        "password",
+        "credential",
+        "access_token",
+        "refresh_token",
+        "email",
+        "ssn",
+        "phone",
+    }
 )
 
 
@@ -83,16 +85,18 @@ def _redact_query_string(query: str) -> str:
 def _check_rate_limit(request: Request, request_id: str, client_ip: str) -> JSONResponse | None:
     """Return a 429 response if client_ip exceeds the auth failure threshold, else None."""
     now = time.monotonic()
-    ip_failures = _auth_failures.get(client_ip)
-    if ip_failures is None:
-        return None
-    while ip_failures and ip_failures[0] < now - _AUTH_FAIL_WINDOW_S:
-        ip_failures.popleft()
-    if not ip_failures:
-        del _auth_failures[client_ip]
-        return None
-    if len(ip_failures) < _AUTH_FAIL_MAX:
-        return None
+    with _auth_failures_lock:
+        ip_failures = _auth_failures.get(client_ip)
+        if ip_failures is None:
+            return None
+        while ip_failures and ip_failures[0] < now - _AUTH_FAIL_WINDOW_S:
+            ip_failures.popleft()
+        if not ip_failures:
+            del _auth_failures[client_ip]
+            return None
+        if len(ip_failures) < _AUTH_FAIL_MAX:
+            return None
+        failure_count = len(ip_failures)
     response = JSONResponse(
         status_code=429,
         content={
@@ -107,13 +111,13 @@ def _check_rate_limit(request: Request, request_id: str, client_ip: str) -> JSON
         request.method,
         request.url.path,
         client_ip,
-        len(ip_failures),
+        failure_count,
         extra={
             "event": "auth_rate_limited",
             "http_method": request.method,
             "http_path": request.url.path,
             "client_ip": client_ip,
-            "failure_count": len(ip_failures),
+            "failure_count": failure_count,
             "request_id": request_id,
         },
     )
@@ -126,17 +130,17 @@ _AUTH_FAIL_MAX_IPS = 200
 def record_auth_failure(client_ip: str) -> None:
     """Record an authentication failure for rate limiting and prune stale entries."""
     now = time.monotonic()
-    if client_ip not in _auth_failures:
-        _auth_failures[client_ip] = collections.deque(maxlen=_AUTH_FAIL_MAX + 10)
-    _auth_failures[client_ip].append(now)
-    if len(_auth_failures) > _AUTH_FAIL_MAX_IPS:
-        cutoff = now - _AUTH_FAIL_WINDOW_S
-        stale = [ip for ip, dq in _auth_failures.items() if not dq or dq[-1] < cutoff]
-        for ip in stale:
-            _auth_failures.pop(ip, None)
-        # Hard cap: evict oldest entries to prevent unbounded growth under DDoS
-        while len(_auth_failures) > _AUTH_FAIL_MAX_IPS:
-            _auth_failures.pop(next(iter(_auth_failures)), None)
+    with _auth_failures_lock:
+        if client_ip not in _auth_failures:
+            _auth_failures[client_ip] = collections.deque(maxlen=_AUTH_FAIL_MAX + 10)
+        _auth_failures[client_ip].append(now)
+        if len(_auth_failures) > _AUTH_FAIL_MAX_IPS:
+            cutoff = now - _AUTH_FAIL_WINDOW_S
+            stale = [ip for ip, dq in _auth_failures.items() if not dq or dq[-1] < cutoff]
+            for ip in stale:
+                _auth_failures.pop(ip, None)
+            while len(_auth_failures) > _AUTH_FAIL_MAX_IPS:
+                _auth_failures.pop(next(iter(_auth_failures)), None)
 
 
 def get_request_id(request: Request) -> str:
@@ -185,6 +189,14 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
                 "request_id": request_id,
             },
         )
+        return response
+
+    # Automation webhook paths use their own HMAC auth inside the route
+    # handler — let them through without requiring an API key or JWT.
+    if _AUTOMATION_WEBHOOK_RE.match(path):
+        response = await call_next(request)
+        response.headers["X-Request-Id"] = request_id
+        _log_request(request, response, start)
         return response
 
     rate_limited = _check_rate_limit(request, request_id, client_ip)
@@ -245,7 +257,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     api_key = request.headers.get("X-API-Key", "")
     if not api_key and path.endswith("/stream"):
         api_key = request.query_params.get("api_key", "")
-    if not api_key or not hmac.compare_digest(api_key, _EXPECTED_API_KEY):
+    if not api_key or not hmac.compare_digest(api_key, get_api_key()):
         record_auth_failure(client_ip)
 
         response = JSONResponse(
@@ -502,6 +514,15 @@ async def validation_exception_handler(_request: Request, exc: Exception) -> JSO
             "request_id": rid,
         },
     )
+    # Strip 'input' and 'ctx' from each error to prevent leaking submitted
+    # values (e.g. passwords) in the HTTP response body.
+    if isinstance(errors, list):
+        errors = [
+            {k: v for k, v in e.items() if k not in ("input", "ctx")}
+            if isinstance(e, dict)
+            else e
+            for e in errors
+        ]
     return JSONResponse(
         status_code=422,
         content={"detail": jsonable_encoder(errors), "request_id": rid},

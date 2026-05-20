@@ -23,7 +23,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { CodeBlock } from '@/components/ui/CodeBlock'
 import { getDuration, formatDate, formatCost } from '@/lib/formatters'
-import { cn } from '@/lib/utils'
+import { cn, getErrorMessage } from '@/lib/utils'
 import { api } from '@/api/client'
 
 /* ------------------------------------------------------------------ */
@@ -274,6 +274,11 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
     return raw as SpendCall[]
   }, [data])
 
+  const totalCost = useMemo(
+    () => (calls ? calls.reduce((sum, c) => sum + (c.spend ?? 0), 0) : 0),
+    [calls],
+  )
+
   if (!calls) {
     return (
       <div className="mt-6">
@@ -285,8 +290,6 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
       </div>
     )
   }
-
-  const totalCost = calls.reduce((sum, c) => sum + (c.spend ?? 0), 0)
 
   return (
     <div className="mt-6">
@@ -435,8 +438,8 @@ export default function ExecutionDetail() {
             data,
           },
         ])
-      } catch {
-        // Ignore malformed events
+      } catch (err) {
+        console.debug('[SSE] Failed to parse event:', e.type, err)
       }
     }
 
@@ -454,8 +457,8 @@ export default function ExecutionDetail() {
           void fetchExecution(id)
           void fetchEvents(id)
         }
-      } catch {
-        // Ignore malformed status
+      } catch (err) {
+        console.debug('[SSE] Failed to parse status update:', err)
       }
     })
 
@@ -625,7 +628,7 @@ export default function ExecutionDetail() {
           <SummaryCard
             icon={Coins}
             label="Total tokens"
-            value={execution.total_tokens > 0 ? execution.total_tokens.toLocaleString() : '--'}
+            value={execution.total_tokens > 0 ? execution.total_tokens.toLocaleString() : '—'}
             valueLabel={execution.total_tokens > 0 ? undefined : 'No tokens recorded'}
             borderColor="border-t-violet-500"
           />
@@ -640,6 +643,7 @@ export default function ExecutionDetail() {
             icon={Clock}
             label="Duration"
             value={getDuration(execution.started_at, execution.completed_at)}
+            valueLabel={execution.started_at ? undefined : 'No duration recorded'}
             sub={isActive ? 'In progress' : undefined}
             borderColor="border-t-amber-500"
           />
@@ -758,7 +762,7 @@ export default function ExecutionDetail() {
               await cancelExecution(id)
               setShowCancelConfirm(false)
             } catch (err) {
-              setCancelError((err as Error).message)
+              setCancelError(getErrorMessage(err, 'Failed to cancel execution'))
               setShowCancelConfirm(false)
             } finally {
               setCancelling(false)

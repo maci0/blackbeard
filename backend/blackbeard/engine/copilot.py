@@ -93,7 +93,7 @@ class NoLLMConnectionError(CopilotError):
 def _get_copilot_client() -> httpx.AsyncClient:
     """Return a shared httpx client for copilot LiteLLM requests."""
     key = settings.litellm_master_key.get_secret_value()
-    return get_client("litellm-copilot", headers={"Authorization": f"Bearer {key}"})
+    return get_client("litellm-copilot", timeout=120.0, headers={"Authorization": f"Bearer {key}"})
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -364,9 +364,7 @@ async def generate_resources(
     raw_content = message.get("content", "")
 
     if not raw_content:
-        raise CopilotError(
-            "The model returned an empty response. Try rephrasing your prompt."
-        )
+        raise CopilotError("The model returned an empty response. Try rephrasing your prompt.")
 
     if len(raw_content) > _MAX_RESPONSE_LEN:
         raw_content = raw_content[:_MAX_RESPONSE_LEN]

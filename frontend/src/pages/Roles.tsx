@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import {
   Shield,
   Search,
@@ -244,7 +244,10 @@ function CreateRoleDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return
+    if (!name.trim()) {
+      setError('Role name is required.')
+      return
+    }
     setSubmitting(true)
     setError(null)
     try {
@@ -302,6 +305,8 @@ function CreateRoleDialog({
                 onChange={(e) => setName(e.target.value)}
                 required
                 autoFocus
+                autoComplete="off"
+                spellCheck={false}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="e.g. crew-manager"
               />
@@ -316,6 +321,7 @@ function CreateRoleDialog({
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                autoComplete="off"
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="What does this role allow?"
               />
@@ -372,8 +378,18 @@ export default function Roles() {
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [selectedRole, setSelectedRole] = useState<RoleRecord | null>(null)
+  const detailPanelRef = useRef<HTMLDivElement>(null)
 
   useDocumentTitle('Roles')
+
+  useEffect(() => {
+    if (selectedRole) {
+      requestAnimationFrame(() => {
+        detailPanelRef.current?.focus()
+        detailPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      })
+    }
+  }, [selectedRole])
 
   const fetchRoles = useCallback(async () => {
     setLoading(true)
@@ -503,7 +519,7 @@ export default function Roles() {
 
         {/* Selected role detail */}
         {selectedRole && (
-          <div className="mb-4">
+          <div ref={detailPanelRef} tabIndex={-1} className="mb-4 focus-visible:outline-none">
             <RoleDetail
               role={selectedRole}
               onClose={() => setSelectedRole(null)}

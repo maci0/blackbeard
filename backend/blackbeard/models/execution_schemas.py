@@ -19,7 +19,9 @@ _SAFE_INPUT_KEY = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 # Keys whose values should be redacted in API responses to prevent
 # accidental exposure of secrets passed as crew inputs.
 _SENSITIVE_INPUT_KEYS = re.compile(
-    r"(password|secret|token|credential|api.?key|auth|private.?key|access.?key)",
+    r"(password|secret|token|credential|api.?key|auth|private.?key|access.?key"
+    r"|ssn|social.?security|credit.?card|card.?number|bank.?account|routing.?number"
+    r"|date.?of.?birth|dob|passport|driver.?license|national.?id)",
     re.IGNORECASE,
 )
 _REDACTED = "[REDACTED]"
@@ -234,6 +236,12 @@ class ExecutionResponse(BaseModel):
             ]
         raw_inputs = execution.__dict__.get("inputs")
         initiated_by_raw = execution.__dict__.get("initiated_by")
+        principal_chain = execution.__dict__.get("principal_chain")
+        if isinstance(principal_chain, dict) and isinstance(principal_chain.get("user"), dict):
+            principal_chain = {
+                **principal_chain,
+                "user": {k: v for k, v in principal_chain["user"].items() if k != "email"},
+            }
         return cls.model_construct(
             id=execution.id,
             crew_name=execution.crew_name,
@@ -252,7 +260,7 @@ class ExecutionResponse(BaseModel):
             completion_tokens=execution.completion_tokens,
             cost_usd=execution.cost_usd,
             initiated_by=str(initiated_by_raw) if initiated_by_raw else None,
-            principal_chain=execution.__dict__.get("principal_chain"),
+            principal_chain=principal_chain,
             created_at=execution.created_at,
             started_at=execution.started_at,
             completed_at=execution.completed_at,

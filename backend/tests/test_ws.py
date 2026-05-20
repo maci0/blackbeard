@@ -23,7 +23,7 @@ from blackbeard.auth.jwt import create_access_token
 
 def test_ws_auth_valid_api_key_accepted():
     """The WS handler should accept a valid API key via hmac.compare_digest."""
-    from blackbeard.api.middleware import _EXPECTED_API_KEY
+    from blackbeard.auth.api_key import _EXPECTED_API_KEY
 
     authenticated = hmac.compare_digest("change-me-in-production", _EXPECTED_API_KEY)
     assert authenticated is True
@@ -31,7 +31,7 @@ def test_ws_auth_valid_api_key_accepted():
 
 def test_ws_auth_invalid_api_key_rejected():
     """The WS handler should reject an invalid API key."""
-    from blackbeard.api.middleware import _EXPECTED_API_KEY
+    from blackbeard.auth.api_key import _EXPECTED_API_KEY
 
     authenticated = hmac.compare_digest("wrong-key", _EXPECTED_API_KEY)
     assert authenticated is False
@@ -39,7 +39,7 @@ def test_ws_auth_invalid_api_key_rejected():
 
 def test_ws_auth_empty_api_key_rejected():
     """The WS handler should reject an empty API key."""
-    from blackbeard.api.middleware import _EXPECTED_API_KEY
+    from blackbeard.auth.api_key import _EXPECTED_API_KEY
 
     authenticated = hmac.compare_digest("", _EXPECTED_API_KEY)
     assert authenticated is False
@@ -144,7 +144,7 @@ def test_ws_auth_wrong_signature_rejected():
 
 def test_ws_auth_both_credentials_empty():
     """WS handler should reject when both token and api_key are empty."""
-    from blackbeard.api.middleware import _EXPECTED_API_KEY
+    from blackbeard.auth.api_key import _EXPECTED_API_KEY
 
     token = ""
     api_key = ""

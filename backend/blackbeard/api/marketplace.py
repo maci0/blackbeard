@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -40,6 +41,20 @@ _MAX_YAML_SIZE_BYTES = 256 * 1024  # 256 KB per file
 
 # Only allow HTTPS URLs (no file://, ssh://, etc.)
 _ALLOWED_URL_SCHEMES = ("https://",)
+
+_SECRET_ENV_KEYS = frozenset(
+    {
+        "DATABASE_URL",
+        "BLACKBEARD_API_KEY",
+        "JWT_SECRET",
+        "LITELLM_MASTER_KEY",
+        "VALKEY_URL",
+        "VALKEY_PASSWORD",
+        "OIDC_CLIENT_SECRET",
+        "LANGFUSE_SECRET_KEY",
+        "POSTGRES_PASSWORD",
+    }
+)
 
 
 class ImportRequest(BaseModel):
@@ -128,11 +143,24 @@ async def _clone_repo(url: str, target: Path) -> None:
     - ``--recurse-submodules=no``: do not clone submodules (could point
       to internal repos or file:// URLs)
     """
+    env = {k: v for k, v in os.environ.items() if k not in _SECRET_ENV_KEYS}
+    env.update(
+        {
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_ASKPASS": "",
+            "GIT_SSH_COMMAND": "",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": "",
+        }
+    )
     proc = await asyncio.create_subprocess_exec(
         "git",
-        "-c", "transfer.fsckObjects=true",
-        "-c", "http.followRedirects=initial",
-        "-c", "protocol.file.allow=never",
+        "-c",
+        "transfer.fsckObjects=true",
+        "-c",
+        "http.followRedirects=initial",
+        "-c",
+        "protocol.file.allow=never",
         "clone",
         "--depth=1",
         "--single-branch",
@@ -142,6 +170,7 @@ async def _clone_repo(url: str, target: Path) -> None:
         str(target),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=env,
     )
     try:
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_MAX_CLONE_TIMEOUT_S)
@@ -217,27 +246,13 @@ async def import_from_url(
                 detail="Git URL must not contain embedded credentials",
             )
 
-        # SECURITY: Reject URLs pointing to localhost or private IP ranges
-        # to mitigate SSRF.  The git clone could otherwise reach internal
-        # services that are not exposed externally.
-        import ipaddress
+        # SECURITY: Full SSRF validation including DNS resolution to catch
+        # DNS rebinding attacks (e.g. public domain resolving to 10.x/169.254.x).
+        from blackbeard.resources import check_url_ssrf
 
-        hostname = (_parsed.hostname or "").lower()
-        blocked = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
-        if hostname in blocked:
-            raise HTTPException(
-                status_code=422,
-                detail="Git URL must not point to localhost or loopback addresses",
-            )
-        try:
-            addr = ipaddress.ip_address(hostname)
-            if addr.is_private or addr.is_loopback or addr.is_link_local:
-                raise HTTPException(
-                    status_code=422,
-                    detail="Git URL must not point to private or internal IP addresses",
-                )
-        except ValueError:
-            pass  # hostname is a DNS name, not an IP -- allowed
+        ssrf_error = check_url_ssrf(url)
+        if ssrf_error:
+            raise HTTPException(status_code=422, detail=ssrf_error)
 
         # Clone to temp dir
         tmpdir = Path(tempfile.mkdtemp(prefix="bb-marketplace-"))
@@ -248,15 +263,13 @@ async def import_from_url(
             # large repositories.  This runs after clone because git
             # doesn't support pre-clone size limits.
             total_size = sum(
-                f.stat().st_size
-                for f in tmpdir.rglob("*")
-                if f.is_file() and not f.is_symlink()
+                f.stat().st_size for f in tmpdir.rglob("*") if f.is_file() and not f.is_symlink()
             )
             if total_size > _MAX_CLONE_SIZE_BYTES:
                 raise HTTPException(
                     status_code=422,
-                    detail=f"Cloned repository is too large ({total_size // (1024*1024)}MB, "
-                    f"limit: {_MAX_CLONE_SIZE_BYTES // (1024*1024)}MB)",
+                    detail=f"Cloned repository is too large ({total_size // (1024 * 1024)}MB, "
+                    f"limit: {_MAX_CLONE_SIZE_BYTES // (1024 * 1024)}MB)",
                 )
 
             git_dir = tmpdir / ".git"
@@ -285,11 +298,11 @@ async def import_from_url(
     for raw in raw_resources:
         try:
             data = ResourceCreate.model_validate(raw)
-        except Exception as exc:
+        except Exception:
             kind_str = raw.get("kind", "Unknown")
             name_str = raw.get("metadata", {}).get("name", "unknown")
             error_details.append(
-                f"Validation error for {kind_str}/{name_str}: {type(exc).__name__}"
+                f"Validation error for {kind_str}/{name_str}: invalid resource structure"
             )
             continue
         try:

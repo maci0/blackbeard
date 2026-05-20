@@ -94,6 +94,13 @@ class ResourceResponse(BaseModel):
     @classmethod
     def from_db(cls, resource: Resource) -> ResourceResponse:
         """Build response from a SQLAlchemy Resource model."""
+        spec = resource.spec
+        if resource.kind.value == "Automation" and spec:
+            spec = dict(spec)
+            trigger = spec.get("trigger")
+            if isinstance(trigger, dict) and "webhook_secret" in trigger:
+                trigger = {**trigger, "webhook_secret": "**REDACTED**"}
+                spec["trigger"] = trigger
         return cls.model_construct(
             id=resource.id,
             apiVersion=API_VERSION,
@@ -103,7 +110,7 @@ class ResourceResponse(BaseModel):
                 namespace=resource.namespace,
                 labels=resource.labels or {},
             ),
-            spec=resource.spec,
+            spec=spec,
             version=resource.version,
             created_at=resource.created_at,
             updated_at=resource.updated_at,

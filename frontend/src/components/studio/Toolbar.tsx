@@ -226,6 +226,7 @@ export function Toolbar({
           data-tour="run-button"
           onClick={onRunClick}
           disabled={status === 'running' || status === 'saving' || status === 'loading'}
+          aria-label={`Run crew ${crewName}`}
           title={
             status === 'running'
               ? 'Crew is already running'

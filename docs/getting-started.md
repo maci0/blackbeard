@@ -85,7 +85,7 @@ Studio is a visual drag-and-drop editor for building crews.
 6. Click **Save** in the toolbar — resources are persisted via the API
 7. Click **Run** to kick off an execution immediately
 
-You can switch between the form view and a read-only YAML preview (Monaco) in the Property Panel at any time.
+You can switch between the form view and a bidirectional YAML editor (Monaco) in the Property Panel at any time — changes sync both ways.
 
 ---
 
@@ -118,4 +118,5 @@ Open a crew in the Studio or navigate to the Crew resource detail page and click
 - **Train and test crews** — Use `blackbeard train` and `blackbeard test-crew` for iterative improvement and evaluation
 - **Set up webhooks** — Register webhook URLs for execution event delivery with HMAC-SHA256 signing
 - **Install the Python SDK** — See [`sdks/python/README.md`](../sdks/python/README.md) for programmatic access
+- **Embed with the React SDK** — See [`sdks/react/`](../sdks/react/) for React components (`CrewViewer`, `CrewRunner`, `ExecutionStatus`)
 - **Browse the YAML reference** — See [`docs/yaml-reference.md`](./yaml-reference.md) for a complete field-by-field reference for all resource kinds

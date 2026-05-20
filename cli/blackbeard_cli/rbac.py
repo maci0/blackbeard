@@ -10,13 +10,13 @@ from rich.table import Table
 
 from blackbeard_cli.helpers import (
     console,
-    extract_detail,
     handle_http_error,
     handle_request_error,
     json_opt,
     out,
     print_json,
     require_auth,
+    validate_name,
 )
 
 ALL_VERBS = ["get", "list", "create", "update", "delete", "run", "invoke", "delegate"]
@@ -110,6 +110,7 @@ Examples:
 def role_describe(ctx: click.Context, name: str, output_json: bool = False) -> None:
     """Show role details with resource-verb permission matrix."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
+    validate_name(name)
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
@@ -278,6 +279,7 @@ def rolebinding_create(
 ) -> None:
     """Create a role binding."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
+    validate_name(name)
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
@@ -288,6 +290,12 @@ def rolebinding_create(
             console.print("[dim]Example: --subject User:admin@blackbeard.sh[/]")
             raise SystemExit(2)
         kind, _, subj_name = s.partition(":")
+        if not kind:
+            console.print(f"[red bold]Error:[/] Invalid --subject: kind cannot be empty in {s!r}")
+            raise SystemExit(2)
+        if not subj_name:
+            console.print(f"[red bold]Error:[/] Invalid --subject: name cannot be empty in {s!r}")
+            raise SystemExit(2)
         parsed_subjects.append({"kind": kind, "name": subj_name})
 
     spec: dict[str, Any] = {
@@ -311,9 +319,7 @@ def rolebinding_create(
         handle_request_error(server, exc)
 
     if resp.status_code not in (200, 201):
-        detail = extract_detail(resp)
-        console.print(f"[red bold]Error:[/] {detail}")
-        raise SystemExit(1)
+        handle_http_error(resp)
 
     data = resp.json()
 

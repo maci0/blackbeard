@@ -46,7 +46,7 @@ Five services run in Docker Compose:
 1. **UI** -- Static React SPA served by Nginx (Vite dev server in development). Proxies `/api` requests to the API server.
 2. **API** -- FastAPI application handling resource CRUD, crew execution, authentication, and WebSocket/SSE streaming.
 3. **PostgreSQL 18** -- Primary data store for resources, executions, users, groups, and LiteLLM's own tables.
-4. **Valkey 9** -- Redis-compatible cache used for session data and rate limiting.
+4. **Valkey 9** -- Redis-compatible store used for real-time collaboration pub/sub (multi-replica WebSocket fan-out).
 5. **LiteLLM Proxy** -- Routes LLM calls to configured providers (Vertex AI, OpenAI, Ollama, etc.) and tracks spend, tokens, and latency per virtual key.
 
 ---
@@ -59,7 +59,7 @@ All entities in Blackbeard are **resources**. Every resource shares a common env
 
 ```yaml
 apiVersion: blackbeard/v1
-kind: Agent          # one of 11 kinds
+kind: Agent          # one of 12 kinds
 metadata:
   name: researcher
   namespace: default
@@ -176,7 +176,7 @@ Blackbeard supports two authentication methods:
 - **API key** -- `X-API-Key` header, validated with `hmac.compare_digest` against `BLACKBEARD_API_KEY`
 - **JWT Bearer** -- `Authorization: Bearer <token>`, with 15-minute access tokens and 7-day refresh tokens
 
-**Public endpoints** (no auth required): health checks (`/api/v1/health`, `/api/v1/health/ready`), auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), and API docs (`/docs`, `/redoc` in debug mode).
+**Public endpoints** (no auth required): health checks (`/api/v1/health`, `/api/v1/health/ready`), auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), and API docs (`/docs`, `/redoc` in debug mode).
 
 **RBAC model:**
 
@@ -397,11 +397,11 @@ All containers use `no-new-privileges` and `cap_drop: ALL`. PostgreSQL and Valke
 
 | Container  | cap_drop | cap_add                                        | Read-only | PID limit |
 |------------|----------|------------------------------------------------|-----------|-----------|
-| API        | ALL      | (none)                                         | No        | 256       |
-| UI         | ALL      | (none)                                         | No        | 64        |
+| API        | ALL      | (none)                                         | Yes       | 256       |
+| UI         | ALL      | (none)                                         | Yes       | 64        |
 | PostgreSQL | ALL      | CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID    | No        | 128       |
 | Valkey     | ALL      | SETGID, SETUID                                 | Yes       | 64        |
-| LiteLLM    | ALL      | (none)                                         | No        | 128       |
+| LiteLLM    | ALL      | (none)                                         | Yes       | 128       |
 
 ### API Security
 
@@ -412,9 +412,19 @@ All containers use `no-new-privileges` and `cap_drop: ALL`. PostgreSQL and Valke
 - All ports bound to `127.0.0.1` only (not exposed to external networks)
 - `X-Request-Id` on every response for tracing
 
-### WASM Sandbox
+### Tool Sandbox Tiers
 
-Tools with `sandbox: wasm` run in a WebAssembly runtime (`wasmtime-py`) with restricted capabilities. WASI grants are explicitly enumerated (e.g., `http_fetch`, `env`). The `env` capability exposes only a fixed set of safe variables (`LANG`, `LC_ALL`, `TZ`, `TERM`).
+Tools run in one of five sandbox tiers, ordered by isolation strength:
+
+| Tier | Runtime | Isolation |
+|------|---------|-----------|
+| `none` | In-process | No isolation |
+| `wasm` | wasmtime-py | WebAssembly with WASI capability grants (`http_fetch`, `env`) |
+| `docker`/`podman` | Container | Disposable container, no network, read-only FS, caps dropped |
+| `gvisor` | runsc | Syscall-level isolation via application kernel on top of Docker/Podman |
+| `microvm` | Firecracker or libkrun | Dedicated VM with its own kernel via KVM |
+
+AgentPolicy `sandbox.minimum_tier` promotes tools to a higher tier. The `env` WASI capability exposes only safe variables (`LANG`, `LC_ALL`, `TZ`, `TERM`).
 
 ---
 
@@ -464,8 +474,8 @@ POST /api/v1/flows/{name}/run   → Run a flow
 |------|-------------|
 | `crew` | Builds and runs a referenced crew |
 | `function` | Invokes a Python function (module:function format, allowlisted) |
-| `router` | Routes to different steps based on output (not yet implemented at runtime) |
-| `condition` | Conditional step execution (not yet implemented at runtime) |
+| `router` | Routes to different steps based on output |
+| `condition` | Conditional step execution based on a simple expression |
 
 ---
 
@@ -513,7 +523,7 @@ The CLI (`cli/` directory) is a standalone Python package named `blackbeard-cli`
 | `exec.py` | executions (list), events, cancel |
 | `export_cmd.py` | export (YAML dump) |
 | `rbac.py` | role, rolebinding management |
-| `users.py` | user, group management (create, list, add-member, remove-member) |
+| `users.py` | user, group management (create, list, delete) |
 
 **Auth resolution order:** `--api-key` flag > `BLACKBEARD_API_KEY` env var > stored JWT in `~/.config/blackbeard/`.
 
@@ -526,6 +536,8 @@ The CLI copies `kinds.py` and the `resources/` validation code from the backend.
 **Python SDK** (`sdks/python/`): Thin wrapper over httpx. Covers auth (login, register, refresh, whoami), resource CRUD (list, get, create, update, delete, apply, export), and executions (kickoff, train, test, run_flow, cancel, wait, events, spend).
 
 **TypeScript SDK** (`sdks/typescript/`): Thin wrapper over fetch. Mirrors the Python SDK's API coverage.
+
+**React SDK** (`sdks/react/`): React component library (`@blackbeard/react`). Provides `BlackbeardProvider`, `CrewViewer`, `CrewRunner`, and `ExecutionStatus` components for embedding Blackbeard into React applications.
 
 ---
 

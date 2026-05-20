@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from blackbeard.engine.policy import resolve_policy
 from blackbeard.resources import parse_ref
 
 logger = logging.getLogger(__name__)
@@ -34,8 +35,6 @@ def get_pii_config(
     default) and returns the first PII config block that has ``enabled=True``.
     Returns ``None`` if no policy enables PII redaction.
     """
-    from blackbeard.engine.policy import resolve_policy
-
     crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
     crew_spec = crew_snap.get("spec", {})
     policy_specs = extract_policy_specs(resource_snapshot)
@@ -82,8 +81,6 @@ def derive_budget_limits(
         ``(max_budget_usd, max_tokens)`` -- either may be ``None`` if no
         policy defines that limit.
     """
-    from blackbeard.engine.policy import resolve_policy
-
     crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
     crew_spec = crew_snap.get("spec", {})
 

@@ -24,7 +24,7 @@ import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
-import { cn } from '@/lib/utils'
+import { cn, getErrorMessage } from '@/lib/utils'
 import { useToastStore } from '@/stores/toastStore'
 
 /* ------------------------------------------------------------------ */
@@ -239,11 +239,24 @@ function AddModelDialog({
   const [form, setForm] = useState<AddModelForm>(INITIAL_FORM)
 
   const set =
-    (field: keyof AddModelForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    (field: keyof AddModelForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       setForm((f) => ({ ...f, [field]: e.target.value }))
+      setValidationError(null)
+    }
+
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!form.name.trim()) {
+      setValidationError('Name is required.')
+      return
+    }
+    if (!form.model.trim()) {
+      setValidationError('Model is required.')
+      return
+    }
+    setValidationError(null)
     onSubmit(form)
   }
 
@@ -252,6 +265,7 @@ function AddModelDialog({
       open={open}
       onOpenChange={(v) => {
         if (!v) setForm(INITIAL_FORM)
+        setValidationError(null)
         onOpenChange(v)
       }}
     >
@@ -275,7 +289,7 @@ function AddModelDialog({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4 p-5">
+          <form onSubmit={handleSubmit} noValidate className="space-y-4 p-5">
             <fieldset
               disabled={submitting}
               aria-busy={submitting}
@@ -294,6 +308,7 @@ function AddModelDialog({
                   onChange={set('name')}
                   placeholder="my-gpt4-connection"
                   autoComplete="off"
+                  autoFocus
                   pattern="[a-z0-9][a-z0-9\-]*"
                   title="Lowercase letters, numbers, and hyphens only (must start with a letter or number)"
                   aria-describedby="model-name-hint"
@@ -379,14 +394,14 @@ function AddModelDialog({
               </div>
             </fieldset>
 
-            {submitError && (
+            {(validationError ?? submitError) && (
               <div
                 role="alert"
                 aria-live="assertive"
                 className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
               >
                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                {submitError}
+                {validationError ?? submitError}
               </div>
             )}
 
@@ -478,7 +493,7 @@ export default function Models() {
       setAddOpen(false)
       toasts.success(`Connection "${form.name}" created`)
     } catch (err) {
-      setSubmitError((err as Error).message)
+      setSubmitError(getErrorMessage(err, 'Failed to create connection'))
     } finally {
       setSubmitting(false)
     }
@@ -494,7 +509,7 @@ export default function Models() {
       toasts.success(`Connection "${name}" deleted`)
     } catch (err) {
       setDeleteTarget(null)
-      setDeleteError((err as Error).message)
+      setDeleteError(getErrorMessage(err, 'Failed to delete connection'))
       if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
       deleteErrorTimerRef.current = setTimeout(() => setDeleteError(null), 8000)
     } finally {

@@ -37,6 +37,7 @@ def test_redact_sensitive_inputs_password():
     inputs = {"password": "s3cr3t", "topic": "AI"}
     result = _redact_sensitive_inputs(inputs)
     assert result["password"] == "[REDACTED]"
+    assert "s3cr3t" not in str(result), "Original secret must not appear anywhere in output"
     assert result["topic"] == "AI"
 
 
@@ -45,6 +46,7 @@ def test_redact_sensitive_inputs_api_key():
     inputs = {"api_key": "sk-1234", "name": "test"}
     result = _redact_sensitive_inputs(inputs)
     assert result["api_key"] == "[REDACTED]"
+    assert "sk-1234" not in str(result), "Original secret must not appear anywhere in output"
     assert result["name"] == "test"
 
 
@@ -53,6 +55,7 @@ def test_redact_sensitive_inputs_token():
     inputs = {"auth_token": "bearer-xyz", "count": "5"}
     result = _redact_sensitive_inputs(inputs)
     assert result["auth_token"] == "[REDACTED]"
+    assert "bearer-xyz" not in str(result), "Original secret must not appear anywhere in output"
     assert result["count"] == "5"
 
 
@@ -104,6 +107,7 @@ def test_redact_sensitive_inputs_nested_dict():
     result = _redact_sensitive_inputs(inputs)
     assert result["config"]["api_key"] == "[REDACTED]"
     assert result["config"]["host"] == "example.com"
+    assert "sk-nested" not in str(result), "Nested secret must not appear anywhere in output"
 
 
 def test_redact_sensitive_inputs_list_of_dicts():
@@ -874,8 +878,8 @@ def test_get_request_id_invalid_client_id():
     mock_request = MagicMock()
     mock_request.headers = {"X-Request-Id": "invalid id with spaces!"}
     result = get_request_id(mock_request)
-    assert result != "invalid id with spaces!"
-    uuid.UUID(result)  # Should parse as valid UUID
+    parsed = uuid.UUID(result)  # Must parse as valid UUID
+    assert str(parsed) == result, "Generated ID must be a canonical UUID string"
 
 
 def test_get_request_id_no_client_id():
@@ -891,8 +895,8 @@ def test_get_request_id_too_long():
     mock_request = MagicMock()
     mock_request.headers = {"X-Request-Id": "a" * 65}
     result = get_request_id(mock_request)
-    assert result != "a" * 65
-    uuid.UUID(result)
+    parsed = uuid.UUID(result)
+    assert str(parsed) == result, "Generated ID must be a canonical UUID string"
 
 
 # ---------------------------------------------------------------------------

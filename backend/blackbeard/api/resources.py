@@ -42,8 +42,9 @@ async def _maybe_reload_scheduler(request: Request, kind: str) -> None:
         try:
             await scheduler.reload()
         except Exception:
-            logger.warning(
-                "Scheduler reload failed after Automation change",
+            logger.error(
+                "Scheduler reload failed after Automation change — "
+                "cron schedules may be stale until next restart",
                 exc_info=True,
                 extra={"event": "scheduler_reload_failed"},
             )
@@ -53,7 +54,7 @@ def _resolve_kind(kind_plural: str) -> str:
     """Validate kind_plural and return the ResourceKind value string."""
     kind = PLURAL_TO_KIND.get(kind_plural)
     if kind is None:
-        valid = ", ".join(PLURAL_TO_KIND.keys())
+        valid = ", ".join(sorted(PLURAL_TO_KIND.keys()))
         raise HTTPException(
             status_code=404,
             detail=f"Unknown resource kind '{kind_plural}'. Valid kinds: {valid}",

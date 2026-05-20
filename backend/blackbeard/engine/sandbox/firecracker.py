@@ -106,9 +106,11 @@ class FirecrackerSandbox:
             vcpus: Number of virtual CPUs per VM (default 1).
             memory_mb: Memory allocation per VM in MiB (default 128).
         """
-        self._bin = bin_path or os.environ.get("FIRECRACKER_BIN", "firecracker")
-        self._kernel = kernel_path or os.environ.get("FIRECRACKER_KERNEL", "")
-        self._rootfs = rootfs_path or os.environ.get("FIRECRACKER_ROOTFS", "")
+        from blackbeard.config import settings
+
+        self._bin = bin_path or settings.firecracker_bin
+        self._kernel = kernel_path or settings.firecracker_kernel
+        self._rootfs = rootfs_path or settings.firecracker_rootfs
         self._vcpus = vcpus
         self._memory_mb = memory_mb
 
@@ -392,7 +394,8 @@ def is_firecracker_available() -> bool:
     Returns:
         True if Firecracker can be used on this system.
     """
-    bin_path = os.environ.get("FIRECRACKER_BIN", "firecracker")
-    has_binary = shutil.which(bin_path) is not None
+    from blackbeard.config import settings
+
+    has_binary = shutil.which(settings.firecracker_bin) is not None
     has_kvm = Path("/dev/kvm").exists()
     return has_binary and has_kvm

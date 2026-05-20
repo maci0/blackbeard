@@ -65,9 +65,10 @@ class AutomationScheduler:
             )
         except Exception:
             logger.exception(
-                "Failed to start automation scheduler",
+                "Failed to start automation scheduler — no cron automations will run until restart",
                 extra={"event": "scheduler_start_failed"},
             )
+            self._running = False
 
     async def stop(self) -> None:
         """Cancel all scheduled tasks."""
@@ -159,6 +160,7 @@ class AutomationScheduler:
                 "Invalid cron expression for automation '%s': %s",
                 automation_name,
                 cron_expr,
+                exc_info=True,
                 extra={
                     "event": "invalid_cron_expression",
                     "automation_name": automation_name,
@@ -192,6 +194,7 @@ class AutomationScheduler:
                 "Invalid cron expression for automation '%s': %s",
                 automation_name,
                 cron_expr,
+                exc_info=True,
                 extra={
                     "event": "invalid_cron_expression",
                     "automation_name": automation_name,

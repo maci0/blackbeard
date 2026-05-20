@@ -6,7 +6,7 @@ import asyncio
 from sqlalchemy import text
 from blackbeard.models.database import engine, Base
 from blackbeard.kinds import ResourceKind
-from blackbeard.models.execution import ExecutionStatus, TaskStatus
+from blackbeard.models.execution import ExecutionStatus, ExecutionType, TaskStatus
 import blackbeard.models.resource
 import blackbeard.models.execution
 import blackbeard.models.user
@@ -22,12 +22,15 @@ _PG_CHECKS = [
     f"DO $$ BEGIN ALTER TABLE resources ADD CONSTRAINT ck_resource_namespace_pattern CHECK (namespace ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
     f"DO $$ BEGIN ALTER TABLE executions ADD CONSTRAINT ck_execution_crew_name_pattern CHECK (crew_name ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
     f"DO $$ BEGIN ALTER TABLE executions ADD CONSTRAINT ck_execution_crew_ns_pattern CHECK (crew_namespace ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+    f"DO $$ BEGIN ALTER TABLE resource_refs ADD CONSTRAINT ck_ref_target_name_pattern CHECK (target_name ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+    f"DO $$ BEGIN ALTER TABLE resource_refs ADD CONSTRAINT ck_ref_target_ns_pattern CHECK (target_namespace ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
 ]
 
 async def migrate():
     async with engine.begin() as conn:
         for stmt in [
             _create_enum_sql("resourcekind", ResourceKind),
+            _create_enum_sql("executiontype", ExecutionType),
             _create_enum_sql("executionstatus", ExecutionStatus),
             _create_enum_sql("taskstatus", TaskStatus),
         ]:

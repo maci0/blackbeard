@@ -66,6 +66,10 @@ spec:
                   key: database-password
             - name: DATABASE_URL
               value: {{ include "blackbeard.litellmDatabaseUrl" . | quote }}
+            {{- range $key, $value := .Values.litellm.env }}
+            - name: {{ $key | quote }}
+              value: {{ $value | quote }}
+            {{- end }}
           startupProbe:
             httpGet:
               path: /health/liveness

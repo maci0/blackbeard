@@ -109,13 +109,13 @@ async def test_webhook_delete(client: AsyncClient, db_session: AsyncSession):
 
 
 async def test_webhook_delete_nonexistent(client: AsyncClient):
-    """DELETE /webhooks/{id} for nonexistent webhook returns 404."""
+    """DELETE /webhooks/{id} for nonexistent webhook returns 204 (idempotent)."""
     fake_id = str(uuid.uuid4())
     resp = await client.delete(
         f"/api/v1/webhooks/{fake_id}",
         headers=API_KEY_HEADER,
     )
-    assert resp.status_code == 404
+    assert resp.status_code == 204
 
 
 async def test_webhook_create_requires_auth(client: AsyncClient):
@@ -375,7 +375,7 @@ def test_collaboration_non_dict_message_ignored():
     from starlette.testclient import TestClient
 
     from blackbeard.api.collaboration import _rooms, router
-    from blackbeard.api.middleware import _EXPECTED_API_KEY
+    from blackbeard.auth.api_key import _EXPECTED_API_KEY
 
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
@@ -529,5 +529,5 @@ async def test_trigger_automation_flow_target(client: AsyncClient):
         json={"inputs": {}},
         headers=API_KEY_HEADER,
     )
-    # Will get an error since the flow doesn't exist, but the code path is exercised
-    assert resp.status_code in (404, 500)
+    # Flow doesn't exist → ExecutionNotFoundError → 404
+    assert resp.status_code == 404

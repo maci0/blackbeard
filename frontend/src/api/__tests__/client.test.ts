@@ -147,6 +147,7 @@ describe('ApiClient', () => {
     })
 
     it('throws ApiError with correct status and message on 401', async () => {
+      expect.assertions(6)
       const fetchMock = vi.mocked(globalThis.fetch)
       fetchMock.mockResolvedValueOnce(mockResponse(401, { detail: 'Invalid credentials' }))
 
@@ -166,6 +167,7 @@ describe('ApiClient', () => {
     })
 
     it('throws ApiError with array detail (validation error)', async () => {
+      expect.assertions(4)
       const fetchMock = vi.mocked(globalThis.fetch)
       const detail = [
         { field: 'name', message: 'Name is required' },
@@ -185,6 +187,7 @@ describe('ApiClient', () => {
     })
 
     it('handles array detail with msg field (FastAPI style)', async () => {
+      expect.assertions(1)
       const fetchMock = vi.mocked(globalThis.fetch)
       const detail = [{ loc: ['body', 'name'], msg: 'field required', type: 'missing' }]
       fetchMock.mockResolvedValueOnce(mockResponse(422, { detail }))
@@ -198,6 +201,7 @@ describe('ApiClient', () => {
     })
 
     it('falls back to HTTP status code in message when detail is unparseable', async () => {
+      expect.assertions(2)
       const fetchMock = vi.mocked(globalThis.fetch)
       // Non-JSON error body
       const response = {
@@ -219,6 +223,7 @@ describe('ApiClient', () => {
     })
 
     it('throws ApiError on network error (TypeError)', async () => {
+      expect.assertions(3)
       const fetchMock = vi.mocked(globalThis.fetch)
       fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
 
@@ -233,6 +238,7 @@ describe('ApiClient', () => {
     })
 
     it('throws ApiError on timeout (DOMException TimeoutError)', async () => {
+      expect.assertions(3)
       const fetchMock = vi.mocked(globalThis.fetch)
       const timeoutError = new DOMException('The operation was aborted.', 'TimeoutError')
       fetchMock.mockRejectedValueOnce(timeoutError)
@@ -248,6 +254,7 @@ describe('ApiClient', () => {
     })
 
     it('throws ApiError on abort (DOMException AbortError)', async () => {
+      expect.assertions(3)
       const fetchMock = vi.mocked(globalThis.fetch)
       const abortError = new DOMException('The operation was aborted.', 'AbortError')
       fetchMock.mockRejectedValueOnce(abortError)
@@ -287,6 +294,7 @@ describe('ApiClient', () => {
     })
 
     it('uses server X-Request-Id from error response when available', async () => {
+      expect.assertions(1)
       const fetchMock = vi.mocked(globalThis.fetch)
       const response = {
         ok: false,

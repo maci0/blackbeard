@@ -67,14 +67,13 @@ class TestFirecrackerSandboxInit:
         assert sandbox.rootfs_path == "/opt/rootfs.ext4"
         assert sandbox.is_configured is True
 
-    def test_init_from_env_vars(self):
-        with patch.dict(
-            "os.environ",
-            {
-                "FIRECRACKER_BIN": "/custom/firecracker",
-                "FIRECRACKER_KERNEL": "/custom/vmlinux.bin",
-                "FIRECRACKER_ROOTFS": "/custom/rootfs.ext4",
-            },
+    def test_init_from_settings(self):
+        from blackbeard.config import settings
+
+        with (
+            patch.object(settings, "firecracker_bin", "/custom/firecracker"),
+            patch.object(settings, "firecracker_kernel", "/custom/vmlinux.bin"),
+            patch.object(settings, "firecracker_rootfs", "/custom/rootfs.ext4"),
         ):
             sandbox = FirecrackerSandbox()
             assert sandbox.bin_path == "/custom/firecracker"
@@ -83,21 +82,26 @@ class TestFirecrackerSandboxInit:
             assert sandbox.is_configured is True
 
     def test_init_defaults_when_unconfigured(self):
-        with patch.dict("os.environ", {}, clear=True):
+        from blackbeard.config import settings
+
+        with (
+            patch.object(settings, "firecracker_bin", "firecracker"),
+            patch.object(settings, "firecracker_kernel", ""),
+            patch.object(settings, "firecracker_rootfs", ""),
+        ):
             sandbox = FirecrackerSandbox()
             assert sandbox.bin_path == "firecracker"
             assert sandbox.kernel_path == ""
             assert sandbox.rootfs_path == ""
             assert sandbox.is_configured is False
 
-    def test_explicit_paths_override_env(self):
-        with patch.dict(
-            "os.environ",
-            {
-                "FIRECRACKER_BIN": "/env/firecracker",
-                "FIRECRACKER_KERNEL": "/env/vmlinux.bin",
-                "FIRECRACKER_ROOTFS": "/env/rootfs.ext4",
-            },
+    def test_explicit_paths_override_settings(self):
+        from blackbeard.config import settings
+
+        with (
+            patch.object(settings, "firecracker_bin", "/settings/firecracker"),
+            patch.object(settings, "firecracker_kernel", "/settings/vmlinux.bin"),
+            patch.object(settings, "firecracker_rootfs", "/settings/rootfs.ext4"),
         ):
             sandbox = FirecrackerSandbox(
                 bin_path="/explicit/firecracker",
@@ -531,9 +535,11 @@ class TestIsFirecrackerAvailable:
         ):
             assert is_firecracker_available() is False
 
-    def test_uses_firecracker_bin_env_var(self):
+    def test_uses_firecracker_bin_setting(self):
+        from blackbeard.config import settings
+
         with (
-            patch.dict("os.environ", {"FIRECRACKER_BIN": "/custom/fc"}),
+            patch.object(settings, "firecracker_bin", "/custom/fc"),
             patch(
                 "blackbeard.engine.sandbox.firecracker.shutil.which",
                 return_value="/custom/fc",
@@ -554,8 +560,10 @@ class TestIsFirecrackerAvailable:
 
 class TestSelectMicrovmBackend:
     def test_selects_firecracker_when_configured(self):
+        from blackbeard.config import settings
+
         with (
-            patch.dict("os.environ", {"FIRECRACKER_KERNEL": "/opt/vmlinux.bin"}),
+            patch.object(settings, "firecracker_kernel", "/opt/vmlinux.bin"),
             patch(
                 "blackbeard.engine.sandbox.firecracker.is_firecracker_available",
                 return_value=True,
@@ -564,8 +572,10 @@ class TestSelectMicrovmBackend:
             assert select_microvm_backend() == "firecracker"
 
     def test_falls_back_to_krun_when_firecracker_unavailable(self):
+        from blackbeard.config import settings
+
         with (
-            patch.dict("os.environ", {"FIRECRACKER_KERNEL": "/opt/vmlinux.bin"}),
+            patch.object(settings, "firecracker_kernel", "/opt/vmlinux.bin"),
             patch(
                 "blackbeard.engine.sandbox.firecracker.is_firecracker_available",
                 return_value=False,
@@ -578,20 +588,23 @@ class TestSelectMicrovmBackend:
             assert select_microvm_backend() == "krun"
 
     def test_selects_krun_when_firecracker_not_configured(self):
+        from blackbeard.config import settings
+
         with (
-            patch.dict("os.environ", {}, clear=True),
+            patch.object(settings, "firecracker_kernel", ""),
             patch(
                 "blackbeard.engine.sandbox.microvm_runtime.is_krun_available",
                 return_value=True,
             ),
         ):
-            # No FIRECRACKER_KERNEL set at all
             result = select_microvm_backend()
             assert result == "krun"
 
     def test_returns_none_when_nothing_available(self):
+        from blackbeard.config import settings
+
         with (
-            patch.dict("os.environ", {}, clear=True),
+            patch.object(settings, "firecracker_kernel", ""),
             patch(
                 "blackbeard.engine.sandbox.microvm_runtime.is_krun_available",
                 return_value=False,

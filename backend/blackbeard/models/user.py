@@ -65,7 +65,7 @@ class User(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<User {self.email} active={self.is_active}>"
+        return f"<User id={self.id} active={self.is_active}>"
 
 
 class Group(Base):

@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import { api } from '@/api/client'
+import { getErrorMessage } from '@/lib/utils'
 import type { Execution, ExecutionEvent } from '@/lib/types'
 
 const MAX_EVENTS = 2000
+const EVENTS_FETCH_LIMIT = 200
 
 interface ExecutionState {
   executions: Execution[]
@@ -44,7 +46,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       const result = await api.get<{ items: Execution[]; total: number }>(executionsPath(crewName))
       set({ executions: result.items, loading: false })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch executions'
+      const message = getErrorMessage(err, 'Failed to fetch executions')
       set({ error: message, loading: false })
     }
   },
@@ -62,7 +64,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       const execution = await api.get<Execution>(`/api/v1/executions/${id}`)
       set({ currentExecution: execution, loading: false })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch execution'
+      const message = getErrorMessage(err, 'Failed to fetch execution')
       set({ error: message, loading: false })
     }
   },
@@ -84,32 +86,36 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
   },
 
   pollExecution: async (id: string) => {
-    const execution = await api.get<Execution>(`/api/v1/executions/${id}`)
-    set((state) => {
-      const prev = state.currentExecution
-      if (
-        prev?.id === id &&
-        prev.status === execution.status &&
-        prev.total_tokens === execution.total_tokens &&
-        prev.error === execution.error &&
-        (prev.tasks?.length ?? 0) === (execution.tasks?.length ?? 0)
-      ) {
-        const prevTasks = prev.tasks ?? []
-        const nextTasks = execution.tasks ?? []
-        let tasksMatch = true
-        for (let i = 0; i < prevTasks.length; i++) {
-          if (prevTasks[i]?.status !== nextTasks[i]?.status) {
-            tasksMatch = false
-            break
+    try {
+      const execution = await api.get<Execution>(`/api/v1/executions/${id}`)
+      set((state) => {
+        const prev = state.currentExecution
+        if (
+          prev?.id === id &&
+          prev.status === execution.status &&
+          prev.total_tokens === execution.total_tokens &&
+          prev.error === execution.error &&
+          (prev.tasks?.length ?? 0) === (execution.tasks?.length ?? 0)
+        ) {
+          const prevTasks = prev.tasks ?? []
+          const nextTasks = execution.tasks ?? []
+          let tasksMatch = true
+          for (let i = 0; i < prevTasks.length; i++) {
+            if (prevTasks[i]?.status !== nextTasks[i]?.status) {
+              tasksMatch = false
+              break
+            }
           }
+          if (tasksMatch) return state
         }
-        if (tasksMatch) return state
-      }
-      return {
-        currentExecution: execution,
-        executions: state.executions.map((e) => (e.id === id ? execution : e)),
-      }
-    })
+        return {
+          currentExecution: execution,
+          executions: state.executions.map((e) => (e.id === id ? execution : e)),
+        }
+      })
+    } catch (err) {
+      console.warn('[poll] execution fetch failed:', getErrorMessage(err, 'unknown error'))
+    }
   },
 
   pollExecutions: async (crewName?: string) => {
@@ -135,7 +141,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         return changed ? { executions: merged } : state
       })
     } catch (err) {
-      console.warn('[poll] executions fetch failed:', (err as Error).message)
+      console.warn('[poll] executions fetch failed:', getErrorMessage(err, 'unknown error'))
     }
   },
 
@@ -162,11 +168,11 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     const lastSeq = after ?? evts.at(-1)?.sequence ?? -1
     try {
       const result = await api.get<{ events: ExecutionEvent[]; next_sequence: number }>(
-        `/api/v1/executions/${id}/events?after=${lastSeq}&limit=200`,
+        `/api/v1/executions/${id}/events?after=${lastSeq}&limit=${EVENTS_FETCH_LIMIT}`,
       )
       get().addEvents(result.events)
     } catch (err) {
-      console.warn('[poll] events fetch failed:', (err as Error).message)
+      console.warn('[poll] events fetch failed:', getErrorMessage(err, 'unknown error'))
     }
   },
 
@@ -175,7 +181,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       const result = await api.get<Record<string, unknown>>(`/api/v1/executions/${id}/spend`)
       set({ spendData: result })
     } catch (err) {
-      console.warn('[poll] spend fetch failed:', (err as Error).message)
+      console.warn('[poll] spend fetch failed:', getErrorMessage(err, 'unknown error'))
       set({ spendData: null })
     }
   },

@@ -313,6 +313,13 @@ def test_flow_step_function_path_blocked():
 # ---------------------------------------------------------------------------
 
 
+def test_valid_agent_spec_produces_no_errors():
+    """A well-formed Agent spec should validate cleanly — not just 'no crash'."""
+    spec = {"role": "researcher", "goal": "find info", "backstory": "experienced analyst"}
+    errors, _refs = validate_resource("Agent", spec)
+    assert errors == [], f"Valid Agent spec should have no errors, got: {errors}"
+
+
 def test_deeply_nested_spec_does_not_crash():
     """Very deeply nested specs should not cause a stack overflow."""
     # Build a 100-level deep nested dict

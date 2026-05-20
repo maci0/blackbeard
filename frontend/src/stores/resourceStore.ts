@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { api } from '@/api/client'
 import { KIND_TO_PLURAL, ALL_PLURALS } from '@/lib/kinds'
 import type { Resource } from '@/lib/types'
+import { getErrorMessage } from '@/lib/utils'
 
 interface ResourceState {
   resources: Record<string, Resource[]>
@@ -56,7 +57,7 @@ export const useResourceStore = create<ResourceState>((set, get) => ({
       set((state) => {
         const next: Record<string, true> = { ...state.loadingKinds }
         delete next[kindPlural]
-        const message = err instanceof Error ? err.message : 'Failed to fetch resources'
+        const message = getErrorMessage(err, 'Failed to fetch resources')
         return { error: message, loadingKinds: next, loading: Object.keys(next).length > 0 }
       })
     }
@@ -76,9 +77,12 @@ export const useResourceStore = create<ResourceState>((set, get) => ({
       ),
     )
     const updated: Record<string, Resource[]> = {}
+    const failedKinds: string[] = []
     for (const result of results) {
       if (result.status === 'fulfilled') {
         updated[result.value.kind] = result.value.items
+      } else {
+        failedKinds.push(result.reason instanceof Error ? result.reason.message : 'fetch failed')
       }
     }
     set((state) => {
@@ -88,6 +92,7 @@ export const useResourceStore = create<ResourceState>((set, get) => ({
         resources: { ...state.resources, ...updated },
         loadingKinds: next,
         loading: Object.keys(next).length > 0,
+        error: failedKinds.length > 0 ? `Failed to load some resources: ${failedKinds[0]}` : null,
       }
     })
   },

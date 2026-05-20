@@ -9,7 +9,7 @@ import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { useResourceStore } from '@/stores/resourceStore'
 import type { Resource } from '@/lib/types'
 import { api } from '@/api/client'
-import { cn } from '@/lib/utils'
+import { cn, getErrorMessage } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks'
 import { resourceToYaml, parseYaml } from '@/lib/yaml'
 import { formatDate } from '@/lib/formatters'
@@ -181,7 +181,7 @@ export default function ResourceDetail() {
       setResource(res)
       setYamlContent(resourceToYaml(res))
     } catch (err) {
-      setError((err as Error).message)
+      setError(getErrorMessage(err, 'Failed to load resource'))
     } finally {
       setLoading(false)
     }
@@ -231,7 +231,7 @@ export default function ResourceDetail() {
       setEditMode(false)
       toasts.success(`Resource "${name}" saved`)
     } catch (err) {
-      const message = (err as Error).message
+      const message = getErrorMessage(err, 'Failed to save resource')
       setSaveError(message)
       toasts.error(message)
     } finally {
@@ -262,7 +262,7 @@ export default function ResourceDetail() {
       toasts.success(`Resource "${name}" deleted`)
       void navigate('/resources')
     } catch (err) {
-      const message = (err as Error).message
+      const message = getErrorMessage(err, 'Failed to delete resource')
       setDeleteError(message)
       toasts.error(message)
       setDeleteOpen(false)
@@ -307,7 +307,7 @@ export default function ResourceDetail() {
       }
       void navigate(`/executions/${result.id}`)
     } catch (err) {
-      setRunError((err as Error).message)
+      setRunError(getErrorMessage(err, 'Run failed'))
     } finally {
       setRunLoading(false)
     }
@@ -493,6 +493,17 @@ export default function ResourceDetail() {
           ) : null}
         </div>
 
+        {/* Delete error */}
+        {deleteError && (
+          <ErrorAlert
+            message={deleteError}
+            actionLabel="Dismiss"
+            onAction={() => setDeleteError(null)}
+            ariaLabel="Dismiss delete error"
+            className="mb-4"
+          />
+        )}
+
         {/* Save error */}
         <InlineAlert message={saveError} />
 
@@ -507,7 +518,7 @@ export default function ResourceDetail() {
                 key={tab}
                 value={tab}
                 className={cn(
-                  '-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
+                  '-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                   'data-[state=active]:border-primary data-[state=active]:text-primary',
                   'data-[state=inactive]:border-transparent data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground',
                 )}
@@ -587,17 +598,6 @@ export default function ResourceDetail() {
         onConfirm={() => void handleDelete()}
         loading={deleting}
       />
-      {deleteError && (
-        <div className="mx-auto max-w-4xl px-6 pb-4">
-          <ErrorAlert
-            message={deleteError}
-            actionLabel="Dismiss"
-            onAction={() => setDeleteError(null)}
-            ariaLabel="Dismiss delete error"
-          />
-        </div>
-      )}
-
       {/* Run dialog */}
       <RunDialog
         open={showRunDialog}

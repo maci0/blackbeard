@@ -217,6 +217,43 @@ class ExecutionMixin:
         resp.raise_for_status()
         return resp.json()
 
+    def respond(
+        self,
+        execution_id: str,
+        response: str,
+    ) -> dict[str, Any]:
+        """Submit a human-in-the-loop response to a paused execution.
+
+        Args:
+            execution_id: Execution UUID string.
+            response: Free-text response from the human reviewer.
+
+        Returns:
+            Dict with status and execution_id confirming the response was recorded.
+        """
+        resp = self._http.post(
+            f"/api/v1/executions/{execution_id}/respond",
+            json={"response": response},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def retry(self, execution_id: str) -> dict[str, Any]:
+        """Retry a terminal execution.
+
+        Creates a new execution with the same crew, namespace, and inputs.
+        Only works on completed, failed, or cancelled executions.
+
+        Args:
+            execution_id: Execution UUID string of the original execution.
+
+        Returns:
+            New execution dict with status=queued.
+        """
+        resp = self._http.post(f"/api/v1/executions/{execution_id}/retry")
+        resp.raise_for_status()
+        return resp.json()
+
     def wait(
         self,
         execution_id: str,

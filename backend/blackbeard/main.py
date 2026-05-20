@@ -34,12 +34,12 @@ from blackbeard.api.middleware import (
     global_exception_handler,
     http_exception_handler,
     security_headers_middleware,
-    set_api_key,
     validation_exception_handler,
 )
 from blackbeard.api.resources import router as resources_router
 from blackbeard.api.users import router as users_router
 from blackbeard.api.webhooks import router as webhooks_router
+from blackbeard.auth.api_key import set_api_key
 from blackbeard.config import settings
 from blackbeard.engine import recover_stale_executions, shutdown_executor
 from blackbeard.engine.execution_listener import shutdown_otel, shutdown_webhook_executor
@@ -136,8 +136,18 @@ def _validate_startup_config() -> None:
             f"Refusing to start: LITELLM_PROXY_URL has unexpected scheme: "
             f"{settings.litellm_proxy_url!r}. Must start with http:// or https://."
         )
-    forwarded_allow = os.environ.get("FORWARDED_ALLOW_IPS", "")
-    if forwarded_allow == "*" and not settings.debug:
+    if settings.oidc_issuer and not settings.debug:
+        if not settings.oidc_client_secret:
+            raise _fatal(
+                "Refusing to start: OIDC_ISSUER is set but OIDC_CLIENT_SECRET is missing. "
+                "Set OIDC_CLIENT_SECRET for confidential client flow, "
+                "or set DEBUG=true for local development."
+            )
+        if not settings.oidc_client_id:
+            raise _fatal(
+                "Refusing to start: OIDC_ISSUER is set but OIDC_CLIENT_ID is missing."
+            )
+    if settings.forwarded_allow_ips == "*" and not settings.debug:
         logger.warning(
             "SECURITY: FORWARDED_ALLOW_IPS='*' trusts X-Forwarded-For from any source. "
             "Set to your reverse proxy's IP to prevent IP spoofing.",
@@ -195,7 +205,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     try:
         from blackbeard.grpc.server import start_grpc_server
 
-        grpc_port = int(os.environ.get("GRPC_PORT", "50051"))
+        grpc_port = settings.grpc_port
         grpc_server = await start_grpc_server(port=grpc_port)
         logger.info(
             "gRPC server started on port %d",
@@ -344,13 +354,19 @@ if settings.oidc_issuer:
     from blackbeard.api.oidc import router as oidc_router
 
     app.include_router(oidc_router, prefix="/api/v1")
+    import hashlib
+
     from starlette.middleware.sessions import SessionMiddleware
 
+    _session_key = hashlib.sha256(
+        b"session:" + settings.jwt_secret.get_secret_value().encode()
+    ).hexdigest()
     app.add_middleware(
         SessionMiddleware,
-        secret_key=settings.jwt_secret.get_secret_value(),
+        secret_key=_session_key,
         https_only=not settings.debug,
         same_site="lax",
+        max_age=600,
     )
 
 app.include_router(resources_router, prefix="/api/v1")

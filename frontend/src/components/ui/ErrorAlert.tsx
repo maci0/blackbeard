@@ -2,12 +2,14 @@ import { AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function ErrorAlert({
+  id,
   message,
   actionLabel = 'Retry',
   onAction,
   ariaLabel,
   className,
 }: {
+  id?: string
   message: string
   actionLabel?: string
   onAction?: () => void
@@ -16,6 +18,7 @@ export function ErrorAlert({
 }) {
   return (
     <div
+      id={id}
       role="alert"
       className={cn(
         'flex items-center justify-between rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive',

@@ -334,7 +334,7 @@ async def test_auth_interceptor_rejects_no_credentials(auth_interceptor):
 
 async def test_auth_interceptor_accepts_valid_api_key(auth_interceptor):
     """Valid API key in metadata should be accepted."""
-    from blackbeard.api.middleware import _EXPECTED_API_KEY
+    from blackbeard.auth.api_key import _EXPECTED_API_KEY
 
     handler_call_details = MagicMock()
     handler_call_details.method = "/blackbeard.BlackbeardService/ListResources"

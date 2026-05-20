@@ -192,7 +192,7 @@ def run_flow_steps(
                         step_result = fn({**inputs, **step_outputs})
                         step_outputs[step_name] = step_result
                     except Exception as exc:
-                        logger.warning(
+                        logger.error(
                             "Flow function step '%s' failed: %s",
                             step_name,
                             exc,
@@ -205,7 +205,7 @@ def run_flow_steps(
                                 "error_type": type(exc).__name__,
                             },
                         )
-                        step_outputs[step_name] = "error: step execution failed"
+                        step_outputs[step_name] = f"error: {type(exc).__name__}: {exc}"
 
         elif step_type == "router":
             fn_path = step.get("function_path", "")
@@ -296,7 +296,7 @@ def run_flow_steps(
                         _json.loads(wasm_result.output) if wasm_result.output else {}
                     )
                 except Exception as exc:
-                    logger.warning(
+                    logger.error(
                         "Transform step '%s' failed: %s",
                         step_name,
                         exc,
@@ -309,7 +309,7 @@ def run_flow_steps(
                             "error_type": type(exc).__name__,
                         },
                     )
-                    step_outputs[step_name] = f"error: {type(exc).__name__}"
+                    step_outputs[step_name] = f"error: {type(exc).__name__}: {exc}"
             else:
                 logger.warning(
                     "Transform step '%s' has no wasm_module — skipped",
@@ -367,6 +367,20 @@ def evaluate_condition(expr: str, context: dict[str, Any]) -> bool:
             try:
                 return bool(fn(left_val, right_val))
             except TypeError:
+                logger.debug(
+                    "Condition type mismatch: %r (%s) %s %r (%s) — evaluating as False",
+                    left_val,
+                    type(left_val).__name__,
+                    op,
+                    right_val,
+                    type(right_val).__name__,
+                    extra={
+                        "event": "condition_type_mismatch",
+                        "operator": op,
+                        "left_type": type(left_val).__name__,
+                        "right_type": type(right_val).__name__,
+                    },
+                )
                 return False
 
     if " in " in expr:

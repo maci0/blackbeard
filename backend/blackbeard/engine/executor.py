@@ -195,8 +195,6 @@ def shutdown_executor(wait: bool = False) -> None:
         bg = _bg_engine
         _bg_engine = None
     if bg is not None:
-        import asyncio
-
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -322,7 +320,7 @@ def _build_principal_chain(
     """
     chain: dict[str, Any] = {}
     if user is not None:
-        chain["user"] = {"id": str(user.id), "email": user.email}
+        chain["user"] = {"id": str(user.id)}
     chain["crew"] = crew_name
     agents: list[dict[str, str]] = []
     for key, r in resources.items():
@@ -352,108 +350,9 @@ async def kickoff(
     Creates an execution record, then runs the crew in a background thread.
     Returns the execution record immediately (status=queued).
     """
-    inputs = inputs or {}
-
-    resources = await _load_crew_resources(session, crew_name, namespace)
-    crew_key = f"Crew/{crew_name}"
-    crew_resource = resources[crew_key]
-
-    principal_chain = _build_principal_chain(user, crew_name, resources)
-
-    execution = Execution(
-        crew_name=crew_name,
-        crew_namespace=namespace,
-        status=ExecutionStatus.QUEUED,
-        inputs=inputs,
-        initiated_by=user.id if user is not None else None,
-        principal_chain=principal_chain,
+    return await _submit_execution(
+        session, crew_name, inputs or {}, namespace, user, ExecutionType.KICKOFF
     )
-    session.add(execution)
-    # Flush to assign execution.id before creating child ExecutionTask rows.
-    await session.flush()
-
-    task_refs = crew_resource.spec.get("tasks", [])
-    pool = get_pool_status()
-    pool_saturated = pool["saturated"]
-    logger.log(
-        logging.WARNING if pool_saturated else logging.INFO,
-        "Kickoff: execution_id=%s crew=%s namespace=%s tasks=%d input_keys=%s pool=%d/%d queued=%d",
-        execution.id,
-        crew_name,
-        namespace,
-        len(task_refs),
-        sorted(inputs.keys()),
-        pool["active_threads"],
-        pool["max_workers"],
-        pool["queued_tasks"],
-        extra={
-            "event": "execution_kickoff",
-            "execution_id": str(execution.id),
-            "crew_name": crew_name,
-            "namespace": namespace,
-            "task_count": len(task_refs),
-            "pool_active_threads": pool["active_threads"],
-            "pool_max_workers": pool["max_workers"],
-            "pool_queued_tasks": pool["queued_tasks"],
-            "pool_saturated": pool_saturated,
-        },
-    )
-    if task_refs:
-        session.add_all(
-            [
-                ExecutionTask(
-                    execution_id=execution.id,
-                    task_name=(ref.name if (ref := parse_ref(task_ref)) else task_ref),
-                    order=i,
-                    status=TaskStatus.PENDING,
-                )
-                for i, task_ref in enumerate(task_refs)
-            ]
-        )
-
-    await session.commit()
-
-    resource_snapshot = _snapshot_crew_resources(resources, crew_name)
-
-    execution_id = execution.id
-    loop = asyncio.get_running_loop()
-    future = loop.run_in_executor(
-        _get_executor(),
-        _run_crew_sync,
-        execution_id,
-        resource_snapshot,
-        crew_name,
-        inputs,
-    )
-
-    def _on_thread_error(fut: asyncio.Future) -> None:  # type: ignore[type-arg]
-        exc = fut.exception()
-        if exc is not None:
-            logger.error(
-                "Execution %s thread failed: %s",
-                execution_id,
-                exc,
-                exc_info=True,
-                extra={
-                    "event": "execution_thread_failed",
-                    "execution_id": str(execution_id),
-                    "crew_name": crew_name,
-                    "error_type": type(exc).__name__,
-                    "error_message": str(exc)[:500],
-                },
-            )
-            error_msg = _sanitize_error(str(exc))
-            # This callback runs on the main event loop thread, so we can
-            # schedule the async mark-failed coroutine directly.
-            task = loop.create_task(_mark_failed_async(execution_id, error_msg))
-            task.add_done_callback(_log_task_exception)
-
-    future.add_done_callback(_on_thread_error)
-
-    loaded = await get_execution(session, execution_id)
-    if loaded is None:
-        raise ExecutionError(f"Execution {execution_id} not found after kickoff")
-    return loaded
 
 
 async def _submit_execution(
@@ -683,6 +582,9 @@ def _snapshot_resource(resource: Resource) -> dict[str, Any]:
     }
 
 
+_MAX_SNAPSHOT_DEPTH = 20
+
+
 def _snapshot_crew_resources(
     resources: dict[str, Resource],
     crew_name: str,
@@ -696,8 +598,16 @@ def _snapshot_crew_resources(
     """
     needed: dict[str, dict[str, Any]] = {}
 
-    def _collect(key: str) -> None:
+    def _collect(key: str, depth: int = 0) -> None:
         if key in needed:
+            return
+        if depth > _MAX_SNAPSHOT_DEPTH:
+            logger.warning(
+                "Snapshot ref depth limit reached at key '%s' (depth=%d)",
+                key,
+                depth,
+                extra={"event": "snapshot_depth_limit", "key": key, "depth": depth},
+            )
             return
         resource = resources.get(key)
         if resource is None:
@@ -708,41 +618,29 @@ def _snapshot_crew_resources(
             for ref_str in spec.get(field, []):
                 ref = parse_ref(ref_str)
                 if ref:
-                    _collect(f"{ref.kind.value}/{ref.name}")
-        for field in ("agent", "llm", "manager_llm", "manager_agent", "default_agent_policy"):
+                    _collect(f"{ref.kind.value}/{ref.name}", depth + 1)
+        for field in (
+            "agent",
+            "llm",
+            "manager_llm",
+            "manager_agent",
+            "default_agent_policy",
+            "policy",
+        ):
             ref_str = spec.get(field)
             if ref_str and isinstance(ref_str, str):
                 ref = parse_ref(ref_str)
                 if ref:
-                    _collect(f"{ref.kind.value}/{ref.name}")
+                    _collect(f"{ref.kind.value}/{ref.name}", depth + 1)
         # Flow steps reference crews
         for step in spec.get("steps", []):
             crew_ref = step.get("crew") if isinstance(step, dict) else None
             if crew_ref and isinstance(crew_ref, str):
                 ref = parse_ref(crew_ref)
                 if ref:
-                    _collect(f"{ref.kind.value}/{ref.name}")
-        # Agent policy ref on agent spec
-        policy_ref = spec.get("policy")
-        if policy_ref and isinstance(policy_ref, str):
-            ref = parse_ref(policy_ref)
-            if ref:
-                _collect(f"{ref.kind.value}/{ref.name}")
+                    _collect(f"{ref.kind.value}/{ref.name}", depth + 1)
 
     _collect(f"{target_kind}/{crew_name}")
-
-    # Always include AgentPolicy resources referenced by any collected agent
-    for key in list(needed):
-        if key.startswith("Agent/"):
-            spec = needed[key].get("spec", {})
-            for field in ("policy",):
-                ref_str = spec.get(field)
-                if ref_str and isinstance(ref_str, str):
-                    ref = parse_ref(ref_str)
-                    if ref and f"{ref.kind.value}/{ref.name}" not in needed:
-                        resource = resources.get(f"{ref.kind.value}/{ref.name}")
-                        if resource:
-                            needed[f"{ref.kind.value}/{ref.name}"] = _snapshot_resource(resource)
 
     return needed
 
@@ -1270,7 +1168,9 @@ async def _get_execution_for_update(session: AsyncSession, execution_id: UUID) -
 async def get_execution(session: AsyncSession, execution_id: UUID) -> Execution | None:
     """Get an execution with its tasks loaded."""
     result = await session.execute(
-        select(Execution).options(selectinload(Execution.tasks)).where(Execution.id == execution_id)
+        select(Execution)
+        .options(selectinload(Execution.tasks), defer(Execution.litellm_key))
+        .where(Execution.id == execution_id)
     )
     return result.scalar_one_or_none()
 
@@ -1306,7 +1206,7 @@ async def list_executions(
     query = select(Execution).where(*filters)
 
     if include_tasks:
-        query = query.options(selectinload(Execution.tasks))
+        query = query.options(selectinload(Execution.tasks), defer(Execution.litellm_key))
     else:
         query = query.options(
             load_only(
@@ -1503,38 +1403,44 @@ async def cleanup_orphaned_keys() -> int:
                 Execution.litellm_key.isnot(None),
             )
         )
-        for execution in stale.scalars():
-            try:
-                deleted = await key_mgr.delete_key(execution.litellm_key)
-                if deleted:
-                    keys_deleted += 1
-                    logger.info(
-                        "Orphaned virtual key deleted for execution %s",
-                        execution.id,
-                        extra={
-                            "event": "orphaned_key_deleted",
-                            "execution_id": str(execution.id),
-                        },
-                    )
-                else:
-                    logger.warning(
-                        "Failed to delete orphaned virtual key for execution %s",
-                        execution.id,
-                        extra={
-                            "event": "orphaned_key_delete_failed",
-                            "execution_id": str(execution.id),
-                        },
-                    )
-            except Exception:
-                logger.warning(
-                    "Error deleting orphaned virtual key for execution %s",
+        stale_list = list(stale.scalars())
+
+    async def _delete_one(execution: Execution) -> bool:
+        try:
+            deleted = await key_mgr.delete_key(execution.litellm_key)
+            if deleted:
+                logger.info(
+                    "Orphaned virtual key deleted for execution %s",
                     execution.id,
-                    exc_info=True,
                     extra={
-                        "event": "orphaned_key_delete_error",
+                        "event": "orphaned_key_deleted",
                         "execution_id": str(execution.id),
                     },
                 )
+                return True
+            logger.warning(
+                "Failed to delete orphaned virtual key for execution %s",
+                execution.id,
+                extra={
+                    "event": "orphaned_key_delete_failed",
+                    "execution_id": str(execution.id),
+                },
+            )
+        except Exception:
+            logger.warning(
+                "Error deleting orphaned virtual key for execution %s",
+                execution.id,
+                exc_info=True,
+                extra={
+                    "event": "orphaned_key_delete_error",
+                    "execution_id": str(execution.id),
+                },
+            )
+        return False
+
+    if stale_list:
+        results = await asyncio.gather(*(_delete_one(e) for e in stale_list))
+        keys_deleted = sum(1 for r in results if r)
 
     if keys_deleted > 0:
         logger.info(

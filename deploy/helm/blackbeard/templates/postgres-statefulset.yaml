@@ -9,6 +9,7 @@ metadata:
 spec:
   serviceName: {{ include "blackbeard.fullname" . }}-postgres
   replicas: 1
+  revisionHistoryLimit: 5
   selector:
     matchLabels:
       {{- include "blackbeard.selectorLabels" (dict "context" . "component" "postgres") | nindent 6 }}

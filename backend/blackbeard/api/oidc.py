@@ -117,14 +117,14 @@ async def oidc_callback(
     email = (userinfo.get("email") or "").lower().strip()
     if not email:
         raise HTTPException(400, "OIDC provider did not return an email address")
+    if "@" not in email or len(email) > 320:
+        raise HTTPException(400, "OIDC provider returned an invalid email address")
 
     if not userinfo.get("email_verified", False):
         logger.warning(
-            "OIDC login rejected: email not verified: %s",
-            email,
+            "OIDC login rejected: email not verified",
             extra={
                 "event": "oidc_email_not_verified",
-                "email": email,
                 "request_id": request_id_var.get("-"),
             },
         )
@@ -150,9 +150,9 @@ async def oidc_callback(
     refresh_token = create_refresh_token(str(user.id))
 
     logger.info(
-        "OIDC login: %s",
-        user.email,
-        extra={"event": "oidc_login", "user_id": str(user.id), "email": user.email},
+        "OIDC login: user_id=%s",
+        user.id,
+        extra={"event": "oidc_login", "user_id": str(user.id)},
     )
 
     # Build a same-origin fragment redirect.  The frontend reads the
@@ -162,11 +162,25 @@ async def oidc_callback(
     # the POST body on redirect and to signal that the callback should not
     # be cached or bookmarked.
     frontend_base = (settings.oidc_redirect_uri or str(request.url_for("oidc_callback")))
-    # Strip the callback path to get the origin, then anchor to the root.
     from urllib.parse import urlparse as _urlparse
 
     parsed = _urlparse(frontend_base)
     origin = f"{parsed.scheme}://{parsed.netloc}"
+
+    # Validate redirect origin against configured CORS origins to prevent
+    # token theft via open-redirect if OIDC_REDIRECT_URI is misconfigured.
+    if origin not in settings.cors_origins:
+        logger.error(
+            "OIDC redirect origin %s not in CORS_ORIGINS — refusing redirect",
+            origin,
+            extra={
+                "event": "oidc_redirect_origin_rejected",
+                "origin": origin,
+                "request_id": request_id_var.get("-"),
+            },
+        )
+        raise HTTPException(500, "OIDC redirect origin is not an allowed origin")
+
     frontend_url = f"{origin}/#token={access_token}&refresh={refresh_token}"
     return RedirectResponse(url=frontend_url, status_code=303)
 
@@ -182,7 +196,7 @@ async def _find_or_create_user(
 
     if user:
         if not user.is_active:
-            raise HTTPException(401, "Account is deactivated")
+            raise HTTPException(403, "Account is deactivated")
         user.last_login_at = datetime.now(UTC)
         return user
 
@@ -197,8 +211,8 @@ async def _find_or_create_user(
     await session.refresh(user)
 
     logger.info(
-        "OIDC user created: %s",
-        email,
-        extra={"event": "oidc_user_created", "user_id": str(user.id), "email": email},
+        "OIDC user created: user_id=%s",
+        user.id,
+        extra={"event": "oidc_user_created", "user_id": str(user.id)},
     )
     return user

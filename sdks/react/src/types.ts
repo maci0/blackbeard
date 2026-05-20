@@ -11,20 +11,20 @@ export interface BlackbeardConfig {
 /** Metadata attached to every Blackbeard resource. */
 export interface ResourceMetadata {
   name: string
-  namespace: string
-  labels: Record<string, string>
+  namespace?: string
+  labels?: Record<string, string>
 }
 
 /** A generic Blackbeard resource returned from the API. */
 export interface Resource {
-  id: string
+  id?: string
   apiVersion: string
   kind: string
   metadata: ResourceMetadata
   spec: Record<string, unknown>
-  version: number
-  created_at: string
-  updated_at: string
+  version?: number
+  created_at?: string
+  updated_at?: string
 }
 
 /** An individual task within an execution. */
@@ -48,7 +48,7 @@ export interface Execution {
   crew_name: string
   crew_namespace: string
   execution_type: 'kickoff' | 'train' | 'test' | 'flow'
-  status: string
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   n_iterations: number | null
   training_file: string | null
   inputs: Record<string, unknown>
@@ -58,6 +58,8 @@ export interface Execution {
   prompt_tokens: number
   completion_tokens: number
   cost_usd: number | string
+  initiated_by: string | null
+  principal_chain: Record<string, unknown> | null
   created_at: string
   started_at: string | null
   completed_at: string | null

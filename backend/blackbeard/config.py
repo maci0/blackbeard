@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 __all__ = [
@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     google_application_credentials: str = ""
 
     jwt_secret: SecretStr = SecretStr("change-jwt-secret-in-production")
-    jwt_access_token_expire_minutes: int = 15
-    jwt_refresh_token_expire_days: int = 7
+    jwt_access_token_expire_minutes: int = Field(default=15, ge=1)
+    jwt_refresh_token_expire_days: int = Field(default=7, ge=1)
 
     otel_endpoint: str | None = None
 
@@ -56,14 +56,14 @@ class Settings(BaseSettings):
     # Container sandbox settings
     container_runtime: str = "auto"  # "docker", "podman", or "auto"
     container_default_image: str = "python:3.13-slim"
-    container_timeout: int = 30
+    container_timeout: int = Field(default=30, ge=1)
     container_memory_limit: str = "256m"
 
     # gVisor sandbox settings
     gvisor_enabled: bool = False
 
     # MicroVM sandbox settings (requires crun-krun + /dev/kvm)
-    microvm_enabled: bool = True
+    microvm_enabled: bool = False
 
     # Firecracker MicroVM settings (alternative to libkrun for microvm tier)
     # Requires: firecracker binary, kernel image, rootfs image, /dev/kvm
@@ -74,11 +74,46 @@ class Settings(BaseSettings):
     # MuninnDB cognitive memory settings
     muninndb_url: str = "http://localhost:8475"
 
-    max_concurrent_executions: int = 4
+    max_concurrent_executions: int = Field(default=4, ge=1)
 
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = Field(default=8000, ge=1, le=65535)
+    grpc_port: int = Field(default=50051, ge=1, le=65535)
+    web_concurrency: int = Field(default=1, ge=1)
+    forwarded_allow_ips: str = "127.0.0.1"
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+
+    @field_validator("log_level")
+    @classmethod
+    def _validate_log_level(cls, v: str) -> str:
+        if v and v.upper() not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+            raise ValueError(
+                f"Invalid log_level {v!r}. "
+                "Must be one of: DEBUG, INFO, WARNING, ERROR, CRITICAL (or empty for default)"
+            )
+        return v
+
+    @field_validator("database_url")
+    @classmethod
+    def _validate_database_url(cls, v: SecretStr) -> SecretStr:
+        url = v.get_secret_value()
+        if not url.startswith("postgresql+asyncpg://"):
+            raise ValueError(
+                f"DATABASE_URL must use the 'postgresql+asyncpg://' scheme "
+                f"(got {url.split('://')[0] + '://' if '://' in url else url!r}). "
+                f"Example: postgresql+asyncpg://user:pass@host:5432/dbname"
+            )
+        return v
+
+    @field_validator("container_runtime")
+    @classmethod
+    def _validate_container_runtime(cls, v: str) -> str:
+        allowed = ("auto", "docker", "podman")
+        if v not in allowed:
+            raise ValueError(
+                f"Invalid container_runtime {v!r}. Must be one of: {', '.join(allowed)}"
+            )
+        return v
 
     model_config = SettingsConfigDict(env_prefix="", case_sensitive=False)
 

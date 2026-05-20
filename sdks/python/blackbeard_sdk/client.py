@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import httpx
@@ -30,11 +31,17 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
         client = BlackbeardClient(base_url="http://localhost:8000")
         client.login("user@example.com", "password123")
         agents = client.list("Agent")
+
+    Environment variable fallbacks (used when no explicit argument is passed):
+
+    - ``BLACKBEARD_BASE_URL``: API server URL (default ``http://localhost:8000``)
+    - ``BLACKBEARD_API_KEY``: API key for X-API-Key authentication
+    - ``BLACKBEARD_TOKEN``: JWT access token for Bearer authentication
     """
 
     def __init__(
         self,
-        base_url: str = "http://localhost:8000",
+        base_url: str = "",
         api_key: str | None = None,
         token: str | None = None,
         *,
@@ -43,16 +50,30 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
         """Initialize the Blackbeard client.
 
         Args:
-            base_url: Base URL of the Blackbeard API server.
-            api_key: API key for X-API-Key header authentication.
-            token: JWT access token for Bearer authentication.
+            base_url: Base URL of the Blackbeard API server.  Falls back to
+                ``BLACKBEARD_BASE_URL`` env var, then ``http://localhost:8000``.
+            api_key: API key for X-API-Key header authentication.  Falls back
+                to ``BLACKBEARD_API_KEY`` env var.
+            token: JWT access token for Bearer authentication.  Falls back to
+                ``BLACKBEARD_TOKEN`` env var.
             timeout: Default request timeout in seconds.
         """
+        if not base_url:
+            base_url = os.environ.get(
+                "BLACKBEARD_BASE_URL", "http://localhost:8000"
+            )
+        if api_key is None:
+            api_key = os.environ.get("BLACKBEARD_API_KEY")
+        if token is None:
+            token = os.environ.get("BLACKBEARD_TOKEN")
+
+        self._api_key = api_key
+        self._token = token
         headers: dict[str, str] = {}
-        if api_key:
-            headers["X-API-Key"] = api_key
         if token:
             headers["Authorization"] = f"Bearer {token}"
+        elif api_key:
+            headers["X-API-Key"] = api_key
 
         self._http = httpx.Client(
             base_url=base_url,

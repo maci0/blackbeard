@@ -11,6 +11,7 @@ from rich.table import Table
 
 from blackbeard_cli.helpers import (
     STATUS_COLORS,
+    TERMINAL_STATUSES,
     console,
     handle_http_error,
     handle_request_error,
@@ -43,7 +44,7 @@ Examples:
 )
 @click.option(
     "--limit",
-    default=20,
+    default=100,
     show_default=True,
     type=click.IntRange(1, 1000),
     metavar="N",
@@ -90,7 +91,7 @@ def executions_list(
         return
 
     table = Table(title="Executions")
-    table.add_column("ID", style="dim", width=8)
+    table.add_column("ID", style="dim", width=12)
     table.add_column("Crew", style="bold")
     table.add_column("Status")
     table.add_column("Created")
@@ -98,18 +99,22 @@ def executions_list(
     table.add_column("Cost", justify="right")
 
     for ex in items:
-        ex_id = str(ex.get("id", "—"))[:8]
+        ex_id = str(ex.get("id", "—"))[:12]
         status_val = ex.get("status", "—")
         color = STATUS_COLORS.get(status_val, "dim")
         tokens = ex.get("total_tokens")
         cost = ex.get("cost_usd")
+        try:
+            cost_str = f"${float(cost):.4f}" if cost else "—"
+        except (TypeError, ValueError):
+            cost_str = "—"
         table.add_row(
             ex_id,
             ex.get("crew_name", "—"),
             f"[{color}]{status_val}[/]",
             str(ex.get("created_at", "—"))[:19],
             f"{tokens:,}" if tokens else "—",
-            f"${float(cost):.4f}" if cost else "—",
+            cost_str,
         )
 
     out.print(table)
@@ -171,6 +176,7 @@ def events(
 
     url = f"{server}/api/v1/executions/{execution_id}/events"
     after = -1
+    event_count = 0
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
@@ -187,6 +193,7 @@ def events(
                 event_list = data.get("events", [])
 
                 for ev in event_list:
+                    event_count += 1
                     seq = ev.get("sequence", 0)
                     if seq > after:
                         after = seq
@@ -203,6 +210,8 @@ def events(
                         out.print(f"[dim]{ts}[/]  [{color}]{etype}[/]  {summary}")
 
                 if not follow:
+                    if not is_json and event_count:
+                        out.print(f"[dim]{event_count} event(s)[/]")
                     break
 
                 has_more = data.get("has_more", False)
@@ -212,7 +221,7 @@ def events(
                     )
                     if exec_resp.status_code == 200:
                         status = exec_resp.json().get("status", "")
-                        if status in ("completed", "failed", "cancelled"):
+                        if status in TERMINAL_STATUSES:
                             if not is_json:
                                 color = STATUS_COLORS.get(status, "dim")
                                 out.print(f"\n[{color} bold]Execution {status}[/]")
@@ -260,8 +269,14 @@ Examples:
 """,
 )
 @click.argument("execution_id")
-@click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation")
-@json_opt
+@click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    default=False,
+    help="Output as JSON for scripting (skips confirmation prompt)",
+)
 @click.pass_context
 def cancel(ctx: click.Context, execution_id: str, yes: bool, output_json: bool = False) -> None:
     """Cancel a running execution.
@@ -297,4 +312,4 @@ def cancel(ctx: click.Context, execution_id: str, yes: bool, output_json: bool =
         print_json(data)
         return
 
-    out.print(f"[green]Cancelled[/] execution [bold]{execution_id[:8]}...[/]")
+    out.print(f"[green]Cancelled[/] execution [bold]{execution_id}[/]")

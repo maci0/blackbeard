@@ -16,7 +16,7 @@ from blackbeard.api.collaboration import (
     router,
     validate_ws_auth,
 )
-from blackbeard.api.middleware import _EXPECTED_API_KEY
+from blackbeard.auth.api_key import _EXPECTED_API_KEY
 from blackbeard.auth.jwt import create_access_token
 
 # ---------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo, type ChangeEvent } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { AlertCircle, Check } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
 import { canvasToYaml, yamlToCanvas } from './yamlSync'
@@ -12,11 +13,15 @@ export function YamlEditor() {
   const setNodes = useStudioStore((s) => s.setNodes)
   const setEdges = useStudioStore((s) => s.setEdges)
 
-  // Derive a stable fingerprint from node data only (not positions),
-  // so dragging nodes doesn't trigger expensive YAML re-generation.
+  // Extract only id+type+data per node so position-only changes (dragging)
+  // don't trigger expensive JSON.stringify + YAML re-generation.
+  const nodeDataSlice = useStudioStore(
+    useShallow((s) => s.nodes.map((n) => ({ id: n.id, type: n.type, data: n.data }))),
+  )
+
   const nodeDataFingerprint = useMemo(
-    () => nodes.map((n) => `${n.id}:${n.type}:${JSON.stringify(n.data)}`).join('|'),
-    [nodes],
+    () => nodeDataSlice.map((n) => `${n.id}:${n.type}:${JSON.stringify(n.data)}`).join('|'),
+    [nodeDataSlice],
   )
 
   const [yamlText, setYamlText] = useState(() => canvasToYaml(nodes))

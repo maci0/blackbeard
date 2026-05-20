@@ -2,12 +2,15 @@ import type {
   BlackbeardConfig,
   Resource,
   Execution,
+  ExecutionEventsResponse,
   ListResponse,
   AuthResponse,
   User,
+  HealthResponse,
+  HITLResponseResult,
 } from "./types.js";
 
-const KIND_PLURALS: Record<string, string> = {
+export const KIND_PLURALS: Record<string, string> = {
   Agent: "agents",
   Task: "tasks",
   Crew: "crews",
@@ -29,17 +32,29 @@ export class BlackbeardClient {
   private timeout: number;
 
   constructor(config: BlackbeardConfig = {}) {
-    this.baseUrl = (config.baseUrl ?? "http://localhost:8000").replace(
-      /\/$/,
-      ""
-    );
-    this.apiKey = config.apiKey;
-    this.token = config.token;
+    const env =
+      typeof globalThis !== "undefined" &&
+      typeof (globalThis as Record<string, unknown>).process === "object"
+        ? (
+            (globalThis as Record<string, unknown>).process as {
+              env?: Record<string, string | undefined>;
+            }
+          ).env
+        : undefined;
+
+    this.baseUrl = (
+      config.baseUrl ??
+      env?.BLACKBEARD_BASE_URL ??
+      "http://localhost:8000"
+    ).replace(/\/$/, "");
+    this.apiKey = config.apiKey ?? env?.BLACKBEARD_API_KEY;
+    this.token = config.token ?? env?.BLACKBEARD_TOKEN;
     this.timeout = config.timeout ?? 30_000;
   }
 
-  private headers(): Record<string, string> {
-    const h: Record<string, string> = { "Content-Type": "application/json" };
+  private headers(hasBody: boolean): Record<string, string> {
+    const h: Record<string, string> = {};
+    if (hasBody) h["Content-Type"] = "application/json";
     if (this.token) {
       h["Authorization"] = `Bearer ${this.token}`;
     } else if (this.apiKey) {
@@ -59,7 +74,7 @@ export class BlackbeardClient {
     try {
       const resp = await fetch(`${this.baseUrl}${path}`, {
         method,
-        headers: this.headers(),
+        headers: this.headers(body !== undefined),
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
@@ -78,6 +93,19 @@ export class BlackbeardClient {
     }
   }
 
+  // ── Health ──
+
+  async health(): Promise<HealthResponse> {
+    return this.request<HealthResponse>("GET", "/api/v1/health");
+  }
+
+  async readiness(): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>(
+      "GET",
+      "/api/v1/health/ready"
+    );
+  }
+
   // ── Auth ──
 
   async login(email: string, password: string): Promise<AuthResponse> {
@@ -90,6 +118,30 @@ export class BlackbeardClient {
     return result;
   }
 
+  async register(
+    email: string,
+    password: string,
+    displayName: string
+  ): Promise<AuthResponse> {
+    const result = await this.request<AuthResponse>(
+      "POST",
+      "/api/v1/auth/register",
+      { email, password, display_name: displayName }
+    );
+    this.token = result.access_token;
+    return result;
+  }
+
+  async refresh(refreshToken: string): Promise<AuthResponse> {
+    const result = await this.request<AuthResponse>(
+      "POST",
+      "/api/v1/auth/refresh",
+      { refresh_token: refreshToken }
+    );
+    this.token = result.access_token;
+    return result;
+  }
+
   async whoami(): Promise<User> {
     return this.request<User>("GET", "/api/v1/auth/me");
   }
@@ -97,21 +149,34 @@ export class BlackbeardClient {
   // ── Resources ──
 
   private plural(kind: string): string {
-    return KIND_PLURALS[kind] ?? `${kind.toLowerCase()}s`;
+    const p = KIND_PLURALS[kind];
+    if (p) return p;
+    if (Object.values(KIND_PLURALS).includes(kind)) return kind;
+    throw new Error(
+      `Unknown resource kind '${kind}'. Valid kinds: ${Object.keys(KIND_PLURALS).sort().join(", ")}`
+    );
   }
 
   async list(
     kind: string,
-    options?: { namespace?: string; limit?: number; offset?: number }
+    options?: {
+      namespace?: string;
+      label_selector?: string;
+      limit?: number;
+      offset?: number;
+    }
   ): Promise<ListResponse<Resource>> {
     const params = new URLSearchParams();
-    if (options?.namespace) params.set("namespace", options.namespace);
-    if (options?.limit) params.set("limit", String(options.limit));
-    if (options?.offset) params.set("offset", String(options.offset));
-    const qs = params.toString();
+    params.set("namespace", options?.namespace ?? "default");
+    if (options?.label_selector)
+      params.set("label_selector", options.label_selector);
+    if (options?.limit !== undefined)
+      params.set("limit", String(options.limit));
+    if (options?.offset !== undefined)
+      params.set("offset", String(options.offset));
     return this.request<ListResponse<Resource>>(
       "GET",
-      `/api/v1/${this.plural(kind)}${qs ? `?${qs}` : ""}`
+      `/api/v1/${this.plural(kind)}?${params}`
     );
   }
 
@@ -120,10 +185,12 @@ export class BlackbeardClient {
     name: string,
     namespace?: string
   ): Promise<Resource> {
-    const qs = namespace ? `?namespace=${namespace}` : "";
+    const params = new URLSearchParams({
+      namespace: namespace ?? "default",
+    });
     return this.request<Resource>(
       "GET",
-      `/api/v1/${this.plural(kind)}/${name}${qs}`
+      `/api/v1/${this.plural(kind)}/${encodeURIComponent(name)}?${params}`
     );
   }
 
@@ -141,19 +208,23 @@ export class BlackbeardClient {
     resource: Partial<Resource>,
     namespace?: string
   ): Promise<Resource> {
-    const qs = namespace ? `?namespace=${namespace}` : "";
+    const params = new URLSearchParams({
+      namespace: namespace ?? "default",
+    });
     return this.request<Resource>(
       "PUT",
-      `/api/v1/${this.plural(kind)}/${name}${qs}`,
+      `/api/v1/${this.plural(kind)}/${encodeURIComponent(name)}?${params}`,
       resource
     );
   }
 
   async delete(kind: string, name: string, namespace?: string): Promise<void> {
-    const qs = namespace ? `?namespace=${namespace}` : "";
+    const params = new URLSearchParams({
+      namespace: namespace ?? "default",
+    });
     await this.request<void>(
       "DELETE",
-      `/api/v1/${this.plural(kind)}/${name}${qs}`
+      `/api/v1/${this.plural(kind)}/${encodeURIComponent(name)}?${params}`
     );
   }
 
@@ -173,10 +244,12 @@ export class BlackbeardClient {
     inputs?: Record<string, unknown>,
     namespace?: string
   ): Promise<Execution> {
-    const qs = namespace ? `?namespace=${namespace}` : "";
+    const params = new URLSearchParams({
+      namespace: namespace ?? "default",
+    });
     return this.request<Execution>(
       "POST",
-      `/api/v1/crews/${crewName}/kickoff${qs}`,
+      `/api/v1/crews/${encodeURIComponent(crewName)}/kickoff?${params}`,
       { inputs: inputs ?? {} }
     );
   }
@@ -190,10 +263,12 @@ export class BlackbeardClient {
       namespace?: string;
     }
   ): Promise<Execution> {
-    const qs = options?.namespace ? `?namespace=${options.namespace}` : "";
+    const params = new URLSearchParams({
+      namespace: options?.namespace ?? "default",
+    });
     return this.request<Execution>(
       "POST",
-      `/api/v1/crews/${crewName}/train${qs}`,
+      `/api/v1/crews/${encodeURIComponent(crewName)}/train?${params}`,
       {
         inputs: options?.inputs ?? {},
         n_iterations: options?.n_iterations ?? 3,
@@ -210,10 +285,12 @@ export class BlackbeardClient {
       namespace?: string;
     }
   ): Promise<Execution> {
-    const qs = options?.namespace ? `?namespace=${options.namespace}` : "";
+    const params = new URLSearchParams({
+      namespace: options?.namespace ?? "default",
+    });
     return this.request<Execution>(
       "POST",
-      `/api/v1/crews/${crewName}/test${qs}`,
+      `/api/v1/crews/${encodeURIComponent(crewName)}/test?${params}`,
       {
         inputs: options?.inputs ?? {},
         n_iterations: options?.n_iterations ?? 3,
@@ -221,24 +298,43 @@ export class BlackbeardClient {
     );
   }
 
+  async runFlow(
+    flowName: string,
+    inputs?: Record<string, unknown>,
+    namespace?: string
+  ): Promise<Execution> {
+    const params = new URLSearchParams({
+      namespace: namespace ?? "default",
+    });
+    return this.request<Execution>(
+      "POST",
+      `/api/v1/flows/${encodeURIComponent(flowName)}/run?${params}`,
+      { inputs: inputs ?? {} }
+    );
+  }
+
   async getExecution(executionId: string): Promise<Execution> {
     return this.request<Execution>(
       "GET",
-      `/api/v1/executions/${executionId}`
+      `/api/v1/executions/${encodeURIComponent(executionId)}`
     );
   }
 
   async listExecutions(options?: {
     crew_name?: string;
+    namespace?: string;
     status?: string;
     limit?: number;
     offset?: number;
   }): Promise<ListResponse<Execution>> {
     const params = new URLSearchParams();
     if (options?.crew_name) params.set("crew_name", options.crew_name);
+    if (options?.namespace) params.set("namespace", options.namespace);
     if (options?.status) params.set("status", options.status);
-    if (options?.limit) params.set("limit", String(options.limit));
-    if (options?.offset) params.set("offset", String(options.offset));
+    if (options?.limit !== undefined)
+      params.set("limit", String(options.limit));
+    if (options?.offset !== undefined)
+      params.set("offset", String(options.offset));
     const qs = params.toString();
     return this.request<ListResponse<Execution>>(
       "GET",
@@ -246,10 +342,53 @@ export class BlackbeardClient {
     );
   }
 
+  async getExecutionSpend(
+    executionId: string
+  ): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>(
+      "GET",
+      `/api/v1/executions/${encodeURIComponent(executionId)}/spend`
+    );
+  }
+
+  async getExecutionEvents(
+    executionId: string,
+    options?: { after?: number; limit?: number }
+  ): Promise<ExecutionEventsResponse> {
+    const params = new URLSearchParams();
+    if (options?.after !== undefined)
+      params.set("after", String(options.after));
+    if (options?.limit !== undefined)
+      params.set("limit", String(options.limit));
+    const qs = params.toString();
+    return this.request<ExecutionEventsResponse>(
+      "GET",
+      `/api/v1/executions/${encodeURIComponent(executionId)}/events${qs ? `?${qs}` : ""}`
+    );
+  }
+
   async cancel(executionId: string): Promise<Execution> {
     return this.request<Execution>(
       "PATCH",
-      `/api/v1/executions/${executionId}/cancel`
+      `/api/v1/executions/${encodeURIComponent(executionId)}/cancel`
+    );
+  }
+
+  async respond(
+    executionId: string,
+    response: string
+  ): Promise<HITLResponseResult> {
+    return this.request<HITLResponseResult>(
+      "POST",
+      `/api/v1/executions/${encodeURIComponent(executionId)}/respond`,
+      { response }
+    );
+  }
+
+  async retry(executionId: string): Promise<Execution> {
+    return this.request<Execution>(
+      "POST",
+      `/api/v1/executions/${encodeURIComponent(executionId)}/retry`
     );
   }
 
@@ -266,6 +405,18 @@ export class BlackbeardClient {
       if (terminal.has(exec.status)) return exec;
       await new Promise((r) => setTimeout(r, pollInterval));
     }
-    throw new Error(`Execution ${executionId} did not complete within timeout`);
+    const last = await this.getExecution(executionId);
+    throw new Error(
+      `Execution ${executionId} did not complete within ${timeout}ms (current status: ${last.status})`
+    );
+  }
+
+  async exportAll(namespace = "default"): Promise<Resource[]> {
+    const all: Resource[] = [];
+    for (const kind of Object.keys(KIND_PLURALS)) {
+      const resp = await this.list(kind, { namespace, limit: 1000 });
+      all.push(...resp.items);
+    }
+    return all;
   }
 }

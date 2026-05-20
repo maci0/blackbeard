@@ -13,12 +13,14 @@ import time
 from typing import Any, Literal
 
 import httpx
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from blackbeard.auth.dependencies import get_current_user
 from blackbeard.config import settings
 from blackbeard.http_client import get_client
 from blackbeard.logging_config import request_id_var
+from blackbeard.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,7 @@ class TokenUsage(BaseModel):
 def _get_litellm_client() -> httpx.AsyncClient:
     """Return a shared httpx client for LiteLLM requests."""
     key = settings.litellm_master_key.get_secret_value()
-    return get_client("litellm-chat", headers={"Authorization": f"Bearer {key}"})
+    return get_client("litellm-chat", timeout=120.0, headers={"Authorization": f"Bearer {key}"})
 
 
 def _extract_content(data: dict[str, Any]) -> tuple[str, TokenUsage]:
@@ -83,7 +85,10 @@ class ChatResponse(BaseModel):
         502: {"description": "LiteLLM proxy unreachable or model error"},
     },
 )
-async def chat(body: ChatRequest = Body(...)) -> ChatResponse:
+async def chat(
+    body: ChatRequest = Body(...),
+    _user: User | None = Depends(get_current_user),
+) -> ChatResponse:
     """Send an ad-hoc chat completion through LiteLLM."""
     payload: dict[str, Any] = {
         "model": body.model,
@@ -101,7 +106,6 @@ async def chat(body: ChatRequest = Body(...)) -> ChatResponse:
             f"{settings.litellm_proxy_url}/chat/completions",
             json=payload,
             headers={"X-Request-Id": request_id_var.get("-")},
-            timeout=120,
         )
     except httpx.TransportError as e:
         latency_ms = int((time.monotonic() - t0) * 1000)
@@ -222,6 +226,7 @@ class ModelTestResult(BaseModel):
 )
 async def test_model(
     model: str = Body(..., embed=True, min_length=1, max_length=256),
+    _user: User | None = Depends(get_current_user),
 ) -> ModelTestResult:
     """Test connectivity and API key validity for a specific model.
 
@@ -368,7 +373,9 @@ class ModelInfo(BaseModel):
         502: {"description": "LiteLLM proxy unreachable"},
     },
 )
-async def list_available_models() -> list[ModelInfo]:
+async def list_available_models(
+    _user: User | None = Depends(get_current_user),
+) -> list[ModelInfo]:
     """List all models configured in the LiteLLM proxy."""
     try:
         client = _get_litellm_client()

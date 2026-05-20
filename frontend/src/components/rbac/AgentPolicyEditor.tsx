@@ -35,6 +35,8 @@ const SANDBOX_TIERS = [
   { value: 'none', label: 'None' },
   { value: 'wasm', label: 'WebAssembly (WASM)' },
   { value: 'docker', label: 'Docker container' },
+  { value: 'podman', label: 'Podman container' },
+  { value: 'gvisor', label: 'gVisor (runsc)' },
   { value: 'microvm', label: 'Micro VM' },
 ] as const
 

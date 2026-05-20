@@ -154,6 +154,10 @@ class Execution(Base):
         CheckConstraint("prompt_tokens >= 0", name="ck_execution_prompt_tokens_nonneg"),
         CheckConstraint("completion_tokens >= 0", name="ck_execution_completion_tokens_nonneg"),
         CheckConstraint("cost_usd >= 0", name="ck_execution_cost_nonneg"),
+        CheckConstraint(
+            "n_iterations IS NULL OR n_iterations >= 1",
+            name="ck_execution_n_iterations_positive",
+        ),
         CheckConstraint("length(crew_name) >= 1", name="ck_execution_crew_name_nonempty"),
         CheckConstraint("length(crew_namespace) >= 1", name="ck_execution_crew_ns_nonempty"),
         CheckConstraint(

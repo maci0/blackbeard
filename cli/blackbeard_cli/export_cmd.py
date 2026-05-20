@@ -19,7 +19,7 @@ from blackbeard_cli.helpers import (
     require_auth,
     validate_name,
 )
-from blackbeard_cli.kinds import ALL_KINDS, KIND_TO_PLURAL
+from blackbeard_cli.kinds import ALL_KINDS, API_VERSION, KIND_TO_PLURAL
 
 
 def _strip_server_fields(resource: dict[str, Any]) -> dict[str, Any]:
@@ -34,7 +34,7 @@ def _strip_server_fields(resource: dict[str, Any]) -> dict[str, Any]:
         clean_meta["labels"] = labels
 
     return {
-        "apiVersion": resource.get("apiVersion", "blackbeard/v1"),
+        "apiVersion": resource.get("apiVersion", API_VERSION),
         "kind": resource.get("kind", ""),
         "metadata": clean_meta,
         "spec": resource.get("spec", {}),
@@ -112,7 +112,7 @@ def export_cmd(
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
-    namespace = ctx.obj.get("namespace")
+    namespace = ctx.obj["namespace"]
 
     if not export_all and not kind:
         console.print("[red bold]Error:[/] Specify a Kind or use --all.")
@@ -120,13 +120,16 @@ def export_cmd(
 
     if export_all and kind:
         console.print(
-            f"[yellow]Warning:[/] --all ignores Kind argument '{kind}'."
-            " Exporting all resource kinds."
+            f"[red bold]Error:[/] --all cannot be combined with Kind argument '{kind}'.\n"
+            "  Use [bold]blackbeard export --all[/] or [bold]blackbeard export {kind}[/]."
         )
+        raise SystemExit(2)
     if export_all and name:
         console.print(
-            f"[yellow]Warning:[/] --all ignores Name argument '{name}'. Exporting all resources."
+            f"[red bold]Error:[/] --all cannot be combined with Name argument '{name}'.\n"
+            "  Use [bold]blackbeard export --all[/] or [bold]blackbeard export {kind} {name}[/]."
         )
+        raise SystemExit(2)
 
     if name:
         validate_name(name)
@@ -146,7 +149,18 @@ def export_cmd(
         return
 
     if ctx.obj["json"]:
-        print_json(resources)
+        if output_path:
+            p = Path(output_path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            import json as _json
+
+            p.write_text(
+                _json.dumps(resources, indent=2, default=str, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            console.print(f"[green]Wrote[/] {p} ({len(resources)} resource(s), JSON)")
+        else:
+            print_json(resources)
         return
 
     yaml_str = _resources_to_yaml(resources)
@@ -164,6 +178,7 @@ def export_cmd(
                 file = p / f"{plural}.yaml"
                 file.write_text(_resources_to_yaml(items), encoding="utf-8")
                 console.print(f"  [green]Wrote[/] {file} ({len(items)} {k})")
+            console.print(f"[dim]{len(resources)} resource(s) exported to {p}[/]")
         else:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(yaml_str, encoding="utf-8")

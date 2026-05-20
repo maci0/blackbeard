@@ -14,6 +14,14 @@ const MAX_HISTORY = 30
 const HISTORY_DEBOUNCE_MS = 100
 const NODE_DATA_DEBOUNCE_MS = 500
 
+function cloneNodes(nodes: Node[]): Node[] {
+  return nodes.map((n) => ({ ...n, data: { ...n.data }, position: { ...n.position } }))
+}
+
+function cloneEdges(edges: Edge[]): Edge[] {
+  return edges.map((e) => ({ ...e, data: e.data ? { ...e.data } : e.data }))
+}
+
 interface HistorySnapshot {
   nodes: Node[]
   edges: Edge[]
@@ -53,7 +61,7 @@ export const useStudioStore = create<StudioState>()((set, get) => {
 
     const { nodes, edges, history, historyIndex } = get()
     const newHistory = history.slice(0, historyIndex + 1)
-    newHistory.push({ nodes: structuredClone(nodes), edges: structuredClone(edges) })
+    newHistory.push({ nodes: cloneNodes(nodes), edges: cloneEdges(edges) })
     if (newHistory.length > MAX_HISTORY) newHistory.shift()
     const newIndex = newHistory.length - 1
     set({
@@ -151,7 +159,7 @@ export const useStudioStore = create<StudioState>()((set, get) => {
       if (historyIndex === history.length - 1) {
         currentHistory = [
           ...history,
-          { nodes: structuredClone(state.nodes), edges: structuredClone(state.edges) },
+          { nodes: cloneNodes(state.nodes), edges: cloneEdges(state.edges) },
         ]
         if (currentHistory.length > MAX_HISTORY + 1) currentHistory.shift()
       }

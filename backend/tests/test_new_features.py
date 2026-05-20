@@ -595,7 +595,7 @@ class TestWebhookAPI:
             f"/api/v1/webhooks/{fake_id}",
             headers=API_KEY_HEADER,
         )
-        assert resp.status_code == 404
+        assert resp.status_code == 204
 
     async def test_create_webhook_invalid_url(self, client):
         """Webhook with non-HTTP URL should be rejected."""

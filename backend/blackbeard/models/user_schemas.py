@@ -12,14 +12,17 @@ if TYPE_CHECKING:
 
 
 class UserResponse(BaseModel):
-    """Public user profile."""
+    """Public user profile.
+
+    last_login_at excluded — unnecessary activity-tracking exposure
+    in list/detail endpoints. Frontend uses token expiry for session state.
+    """
 
     id: str
     email: str
     display_name: str
     is_active: bool
     created_at: datetime
-    last_login_at: datetime | None = None
 
 
 def user_response(user: User) -> UserResponse:
@@ -29,5 +32,4 @@ def user_response(user: User) -> UserResponse:
         display_name=user.display_name,
         is_active=user.is_active,
         created_at=user.created_at,
-        last_login_at=user.last_login_at,
     )

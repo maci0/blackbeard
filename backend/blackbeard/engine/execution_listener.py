@@ -13,6 +13,7 @@ import hmac
 import json
 import logging
 import threading
+import time as _time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
 from blackbeard.http_client import get_sync_client
 from blackbeard.logging_config import request_id_var
 from blackbeard.models import ExecutionEvent, ExecutionTask, TaskStatus
+from blackbeard.pii import redact_dict as _redact_dict
 
 # ---------------------------------------------------------------------------
 # Optional OpenTelemetry integration
@@ -136,13 +138,12 @@ def shutdown_webhook_executor() -> None:
 _webhook_cache: list[Any] | None = None
 _webhook_cache_time: float = 0.0
 _webhook_cache_lock = threading.Lock()
-_WEBHOOK_CACHE_TTL = 30.0
+_WEBHOOK_CACHE_TTL = 300.0
 
 
 def _get_cached_webhooks(db_url: str) -> list[Any]:
-    """Return active webhooks, cached for 30s to avoid DB hit per event."""
+    """Return active webhooks, cached for 5min to avoid DB hit per event."""
     global _webhook_cache, _webhook_cache_time
-    import time as _time
 
     now = _time.monotonic()
     if _webhook_cache is not None and (now - _webhook_cache_time) < _WEBHOOK_CACHE_TTL:
@@ -152,20 +153,22 @@ def _get_cached_webhooks(db_url: str) -> list[Any]:
         if _webhook_cache is not None and (now - _webhook_cache_time) < _WEBHOOK_CACHE_TTL:
             return _webhook_cache
 
+        from sqlalchemy import select as sync_select
+
         from blackbeard.models.webhook import Webhook
 
         session_factory = _get_sync_session_factory(db_url)
         try:
             with session_factory() as session:
-                from sqlalchemy import select as sync_select
-
                 result = session.execute(sync_select(Webhook).where(Webhook.active.is_(True)))
                 cached = list(result.scalars())
                 # Detach from session so they can be used outside
                 session.expunge_all()
         except Exception:
-            logger.exception(
-                "Failed to load webhooks for event delivery",
+            logger.error(
+                "Failed to load webhooks for event delivery — "
+                "webhook notifications will be skipped until next cache refresh",
+                exc_info=True,
                 extra={"event": "webhook_load_failed"},
             )
             return []
@@ -218,7 +221,7 @@ def _deliver_single_webhook(
                 },
             )
         else:
-            logger.info(
+            logger.debug(
                 "Webhook delivered: id=%s event=%s status=%d",
                 webhook.id,
                 event_type,
@@ -304,9 +307,8 @@ def _deliver_webhooks_sync(
 ) -> None:
     """Deliver an event to all matching webhooks sequentially.
 
-    Kept for backward compatibility and direct-call use (e.g. tests).
-    The live dispatch path uses ``_dispatch_webhook`` which fans out
-    individual deliveries to the shared webhook executor.
+    Used by tests.  The live dispatch path uses ``_dispatch_webhook``
+    which fans out individual deliveries to the shared webhook executor.
     """
     payload, targets = _prepare_webhook_targets(event_type, data, execution_id, db_url)
     for wh in targets:
@@ -419,10 +421,11 @@ class BlackbeardExecutionListener(BaseEventListener):
 
     def _schedule_flush(self) -> None:
         """Schedule a deferred flush if one isn't already pending."""
-        if self._flush_timer is None or not self._flush_timer.is_alive():
-            self._flush_timer = threading.Timer(self._FLUSH_INTERVAL, self._flush_buffer)
-            self._flush_timer.daemon = True
-            self._flush_timer.start()
+        with self._lock:
+            if self._flush_timer is None or not self._flush_timer.is_alive():
+                self._flush_timer = threading.Timer(self._FLUSH_INTERVAL, self._flush_buffer)
+                self._flush_timer.daemon = True
+                self._flush_timer.start()
 
     def _flush_buffer(self) -> None:
         """Flush buffered events to DB in a single transaction."""
@@ -465,8 +468,11 @@ class BlackbeardExecutionListener(BaseEventListener):
 
     def flush(self) -> None:
         """Force-flush any buffered events. Called at end of execution."""
-        if self._flush_timer is not None:
-            self._flush_timer.cancel()
+        with self._lock:
+            timer = self._flush_timer
+            self._flush_timer = None
+        if timer is not None:
+            timer.cancel()
         self._flush_buffer()
         orphaned = len(self._otel_active_spans)
         for span in self._otel_active_spans.values():
@@ -546,9 +552,7 @@ class BlackbeardExecutionListener(BaseEventListener):
         self._ensure_request_id()
         # PII redaction on event data
         if self._pii_config and self._pii_config.get("redact_events", True):
-            from blackbeard.pii import redact_dict
-
-            data = redact_dict(
+            data = _redact_dict(
                 data,
                 entities=self._pii_config.get("entities"),
                 config=self._pii_config,

@@ -8,7 +8,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Request, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -154,14 +154,18 @@ async def create_webhook(
     responses={200: {"description": "List of registered webhooks"}},
 )
 async def list_webhooks(
+    limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
+    offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     session: AsyncSession = Depends(get_session),
+    _user: User | None = Depends(get_current_user),
 ) -> list[WebhookResponse]:
     """List all registered webhooks (secrets are not returned)."""
     result = await session.execute(
         select(Webhook)
         .options(defer(Webhook.secret))
         .order_by(Webhook.created_at.desc())
-        .limit(1000)
+        .limit(limit)
+        .offset(offset)
     )
     webhooks = list(result.scalars())
     return [
@@ -180,8 +184,7 @@ async def list_webhooks(
     "/{webhook_id}",
     status_code=204,
     responses={
-        204: {"description": "Webhook deleted"},
-        404: {"description": "Webhook not found"},
+        204: {"description": "Webhook deleted (or did not exist — idempotent)"},
     },
 )
 async def delete_webhook(
@@ -199,7 +202,15 @@ async def delete_webhook(
     )
     webhook = result.scalar_one_or_none()
     if webhook is None:
-        raise HTTPException(status_code=404, detail=f"Webhook '{webhook_id}' not found")
+        logger.debug(
+            "Delete no-op: webhook %s not found",
+            webhook_id,
+            extra={
+                "event": "webhook_delete_noop",
+                "webhook_id": str(webhook_id),
+            },
+        )
+        return
 
     await session.delete(webhook)
     await log_audit(

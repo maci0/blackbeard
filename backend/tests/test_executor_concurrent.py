@@ -152,11 +152,11 @@ def test_pool_status_with_executor():
 
         status = get_pool_status()
         assert isinstance(status["active_threads"], int)
-        assert status["active_threads"] >= 0
+        assert status["active_threads"] == 0
         assert isinstance(status["max_workers"], int)
         assert status["max_workers"] > 0
         assert isinstance(status["queued_tasks"], int)
-        assert status["queued_tasks"] >= 0
+        assert status["queued_tasks"] == 0
         assert status["saturated"] is False, (
             "Idle pool with no submitted tasks should not be saturated"
         )

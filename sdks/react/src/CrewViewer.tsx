@@ -37,7 +37,7 @@ const NODE_COLORS: Record<string, { bg: string; border: string; text: string }> 
  * and its tasks from the API, then renders a simple node graph using
  * plain divs and SVG lines. No React Flow dependency.
  */
-export function CrewViewer({ crewName }: CrewViewerProps) {
+export function CrewViewer({ crewName, namespace }: CrewViewerProps) {
   const config = useBlackbeard()
   const [agents, setAgents] = useState<Resource[]>([])
   const [tasks, setTasks] = useState<Resource[]>([])
@@ -51,13 +51,15 @@ export function CrewViewer({ crewName }: CrewViewerProps) {
       setLoading(true)
       setError(null)
       try {
-        const crew = await apiFetch<Resource>(config, `/api/v1/crews/${crewName}`)
+        const ns = namespace ?? 'default'
+        const nsParam = `namespace=${encodeURIComponent(ns)}`
+        const crew = await apiFetch<Resource>(config, `/api/v1/crews/${crewName}?${nsParam}`)
         const agentNames = ((crew.spec.agents as string[] | undefined) ?? []).map(parseRef)
         const taskNames = ((crew.spec.tasks as string[] | undefined) ?? []).map(parseRef)
 
         const [agentResults, taskResults] = await Promise.all([
-          Promise.all(agentNames.map((n) => apiFetch<Resource>(config, `/api/v1/agents/${n}`))),
-          Promise.all(taskNames.map((n) => apiFetch<Resource>(config, `/api/v1/tasks/${n}`))),
+          Promise.all(agentNames.map((n) => apiFetch<Resource>(config, `/api/v1/agents/${n}?${nsParam}`))),
+          Promise.all(taskNames.map((n) => apiFetch<Resource>(config, `/api/v1/tasks/${n}?${nsParam}`))),
         ])
 
         if (!active) return
@@ -75,7 +77,7 @@ export function CrewViewer({ crewName }: CrewViewerProps) {
     return () => {
       active = false
     }
-  }, [config, crewName])
+  }, [config, crewName, namespace])
 
   /* ── Compute layout positions ── */
   const NODE_W = 180

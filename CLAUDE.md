@@ -92,9 +92,9 @@ DB schema is managed in `backend/entrypoint.sh`: first creates PostgreSQL enum t
 
 **Helm chart**: `deploy/helm/blackbeard/` — full Kubernetes deployment. PG StatefulSet, Valkey, LiteLLM, API, UI, Ingress, Secrets. Install: `helm install blackbeard deploy/helm/blackbeard/ --set auth.apiKey=... --set auth.jwtSecret=...`
 
-**SDKs**: Python (`sdks/python/`) and TypeScript (`sdks/typescript/`) — thin wrappers over httpx/fetch. Cover auth, resources, executions, train/test/flow.
+**SDKs**: Python (`sdks/python/`), TypeScript (`sdks/typescript/`), and React (`sdks/react/`) — thin wrappers over httpx/fetch. Cover auth, resources, executions, train/test/flow. React SDK provides `BlackbeardProvider`, `CrewViewer`, `CrewRunner`, and `ExecutionStatus` components.
 
-**CI**: GitHub Actions — 8 jobs: backend (ruff check + ruff format + mypy + pytest + pip-audit) → CLI (lint + validate) → Python SDK (pytest) → TypeScript SDK (tsc) → Helm lint → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (docker-api after backend, docker-ui after frontend, cached).
+**CI**: GitHub Actions — 9 jobs: backend (ruff check + ruff format + mypy + pytest + pip-audit) → CLI (lint + validate) → Python SDK (pytest) → TypeScript SDK (tsc) → React SDK (tsc) → Helm lint → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (docker-api after backend, docker-ui after frontend, cached).
 
 **Webhooks**: Register webhook URLs via `POST /api/v1/webhooks`. Execution events delivered with HMAC-SHA256 signature. Fire-and-forget delivery.
 

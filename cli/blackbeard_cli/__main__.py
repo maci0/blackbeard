@@ -20,6 +20,7 @@ from rich.table import Table
 
 from blackbeard_cli.helpers import (
     STATUS_COLORS,
+    TERMINAL_STATUSES,
     console,
     extract_detail,
     handle_http_error,
@@ -39,9 +40,6 @@ from blackbeard_cli.resources import (
     detect_cycles,
     validate_resource,
 )
-
-# Terminal execution statuses — inlined to avoid pulling in SQLAlchemy.
-TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
 
 
 def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
@@ -213,7 +211,7 @@ def health(ctx: click.Context, ready: bool, output_json: bool) -> None:
 
     try:
         data = response.json()
-    except Exception:
+    except (ValueError, KeyError):
         body_preview = response.text[:200] if response.text else "(empty body)"
         console.print(
             f"[red bold]Error:[/] Server returned non-JSON response"
@@ -925,6 +923,14 @@ def kickoff(
         console.print(f"\nTrack with: [bold]{prog} status {execution_id} -w[/]")
 
 
+def _validate_pkl_filename(_ctx: click.Context, _param: click.Parameter, value: str) -> str:
+    if not value.endswith(".pkl"):
+        raise click.BadParameter("must end with .pkl")
+    if "/" in value or "\\" in value:
+        raise click.BadParameter("must be a plain filename without path separators")
+    return value
+
+
 @cli.command(
     epilog="""\b
 Examples:
@@ -955,6 +961,7 @@ Examples:
     show_default=True,
     metavar="FILE",
     help="Filename for training data output (must end with .pkl)",
+    callback=_validate_pkl_filename,
 )
 @click.option(
     "--wait",
@@ -992,10 +999,6 @@ def train(
     """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     validate_name(crew_name)
-
-    if not filename.endswith(".pkl"):
-        console.print(f"[red bold]Error:[/] --filename must end with .pkl, got: {filename!r}")
-        raise SystemExit(2)
 
     parsed_inputs = parse_key_value_inputs(inputs)
 

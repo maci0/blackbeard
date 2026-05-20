@@ -79,7 +79,7 @@ Seeding Blackbeard at http://localhost:8000 ...
   + Tool/file-read
   ...
 
-Seed complete: 24 created, 0 failed.
+Seed complete: 34 created, 0 failed.
 ```
 
 Refresh the UI. You can now see resources in the Resources page (click "Resources" in the sidebar). The Studio page will show the research crew if you open it.
@@ -295,16 +295,22 @@ In the Studio toolbar, use the **Train** and **Test** buttons alongside the stan
 
 ---
 
-## Step 10: Pull Resources from the Server
+## Step 10: Export Resources from the Server
 
-Use the `pull` command to download resources from the server as YAML files, useful for backup or version control.
+Use the `export` command to download resources from the server as YAML files, useful for backup or version control.
 
 ```bash
-# Pull a single resource
-blackbeard pull Agent researcher -o agents/researcher.yaml
+# Export all resources as YAML
+blackbeard export --all > backup.yaml
 
-# Export all resources in a namespace
-blackbeard export --namespace default > backup.yaml
+# Export all resources to a directory
+blackbeard export --all -o backup/
+
+# Export a single resource
+blackbeard export Agent researcher
+
+# Inspect a single resource as JSON
+blackbeard get Agent researcher --json
 ```
 
 ---
@@ -320,15 +326,27 @@ The Studio property panel includes a bidirectional YAML editor (Monaco). You can
 ### Create users
 
 ```bash
-blackbeard user create alice@example.com --display-name "Alice" --password "..."
+blackbeard user invite -e alice@example.com -d "Alice"
 ```
 
 ### Manage groups
 
 ```bash
 blackbeard group create engineering --description "Engineering team"
-blackbeard group add-member engineering alice@example.com
-blackbeard group remove-member engineering alice@example.com
+blackbeard group list
+```
+
+To add or remove group members, use the API:
+
+```bash
+# Add a member (requires user ID and group ID)
+curl -X POST -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{"user_id": "<user-uuid>"}' \
+  http://localhost:8000/api/v1/groups/<group-uuid>/members
+
+# Remove a member
+curl -X DELETE -H "X-API-Key: $KEY" \
+  http://localhost:8000/api/v1/groups/<group-uuid>/members/<user-uuid>
 ```
 
 Groups can be used as subjects in RoleBindings for team-level RBAC.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import UTC, datetime
@@ -25,7 +26,7 @@ from blackbeard.models.user_schemas import UserResponse, user_response
 logger = logging.getLogger(__name__)
 
 
-async def _register_litellm_user(user_id: str, email: str) -> None:
+async def _register_litellm_user(user_id: str) -> None:
     """Register user in LiteLLM for per-user spend tracking (best-effort)."""
     try:
         from blackbeard.config import settings
@@ -40,11 +41,12 @@ async def _register_litellm_user(user_id: str, email: str) -> None:
         )
         await client.post(
             url,
-            json={"user_id": user_id, "user_email": email},
+            json={"user_id": user_id},
         )
     except Exception:
-        logger.debug(
-            "Could not register user in LiteLLM (proxy may not be running)",
+        logger.warning(
+            "Could not register user in LiteLLM (proxy may not be running) — "
+            "per-user spend tracking will be unavailable",
             exc_info=True,
             extra={"event": "litellm_user_registration_failed", "user_id": user_id},
         )
@@ -129,10 +131,13 @@ async def register(
 ) -> AuthResponse:
     """Register a new user account."""
     email = data.email.lower()
+    client_ip = request.client.host if request.client else "unknown"
+
+    hashed = await asyncio.to_thread(hash_password, data.password)
     user = User(
         email=email,
         display_name=data.display_name,
-        password_hash=hash_password(data.password),
+        password_hash=hashed,
     )
     session.add(user)
     try:
@@ -140,9 +145,9 @@ async def register(
     except IntegrityError:
         await session.rollback()
         logger.info(
-            "Registration conflict: %s",
-            data.email,
-            extra={"event": "registration_conflict", "email": data.email},
+            "Registration conflict from %s",
+            client_ip,
+            extra={"event": "registration_conflict", "client_ip": client_ip},
         )
         raise HTTPException(
             status_code=409, detail="Registration failed — please try again or log in"
@@ -156,24 +161,25 @@ async def register(
         actor_email=user.email,
         resource_type="User",
         resource_id=str(user.id),
-        ip_address=request.client.host if request.client else None,
+        ip_address=client_ip if client_ip != "unknown" else None,
         request_id=request_id_var.get("-"),
     )
     await session.commit()
     await session.refresh(user)
 
     logger.info(
-        "User registered: %s",
-        user.email,
+        "User registered: user_id=%s from %s",
+        user.id,
+        client_ip,
         extra={
             "event": "user_registered",
             "user_id": str(user.id),
-            "email": user.email,
+            "client_ip": client_ip,
             "request_id": request_id_var.get("-"),
         },
     )
 
-    await _register_litellm_user(str(user.id), user.email)
+    await _register_litellm_user(str(user.id))
 
     response.headers["Location"] = f"/api/v1/users/{user.id}"
     return _auth_response(user)
@@ -184,7 +190,6 @@ async def register(
     response_model=AuthResponse,
     responses={
         401: {"description": "Invalid email or password"},
-        403: {"description": "Account is deactivated"},
     },
 )
 async def login(
@@ -200,18 +205,18 @@ async def login(
 
     password_hash = user.password_hash if user else _DUMMY_HASH
     if not password_hash.startswith("$2"):
-        # OIDC user or corrupted hash — run bcrypt on dummy to equalize timing
-        verify_password(data.password, _DUMMY_HASH)
+        await asyncio.to_thread(verify_password, data.password, _DUMMY_HASH)
         valid = False
     else:
-        valid = verify_password(data.password, password_hash) and user is not None
+        matched = await asyncio.to_thread(verify_password, data.password, password_hash)
+        valid = matched and user is not None
     if not valid:
         logger.warning(
-            "Login failed: %s",
-            data.email,
+            "Login failed from %s",
+            ip or "unknown",
             extra={
                 "event": "login_failed",
-                "email": data.email,
+                "client_ip": ip or "unknown",
                 "request_id": request_id_var.get("-"),
             },
         )
@@ -234,12 +239,13 @@ async def login(
     assert user is not None  # narrowing: valid=True implies user is not None
     if not user.is_active:
         logger.warning(
-            "Login blocked (deactivated): %s",
-            data.email,
+            "Login blocked (deactivated): user_id=%s from %s",
+            user.id,
+            ip or "unknown",
             extra={
                 "event": "login_blocked_deactivated",
                 "user_id": str(user.id),
-                "email": data.email,
+                "client_ip": ip or "unknown",
             },
         )
         await log_audit(
@@ -275,12 +281,13 @@ async def login(
     await session.refresh(user)
 
     logger.info(
-        "User logged in: %s",
-        user.email,
+        "User logged in: user_id=%s from %s",
+        user.id,
+        ip or "unknown",
         extra={
             "event": "user_login",
             "user_id": str(user.id),
-            "email": user.email,
+            "client_ip": ip or "unknown",
             "request_id": request_id_var.get("-"),
         },
     )
@@ -364,8 +371,8 @@ async def refresh(
     access_token = create_access_token(str(user.id), user.email)
     new_refresh_token = create_refresh_token(str(user.id))
     logger.info(
-        "Token refreshed: %s",
-        user.email,
+        "Token refreshed: user_id=%s",
+        user.id,
         extra={
             "event": "token_refreshed",
             "user_id": str(user.id),

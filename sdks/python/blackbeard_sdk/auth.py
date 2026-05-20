@@ -25,8 +25,7 @@ class AuthMixin:
         )
         resp.raise_for_status()
         data: dict[str, Any] = resp.json()
-        # Store the token so subsequent requests are authenticated
-        self._http.headers["Authorization"] = f"Bearer {data['access_token']}"
+        self._set_bearer_token(data["access_token"])
         return data
 
     def register(self, email: str, password: str, display_name: str) -> dict[str, Any]:
@@ -45,7 +44,7 @@ class AuthMixin:
         )
         resp.raise_for_status()
         data: dict[str, Any] = resp.json()
-        self._http.headers["Authorization"] = f"Bearer {data['access_token']}"
+        self._set_bearer_token(data["access_token"])
         return data
 
     def refresh(self, refresh_token: str) -> dict[str, Any]:
@@ -60,8 +59,13 @@ class AuthMixin:
         )
         resp.raise_for_status()
         data: dict[str, Any] = resp.json()
-        self._http.headers["Authorization"] = f"Bearer {data['access_token']}"
+        self._set_bearer_token(data["access_token"])
         return data
+
+    def _set_bearer_token(self, token: str) -> None:
+        """Switch auth to Bearer token, removing any API key header."""
+        self._http.headers.pop("X-API-Key", None)
+        self._http.headers["Authorization"] = f"Bearer {token}"
 
     def whoami(self) -> dict[str, Any]:
         """Get the currently authenticated user's profile."""

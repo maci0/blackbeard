@@ -63,9 +63,7 @@ class ReadinessResponse(BaseModel):
 @router.get("/config/public")
 async def public_config() -> dict[str, bool]:
     """Public configuration — no auth required."""
-    from blackbeard.config import settings as _settings
-
-    return {"oidc_enabled": bool(_settings.oidc_issuer)}
+    return {"oidc_enabled": bool(settings.oidc_issuer)}
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -90,22 +88,27 @@ async def _check_valkey() -> dict[str, object]:
     """
     global _valkey_client
     t0 = time.monotonic()
+    client: Any = None
     try:
         if _valkey_client is None:
             async with _valkey_lock:
                 if _valkey_client is None:
                     url = settings.valkey_url.get_secret_value().replace("valkey://", "redis://", 1)
                     _valkey_client = _redis_from_url(url, socket_connect_timeout=2)  # type: ignore[no-untyped-call]
-        await _valkey_client.ping()
+        client = _valkey_client
+        await client.ping()
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
         return {"status": "up", "latency_ms": latency_ms}
     except Exception as e:
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
-        old_client = _valkey_client
-        _valkey_client = None
-        if old_client is not None:
+        stale: Any = None
+        async with _valkey_lock:
+            if _valkey_client is client:
+                stale = _valkey_client
+                _valkey_client = None
+        if stale is not None:
             try:
-                await old_client.aclose()
+                await stale.aclose()
             except Exception as close_err:
                 logger.debug(
                     "Error closing stale valkey client: %s",

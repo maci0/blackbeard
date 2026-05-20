@@ -25,12 +25,11 @@ function ToastItem({ toast }: { toast: Toast }) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // Trigger the slide-in animation after mount
     const el = ref.current
     if (el) {
       requestAnimationFrame(() => {
-        el.classList.remove('translate-x-full', 'opacity-0')
-        el.classList.add('translate-x-0', 'opacity-100')
+        el.classList.remove('translate-y-2', 'sm:translate-y-0', 'sm:translate-x-full', 'opacity-0')
+        el.classList.add('translate-y-0', 'sm:translate-x-0', 'opacity-100')
       })
     }
   }, [])
@@ -39,14 +38,13 @@ function ToastItem({ toast }: { toast: Toast }) {
     <div
       ref={ref}
       role={toast.type === 'error' ? 'alert' : 'status'}
-      aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
       onMouseEnter={() => pause(toast.id)}
       onMouseLeave={() => resume(toast.id)}
       onFocus={() => pause(toast.id)}
       onBlur={() => resume(toast.id)}
       className={cn(
         'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border p-4 shadow-lg transition-all duration-300 ease-out motion-reduce:transition-none',
-        'translate-x-full opacity-0',
+        'translate-y-2 opacity-0 sm:translate-x-full sm:translate-y-0',
         STYLE_MAP[toast.type],
       )}
     >

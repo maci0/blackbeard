@@ -107,7 +107,7 @@ class AuthInterceptor(grpc.aio.ServerInterceptor):
         # Check API key
         api_key = metadata.get("x-api-key", "")
         if api_key:
-            from blackbeard.api.middleware import get_api_key
+            from blackbeard.auth.api_key import get_api_key
 
             if hmac.compare_digest(api_key, get_api_key()):
                 return await continuation(handler_call_details)

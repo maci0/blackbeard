@@ -179,12 +179,17 @@ async def webhook_trigger(
 
     expected_secret = trigger.get("webhook_secret", "")
     if not expected_secret or not hmac.compare_digest(body.secret, expected_secret):
+        client_ip = request.client.host if request.client else "unknown"
+        from blackbeard.api.middleware import record_auth_failure
+
+        record_auth_failure(client_ip)
         logger.warning(
             "Webhook auth failed for automation '%s'",
             name,
             extra={
                 "event": "webhook_auth_failed",
                 "automation_name": name,
+                "client_ip": client_ip,
             },
         )
         raise HTTPException(status_code=401, detail="Invalid webhook secret")

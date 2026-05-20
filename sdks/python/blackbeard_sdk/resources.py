@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 import yaml
@@ -90,7 +91,7 @@ class ResourceMixin:
         """
         plural = _kind_plural(kind)
         resp = self._http.get(
-            f"/api/v1/{plural}/{name}",
+            f"/api/v1/{plural}/{quote(name, safe='')}",
             params={"namespace": namespace},
         )
         resp.raise_for_status()
@@ -137,7 +138,7 @@ class ResourceMixin:
         """
         plural = _kind_plural(kind)
         resp = self._http.put(
-            f"/api/v1/{plural}/{name}",
+            f"/api/v1/{plural}/{quote(name, safe='')}",
             params={"namespace": namespace},
             json=resource,
         )
@@ -154,7 +155,7 @@ class ResourceMixin:
         """
         plural = _kind_plural(kind)
         resp = self._http.delete(
-            f"/api/v1/{plural}/{name}",
+            f"/api/v1/{plural}/{quote(name, safe='')}",
             params={"namespace": namespace},
         )
         resp.raise_for_status()

@@ -73,9 +73,7 @@ def _add_llm_recognizer(
     model = config.get("model", "ollama/gliner-pii")
     proxy_url = config.get("proxy_url") or settings.litellm_proxy_url
     master_key = settings.litellm_master_key.get_secret_value()
-    recognizer = LLMPIIRecognizer(
-        model=model, proxy_url=proxy_url, master_key=master_key
-    )
+    recognizer = LLMPIIRecognizer(model=model, proxy_url=proxy_url, master_key=master_key)
     analyzer.registry.add_recognizer(recognizer)
     logger.info(
         "LLM PII recognizer added: model=%s",
@@ -146,12 +144,12 @@ class LLMPIIRecognizer(EntityRecognizer):
             proxy_url = proxy_url or settings.litellm_proxy_url
             master_key = master_key or settings.litellm_master_key.get_secret_value()
 
+        entity_list = ", ".join(self.ENTITIES)
         prompt = (
             "Identify all PII (personally identifiable information) in the "
             "following text.  Return ONLY a JSON array of objects, each with "
             "'entity_type', 'start', 'end', 'score' fields.  "
-            "Entity types: PERSON, EMAIL_ADDRESS, PHONE_NUMBER, LOCATION, "
-            "CREDIT_CARD, US_SSN, IP_ADDRESS.\n\nText: " + text
+            f"Entity types: {entity_list}.\n\nText: " + text
         )
 
         try:
@@ -225,8 +223,9 @@ class LLMPIIRecognizer(EntityRecognizer):
             return results
 
         except Exception:
-            logger.warning(
-                "LLM PII recognizer failed -- returning empty results",
+            logger.error(
+                "LLM PII recognizer failed -- returning empty results; "
+                "PII may pass through unredacted",
                 exc_info=True,
                 extra={"event": "llm_pii_recognizer_error", "model": self._model},
             )

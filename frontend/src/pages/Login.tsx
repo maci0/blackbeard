@@ -29,7 +29,9 @@ export default function Login() {
     fetch('/api/v1/config/public')
       .then((r) => r.json())
       .then((d: { oidc_enabled?: boolean }) => setOidcEnabled(d.oidc_enabled === true))
-      .catch(() => {})
+      .catch(() => {
+        console.debug('[Login] OIDC config fetch failed — SSO button hidden')
+      })
   }, [])
 
   useEffect(() => {
@@ -80,10 +82,10 @@ export default function Login() {
           <p className="mt-1 text-sm text-muted-foreground">Agent Management Platform</p>
         </div>
 
-        {error && <ErrorAlert message={error} className="mb-4" />}
+        {error && <ErrorAlert id="login-error" message={error} className="mb-4" />}
 
         {/* Form */}
-        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        <form onSubmit={(e) => void handleSubmit(e)} noValidate className="space-y-4">
           <fieldset disabled={loading} className="space-y-4">
             <div>
               <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium">
@@ -101,6 +103,7 @@ export default function Login() {
                 autoFocus
                 required
                 aria-invalid={(isFieldError ? !email.trim() : !!error) || undefined}
+                aria-describedby={error ? 'login-error' : undefined}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="you@example.com"
               />
@@ -122,6 +125,7 @@ export default function Login() {
                   autoComplete="current-password"
                   required
                   aria-invalid={(isFieldError ? !password.trim() : !!error) || undefined}
+                  aria-describedby={error ? 'login-error' : undefined}
                   className="w-full rounded-md border bg-background px-3 py-2 pr-10 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                   placeholder="Enter your password"
                 />

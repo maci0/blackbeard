@@ -135,7 +135,12 @@ function RepoCard({
   const isBuiltIn = repo.url === 'built-in'
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md">
+    <div
+      className={cn(
+        'flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow',
+        !isComingSoon && 'hover:shadow-md',
+      )}
+    >
       {/* Header */}
       <div className="border-b bg-muted/20 px-4 pb-3 pt-4">
         <div className="flex items-start justify-between gap-2">
@@ -270,17 +275,18 @@ export default function Marketplace() {
   const handleUrlImport = useCallback(() => {
     const trimmed = url.trim()
     if (!trimmed) return
-    void handleImport(trimmed)
-  }, [url, handleImport])
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        handleUrlImport()
+    try {
+      const parsed = new URL(trimmed)
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        error('Please enter an HTTPS URL (e.g. https://github.com/org/repo.git)')
+        return
       }
-    },
-    [handleUrlImport],
-  )
+    } catch {
+      error('Please enter a valid URL (e.g. https://github.com/org/repo.git)')
+      return
+    }
+    void handleImport(trimmed)
+  }, [url, handleImport, error])
 
   return (
     <div className="page-enter flex-1 overflow-auto">
@@ -305,7 +311,13 @@ export default function Marketplace() {
             Paste a git HTTPS URL containing Blackbeard resource YAML files to import agents, crews,
             tools, and other resources.
           </p>
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleUrlImport()
+            }}
+            className="flex flex-col gap-3 sm:flex-row"
+          >
             <div className="relative flex-1">
               <label htmlFor="marketplace-url" className="sr-only">
                 Git repository HTTPS URL
@@ -320,14 +332,13 @@ export default function Marketplace() {
                 placeholder="https://github.com/org/repo.git"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                onKeyDown={handleKeyDown}
                 autoComplete="off"
                 disabled={importing}
                 className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
             <button
-              onClick={handleUrlImport}
+              type="submit"
               disabled={!url.trim() || importing}
               aria-busy={importing || undefined}
               className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
@@ -344,7 +355,7 @@ export default function Marketplace() {
                 </>
               )}
             </button>
-          </div>
+          </form>
         </section>
 
         {/* Featured repos section */}

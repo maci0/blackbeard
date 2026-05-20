@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Database, Search, ChevronRight, RefreshCw, X } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
@@ -39,6 +39,7 @@ export default function Resources() {
   )
   const [kindFilter, setKindFilter] = useState('')
   const [search, setSearch] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useDocumentTitle('Resources')
 
@@ -129,6 +130,7 @@ export default function Resources() {
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             />
             <input
+              ref={searchRef}
               id="resources-search"
               type="search"
               placeholder="Search by name…"
@@ -161,6 +163,7 @@ export default function Resources() {
               onClick={() => {
                 setSearch('')
                 setKindFilter('')
+                searchRef.current?.focus()
               }}
               aria-label="Clear all filters"
               className="inline-flex min-h-[44px] items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

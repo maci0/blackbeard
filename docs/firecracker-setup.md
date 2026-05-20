@@ -50,9 +50,10 @@ See the [Firecracker kernel docs](https://github.com/firecracker-microvm/firecra
 
 ## 3. Build Root Filesystem
 
-The rootfs must contain an init process that reads the `BB_CMD` parameter
-from `/proc/cmdline` and executes it. Blackbeard injects the tool command
-via kernel boot args.
+The rootfs must contain an init process that reads the `BB_CMD_B64` parameter
+from `/proc/cmdline`, base64-decodes it, and executes it. Blackbeard injects
+the tool command via base64-encoded kernel boot args to prevent injection
+attacks through spaces or shell metacharacters.
 
 ### Minimal rootfs with Alpine
 
@@ -73,22 +74,24 @@ sudo apk -X https://dl-cdn.alpinelinux.org/alpine/latest-stable/main \
 # Create the init script that Blackbeard expects
 sudo tee /tmp/rootfs-mount/init << 'INIT_EOF'
 #!/bin/bash
-# Parse BB_CMD from kernel command line
-BB_CMD=$(cat /proc/cmdline | tr ' ' '\n' | grep '^BB_CMD=' | cut -d= -f2-)
+# Parse BB_CMD_B64 from kernel command line (base64-encoded to prevent
+# boot-arg injection via spaces or shell metacharacters in the command).
+BB_CMD_B64=$(cat /proc/cmdline | tr ' ' '\n' | grep '^BB_CMD_B64=' | cut -d= -f2-)
 
-# Parse BB_ENV_* variables
-for param in $(cat /proc/cmdline | tr ' ' '\n' | grep '^BB_ENV_'); do
-    key=$(echo "$param" | sed 's/^BB_ENV_//' | cut -d= -f1)
-    value=$(echo "$param" | cut -d= -f2-)
+# Parse BB_ENV_B64_* variables (base64-encoded values)
+for param in $(cat /proc/cmdline | tr ' ' '\n' | grep '^BB_ENV_B64_'); do
+    key=$(echo "$param" | sed 's/^BB_ENV_B64_//' | cut -d= -f1)
+    value=$(echo "$param" | cut -d= -f2- | base64 -d)
     export "$key=$value"
 done
 
-# Execute the command
-if [ -n "$BB_CMD" ]; then
+# Decode and execute the command
+if [ -n "$BB_CMD_B64" ]; then
+    BB_CMD=$(echo "$BB_CMD_B64" | base64 -d)
     eval "$BB_CMD"
     EXIT_CODE=$?
 else
-    echo "No BB_CMD found in kernel command line" >&2
+    echo "No BB_CMD_B64 found in kernel command line" >&2
     EXIT_CODE=1
 fi
 

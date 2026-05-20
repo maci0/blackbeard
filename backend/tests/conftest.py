@@ -209,7 +209,7 @@ def _make_execution(
     e.crew_namespace = "default"
     e.execution_type = ExecutionType(execution_type)
     e.status = ExecutionStatus(status)
-    e.inputs = inputs
+    e.inputs = inputs if inputs is not None else {}
     e.outputs = outputs
     e.error = error
     e.total_tokens = total_tokens

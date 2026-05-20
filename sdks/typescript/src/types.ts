@@ -76,9 +76,34 @@ export interface User {
   last_login_at: string | null;
 }
 
+export interface ExecutionEvent {
+  sequence: number;
+  event_type: string;
+  timestamp: string;
+  data: Record<string, unknown>;
+}
+
+export interface ExecutionEventsResponse {
+  events: ExecutionEvent[];
+  next_sequence: number;
+  has_more: boolean;
+}
+
 export interface AuthResponse {
   access_token: string;
   refresh_token: string;
   token_type: string;
   user: User;
+}
+
+export interface HealthResponse {
+  status: string;
+  service: string;
+  version: string;
+  uptime_s: number;
+}
+
+export interface HITLResponseResult {
+  status: string;
+  execution_id: string;
 }

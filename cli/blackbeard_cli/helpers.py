@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import click
-import httpx
 from rich.console import Console
+
+if TYPE_CHECKING:
+    import httpx
 
 console = Console(stderr=True)
 out = Console()
@@ -20,6 +22,8 @@ STATUS_COLORS: dict[str, str] = {
     "queued": "cyan",
     "pending": "cyan",
 }
+
+TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
 
 json_opt = click.option(
     "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
@@ -66,7 +70,9 @@ def handle_request_error(server: str, exc: httpx.RequestError) -> NoReturn:
 def handle_http_error(response: httpx.Response) -> NoReturn:
     """Handle HTTP errors with status-specific hints."""
     detail = extract_detail(response)
-    console.print(f"[red bold]Error:[/] HTTP {response.status_code}: {detail}")
+    method = response.request.method
+    path = response.request.url.path
+    console.print(f"[red bold]Error:[/] HTTP {response.status_code} on {method} {path}: {detail}")
     if response.status_code == 401:
         console.print("[dim]Hint: Check your credentials (blackbeard login or --api-key)[/]")
     elif response.status_code == 403:
@@ -112,10 +118,20 @@ def require_auth(ctx: click.Context) -> dict[str, str]:
     if token:
         return {"Authorization": f"Bearer {token}"}
 
-    console.print(
-        "[red bold]Error:[/] Authentication required.\n"
-        "  Use [bold]blackbeard login[/] or set BLACKBEARD_API_KEY."
-    )
+    from blackbeard_cli.credentials import load_credentials
+
+    creds = load_credentials()
+    if creds and creds.server.rstrip("/") != server.rstrip("/"):
+        console.print(
+            f"[red bold]Error:[/] Authentication required.\n"
+            f"  Logged in to [bold]{creds.server}[/] but targeting [bold]{server}[/].\n"
+            f"  Run: [bold]blackbeard -s {server} login[/]"
+        )
+    else:
+        console.print(
+            "[red bold]Error:[/] Authentication required.\n"
+            "  Use [bold]blackbeard login[/] or set BLACKBEARD_API_KEY."
+        )
     raise SystemExit(2)
 
 
@@ -178,8 +194,3 @@ def parse_key_value_inputs(items: tuple[str, ...], flag_name: str = "--input") -
         except (ValueError, _json.JSONDecodeError):
             result[key] = value
     return result
-
-
-def make_client(ctx: click.Context) -> httpx.Client:
-    """Create an httpx client with the configured timeout."""
-    return httpx.Client(timeout=ctx.obj["timeout"])

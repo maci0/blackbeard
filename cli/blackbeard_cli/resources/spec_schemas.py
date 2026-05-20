@@ -611,7 +611,7 @@ AUTOMATION_SCHEMA: dict[str, Any] = {
             "properties": {
                 "type": {"type": "string", "enum": ["cron", "webhook", "api"]},
                 "cron": {"type": "string", "maxLength": 100},
-                "webhook_secret": {"type": "string", "maxLength": 255},
+                "webhook_secret": {"type": "string", "minLength": 16, "maxLength": 255},
             },
             "additionalProperties": False,
         },

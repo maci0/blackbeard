@@ -23,3 +23,7 @@ export function parseRef(ref: string): string {
   const idx = ref.lastIndexOf('/')
   return idx >= 0 ? ref.slice(idx + 1) : ref
 }
+
+export function getErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback
+}

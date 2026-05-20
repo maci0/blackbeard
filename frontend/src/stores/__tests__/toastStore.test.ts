@@ -117,10 +117,13 @@ describe('toastStore', () => {
       expect(useToastStore.getState().toasts).toHaveLength(0)
     })
 
-    it('auto-dismisses info toast after 5 seconds', () => {
+    it('auto-dismisses info toast after 7 seconds', () => {
       useToastStore.getState().info('Info toast')
 
-      vi.advanceTimersByTime(5000)
+      vi.advanceTimersByTime(6999)
+      expect(useToastStore.getState().toasts).toHaveLength(1)
+
+      vi.advanceTimersByTime(1)
       expect(useToastStore.getState().toasts).toHaveLength(0)
     })
   })

@@ -19,11 +19,15 @@ _sync_clients: dict[str, httpx.Client] = {}
 _lock = threading.Lock()
 
 
+_DEFAULT_TIMEOUT = 30.0
+
+
 def get_client(name: str, **kwargs: Any) -> httpx.AsyncClient:
     """Return a named httpx.AsyncClient, creating it on first call.
 
     Thread-safe via double-checked locking. kwargs are forwarded to
     httpx.AsyncClient() on first creation and ignored on subsequent calls.
+    Applies a 30s default timeout if none is specified.
     """
     client = _clients.get(name)
     if client is not None:
@@ -32,6 +36,7 @@ def get_client(name: str, **kwargs: Any) -> httpx.AsyncClient:
         client = _clients.get(name)
         if client is not None:
             return client
+        kwargs.setdefault("timeout", _DEFAULT_TIMEOUT)
         client = httpx.AsyncClient(**kwargs)
         _clients[name] = client
         logger.debug(
@@ -47,6 +52,7 @@ def get_sync_client(name: str, **kwargs: Any) -> httpx.Client:
 
     Thread-safe via double-checked locking. kwargs are forwarded to
     httpx.Client() on first creation and ignored on subsequent calls.
+    Applies a 30s default timeout if none is specified.
     """
     client = _sync_clients.get(name)
     if client is not None:
@@ -55,6 +61,7 @@ def get_sync_client(name: str, **kwargs: Any) -> httpx.Client:
         client = _sync_clients.get(name)
         if client is not None:
             return client
+        kwargs.setdefault("timeout", _DEFAULT_TIMEOUT)
         client = httpx.Client(**kwargs)
         _sync_clients[name] = client
         logger.debug(

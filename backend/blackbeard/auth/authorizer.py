@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import collections
 import logging
+import threading
 import time
 from typing import Any
 
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 # OrderedDict gives O(1) FIFO eviction vs heapq's O(n log k) scan.
 _cache: collections.OrderedDict[str, tuple[bool, float]] = collections.OrderedDict()
+_cache_lock = threading.Lock()
 _CACHE_TTL_S = 30.0
 _CACHE_MAX_SIZE = 10_000
 
@@ -28,38 +30,41 @@ def _cache_key(
 
 
 def _get_cached(key: str) -> bool | None:
-    entry = _cache.get(key)
-    if entry is None:
-        return None
-    result, ts = entry
-    if time.monotonic() - ts > _CACHE_TTL_S:
-        _cache.pop(key, None)
-        return None
-    return result
+    with _cache_lock:
+        entry = _cache.get(key)
+        if entry is None:
+            return None
+        result, ts = entry
+        if time.monotonic() - ts > _CACHE_TTL_S:
+            _cache.pop(key, None)
+            return None
+        return result
 
 
 def _set_cached(key: str, result: bool) -> None:
-    if len(_cache) >= _CACHE_MAX_SIZE:
-        to_evict = _CACHE_MAX_SIZE // 5
-        for _ in range(min(to_evict, len(_cache))):
-            _cache.popitem(last=False)
-        logger.debug(
-            "Authorization cache eviction: evicted=%d remaining=%d",
-            to_evict,
-            len(_cache),
-            extra={
-                "event": "authz_cache_eviction",
-                "evicted": to_evict,
-                "remaining": len(_cache),
-                "max_size": _CACHE_MAX_SIZE,
-            },
-        )
-    _cache[key] = (result, time.monotonic())
+    with _cache_lock:
+        if len(_cache) >= _CACHE_MAX_SIZE:
+            to_evict = _CACHE_MAX_SIZE // 5
+            for _ in range(min(to_evict, len(_cache))):
+                _cache.popitem(last=False)
+            logger.debug(
+                "Authorization cache eviction: evicted=%d remaining=%d",
+                to_evict,
+                len(_cache),
+                extra={
+                    "event": "authz_cache_eviction",
+                    "evicted": to_evict,
+                    "remaining": len(_cache),
+                    "max_size": _CACHE_MAX_SIZE,
+                },
+            )
+        _cache[key] = (result, time.monotonic())
 
 
 def clear_cache() -> None:
     """Clear the authorization cache (useful for testing)."""
-    _cache.clear()
+    with _cache_lock:
+        _cache.clear()
 
 
 class Authorizer:
@@ -187,7 +192,7 @@ class Authorizer:
     ) -> list[dict[str, Any]]:
         """Find all RoleBinding specs where the subject matches."""
         result = await self._session.execute(
-            select(Resource.spec).where(Resource.kind == ResourceKind.ROLE_BINDING).limit(1000)
+            select(Resource.spec).where(Resource.kind == ResourceKind.ROLE_BINDING)
         )
         rows = result.scalars().all()
         matching: list[dict[str, Any]] = []

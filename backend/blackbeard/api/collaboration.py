@@ -6,7 +6,6 @@ import asyncio
 import hmac
 import json
 import logging
-import os
 import re
 import time
 from typing import Any
@@ -14,8 +13,10 @@ from typing import Any
 import jwt as pyjwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from blackbeard.api import middleware as _auth_mw
+from blackbeard.api.middleware import record_auth_failure
+from blackbeard.auth.api_key import get_api_key
 from blackbeard.auth.jwt import decode_token
+from blackbeard.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ _SINGLE_REPLICA_WARNING = (
     "Set api.replicas=1 in Helm values or use sticky sessions."
 )
 
-if os.environ.get("WEB_CONCURRENCY", "1") != "1":
+if settings.web_concurrency != 1:
     logger.warning(
         _SINGLE_REPLICA_WARNING,
         extra={"event": "collab_multi_replica_warning"},
@@ -56,12 +57,25 @@ _HIGH_FREQ_TYPES = frozenset({"cursor_move", "selection_change"})
 # Maximum depth for nested message data to prevent deeply-nested JSON DoS.
 _MAX_MESSAGE_DATA_DEPTH = 5
 
+
+def _exceeds_depth(obj: object, limit: int, current: int = 0) -> bool:
+    """Return True if *obj* contains nested dicts/lists beyond *limit* levels."""
+    if current >= limit:
+        return True
+    if isinstance(obj, dict):
+        return any(_exceeds_depth(v, limit, current + 1) for v in obj.values())
+    if isinstance(obj, list):
+        return any(_exceeds_depth(v, limit, current + 1) for v in obj)
+    return False
+
+
 # In-memory room state — maps crew_name to set of WebSocket connections.
 # Used by all deployments for local WebSocket fan-out.  When a Valkey
 # backend is available, messages are also published to Valkey pub/sub so
 # that other replicas receive them.
 _rooms: dict[str, set[WebSocket]] = {}
 _rooms_lock = asyncio.Lock()
+_MAX_ROOMS = 500  # prevent unbounded memory growth from room creation
 
 
 class ValkeyCollabBackend:
@@ -90,8 +104,8 @@ class ValkeyCollabBackend:
         try:
             await self._redis.publish(f"collab:{room}", json.dumps(message))
         except Exception:
-            logger.warning(
-                "Valkey publish failed for room %s",
+            logger.error(
+                "Valkey publish failed for room %s — other replicas will not receive this message",
                 room,
                 exc_info=True,
                 extra={"event": "valkey_publish_failed", "room": room},
@@ -131,6 +145,12 @@ class ValkeyCollabBackend:
                 try:
                     message = json.loads(raw_message["data"])
                 except (json.JSONDecodeError, TypeError):
+                    logger.debug(
+                        "Valkey collab message parse failed for room %s — skipping",
+                        room,
+                        exc_info=True,
+                        extra={"event": "valkey_collab_parse_error", "room": room},
+                    )
                     continue
                 # Broadcast to all local connections (sender=None since the
                 # original sender is on a different replica)
@@ -138,8 +158,9 @@ class ValkeyCollabBackend:
         except asyncio.CancelledError:
             pass
         except Exception:
-            logger.warning(
-                "Valkey subscription listener failed for room %s",
+            logger.error(
+                "Valkey subscription listener died for room %s — "
+                "cross-replica collaboration messages will be lost until reconnect",
                 room,
                 exc_info=True,
                 extra={"event": "valkey_listen_failed", "room": room},
@@ -149,16 +170,18 @@ class ValkeyCollabBackend:
 # Initialise Valkey backend lazily — only when the Valkey URL is configured
 # and the redis library is available.
 _valkey_backend: ValkeyCollabBackend | None = None
+_valkey_init_done = False
 
 
 def _get_valkey_backend() -> ValkeyCollabBackend | None:
     """Return the Valkey collaboration backend, creating it on first call.
 
     Returns None if the redis library is not installed or Valkey is not
-    configured.
+    configured.  After the first attempt (success or failure), the result
+    is cached so repeated failures don't re-attempt imports or log spam.
     """
-    global _valkey_backend
-    if _valkey_backend is not None:
+    global _valkey_backend, _valkey_init_done
+    if _valkey_init_done:
         return _valkey_backend
 
     try:
@@ -168,12 +191,20 @@ def _get_valkey_backend() -> ValkeyCollabBackend | None:
 
         valkey_url = settings.valkey_url.get_secret_value()
         if not valkey_url:
+            _valkey_init_done = True
             return None
         _valkey_backend = ValkeyCollabBackend()
+        _valkey_init_done = True
         return _valkey_backend
     except ImportError:
+        _valkey_init_done = True
+        logger.info(
+            "redis package not installed — Valkey collaboration backend disabled",
+            extra={"event": "valkey_collab_no_redis"},
+        )
         return None
     except Exception:
+        _valkey_init_done = True
         logger.warning(
             "Valkey collaboration backend init failed — cross-replica collaboration will not work",
             exc_info=True,
@@ -196,7 +227,7 @@ async def _broadcast_local(
         return
 
     dead: set[WebSocket] = set()
-    for ws in participants:
+    for ws in list(participants):
         if ws is sender:
             continue
         try:
@@ -205,16 +236,23 @@ async def _broadcast_local(
             dead.add(ws)
 
     if dead:
-        participants.difference_update(dead)
-        logger.debug(
-            "Removed %d dead WebSocket connections from room %s",
+        async with _rooms_lock:
+            room_set = _rooms.get(room)
+            if room_set is not None:
+                room_set.difference_update(dead)
+                remaining = len(room_set)
+            else:
+                remaining = 0
+        logger.info(
+            "Removed %d dead WebSocket connection(s) from room %s (%d remaining)",
             len(dead),
             room,
+            remaining,
             extra={
                 "event": "collab_dead_connections_removed",
                 "room": room,
                 "dead_count": len(dead),
-                "remaining": len(participants),
+                "remaining": remaining,
             },
         )
 
@@ -251,7 +289,7 @@ def validate_ws_auth(token: str, api_key: str) -> bool:
         except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError):
             pass
 
-    return bool(api_key and hmac.compare_digest(api_key, _auth_mw.get_api_key()))
+    return bool(api_key and hmac.compare_digest(api_key, get_api_key()))
 
 
 @router.websocket("/ws/collab/{crew_name}")
@@ -282,7 +320,7 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
 
     if not validate_ws_auth(token, api_key):
         client_ip = websocket.client.host if websocket.client else "unknown"
-        _auth_mw.record_auth_failure(client_ip)
+        record_auth_failure(client_ip)
         logger.warning(
             "Collaboration WebSocket auth failed: crew=%s from %s",
             crew_name,
@@ -302,6 +340,15 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
     async with _rooms_lock:
         is_new_room = crew_name not in _rooms
         if is_new_room:
+            if len(_rooms) >= _MAX_ROOMS:
+                logger.warning(
+                    "Collaboration: max rooms reached (%d), rejecting %s",
+                    _MAX_ROOMS,
+                    crew_name,
+                    extra={"event": "collab_max_rooms", "crew_name": crew_name},
+                )
+                await websocket.close(code=4429, reason="Too many active rooms")
+                return
             _rooms[crew_name] = set()
         _rooms[crew_name].add(websocket)
         participant_count = len(_rooms[crew_name])
@@ -345,6 +392,12 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
             try:
                 message = json.loads(raw)
             except (json.JSONDecodeError, ValueError):
+                logger.debug(
+                    "WebSocket message parse failed in room %s — skipping",
+                    crew_name,
+                    exc_info=True,
+                    extra={"event": "ws_message_parse_error", "room": crew_name},
+                )
                 continue
 
             if not isinstance(message, dict):
@@ -359,6 +412,8 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
             # clients who must parse and render the broadcast).
             msg_data = message.get("data")
             if msg_data is not None and not isinstance(msg_data, dict):
+                continue
+            if msg_data is not None and _exceeds_depth(msg_data, _MAX_MESSAGE_DATA_DEPTH):
                 continue
 
             # Rate-limit high-frequency message types to prevent a single

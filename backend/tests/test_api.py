@@ -334,6 +334,8 @@ async def test_delete_nonexistent_is_idempotent(client: AsyncClient):
     """DELETE on a non-existent resource should return 204 (idempotent)."""
     response = await client.delete("/api/v1/agents/ghost-agent", headers=API_KEY_HEADER)
     assert response.status_code == 204
+    get_resp = await client.get("/api/v1/agents/ghost-agent", headers=API_KEY_HEADER)
+    assert get_resp.status_code == 404, "Resource must not exist after idempotent delete"
 
 
 # ---------------------------------------------------------------------------

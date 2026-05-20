@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import {
   Users as UsersIcon,
   Search,
@@ -108,7 +108,10 @@ function InviteDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email.trim()) return
+    if (!email.trim()) {
+      setError('Email address is required.')
+      return
+    }
     setSubmitting(true)
     setError(null)
     try {
@@ -159,6 +162,7 @@ function InviteDialog({
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoFocus
+                autoComplete="email"
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="user@example.com"
               />
@@ -371,8 +375,18 @@ export default function Users() {
   const [search, setSearch] = useState('')
   const [inviteOpen, setInviteOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null)
+  const detailPanelRef = useRef<HTMLDivElement>(null)
 
   useDocumentTitle('Users')
+
+  useEffect(() => {
+    if (selectedUser) {
+      requestAnimationFrame(() => {
+        detailPanelRef.current?.focus()
+        detailPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      })
+    }
+  }, [selectedUser])
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -488,7 +502,7 @@ export default function Users() {
 
         {/* Selected user detail */}
         {selectedUser && (
-          <div className="mb-4">
+          <div ref={detailPanelRef} tabIndex={-1} className="mb-4 focus-visible:outline-none">
             <UserDetailPanel
               user={selectedUser}
               onClose={() => setSelectedUser(null)}

@@ -686,7 +686,7 @@ def test_build_principal_chain_with_user():
     }
     chain = _build_principal_chain(user, "my-crew", resources)
     assert chain["user"]["id"] == "12345678-1234-1234-1234-123456789abc"
-    assert chain["user"]["email"] == "alice@example.com"
+    assert "email" not in chain["user"]
     assert chain["crew"] == "my-crew"
 
 

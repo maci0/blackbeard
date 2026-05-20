@@ -72,7 +72,7 @@ spec:
 | `max_rpm` | integer ≥ 1 | — | Rate limit for LLM calls |
 | `memory` | boolean\|object | — | Enable cross-task memory; object form supports `enabled`, `recency_weight`, `semantic_weight`, `importance_weight` |
 | `cache` | boolean | — | Cache tool results |
-| `policy` | string | — | `ref:` to an AgentPolicy resource (stored but not yet enforced at runtime) |
+| `policy` | string | — | `ref:` to an AgentPolicy resource; enforced at crew-build time (tool filtering, delegation control) |
 | `tool_discovery` | boolean | — | Allow JIT tool discovery via meta-tools (default `true`) |
 | `skills` | string[] | — | Directory paths with domain instruction files |
 | `knowledge_sources` | string[] | — | `ref:` KnowledgeSource resources for RAG |
@@ -131,8 +131,8 @@ spec:
 | `async_execution` | boolean | — | Run concurrently (default `false`) |
 | `human_input` | boolean | — | Pause for human review (default `false`) |
 | `output_file` | string | — | Write output to a file (flat filename, no path separators) |
-| `output_pydantic` | string | — | Dotted class path to parse output into a Pydantic model (stored but not yet passed to CrewAI at runtime) |
-| `output_json` | object | — | JSON Schema for structured output (stored but not yet passed to CrewAI at runtime) |
+| `output_pydantic` | string | — | Dotted class path to parse output into a Pydantic model (must be in allowed module prefixes) |
+| `output_json` | object | — | JSON Schema for structured output |
 | `callback` | string | — | Dotted callable path invoked on completion (stored but not yet passed to CrewAI at runtime) |
 | `guardrails` | string[] | — | `ref:` guardrail resources applied to output |
 
@@ -193,7 +193,7 @@ spec:
 | `cache` | boolean | — | Shared tool cache |
 | `max_rpm` | integer ≥ 1 | — | Crew-wide LLM rate limit |
 | `manager_llm` | string | — | LLM for the hierarchical manager |
-| `manager_agent` | string | — | Custom manager agent (hierarchical; stored but not yet passed to CrewAI at runtime) |
+| `manager_agent` | string | — | Custom manager agent ref (hierarchical process only) |
 | `planning` | boolean | — | Pre-execution planning step (stored but not yet passed to CrewAI at runtime) |
 | `planning_llm` | string | — | LLM used during planning (stored but not yet passed to CrewAI at runtime) |
 | `tool_loading` | `jit`\|`eager`\|`hybrid` | — | Tool loading strategy (default `hybrid`) |
@@ -398,7 +398,7 @@ spec:
 
   # Sandbox enforcement
   sandbox:
-    minimum_tier: wasm                     # "none", "wasm", "docker", or "microvm"
+    minimum_tier: wasm                     # "none", "wasm", "docker", "podman", "gvisor", or "microvm"
 
   # Delegation control
   delegation:
@@ -415,11 +415,11 @@ spec:
 | `tools.deny` | string[] | — | Denied tool refs (used with `denylist`) |
 | `budget.max_usd` | number ≥ 0 | — | Max spend in USD per execution |
 | `budget.max_tokens` | integer ≥ 1 | — | Max total tokens per execution |
-| `sandbox.minimum_tier` | `none`\|`wasm`\|`docker`\|`microvm` | — | Minimum sandbox isolation required |
+| `sandbox.minimum_tier` | `none`\|`wasm`\|`docker`\|`podman`\|`gvisor`\|`microvm` | — | Minimum sandbox isolation required |
 | `delegation.allowed` | boolean | — | Whether agent-to-agent delegation is permitted |
 | `delegation.targets` | string[] | — | Restrict which agents can receive delegated work (refs) |
 
-> **Note:** For MVP, only `none` and `wasm` sandbox tiers are implemented. `docker` and `microvm` are accepted by the schema but fall back to `wasm` at runtime.
+> **Sandbox tiers:** `none`, `wasm`, `docker`/`podman`, `gvisor`, and `microvm` (Firecracker or libkrun). Higher tiers provide stronger isolation. If a policy minimum exceeds a tool's declared tier, the tool is promoted to the policy minimum.
 
 ---
 
@@ -637,3 +637,42 @@ spec:
 | `subjects[].kind` | `User`\|`Group`\|`Agent`\|`Crew` | ✅ | Subject type |
 | `subjects[].name` | string | ✅ | Subject identifier (email for users, resource name for agents/crews) |
 | `scope.namespace` | string | — | Limit the binding to a specific namespace |
+
+---
+
+## Automation
+
+An Automation triggers crew or flow executions on a schedule (cron), via webhook, or through a dedicated API call.
+
+```yaml
+apiVersion: blackbeard/v1
+kind: Automation
+metadata:
+  name: nightly-research
+  namespace: default
+spec:
+  target:
+    kind: Crew
+    name: research-crew
+  trigger:
+    type: cron
+    cron: "0 2 * * *"               # 2 AM daily
+  inputs:                            # Inputs passed to the target (optional)
+    topic: "AI agents"
+  enabled: true                      # Enable/disable without deleting (default: true)
+  max_concurrent: 1                  # Max concurrent executions (1–10, default: 1)
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string | — | Human-readable description (max 5000 chars) |
+| `target` | object | ✅ | What to execute |
+| `target.kind` | `Crew`\|`Flow` | ✅ | Target resource type |
+| `target.name` | string | ✅ | Target resource name |
+| `trigger` | object | ✅ | When to execute |
+| `trigger.type` | `cron`\|`webhook`\|`api` | ✅ | Trigger mechanism |
+| `trigger.cron` | string | — | Cron expression (required when `type: cron`) |
+| `trigger.webhook_secret` | string | — | Shared secret for webhook validation (required when `type: webhook`) |
+| `inputs` | object | — | Key-value inputs passed to the target execution |
+| `enabled` | boolean | — | Whether the automation is active (default: `true`) |
+| `max_concurrent` | integer (1–10) | — | Maximum concurrent executions (default: `1`) |

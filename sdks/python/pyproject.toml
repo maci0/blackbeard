@@ -12,7 +12,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8,<9",
+    "pytest>=9.0.3,<10",  # 9.0.3 fixes CVE-2025-71176 (tmpdir privilege escalation)
     "pytest-httpx>=0.35,<1",
 ]
 

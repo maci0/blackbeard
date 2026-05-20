@@ -10,7 +10,7 @@ export interface ExecutionStatusProps {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b',
+  queued: '#f59e0b',
   running: '#3b82f6',
   completed: '#22c55e',
   failed: '#ef4444',

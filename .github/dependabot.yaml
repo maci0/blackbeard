@@ -25,6 +25,54 @@ updates:
       js-minor:
         update-types: [minor, patch]
 
+  # Python (CLI)
+  - package-ecosystem: pip
+    directory: /cli
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "python"]
+    groups:
+      python-minor:
+        update-types: [minor, patch]
+
+  # Python (SDK)
+  - package-ecosystem: pip
+    directory: /sdks/python
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "python"]
+    groups:
+      python-minor:
+        update-types: [minor, patch]
+
+  # npm/bun (TypeScript SDK)
+  - package-ecosystem: npm
+    directory: /sdks/typescript
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "javascript"]
+    groups:
+      js-minor:
+        update-types: [minor, patch]
+
+  # npm/bun (React SDK)
+  - package-ecosystem: npm
+    directory: /sdks/react
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "javascript"]
+    groups:
+      js-minor:
+        update-types: [minor, patch]
+
   # GitHub Actions
   - package-ecosystem: github-actions
     directory: /
@@ -33,6 +81,9 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: ["dependencies", "ci"]
+    groups:
+      actions-minor:
+        update-types: [minor, patch]
 
   # Docker (Dockerfiles)
   - package-ecosystem: docker
@@ -42,6 +93,9 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: ["dependencies", "docker"]
+    groups:
+      docker-minor:
+        update-types: [minor, patch]
 
   # Docker Compose (service images)
   - package-ecosystem: docker
@@ -51,3 +105,6 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     labels: ["dependencies", "docker"]
+    groups:
+      docker-minor:
+        update-types: [minor, patch]

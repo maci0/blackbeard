@@ -931,8 +931,11 @@ def test_password_hash_and_verify():
 
     hashed = hash_password("mypassword")
     assert hashed != "mypassword"
+    assert len(hashed) >= 50, "Hash should be substantially longer than plaintext"
     assert verify_password("mypassword", hashed) is True
     assert verify_password("wrongpassword", hashed) is False
+    hashed2 = hash_password("mypassword")
+    assert hashed != hashed2, "Same input should produce different salted hashes"
 
 
 # ---------------------------------------------------------------------------
@@ -947,7 +950,7 @@ def test_jwt_access_token_roundtrip():
     token = create_access_token("user-123", "user@test.com")
     payload = decode_token(token)
     assert payload["sub"] == "user-123"
-    assert payload["email"] == "user@test.com"
+    assert "email" not in payload, "Email must not be embedded in JWT tokens"
     assert payload["type"] == "access"
     assert "exp" in payload, "Access token must have an expiration claim"
     assert "iat" in payload, "Access token must have an issued-at claim"

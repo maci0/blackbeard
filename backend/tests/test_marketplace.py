@@ -127,7 +127,7 @@ spec:
             )
             assert response.status_code == 200
             data = response.json()
-            assert data["imported"] >= 0
+            assert data["imported"] == 1
             assert isinstance(data["resources"], list)
             assert isinstance(data["error_details"], list)
         finally:

@@ -140,11 +140,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             return
           }
         } catch {
-          // refresh also failed
+          console.debug('[auth] token refresh failed, logging out')
         }
         get().logout()
       }
-      set({ loading: false })
+      set({ loading: false, error: null })
     }
   },
 }))

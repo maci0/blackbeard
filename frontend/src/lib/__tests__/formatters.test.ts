@@ -16,10 +16,32 @@ describe('formatDate', () => {
 
   it('formats a valid date string', () => {
     const result = formatDate('2024-06-15T10:30:00Z')
-    expect(result).not.toBe('—')
-    // Must contain year and day regardless of locale
-    expect(result).toContain('2024')
-    expect(result).toContain('15')
+    expect(result).toMatch(/2024/)
+    expect(result).toMatch(/15/)
+    expect(result).toMatch(/:/)
+    expect(result.length).toBeGreaterThan(8)
+  })
+
+  it('includes year for dates in a different year', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-03-01T12:00:00Z'))
+
+    const result = formatDate('2024-06-15T10:30:00Z')
+    expect(result).toMatch(/2024/)
+
+    vi.useRealTimers()
+  })
+
+  it('omits year for dates in the current year', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-03-01T12:00:00Z'))
+
+    const result = formatDate('2026-01-10T08:00:00Z')
+    expect(result).not.toMatch(/2026/)
+    expect(result).toMatch(/10/)
+    expect(result).toMatch(/:/)
+
+    vi.useRealTimers()
   })
 })
 

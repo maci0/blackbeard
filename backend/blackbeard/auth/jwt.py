@@ -36,13 +36,16 @@ def _create_token(token_type: str, expires_delta: timedelta, **extra: Any) -> st
     return jwt.encode(payload, _get_secret(), algorithm=_ALGORITHM)
 
 
-def create_access_token(user_id: str, email: str) -> str:
-    """Create a short-lived JWT access token (default 15 minutes)."""
+def create_access_token(user_id: str, email: str = "") -> str:
+    """Create a short-lived JWT access token (default 15 minutes).
+
+    email parameter is accepted for call-site compatibility but NOT
+    embedded in the token — use /auth/me to resolve the user profile.
+    """
     return _create_token(
         "access",
         timedelta(minutes=settings.jwt_access_token_expire_minutes),
         sub=user_id,
-        email=email,
     )
 
 

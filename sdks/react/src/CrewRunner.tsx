@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useBlackbeard } from './BlackbeardProvider'
 import { apiFetch } from './fetch'
 import { ExecutionStatus } from './ExecutionStatus'
@@ -17,12 +17,25 @@ export interface CrewRunnerProps {
  * Crew runner widget. Displays an input form based on the crew spec,
  * triggers a kickoff, and shows execution status while running.
  */
-export function CrewRunner({ crewName, onComplete }: CrewRunnerProps) {
+export function CrewRunner({ crewName, namespace, onComplete }: CrewRunnerProps) {
   const config = useBlackbeard()
   const [inputsJson, setInputsJson] = useState('{}')
   const [executionId, setExecutionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activeRef = useRef(true)
+
+  useEffect(() => {
+    activeRef.current = true
+    return () => {
+      activeRef.current = false
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current)
+        pollTimerRef.current = null
+      }
+    }
+  }, [])
 
   const handleRun = useCallback(async () => {
     setError(null)
@@ -39,31 +52,33 @@ export function CrewRunner({ crewName, onComplete }: CrewRunnerProps) {
         return
       }
 
+      const ns = namespace ?? 'default'
       const result = await apiFetch<{ id: string }>(
         config,
-        `/api/v1/crews/${crewName}/kickoff`,
+        `/api/v1/crews/${crewName}/kickoff?namespace=${encodeURIComponent(ns)}`,
         { method: 'POST', body: { inputs: parsedInputs } },
       )
       setExecutionId(result.id)
 
-      // If onComplete is provided, start polling for completion
       if (onComplete) {
         const poll = async () => {
+          if (!activeRef.current) return
           try {
             const exec = await apiFetch<Execution>(
               config,
               `/api/v1/executions/${result.id}`,
             )
+            if (!activeRef.current) return
             if (['completed', 'failed', 'cancelled'].includes(exec.status)) {
               onComplete(exec)
             } else {
-              setTimeout(() => void poll(), 3000)
+              pollTimerRef.current = setTimeout(() => void poll(), 3000)
             }
           } catch {
             // Stop polling on error — ExecutionStatus component handles display
           }
         }
-        setTimeout(() => void poll(), 3000)
+        pollTimerRef.current = setTimeout(() => void poll(), 3000)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start execution')

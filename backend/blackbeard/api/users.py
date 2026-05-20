@@ -234,8 +234,8 @@ async def update_user(
     await session.refresh(user)
 
     logger.info(
-        "User updated: %s",
-        user.email,
+        "User updated: user_id=%s",
+        user.id,
         extra={"event": "user_updated", "user_id": str(user.id)},
     )
     return user_response(user)
@@ -265,6 +265,10 @@ async def deactivate_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     user.is_active = False
+    user.password_hash = "!deactivated"
+    user.api_key = None
+    user.email = f"deleted-{user.id}@deactivated.local"
+    user.display_name = "Deleted User"
     await log_audit(
         session,
         action="user_deactivated",
@@ -275,8 +279,8 @@ async def deactivate_user(
     await session.commit()
 
     logger.info(
-        "User deactivated: %s",
-        user.email,
+        "User deactivated: user_id=%s",
+        user.id,
         extra={"event": "user_deactivated", "user_id": str(user.id)},
     )
 

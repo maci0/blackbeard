@@ -1,7 +1,8 @@
 import { memo } from 'react'
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { type NodeProps } from '@xyflow/react'
 import { Workflow } from 'lucide-react'
 import { cn, parseRef } from '@/lib/utils'
+import { NodeShell } from './NodeShell'
 
 const TYPE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   crew: {
@@ -36,86 +37,60 @@ export default memo(function FlowStepNode({ data, selected }: NodeProps) {
   const typeColor = TYPE_COLORS[stepType] ?? TYPE_COLORS['crew']!
 
   return (
-    <div
-      aria-label={`Flow step: ${name || 'Unnamed Step'}`}
-      className={cn(
-        'w-[140px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
-        selected
-          ? 'border-amber-400 shadow-md shadow-amber-100 ring-2 ring-amber-300 ring-offset-1 dark:shadow-amber-950 dark:ring-offset-slate-900'
-          : 'border-slate-200 hover:border-amber-200 hover:shadow-md dark:border-slate-700',
-      )}
+    <NodeShell
+      color="amber"
+      icon={Workflow}
+      label="Step"
+      ariaLabel={`Flow step: ${name || 'Unnamed Step'}`}
+      selected={!!selected}
+      width="w-[140px]"
     >
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="!h-2.5 !w-2.5 !border-2 !border-amber-400 !bg-white"
-      />
+      <p
+        className="text-2xs truncate font-semibold leading-tight text-foreground"
+        title={name || 'Unnamed Step'}
+      >
+        {name || 'Unnamed Step'}
+      </p>
 
-      {/* Header strip */}
-      <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-amber-500 px-2 py-1">
-        <Workflow className="h-3 w-3 text-white/90" />
-        <span className="text-2xs font-bold uppercase tracking-wider text-white/90">Step</span>
-      </div>
-
-      {/* Body */}
-      <div className="space-y-0.5 px-2 py-1.5">
-        <p
-          className="text-2xs truncate font-semibold leading-tight text-foreground"
-          title={name || 'Unnamed Step'}
+      <div className="pt-0.5">
+        <span
+          className={cn(
+            'inline-flex items-center rounded border px-1 py-px text-[10px] font-semibold',
+            typeColor.bg,
+            typeColor.text,
+            typeColor.border,
+          )}
         >
-          {name || 'Unnamed Step'}
-        </p>
-
-        {/* Type badge */}
-        <div className="pt-0.5">
-          <span
-            className={cn(
-              'inline-flex items-center rounded border px-1 py-px text-[10px] font-semibold',
-              typeColor.bg,
-              typeColor.text,
-              typeColor.border,
-            )}
-          >
-            {stepType}
-          </span>
-        </div>
-
-        {/* Crew ref for crew type */}
-        {stepType === 'crew' && crew && (
-          <p
-            className="truncate text-[10px] leading-snug text-muted-foreground"
-            title={`Crew: ${parseRef(crew)}`}
-          >
-            crew: {parseRef(crew)}
-          </p>
-        )}
-
-        {/* Function path for function type */}
-        {stepType === 'function' && functionPath && (
-          <p
-            className="truncate text-[10px] leading-snug text-muted-foreground"
-            title={`fn: ${functionPath}`}
-          >
-            fn: {functionPath}
-          </p>
-        )}
-
-        {/* Listen-to indicators */}
-        {listenTo && listenTo.length > 0 && (
-          <p
-            className="truncate text-[10px] leading-snug text-muted-foreground/70"
-            title={`Listens to: ${listenTo.join(', ')}`}
-          >
-            listens: {listenTo.length}
-          </p>
-        )}
+          {stepType}
+        </span>
       </div>
 
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!h-2.5 !w-2.5 !border-2 !border-amber-400 !bg-white"
-      />
-    </div>
+      {stepType === 'crew' && crew && (
+        <p
+          className="truncate text-[10px] leading-snug text-muted-foreground"
+          title={`Crew: ${parseRef(crew)}`}
+        >
+          crew: {parseRef(crew)}
+        </p>
+      )}
+
+      {stepType === 'function' && functionPath && (
+        <p
+          className="truncate text-[10px] leading-snug text-muted-foreground"
+          title={`fn: ${functionPath}`}
+        >
+          fn: {functionPath}
+        </p>
+      )}
+
+      {listenTo && listenTo.length > 0 && (
+        <p
+          className="truncate text-[10px] leading-snug text-muted-foreground/70"
+          title={`Listens to: ${listenTo.join(', ')}`}
+        >
+          listens: {listenTo.length}
+        </p>
+      )}
+    </NodeShell>
   )
 })

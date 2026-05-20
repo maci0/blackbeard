@@ -24,11 +24,11 @@ Blackbeard gives you a self-hosted platform to build, deploy, and manage AI agen
 **Key differentiators:**
 
 - **Visual graph editor** -- drag-and-drop Studio built on React Flow for designing crews
-- **Declarative resource model** -- 11 resource kinds (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding)
+- **Declarative resource model** -- 12 resource kinds (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation)
 - **Full RBAC** -- JWT authentication with roles, role bindings, and per-resource permissions
 - **LiteLLM routing** -- multi-provider model access (Vertex AI, OpenAI, Ollama, etc.) with built-in spend/token/latency tracking
 - **Budget enforcement** -- per-execution spending limits via AgentPolicy and LiteLLM virtual keys
-- **WASM sandbox isolation** -- run untrusted tool code in sandboxed WebAssembly runtimes
+- **Multi-tier sandbox isolation** -- run untrusted tool code in WASM, Docker/Podman, gVisor, or Firecracker MicroVM sandboxes
 - **CLI parity** -- everything you can do in the UI, you can do from the command line
 
 ## Quick Start
@@ -109,21 +109,21 @@ blackbeard kickoff research-crew --input topic="AI agents" --wait
 
 ## Features
 
-- **11 resource kinds** -- Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding
+- **12 resource kinds** -- Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation
 - **Visual graph editor** -- drag-and-drop crew design with React Flow, undo/redo, YAML preview
 - **Full RBAC** -- JWT auth (access + refresh tokens), predefined roles (owner, admin, developer, operator, viewer, policy-admin), user/group management
 - **CLI with 25+ commands** -- apply, validate, kickoff, train, test-crew, export, pull, status, login, and more
 - **Budget enforcement** -- per-execution spending caps via AgentPolicy `max_usd`/`max_tokens` and LiteLLM virtual keys
 - **Multi-provider LLM routing** -- Vertex AI, OpenAI, Anthropic, Ollama, and any LiteLLM-supported provider
 - **Execution streaming** -- SSE stream and event replay for real-time execution monitoring
-- **Tool ecosystem** -- Python tools, builtin CrewAI tools, WASM sandboxed tools, MCP servers (stdio + HTTP)
+- **Tool ecosystem** -- Python tools, builtin CrewAI tools, sandboxed tools (WASM/Docker/gVisor/MicroVM), MCP servers (stdio + HTTP)
 - **Marketplace** -- import crews from git repositories (`blackbeard pull`)
 - **Train/test** -- CrewAI native training and testing via CLI or API
 - **Policy enforcement** -- tool allowlists/denylists, delegation control, sandbox tier requirements
 - **Guardrails** -- function-based or LLM-judge output validation on tasks
 - **Knowledge sources** -- RAG-accessible content (text, PDF, CSV, JSON) attached to agents
 - **Helm chart** -- Kubernetes deployment via `deploy/helm/blackbeard/`
-- **SDKs** -- Python and TypeScript client libraries in `sdks/`
+- **SDKs** -- Python, TypeScript, and React client libraries in `sdks/`
 
 ## Resource Kinds
 
@@ -140,6 +140,7 @@ blackbeard kickoff research-crew --input topic="AI agents" --wait
 | `KnowledgeSource` | RAG-accessible content for agent knowledge               |
 | `Role`            | RBAC role defining resource/verb permissions              |
 | `RoleBinding`     | Binds roles to users, groups, agents, or crews           |
+| `Automation`      | Cron, webhook, or API-triggered crew/flow executions     |
 
 > See [docs/yaml-reference.md](docs/yaml-reference.md) for the full field-by-field reference.
 
@@ -227,11 +228,10 @@ blackbeard/
 │   ├── blackbeard/
 │   │   ├── api/               # REST endpoints
 │   │   ├── auth/              # JWT auth, RBAC
-│   │   ├── engine/            # Execution engine + WASM sandbox
+│   │   ├── engine/            # Execution engine + sandbox runtimes
 │   │   ├── litellm/           # LiteLLM config + key management
 │   │   ├── models/            # SQLAlchemy + Pydantic models
-│   │   ├── resources/         # Resource CRUD + validation
-│   │   └── cli/               # Embedded CLI (legacy; use cli/ instead)
+│   │   └── resources/         # Resource CRUD + validation
 │   └── tests/
 ├── cli/                       # Standalone CLI package (blackbeard-cli)
 │   └── blackbeard_cli/
@@ -242,7 +242,8 @@ blackbeard/
 │       └── stores/            # Zustand state management
 ├── sdks/                      # Client libraries
 │   ├── python/                # Python SDK
-│   └── typescript/            # TypeScript SDK
+│   ├── typescript/            # TypeScript SDK
+│   └── react/                 # React SDK (@blackbeard/react)
 ├── examples/                  # Example YAML crews
 ├── deploy/
 │   ├── docker/                # Dockerfiles
@@ -269,9 +270,8 @@ cp .env.example .env
 
 ```bash
 helm install blackbeard deploy/helm/blackbeard/ \
-  --set api.env.BLACKBEARD_API_KEY=your-secret-key \
-  --set api.env.JWT_SECRET=your-jwt-secret \
-  --set api.env.DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/blackbeard
+  --set auth.apiKey=your-secret-key \
+  --set auth.jwtSecret=your-jwt-secret
 ```
 
 ### Environment Variables

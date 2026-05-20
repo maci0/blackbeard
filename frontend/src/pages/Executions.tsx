@@ -149,7 +149,7 @@ export default function Executions() {
                           execution.total_tokens.toLocaleString()
                         ) : (
                           <>
-                            <span aria-hidden="true">--</span>
+                            <span aria-hidden="true">—</span>
                             <span className="sr-only">No tokens recorded</span>
                           </>
                         )}
@@ -159,7 +159,7 @@ export default function Executions() {
                           formatCost(execution.cost_usd)
                         ) : (
                           <>
-                            <span aria-hidden="true">--</span>
+                            <span aria-hidden="true">—</span>
                             <span className="sr-only">No cost recorded</span>
                           </>
                         )}

@@ -61,6 +61,7 @@ _SENSITIVE_KEYS = frozenset(
         "api_key",
         "api_secret",
         "password",
+        "password_hash",
         "secret",
         "token",
         "credential",
@@ -76,6 +77,17 @@ _SENSITIVE_KEYS = frozenset(
         "connection_string",
         "jwt_secret",
         "passphrase",
+        "email",
+        "user_email",
+        "actor_email",
+        "phone",
+        "phone_number",
+        "ssn",
+        "social_security_number",
+        "credit_card",
+        "card_number",
+        "date_of_birth",
+        "bank_account",
     }
 )
 

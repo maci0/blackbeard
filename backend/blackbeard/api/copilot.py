@@ -90,13 +90,13 @@ async def generate_crew(
         len(body.prompt),
         body.llm_connection or "(auto)",
         body.namespace,
-        user.email if user else "api-key",
+        str(user.id) if user else "api-key",
         extra={
             "event": "copilot_api_request",
             "prompt_length": len(body.prompt),
             "llm_connection": body.llm_connection,
             "namespace": body.namespace,
-            "user": user.email if user else None,
+            "user_id": str(user.id) if user else None,
             "request_id": request_id_var.get("-"),
         },
     )

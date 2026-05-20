@@ -5,6 +5,7 @@ ORM models:
     Execution, ExecutionTask, ExecutionToolCall, ExecutionEvent — execution tracking (execution.py)
     User, Group, GroupMember — authentication and group membership (user.py)
     AuditLog — immutable security audit trail (audit.py)
+    Webhook — registered webhook URLs for execution event delivery (webhook.py)
 
 API schemas (Pydantic):
     resource_schemas — request/response models for resource endpoints

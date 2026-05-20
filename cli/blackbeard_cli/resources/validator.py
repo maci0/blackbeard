@@ -469,7 +469,7 @@ def _validate_tool_extra(spec: dict[str, Any], errors: list[ValidationError]) ->
 
 # Allowlist for function_path in guardrails and flow steps.
 # Prevents arbitrary code execution via dynamic imports.
-ALLOWED_FUNCTION_MODULE_PREFIXES = (
+ALLOWED_CALLABLE_MODULE_PREFIXES = (
     "crewai.",
     "crewai_tools.",
     "langchain.",
@@ -479,7 +479,7 @@ ALLOWED_FUNCTION_MODULE_PREFIXES = (
 )
 
 # Explicitly blocked modules -- dangerous even with prefix allowlist
-BLOCKED_FUNCTION_MODULES = frozenset(
+BLOCKED_CALLABLE_MODULES = frozenset(
     {
         "os",
         "sys",
@@ -511,7 +511,7 @@ def _validate_function_path(
         return
     # Check for blocked top-level modules
     top_module = func_path.split(".")[0].split(":")[0]
-    if top_module in BLOCKED_FUNCTION_MODULES:
+    if top_module in BLOCKED_CALLABLE_MODULES:
         errors.append(
             ValidationError(
                 field_name,
@@ -519,12 +519,12 @@ def _validate_function_path(
             )
         )
         return
-    if not func_path.startswith(ALLOWED_FUNCTION_MODULE_PREFIXES):
+    if not func_path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
         errors.append(
             ValidationError(
                 field_name,
                 f"Function path '{func_path}' is not in the allowed module list. "
-                f"Permitted prefixes: {', '.join(ALLOWED_FUNCTION_MODULE_PREFIXES)}",
+                f"Permitted prefixes: {', '.join(ALLOWED_CALLABLE_MODULE_PREFIXES)}",
             )
         )
 

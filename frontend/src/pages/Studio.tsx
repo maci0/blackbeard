@@ -1,10 +1,10 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useStudioStore } from '@/stores/studioStore'
 import { api } from '@/api/client'
-import { capitalize, toResourceName, parseRef } from '@/lib/utils'
+import { capitalize, toResourceName, parseRef, getErrorMessage } from '@/lib/utils'
 import { useCollaboration, useDocumentTitle } from '@/hooks'
 import { API_VERSION, KIND_TO_PLURAL } from '@/lib/kinds'
 import { DATAFLOW_MARKER_END } from '@/components/studio/defaults'
@@ -188,6 +188,18 @@ function StudioInner() {
 
   useDocumentTitle('Studio')
 
+  const lastCursorBroadcast = useRef(0)
+  const throttledBroadcastCursor = useMemo(() => {
+    if (!broadcastCursor) return undefined
+    const CURSOR_THROTTLE_MS = 33 // ~30fps
+    return (e: React.MouseEvent) => {
+      const now = performance.now()
+      if (now - lastCursorBroadcast.current < CURSOR_THROTTLE_MS) return
+      lastCursorBroadcast.current = now
+      broadcastCursor({ x: e.clientX, y: e.clientY, userId: 'self', name: 'You' })
+    }
+  }, [broadcastCursor])
+
   /* ── Broadcast canvas changes to collaborators ── */
   useEffect(() => {
     if (!collabEnabled || !collabConnected) return
@@ -196,59 +208,50 @@ function StudioInner() {
     // The useCollaboration hook sets applyingRemoteRef=true when applying
     // incoming changes, which causes broadcast() to no-op and prevents
     // echo loops.
+    //
+    // Build lookup Sets lazily and only for the diff direction needed,
+    // so the common case (node move = same array length) pays O(n) not O(2n).
     const unsubscribe = useStudioStore.subscribe((state, prevState) => {
-      // Detect added nodes
-      if (state.nodes.length > prevState.nodes.length) {
-        const prevIds = new Set(prevState.nodes.map((n) => n.id))
-        for (const node of state.nodes) {
-          if (!prevIds.has(node.id)) {
-            broadcast('node_add', { ...node })
+      if (state.nodes !== prevState.nodes) {
+        if (state.nodes.length > prevState.nodes.length) {
+          const prevIds = new Set(prevState.nodes.map((n) => n.id))
+          for (const node of state.nodes) {
+            if (!prevIds.has(node.id)) broadcast('node_add', { ...node })
+          }
+        } else if (state.nodes.length < prevState.nodes.length) {
+          const currentIds = new Set(state.nodes.map((n) => n.id))
+          for (const node of prevState.nodes) {
+            if (!currentIds.has(node.id)) broadcast('node_delete', { id: node.id })
+          }
+        } else {
+          // Same count — compare by index reference (fast path for the
+          // common drag case where applyNodeChanges preserves array order
+          // and only replaces the dragged node object).
+          for (let i = 0; i < state.nodes.length; i++) {
+            const curr = state.nodes[i]!
+            const prev = prevState.nodes[i]
+            if (curr === prev) continue
+            if (
+              prev &&
+              curr.id === prev.id &&
+              (curr.position.x !== prev.position.x || curr.position.y !== prev.position.y)
+            ) {
+              broadcast('node_move', { id: curr.id, position: curr.position })
+            }
           }
         }
       }
 
-      // Detect removed nodes
-      if (state.nodes.length < prevState.nodes.length) {
-        const currentIds = new Set(state.nodes.map((n) => n.id))
-        for (const node of prevState.nodes) {
-          if (!currentIds.has(node.id)) {
-            broadcast('node_delete', { id: node.id })
+      if (state.edges !== prevState.edges) {
+        if (state.edges.length > prevState.edges.length) {
+          const prevIds = new Set(prevState.edges.map((e) => e.id))
+          for (const edge of state.edges) {
+            if (!prevIds.has(edge.id)) broadcast('edge_add', { ...edge })
           }
-        }
-      }
-
-      // Detect moved nodes (same count, different positions)
-      if (state.nodes.length === prevState.nodes.length) {
-        for (let i = 0; i < state.nodes.length; i++) {
-          const curr = state.nodes[i]
-          const prev = prevState.nodes[i]
-          if (
-            curr &&
-            prev &&
-            curr.id === prev.id &&
-            (curr.position.x !== prev.position.x || curr.position.y !== prev.position.y)
-          ) {
-            broadcast('node_move', { id: curr.id, position: curr.position })
-          }
-        }
-      }
-
-      // Detect added edges
-      if (state.edges.length > prevState.edges.length) {
-        const prevIds = new Set(prevState.edges.map((e) => e.id))
-        for (const edge of state.edges) {
-          if (!prevIds.has(edge.id)) {
-            broadcast('edge_add', { ...edge })
-          }
-        }
-      }
-
-      // Detect removed edges
-      if (state.edges.length < prevState.edges.length) {
-        const currentIds = new Set(state.edges.map((e) => e.id))
-        for (const edge of prevState.edges) {
-          if (!currentIds.has(edge.id)) {
-            broadcast('edge_delete', { id: edge.id })
+        } else if (state.edges.length < prevState.edges.length) {
+          const currentIds = new Set(state.edges.map((e) => e.id))
+          for (const edge of prevState.edges) {
+            if (!currentIds.has(edge.id)) broadcast('edge_delete', { id: edge.id })
           }
         }
       }
@@ -386,7 +389,7 @@ function StudioInner() {
         markClean()
         applyStatus('success', `Loaded "${name}"`)
       } catch (err) {
-        applyStatus('error', err instanceof Error ? err.message : 'Load failed')
+        applyStatus('error', getErrorMessage(err, 'Load failed'))
       }
     },
     [applyStatus, markClean, setEdges, setNodes],
@@ -507,7 +510,7 @@ function StudioInner() {
       }
       return true
     } catch (err) {
-      applyStatus('error', err instanceof Error ? err.message : 'Save failed')
+      applyStatus('error', getErrorMessage(err, 'Save failed'))
       return false
     }
   }, [crewName, applyStatus, markClean])
@@ -561,7 +564,7 @@ function StudioInner() {
               : 'Execution started'
         applyStatus('success', `${successLabel} →`)
       } catch (err) {
-        applyStatus('error', err instanceof Error ? err.message : `${modeLabel} failed`)
+        applyStatus('error', getErrorMessage(err, `${modeLabel} failed`))
       }
     },
     [crewName, handleSave, applyStatus],
@@ -787,18 +790,7 @@ function StudioInner() {
 
       <div
         className="relative flex flex-1 overflow-hidden"
-        onMouseMove={
-          collabEnabled && collabConnected
-            ? (e) => {
-                broadcastCursor({
-                  x: e.clientX,
-                  y: e.clientY,
-                  userId: 'self',
-                  name: 'You',
-                })
-              }
-            : undefined
-        }
+        onMouseMove={collabEnabled && collabConnected ? throttledBroadcastCursor : undefined}
       >
         <Palette />
         <Canvas onLoadExample={handleLoadExample} />

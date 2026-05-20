@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import collections
 import concurrent.futures
 import ipaddress
 import logging
 import re
 import socket
 import threading
+import time
 from typing import Any
 from urllib.parse import urlparse
 
@@ -227,7 +229,7 @@ def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError])
        domain resolves to an internal IP (e.g., 169.254.169.254).
 
     NOTE: DNS resolution uses socket.getaddrinfo which is a blocking call.
-    A 5-second timeout is applied to prevent slow/hanging DNS lookups from
+    A 2-second timeout is applied to prevent slow/hanging DNS lookups from
     blocking the async event loop. This is acceptable because validation
     runs infrequently (resource create/update) and the timeout caps worst-case
     latency.
@@ -263,6 +265,12 @@ def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError])
 _DNS_EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
 _DNS_EXECUTOR_LOCK = threading.Lock()
 
+_DNS_CACHE_TTL = 3600  # 1 hour
+_dns_cache: collections.OrderedDict[str, tuple[float, list[str] | str | None]] = (
+    collections.OrderedDict()
+)
+_dns_cache_lock = threading.Lock()
+
 
 def _get_dns_executor() -> concurrent.futures.ThreadPoolExecutor:
     """Return a shared executor for DNS resolution."""
@@ -278,12 +286,55 @@ def _get_dns_executor() -> concurrent.futures.ThreadPoolExecutor:
         return _DNS_EXECUTOR
 
 
+def _dns_cache_get(hostname: str) -> tuple[bool, list[str] | str | None]:
+    """Return (hit, value) from DNS cache. value is list of IPs, error string, or None."""
+    with _dns_cache_lock:
+        entry = _dns_cache.get(hostname)
+        if entry is not None:
+            ts, val = entry
+            if time.monotonic() - ts < _DNS_CACHE_TTL:
+                _dns_cache.move_to_end(hostname)
+                return True, val
+            del _dns_cache[hostname]
+        return False, None
+
+
+_DNS_CACHE_MAX = 2048
+
+
+def _dns_cache_put(hostname: str, value: list[str] | str | None) -> None:
+    with _dns_cache_lock:
+        # Evict oldest entries via O(1) popitem instead of O(n) scan
+        while len(_dns_cache) >= _DNS_CACHE_MAX:
+            _dns_cache.popitem(last=False)
+        _dns_cache[hostname] = (time.monotonic(), value)
+
+
 def _check_dns_resolution(hostname: str, field_name: str, errors: list[ValidationError]) -> None:
     """Resolve hostname via DNS and reject if any address is internal.
 
-    Runs in a thread with a timeout to avoid blocking the async event loop
-    when DNS is slow or unresponsive.
+    Results are cached for 1 hour to avoid repeated blocking DNS lookups
+    for the same hostname across resource create/update calls.
     """
+    hit, cached = _dns_cache_get(hostname)
+    if hit:
+        if isinstance(cached, str):
+            errors.append(ValidationError(field_name, cached))
+        elif isinstance(cached, list):
+            for addr_str in cached:
+                try:
+                    addr = ipaddress.ip_address(addr_str)
+                    if _is_internal_ip(addr):
+                        errors.append(
+                            ValidationError(
+                                field_name,
+                                "URL hostname resolves to an internal/private IP address.",
+                            )
+                        )
+                        return
+                except ValueError:
+                    pass
+        return
 
     def _resolve() -> list[tuple[Any, ...]]:
         return socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
@@ -291,12 +342,15 @@ def _check_dns_resolution(hostname: str, field_name: str, errors: list[Validatio
     try:
         pool = _get_dns_executor()
         future = pool.submit(_resolve)
-        results = future.result(timeout=5.0)
+        results = future.result(timeout=2.0)
+        resolved_ips: list[str] = []
         for _family, _type, _proto, _canonname, sockaddr in results:
             addr_str = sockaddr[0]
+            resolved_ips.append(addr_str)
             try:
                 addr = ipaddress.ip_address(addr_str)
                 if _is_internal_ip(addr):
+                    _dns_cache_put(hostname, resolved_ips)
                     errors.append(
                         ValidationError(
                             field_name,
@@ -306,20 +360,15 @@ def _check_dns_resolution(hostname: str, field_name: str, errors: list[Validatio
                     return
             except ValueError:
                 pass
+        _dns_cache_put(hostname, resolved_ips)
     except concurrent.futures.TimeoutError:
-        errors.append(
-            ValidationError(
-                field_name,
-                "URL hostname DNS resolution timed out. Verify the hostname is correct.",
-            )
-        )
+        msg = "URL hostname DNS resolution timed out. Verify the hostname is correct."
+        _dns_cache_put(hostname, msg)
+        errors.append(ValidationError(field_name, msg))
     except socket.gaierror:
-        errors.append(
-            ValidationError(
-                field_name,
-                "URL hostname could not be resolved. Verify the hostname is correct.",
-            )
-        )
+        msg = "URL hostname could not be resolved. Verify the hostname is correct."
+        _dns_cache_put(hostname, msg)
+        errors.append(ValidationError(field_name, msg))
 
 
 def _validate_knowledge_source_extra(spec: dict[str, Any], errors: list[ValidationError]) -> None:
@@ -469,7 +518,7 @@ def _validate_tool_extra(spec: dict[str, Any], errors: list[ValidationError]) ->
 
 # Allowlist for function_path in guardrails and flow steps.
 # Prevents arbitrary code execution via dynamic imports.
-ALLOWED_FUNCTION_MODULE_PREFIXES = (
+ALLOWED_CALLABLE_MODULE_PREFIXES = (
     "crewai.",
     "crewai_tools.",
     "langchain.",
@@ -479,7 +528,7 @@ ALLOWED_FUNCTION_MODULE_PREFIXES = (
 )
 
 # Explicitly blocked modules -- dangerous even with prefix allowlist
-BLOCKED_FUNCTION_MODULES = frozenset(
+BLOCKED_CALLABLE_MODULES = frozenset(
     {
         "os",
         "sys",
@@ -511,7 +560,7 @@ def _validate_function_path(
         return
     # Check for blocked top-level modules
     top_module = func_path.split(".")[0].split(":")[0]
-    if top_module in BLOCKED_FUNCTION_MODULES:
+    if top_module in BLOCKED_CALLABLE_MODULES:
         errors.append(
             ValidationError(
                 field_name,
@@ -519,12 +568,12 @@ def _validate_function_path(
             )
         )
         return
-    if not func_path.startswith(ALLOWED_FUNCTION_MODULE_PREFIXES):
+    if not func_path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
         errors.append(
             ValidationError(
                 field_name,
                 f"Function path '{func_path}' is not in the allowed module list. "
-                f"Permitted prefixes: {', '.join(ALLOWED_FUNCTION_MODULE_PREFIXES)}",
+                f"Permitted prefixes: {', '.join(ALLOWED_CALLABLE_MODULE_PREFIXES)}",
             )
         )
 

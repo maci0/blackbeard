@@ -8,13 +8,13 @@ from rich.table import Table
 
 from blackbeard_cli.helpers import (
     console,
-    extract_detail,
     handle_http_error,
     handle_request_error,
     json_opt,
     out,
     print_json,
     require_auth,
+    validate_name,
 )
 
 # ── User subgroup ────────────────────────────────────────────────────────────
@@ -139,9 +139,7 @@ def user_invite(
         handle_request_error(server, exc)
 
     if resp.status_code not in (200, 201):
-        detail = extract_detail(resp)
-        console.print(f"[red bold]Error:[/] {detail}")
-        raise SystemExit(1)
+        handle_http_error(resp)
 
     data = resp.json()
 
@@ -241,6 +239,7 @@ def group_create(
 ) -> None:
     """Create a new group."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
+    validate_name(name)
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
@@ -255,9 +254,7 @@ def group_create(
         handle_request_error(server, exc)
 
     if resp.status_code not in (200, 201):
-        detail = extract_detail(resp)
-        console.print(f"[red bold]Error:[/] {detail}")
-        raise SystemExit(1)
+        handle_http_error(resp)
 
     data = resp.json()
 
@@ -277,8 +274,14 @@ Examples:
 """,
 )
 @click.argument("group_id")
-@click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation")
-@json_opt
+@click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    default=False,
+    help="Output as JSON for scripting (skips confirmation prompt)",
+)
 @click.pass_context
 def group_delete(ctx: click.Context, group_id: str, yes: bool, output_json: bool = False) -> None:
     """Delete a group by ID."""

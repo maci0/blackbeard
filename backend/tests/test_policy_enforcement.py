@@ -423,8 +423,8 @@ def test_policy_delegation_true_preserves_spec(mock_agent_cls, mock_llm_cls):
 
 @patch("blackbeard.engine.loader.LLM")
 @patch("blackbeard.engine.loader.Agent")
-def test_policy_no_delegation_section_preserves_spec(mock_agent_cls, mock_llm_cls):
-    """Policy without delegation section should not change allow_delegation."""
+def test_policy_budget_only_preserves_delegation_spec(mock_agent_cls, mock_llm_cls):
+    """Policy with only budget section (no delegation) should not change allow_delegation."""
     agent_res = make_resource(
         ResourceKind.AGENT,
         "delegator",
