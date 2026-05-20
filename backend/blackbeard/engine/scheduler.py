@@ -98,6 +98,10 @@ class AutomationScheduler:
         await self.stop()
         await self.start()
 
+    # Minimum interval between cron executions (in seconds).
+    # Prevents DoS via ``* * * * *`` (every minute) or sub-minute crons.
+    _MIN_INTERVAL_S = 60
+
     def _schedule(
         self,
         automation_name: str,
@@ -106,7 +110,63 @@ class AutomationScheduler:
         inputs: dict[str, Any],
         namespace: str,
     ) -> None:
-        """Schedule a single cron automation."""
+        """Schedule a single cron automation.
+
+        Validates that the cron expression does not fire more often than
+        once per minute.  Rejects sub-minute cron expressions (6-field
+        second-resolution expressions) and expressions that would fire
+        every minute.
+        """
+        # SECURITY: Reject cron expressions with more than 5 fields
+        # (second-resolution crons can fire every second = DoS).
+        fields = cron_expr.strip().split()
+        if len(fields) > 5:
+            logger.warning(
+                "Automation '%s': rejecting sub-minute cron expression: %s",
+                automation_name,
+                cron_expr,
+                extra={
+                    "event": "cron_too_frequent",
+                    "automation_name": automation_name,
+                    "cron_expr": cron_expr,
+                },
+            )
+            return
+
+        # Validate that consecutive firings are at least _MIN_INTERVAL_S apart
+        try:
+            test_cron = croniter(cron_expr, datetime.now(UTC))
+            first = test_cron.get_next(datetime)
+            second = test_cron.get_next(datetime)
+            interval = (second - first).total_seconds()
+            if interval < self._MIN_INTERVAL_S:
+                logger.warning(
+                    "Automation '%s': cron interval too short (%.0fs < %ds): %s",
+                    automation_name,
+                    interval,
+                    self._MIN_INTERVAL_S,
+                    cron_expr,
+                    extra={
+                        "event": "cron_too_frequent",
+                        "automation_name": automation_name,
+                        "cron_expr": cron_expr,
+                        "interval_s": interval,
+                    },
+                )
+                return
+        except (ValueError, KeyError):
+            logger.error(
+                "Invalid cron expression for automation '%s': %s",
+                automation_name,
+                cron_expr,
+                extra={
+                    "event": "invalid_cron_expression",
+                    "automation_name": automation_name,
+                    "cron_expr": cron_expr,
+                },
+            )
+            return
+
         if automation_name in self._tasks:
             self._tasks[automation_name].cancel()
 
@@ -144,8 +204,11 @@ class AutomationScheduler:
             next_dt = cron.get_next(datetime)
             now = datetime.now(UTC)
             delay = (next_dt - now).total_seconds()
-            if delay > 0:
-                await asyncio.sleep(delay)
+            # SECURITY: Ensure a minimum sleep of 1 second to prevent
+            # tight loops if croniter returns a time in the past (clock
+            # skew, DST transition, etc.).
+            delay = max(delay, 1.0)
+            await asyncio.sleep(delay)
 
             if not self._running:
                 break

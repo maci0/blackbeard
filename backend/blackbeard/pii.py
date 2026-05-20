@@ -183,21 +183,45 @@ class LLMPIIRecognizer(EntityRecognizer):
             if not isinstance(items, list):
                 return []
 
+            # SECURITY: Validate each item returned by the LLM.
+            # The LLM is an untrusted data source -- it could return
+            # out-of-bounds positions (causing incorrect redaction or
+            # crashes), disallowed entity types, or negative indices.
+            text_len = len(text)
+            allowed_types = frozenset(self.ENTITIES)
             results: list[RecognizerResult] = []
             for item in items:
+                if not isinstance(item, dict):
+                    continue
                 entity_type = item.get("entity_type", "")
                 start = item.get("start")
                 end = item.get("end")
                 score = item.get("score", 0.85)
-                if entity_type and isinstance(start, int) and isinstance(end, int):
-                    results.append(
-                        RecognizerResult(
-                            entity_type=entity_type,
-                            start=start,
-                            end=end,
-                            score=float(score),
-                        )
+
+                # Validate entity type is in the allowed set
+                if entity_type not in allowed_types:
+                    continue
+
+                # Validate positions are integers within text bounds
+                if not isinstance(start, int) or not isinstance(end, int):
+                    continue
+                if start < 0 or end < 0 or start >= end or end > text_len:
+                    continue
+
+                # Clamp score to [0, 1]
+                try:
+                    clamped_score = max(0.0, min(1.0, float(score)))
+                except (TypeError, ValueError):
+                    clamped_score = 0.85
+
+                results.append(
+                    RecognizerResult(
+                        entity_type=entity_type,
+                        start=start,
+                        end=end,
+                        score=clamped_score,
                     )
+                )
             return results
 
         except Exception:

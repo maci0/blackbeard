@@ -30,7 +30,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth/oidc", tags=["auth"])
 
-_OIDC_PASSWORD_PLACEHOLDER = hash_password(secrets.token_urlsafe(64))
+def _make_oidc_placeholder_hash() -> str:
+    """Generate a unique bcrypt hash of a random value.
+
+    Each OIDC-provisioned user gets their own random hash so that
+    cracking one cannot compromise every OIDC account.
+    """
+    return hash_password(secrets.token_urlsafe(64))
 
 _oauth: OAuth | None = None
 
@@ -149,8 +155,20 @@ async def oidc_callback(
         extra={"event": "oidc_login", "user_id": str(user.id), "email": user.email},
     )
 
-    frontend_url = f"/#token={access_token}&refresh={refresh_token}"
-    return RedirectResponse(url=frontend_url, status_code=302)
+    # Build a same-origin fragment redirect.  The frontend reads the
+    # tokens from window.location.hash which is never sent to the server,
+    # mitigating token leakage via Referer / server logs.
+    # Use 303 (See Other) instead of 302 to prevent browsers from replaying
+    # the POST body on redirect and to signal that the callback should not
+    # be cached or bookmarked.
+    frontend_base = (settings.oidc_redirect_uri or str(request.url_for("oidc_callback")))
+    # Strip the callback path to get the origin, then anchor to the root.
+    from urllib.parse import urlparse as _urlparse
+
+    parsed = _urlparse(frontend_base)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    frontend_url = f"{origin}/#token={access_token}&refresh={refresh_token}"
+    return RedirectResponse(url=frontend_url, status_code=303)
 
 
 async def _find_or_create_user(
@@ -172,7 +190,7 @@ async def _find_or_create_user(
     user = User(
         email=email,
         display_name=display_name,
-        password_hash=_OIDC_PASSWORD_PLACEHOLDER,
+        password_hash=_make_oidc_placeholder_hash(),
     )
     session.add(user)
     await session.flush()

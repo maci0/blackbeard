@@ -245,12 +245,21 @@ def _log_task_exception(task: asyncio.Task) -> None:  # type: ignore[type-arg]
 
 
 async def _load_crew_resources(
-    session: AsyncSession, crew_name: str, namespace: str = "default"
+    session: AsyncSession,
+    crew_name: str,
+    namespace: str = "default",
+    target_kind: str = "Crew",
 ) -> dict[str, Resource]:
     """Load crew-relevant resources from the namespace (capped at 500).
 
     Loads by namespace+kind filter rather than resolving refs recursively.
     Returns a dict keyed by 'Kind/name' for the ResourceLoader.
+
+    Args:
+        session: Database session.
+        crew_name: Name of the root resource (crew or flow).
+        namespace: Resource namespace.
+        target_kind: Kind of the root resource (``"Crew"`` or ``"Flow"``).
     """
     result = await session.execute(
         select(Resource)
@@ -276,18 +285,18 @@ async def _load_crew_resources(
         rows = rows[:_NAMESPACE_RESOURCE_LIMIT]
 
     resources = {f"{r.kind.value}/{r.name}": r for r in rows}
-    if f"Crew/{crew_name}" not in resources:
-        raise ExecutionNotFoundError(f"Crew '{crew_name}' not found in namespace '{namespace}'")
+    root_key = f"{target_kind}/{crew_name}"
+    if root_key not in resources:
+        raise ExecutionNotFoundError(
+            f"{target_kind} '{crew_name}' not found in namespace '{namespace}'"
+        )
 
-    # TODO(perf): Replace namespace-wide load with recursive ref resolution
-    # starting from the crew resource. Walk spec.agents, spec.tasks refs;
-    # for each agent walk spec.tools, spec.llm, spec.knowledge_sources;
-    # for each task walk spec.agent, spec.context. Load only needed resources.
     if len(resources) > 100:
         logger.warning(
-            "Loaded %d resources for crew '%s' in namespace '%s' — "
+            "Loaded %d resources for %s '%s' in namespace '%s' — "
             "consider splitting into smaller namespaces for performance",
             len(resources),
+            target_kind,
             crew_name,
             namespace,
             extra={
@@ -458,8 +467,9 @@ async def _submit_execution(
     training_file: str | None = None,
 ) -> Execution:
     """Shared logic for creating and submitting train/test/flow executions."""
-    resources = await _load_crew_resources(session, crew_name, namespace)
-    crew_key = f"Crew/{crew_name}"
+    target_kind = "Flow" if execution_type == ExecutionType.FLOW else "Crew"
+    resources = await _load_crew_resources(session, crew_name, namespace, target_kind=target_kind)
+    crew_key = f"{target_kind}/{crew_name}"
     crew_resource = resources[crew_key]
     principal_chain = _build_principal_chain(user, crew_name, resources)
 
@@ -519,7 +529,7 @@ async def _submit_execution(
 
     await session.commit()
 
-    resource_snapshot = _snapshot_crew_resources(resources, crew_name)
+    resource_snapshot = _snapshot_crew_resources(resources, crew_name, target_kind=target_kind)
 
     execution_id = execution.id
     loop = asyncio.get_running_loop()
@@ -676,12 +686,13 @@ def _snapshot_resource(resource: Resource) -> dict[str, Any]:
 def _snapshot_crew_resources(
     resources: dict[str, Resource],
     crew_name: str,
+    target_kind: str = "Crew",
 ) -> dict[str, dict[str, Any]]:
-    """Snapshot only resources reachable from the crew via ref resolution.
+    """Snapshot only resources reachable from the root resource via ref resolution.
 
-    Walks crew → agents/tasks → tools/llms/knowledge_sources/guardrails/context
-    recursively, snapshotting only what the crew actually needs instead of the
-    entire namespace (which could be hundreds of resources).
+    Walks crew/flow -> agents/tasks -> tools/llms/knowledge_sources/guardrails/context
+    recursively, snapshotting only what the execution actually needs instead of
+    the entire namespace (which could be hundreds of resources).
     """
     needed: dict[str, dict[str, Any]] = {}
 
@@ -718,7 +729,7 @@ def _snapshot_crew_resources(
             if ref:
                 _collect(f"{ref.kind.value}/{ref.name}")
 
-    _collect(f"Crew/{crew_name}")
+    _collect(f"{target_kind}/{crew_name}")
 
     # Always include AgentPolicy resources referenced by any collected agent
     for key in list(needed):
@@ -1010,7 +1021,6 @@ async def _run_crew_async(
                     virtual_api_key = None
 
             loader = ResourceLoader(mock_resources, api_key=virtual_api_key, policies=policy_specs)
-            crew = loader.build_crew(crew_name)
 
             listener_pii_config = _get_pii_config(resource_snapshot, crew_name)
             listener = BlackbeardExecutionListener(
@@ -1019,34 +1029,35 @@ async def _run_crew_async(
                 pii_config=listener_pii_config,
             )
 
-            # --- Crew hooks ---
-            crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
-            crew_spec = crew_snap.get("spec", {})
-            hooks = crew_spec.get("hooks", {})
-
             if execution_type == ExecutionType.FLOW:
                 result = _run_flow_steps(loader, resource_snapshot, crew_name, inputs, listener)
-            elif execution_type == ExecutionType.TRAIN:
-                crew.train(
-                    n_iterations=n_iterations,
-                    inputs=inputs,
-                    filename=training_file,
-                )
-                result = None
-            elif execution_type == ExecutionType.TEST:
-                eval_llm = _resolve_eval_llm(loader, resource_snapshot, crew_name)
-                crew.test(
-                    n_iterations=n_iterations,
-                    eval_llm=eval_llm,
-                    inputs=inputs,
-                )
-                result = None
             else:
-                if hooks.get("before_kickoff"):
-                    call_hook(loader, hooks["before_kickoff"], inputs, "before_kickoff")
-                result = crew.kickoff(inputs=inputs)
-                if hooks.get("after_kickoff"):
-                    call_hook(loader, hooks["after_kickoff"], result, "after_kickoff")
+                crew = loader.build_crew(crew_name)
+                crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
+                crew_spec = crew_snap.get("spec", {})
+                hooks = crew_spec.get("hooks", {})
+
+                if execution_type == ExecutionType.TRAIN:
+                    crew.train(
+                        n_iterations=n_iterations,
+                        inputs=inputs,
+                        filename=training_file,
+                    )
+                    result = None
+                elif execution_type == ExecutionType.TEST:
+                    eval_llm = _resolve_eval_llm(loader, resource_snapshot, crew_name)
+                    crew.test(
+                        n_iterations=n_iterations,
+                        eval_llm=eval_llm,
+                        inputs=inputs,
+                    )
+                    result = None
+                else:
+                    if hooks.get("before_kickoff"):
+                        call_hook(loader, hooks["before_kickoff"], inputs, "before_kickoff")
+                    result = crew.kickoff(inputs=inputs)
+                    if hooks.get("after_kickoff"):
+                        call_hook(loader, hooks["after_kickoff"], result, "after_kickoff")
             listener.flush()
 
             execution = await _get_execution_for_update(session, execution_id)

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import shutil
 from dataclasses import dataclass
 from typing import Any
@@ -97,6 +98,20 @@ class ContainerSandbox:
             "No container runtime found (install docker or podman)"
         )
 
+    # Env var keys: only allow alphanumerics and underscores, starting
+    # with a letter or underscore.  Prevents injection of flags via
+    # crafted key names (e.g. a key starting with ``-``).
+    _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+    # Image name allowlist: standard Docker image references
+    # (registry/repo:tag@digest).  Rejects anything that could be
+    # misinterpreted as a flag (starts with ``-``) or contains shell
+    # metacharacters.
+    _IMAGE_RE = re.compile(
+        r"^[a-zA-Z0-9]"  # must start with alphanumeric
+        r"[a-zA-Z0-9._/:@\-]*$"  # rest: alphanumeric, dots, slashes, colons, @, hyphens
+    )
+
     def _build_command(
         self,
         image: str,
@@ -114,7 +129,19 @@ class ContainerSandbox:
         This method is intentionally separated from ``execute`` for
         testability -- tests can verify the command line without
         spawning a real process.
+
+        Raises:
+            ContainerRuntimeError: If the image name or env var keys
+                contain invalid characters.
         """
+        # SECURITY: Validate the image name to prevent argument injection.
+        # A malicious image like ``--privileged`` would be interpreted as
+        # a Docker flag rather than an image reference.
+        if not self._IMAGE_RE.match(image):
+            raise ContainerRuntimeError(
+                f"Invalid container image name: {image!r}"
+            )
+
         cmd: list[str] = [
             self._runtime,
             "run",
@@ -134,14 +161,37 @@ class ContainerSandbox:
         if read_only:
             cmd.append("--read-only")
 
+        # SECURITY: Validate env var keys.  The ``-e KEY=VALUE`` form is
+        # passed as two separate arguments to create_subprocess_exec (no
+        # shell), so values cannot inject new flags.  However, a key
+        # starting with ``-`` in the combined ``-e -flag=value`` form
+        # could confuse the container runtime.  Keys are restricted to
+        # the POSIX env var character set.
         if env:
             for k, v in sorted(env.items()):
+                if not self._ENV_KEY_RE.match(k):
+                    logger.warning(
+                        "Container: skipping env var with invalid key: %s",
+                        k[:50],
+                        extra={
+                            "event": "container_invalid_env_key",
+                            "key": k[:50],
+                        },
+                    )
+                    continue
                 cmd.extend(["-e", f"{k}={v}"])
 
         if input_data is not None:
             cmd.append("-i")
 
+        # Image name is validated above; safe to append.
         cmd.append(image)
+
+        # SECURITY: Command args are passed as individual list elements
+        # to create_subprocess_exec (not through a shell), so they
+        # cannot inject additional container flags.  However, validate
+        # that no command arg starts with ``-`` in the image position
+        # (already handled by placing image before command).
         cmd.extend(command)
 
         return cmd

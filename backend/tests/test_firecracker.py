@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -168,9 +169,11 @@ class TestFirecrackerSandboxConfig:
 
     def test_command_in_boot_args(self):
         sandbox = self._make_sandbox()
-        config = sandbox.build_config("python3 -c 'print(42)'")
+        command = "python3 -c 'print(42)'"
+        config = sandbox.build_config(command)
         boot_args = config["boot-source"]["boot_args"]
-        assert "BB_CMD=python3 -c 'print(42)'" in boot_args
+        expected_b64 = base64.b64encode(command.encode()).decode("ascii")
+        assert f"BB_CMD_B64={expected_b64}" in boot_args
 
     def test_boot_args_contain_required_params(self):
         sandbox = self._make_sandbox()
@@ -189,8 +192,10 @@ class TestFirecrackerSandboxConfig:
             env={"FOO": "bar", "BAZ": "qux"},
         )
         boot_args = config["boot-source"]["boot_args"]
-        assert "BB_ENV_BAZ=qux" in boot_args
-        assert "BB_ENV_FOO=bar" in boot_args
+        baz_b64 = base64.b64encode(b"qux").decode("ascii")
+        foo_b64 = base64.b64encode(b"bar").decode("ascii")
+        assert f"BB_ENV_B64_BAZ={baz_b64}" in boot_args
+        assert f"BB_ENV_B64_FOO={foo_b64}" in boot_args
 
     def test_env_vars_sorted(self):
         sandbox = self._make_sandbox()
@@ -199,8 +204,10 @@ class TestFirecrackerSandboxConfig:
             env={"ZEBRA": "z", "ALPHA": "a"},
         )
         boot_args = config["boot-source"]["boot_args"]
-        alpha_pos = boot_args.index("BB_ENV_ALPHA=a")
-        zebra_pos = boot_args.index("BB_ENV_ZEBRA=z")
+        alpha_b64 = base64.b64encode(b"a").decode("ascii")
+        zebra_b64 = base64.b64encode(b"z").decode("ascii")
+        alpha_pos = boot_args.index(f"BB_ENV_B64_ALPHA={alpha_b64}")
+        zebra_pos = boot_args.index(f"BB_ENV_B64_ZEBRA={zebra_b64}")
         assert alpha_pos < zebra_pos
 
     def test_config_is_valid_json_serializable(self):
@@ -422,22 +429,23 @@ class TestFirecrackerSandboxExecution:
 
     @pytest.mark.asyncio
     async def test_execute_cleans_up_temp_files(self):
-        """Temp config and socket files are removed after execution."""
+        """Temp config and socket dir are removed after execution."""
         sandbox = self._make_sandbox()
 
         created_files = []
+        created_dirs = []
 
         original_mkstemp = __import__("tempfile").mkstemp
-        original_mktemp = __import__("tempfile").mktemp
+        original_mkdtemp = __import__("tempfile").mkdtemp
 
         def track_mkstemp(*args, **kwargs):
             fd, path = original_mkstemp(*args, **kwargs)
             created_files.append(path)
             return fd, path
 
-        def track_mktemp(*args, **kwargs):
-            path = original_mktemp(*args, **kwargs)
-            created_files.append(path)
+        def track_mkdtemp(*args, **kwargs):
+            path = original_mkdtemp(*args, **kwargs)
+            created_dirs.append(path)
             return path
 
         mock_proc = AsyncMock()
@@ -451,8 +459,8 @@ class TestFirecrackerSandboxExecution:
                 side_effect=track_mkstemp,
             ),
             patch(
-                "blackbeard.engine.sandbox.firecracker.tempfile.mktemp",
-                side_effect=track_mktemp,
+                "blackbeard.engine.sandbox.firecracker.tempfile.mkdtemp",
+                side_effect=track_mkdtemp,
             ),
         ):
             await sandbox.execute("echo hello")
@@ -460,6 +468,9 @@ class TestFirecrackerSandboxExecution:
         # All temp files should be cleaned up
         for f in created_files:
             assert not Path(f).exists(), f"Temp file not cleaned up: {f}"
+        # All temp dirs should be cleaned up
+        for d in created_dirs:
+            assert not Path(d).exists(), f"Temp dir not cleaned up: {d}"
 
 
 # ---------------------------------------------------------------------------

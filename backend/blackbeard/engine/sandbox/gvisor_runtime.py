@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import shutil
 from dataclasses import dataclass
 from typing import Any
@@ -113,6 +114,16 @@ class GVisorSandbox:
                 extra={"event": "gvisor_runsc_not_found"},
             )
 
+    # Env var keys: only allow alphanumerics and underscores, starting
+    # with a letter or underscore.
+    _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+    # Image name allowlist: standard Docker image references.
+    _IMAGE_RE = re.compile(
+        r"^[a-zA-Z0-9]"
+        r"[a-zA-Z0-9._/:@\-]*$"
+    )
+
     def _build_command(
         self,
         image: str,
@@ -128,7 +139,17 @@ class GVisorSandbox:
         This method is intentionally separated from ``execute`` for
         testability -- tests can verify the command line without
         spawning a real process.
+
+        Raises:
+            GVisorRuntimeError: If the image name or env var keys
+                contain invalid characters.
         """
+        # SECURITY: Validate the image name to prevent argument injection.
+        if not self._IMAGE_RE.match(image):
+            raise GVisorRuntimeError(
+                f"Invalid container image name: {image!r}"
+            )
+
         cmd: list[str] = [
             self._runtime,
             "run",
@@ -146,8 +167,19 @@ class GVisorSandbox:
             "ALL",
         ]
 
+        # SECURITY: Validate env var keys (same rationale as ContainerSandbox).
         if env:
             for k, v in sorted(env.items()):
+                if not self._ENV_KEY_RE.match(k):
+                    logger.warning(
+                        "gVisor: skipping env var with invalid key: %s",
+                        k[:50],
+                        extra={
+                            "event": "gvisor_invalid_env_key",
+                            "key": k[:50],
+                        },
+                    )
+                    continue
                 cmd.extend(["-e", f"{k}={v}"])
 
         if input_data is not None:

@@ -291,7 +291,7 @@ def run_flow_steps(
 
                     sandbox = WasmSandbox()
                     transform_input = _json.dumps({**inputs, **step_outputs})
-                    wasm_result = sandbox.execute(wasm_ref, transform_input)
+                    wasm_result = sandbox.invoke(wasm_ref, transform_input)
                     step_outputs[step_name] = (
                         _json.loads(wasm_result.output) if wasm_result.output else {}
                     )

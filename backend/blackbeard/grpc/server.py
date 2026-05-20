@@ -96,7 +96,13 @@ class AuthInterceptor(grpc.aio.ServerInterceptor):
         if method.endswith("/Health"):
             return await continuation(handler_call_details)
 
-        metadata = dict(handler_call_details.invocation_metadata)
+        # gRPC metadata keys are case-sensitive per the HTTP/2 spec, but
+        # some clients may send mixed-case headers.  Normalize to lower-
+        # case for robust matching.  Use the *last* value for each key
+        # to match HTTP semantics (last header wins).
+        metadata: dict[str, str] = {}
+        for key, value in handler_call_details.invocation_metadata:
+            metadata[key.lower()] = value
 
         # Check API key
         api_key = metadata.get("x-api-key", "")

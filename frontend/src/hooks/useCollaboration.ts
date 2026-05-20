@@ -228,8 +228,10 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
           setRemoteCursors((prev) => {
             const next = new Map(prev)
             const existing = next.get(userId)
-            const colorIdx = colorIndexRef.current++ % CURSOR_COLORS.length
-            const color = existing?.color ?? CURSOR_COLORS[colorIdx] ?? '#6b7280'
+            const color =
+              existing?.color ??
+              CURSOR_COLORS[colorIndexRef.current++ % CURSOR_COLORS.length] ??
+              '#6b7280'
             next.set(userId, {
               userId,
               name: name ?? 'Anonymous',

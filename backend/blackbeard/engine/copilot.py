@@ -243,6 +243,18 @@ def _validate_and_filter(docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 name = kind.lower()
             doc["metadata"]["name"] = name
 
+        # SECURITY: Validate the generated name matches the Blackbeard
+        # name pattern.  An LLM could produce names with illegal chars
+        # or empty strings after sanitization.
+        final_name = doc["metadata"].get("name", "")
+        if not final_name or not re.match(r"^[a-z0-9][a-z0-9\-]*$", final_name):
+            # Fallback to a safe auto-generated name
+            doc["metadata"]["name"] = f"{kind.lower()}-{len(validated)}"
+
+        # Truncate overly long names (max 255 chars per NAME_PATTERN usage)
+        if len(doc["metadata"]["name"]) > 255:
+            doc["metadata"]["name"] = doc["metadata"]["name"][:255].rstrip("-")
+
         validated.append(doc)
 
     return validated

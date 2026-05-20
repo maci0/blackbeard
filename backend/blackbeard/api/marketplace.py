@@ -110,17 +110,34 @@ def _parse_yaml_resources(yaml_files: list[Path]) -> tuple[list[dict[str, Any]],
     return resources, errors
 
 
+# Maximum total size of cloned repo (100 MB).
+_MAX_CLONE_SIZE_BYTES = 100 * 1024 * 1024
+
+
 async def _clone_repo(url: str, target: Path) -> None:
     """Clone a git repository to a temporary directory (shallow, no checkout of history).
 
     Uses asyncio.create_subprocess_exec (not shell) to avoid command injection.
+
+    SECURITY hardening:
+    - ``-c transfer.fsckObjects=true``: validate objects on transfer
+    - ``-c http.followRedirects=initial``: prevent SSRF via git HTTP
+      redirects to internal networks (only allows the initial redirect
+      from the server, not arbitrary follow-on redirects)
+    - ``-c protocol.file.allow=never``: block ``file://`` submodule URLs
+    - ``--recurse-submodules=no``: do not clone submodules (could point
+      to internal repos or file:// URLs)
     """
     proc = await asyncio.create_subprocess_exec(
         "git",
+        "-c", "transfer.fsckObjects=true",
+        "-c", "http.followRedirects=initial",
+        "-c", "protocol.file.allow=never",
         "clone",
         "--depth=1",
         "--single-branch",
         "--no-tags",
+        "--recurse-submodules=no",
         url,
         str(target),
         stdout=asyncio.subprocess.PIPE,
@@ -200,10 +217,48 @@ async def import_from_url(
                 detail="Git URL must not contain embedded credentials",
             )
 
+        # SECURITY: Reject URLs pointing to localhost or private IP ranges
+        # to mitigate SSRF.  The git clone could otherwise reach internal
+        # services that are not exposed externally.
+        import ipaddress
+
+        hostname = (_parsed.hostname or "").lower()
+        blocked = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+        if hostname in blocked:
+            raise HTTPException(
+                status_code=422,
+                detail="Git URL must not point to localhost or loopback addresses",
+            )
+        try:
+            addr = ipaddress.ip_address(hostname)
+            if addr.is_private or addr.is_loopback or addr.is_link_local:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Git URL must not point to private or internal IP addresses",
+                )
+        except ValueError:
+            pass  # hostname is a DNS name, not an IP -- allowed
+
         # Clone to temp dir
         tmpdir = Path(tempfile.mkdtemp(prefix="bb-marketplace-"))
         try:
             await _clone_repo(url, tmpdir)
+
+            # SECURITY: Check total clone size to prevent abuse via
+            # large repositories.  This runs after clone because git
+            # doesn't support pre-clone size limits.
+            total_size = sum(
+                f.stat().st_size
+                for f in tmpdir.rglob("*")
+                if f.is_file() and not f.is_symlink()
+            )
+            if total_size > _MAX_CLONE_SIZE_BYTES:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Cloned repository is too large ({total_size // (1024*1024)}MB, "
+                    f"limit: {_MAX_CLONE_SIZE_BYTES // (1024*1024)}MB)",
+                )
+
             git_dir = tmpdir / ".git"
             if git_dir.is_dir():
                 shutil.rmtree(git_dir, ignore_errors=True)

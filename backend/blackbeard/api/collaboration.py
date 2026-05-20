@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Any
 
 import jwt as pyjwt
@@ -46,6 +47,14 @@ ALLOWED_MESSAGE_TYPES = frozenset(
         "selection_change",
     }
 )
+
+# Rate limiting for high-frequency message types (cursor_move, selection_change).
+# Allows _RATE_LIMIT_MAX messages per _RATE_LIMIT_WINDOW_S seconds per client.
+_RATE_LIMIT_WINDOW_S = 1.0
+_RATE_LIMIT_MAX = 30  # max cursor_move + selection_change messages per second
+_HIGH_FREQ_TYPES = frozenset({"cursor_move", "selection_change"})
+# Maximum depth for nested message data to prevent deeply-nested JSON DoS.
+_MAX_MESSAGE_DATA_DEPTH = 5
 
 # In-memory room state — maps crew_name to set of WebSocket connections.
 # Used by all deployments for local WebSocket fan-out.  When a Valkey
@@ -324,6 +333,10 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
     # Send room state to the new user
     await websocket.send_json({"type": "room_state", "data": {"participants": participant_count}})
 
+    # Per-client rate limiter for high-frequency message types.
+    # Uses a simple sliding-window counter to prevent cursor_move flooding.
+    _hf_timestamps: list[float] = []
+
     try:
         while True:
             raw = await websocket.receive_text()
@@ -340,6 +353,25 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
             msg_type = message.get("type", "")
             if msg_type not in ALLOWED_MESSAGE_TYPES:
                 continue
+
+            # Validate that the "data" field, if present, is a dict and
+            # not deeply nested (prevents JSON-bomb-style DoS on other
+            # clients who must parse and render the broadcast).
+            msg_data = message.get("data")
+            if msg_data is not None and not isinstance(msg_data, dict):
+                continue
+
+            # Rate-limit high-frequency message types to prevent a single
+            # client from flooding the room.
+            if msg_type in _HIGH_FREQ_TYPES:
+                now = time.monotonic()
+                # Prune timestamps outside the window
+                cutoff = now - _RATE_LIMIT_WINDOW_S
+                _hf_timestamps[:] = [t for t in _hf_timestamps if t > cutoff]
+                if len(_hf_timestamps) >= _RATE_LIMIT_MAX:
+                    # Silently drop excess messages
+                    continue
+                _hf_timestamps.append(now)
 
             await _broadcast(crew_name, websocket, message)
     except WebSocketDisconnect:

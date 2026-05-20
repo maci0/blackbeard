@@ -17,9 +17,11 @@ Setup: see ``docs/firecracker-setup.md``
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 from dataclasses import dataclass
@@ -188,21 +190,44 @@ class FirecrackerSandbox:
         effective_vcpus = vcpus if vcpus is not None else self._vcpus
         effective_memory = memory_mb if memory_mb is not None else self._memory_mb
 
-        # Build boot args: quiet console + command injection.
-        # The rootfs init script reads BB_CMD from /proc/cmdline.
+        # Build boot args: quiet console + command passed via base64
+        # encoding.  The rootfs init script reads BB_CMD_B64 from
+        # /proc/cmdline and base64-decodes it before executing.
+        #
+        # SECURITY: Kernel boot args are space-delimited key=value pairs.
+        # Passing the raw command directly allows an attacker to inject
+        # additional boot parameters (e.g. ``init=/bin/sh``) via spaces
+        # or other special characters in the command string.  Base64
+        # encoding eliminates spaces, quotes, and shell metacharacters
+        # from the boot args payload entirely.
+        cmd_b64 = base64.b64encode(command.encode()).decode("ascii")
         boot_args_parts = [
             "console=ttyS0",
             "reboot=k",
             "panic=1",
             "pci=off",
             "quiet",
-            f"BB_CMD={command}",
+            f"BB_CMD_B64={cmd_b64}",
         ]
 
-        # Inject env vars as BB_ENV_<key>=<value> boot args
+        # Inject env vars as base64-encoded BB_ENV_B64_<key>=<b64value>
+        # boot args.  Key names are validated to contain only
+        # alphanumerics and underscores to prevent parameter injection.
         if env:
+            env_key_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
             for k, v in sorted(env.items()):
-                boot_args_parts.append(f"BB_ENV_{k}={v}")
+                if not env_key_re.match(k):
+                    logger.warning(
+                        "Firecracker: skipping env var with invalid key: %s",
+                        k[:50],
+                        extra={
+                            "event": "firecracker_invalid_env_key",
+                            "key": k[:50],
+                        },
+                    )
+                    continue
+                v_b64 = base64.b64encode(v.encode()).decode("ascii")
+                boot_args_parts.append(f"BB_ENV_B64_{k}={v_b64}")
 
         config: dict[str, Any] = {
             "boot-source": {
@@ -267,9 +292,13 @@ class FirecrackerSandbox:
             env=env,
         )
 
-        # Write VM config to a temp file
+        # Write VM config to a temp file.
+        # SECURITY: Use mkstemp for config (atomically created) and
+        # TemporaryDirectory for the socket (avoids mktemp TOCTOU race
+        # where an attacker could predict or pre-create the path).
         config_fd, config_path = tempfile.mkstemp(suffix=".json", prefix="fc-")
-        socket_path = tempfile.mktemp(suffix=".sock", prefix="fc-")
+        socket_dir = tempfile.mkdtemp(prefix="fc-sock-")
+        socket_path = os.path.join(socket_dir, "api.sock")
 
         try:
             with os.fdopen(config_fd, "w") as config_file:
@@ -350,7 +379,7 @@ class FirecrackerSandbox:
         finally:
             # Clean up temp files -- never leave config or socket on disk
             Path(config_path).unlink(missing_ok=True)
-            Path(socket_path).unlink(missing_ok=True)
+            shutil.rmtree(socket_dir, ignore_errors=True)
 
 
 def is_firecracker_available() -> bool:
