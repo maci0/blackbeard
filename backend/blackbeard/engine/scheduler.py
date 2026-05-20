@@ -85,6 +85,19 @@ class AutomationScheduler:
             extra={"event": "scheduler_stopped"},
         )
 
+    async def reload(self) -> None:
+        """Cancel all tasks and re-load from database.
+
+        Called when Automation resources are created, updated, or deleted
+        so that cron schedules stay in sync with the database.
+        """
+        logger.info(
+            "Automation scheduler reloading",
+            extra={"event": "scheduler_reloading"},
+        )
+        await self.stop()
+        await self.start()
+
     def _schedule(
         self,
         automation_name: str,

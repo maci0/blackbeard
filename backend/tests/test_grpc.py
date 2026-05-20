@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import json
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from blackbeard.grpc.server import BlackbeardServicer, _execution_to_proto, _resource_to_proto
+from blackbeard.grpc.server import (
+    AuthInterceptor,
+    BlackbeardServicer,
+    _execution_to_proto,
+    _resource_to_proto,
+)
 
 # ── Proto conversion tests ───────────────────────────────────────────
 
@@ -286,3 +292,181 @@ def test_generated_stubs_importable():
     assert hasattr(blackbeard_pb2, "HealthRequest")
     assert hasattr(blackbeard_pb2_grpc, "BlackbeardServiceServicer")
     assert hasattr(blackbeard_pb2_grpc, "add_BlackbeardServiceServicer_to_server")
+
+
+# ── AuthInterceptor tests ──────────────────────────────────────────────
+
+
+@pytest.fixture
+def auth_interceptor():
+    return AuthInterceptor()
+
+
+async def test_auth_interceptor_allows_health(auth_interceptor):
+    """Health RPC should pass through without credentials."""
+    handler_call_details = MagicMock()
+    handler_call_details.method = "/blackbeard.BlackbeardService/Health"
+    handler_call_details.invocation_metadata = []
+
+    continuation = AsyncMock(return_value="handler")
+    result = await auth_interceptor.intercept_service(
+        continuation, handler_call_details
+    )
+    continuation.assert_called_once_with(handler_call_details)
+    assert result == "handler"
+
+
+async def test_auth_interceptor_rejects_no_credentials(auth_interceptor):
+    """Non-Health RPCs without credentials should be rejected."""
+    from blackbeard.grpc.server import _AbortingHandler
+
+    handler_call_details = MagicMock()
+    handler_call_details.method = "/blackbeard.BlackbeardService/ListResources"
+    handler_call_details.invocation_metadata = []
+
+    continuation = AsyncMock()
+    result = await auth_interceptor.intercept_service(
+        continuation, handler_call_details
+    )
+    continuation.assert_not_called()
+    assert isinstance(result, _AbortingHandler)
+
+
+async def test_auth_interceptor_accepts_valid_api_key(auth_interceptor):
+    """Valid API key in metadata should be accepted."""
+    from blackbeard.api.middleware import _EXPECTED_API_KEY
+
+    handler_call_details = MagicMock()
+    handler_call_details.method = "/blackbeard.BlackbeardService/ListResources"
+    handler_call_details.invocation_metadata = [
+        ("x-api-key", _EXPECTED_API_KEY),
+    ]
+
+    continuation = AsyncMock(return_value="handler")
+    result = await auth_interceptor.intercept_service(
+        continuation, handler_call_details
+    )
+    continuation.assert_called_once()
+    assert result == "handler"
+
+
+async def test_auth_interceptor_rejects_invalid_api_key(auth_interceptor):
+    """Invalid API key in metadata should be rejected."""
+    from blackbeard.grpc.server import _AbortingHandler
+
+    handler_call_details = MagicMock()
+    handler_call_details.method = "/blackbeard.BlackbeardService/GetResource"
+    handler_call_details.invocation_metadata = [
+        ("x-api-key", "wrong-key"),
+    ]
+
+    continuation = AsyncMock()
+    result = await auth_interceptor.intercept_service(
+        continuation, handler_call_details
+    )
+    continuation.assert_not_called()
+    assert isinstance(result, _AbortingHandler)
+
+
+async def test_auth_interceptor_accepts_valid_jwt(auth_interceptor):
+    """Valid JWT Bearer token in metadata should be accepted."""
+    from blackbeard.auth.jwt import create_access_token
+
+    token = create_access_token(
+        user_id=str(uuid.uuid4()), email="test@example.com"
+    )
+
+    handler_call_details = MagicMock()
+    handler_call_details.method = "/blackbeard.BlackbeardService/CreateResource"
+    handler_call_details.invocation_metadata = [
+        ("authorization", f"Bearer {token}"),
+    ]
+
+    continuation = AsyncMock(return_value="handler")
+    result = await auth_interceptor.intercept_service(
+        continuation, handler_call_details
+    )
+    continuation.assert_called_once()
+    assert result == "handler"
+
+
+async def test_auth_interceptor_rejects_invalid_jwt(auth_interceptor):
+    """Invalid JWT token should be rejected."""
+    from blackbeard.grpc.server import _AbortingHandler
+
+    handler_call_details = MagicMock()
+    handler_call_details.method = "/blackbeard.BlackbeardService/DeleteResource"
+    handler_call_details.invocation_metadata = [
+        ("authorization", "Bearer invalid.jwt.token"),
+    ]
+
+    continuation = AsyncMock()
+    result = await auth_interceptor.intercept_service(
+        continuation, handler_call_details
+    )
+    continuation.assert_not_called()
+    assert isinstance(result, _AbortingHandler)
+
+
+async def test_auth_interceptor_rejects_refresh_token(auth_interceptor):
+    """Refresh JWT token (type != access) should be rejected."""
+    from blackbeard.auth.jwt import create_refresh_token
+    from blackbeard.grpc.server import _AbortingHandler
+
+    token = create_refresh_token(user_id=str(uuid.uuid4()))
+
+    handler_call_details = MagicMock()
+    handler_call_details.method = "/blackbeard.BlackbeardService/Kickoff"
+    handler_call_details.invocation_metadata = [
+        ("authorization", f"Bearer {token}"),
+    ]
+
+    continuation = AsyncMock()
+    result = await auth_interceptor.intercept_service(
+        continuation, handler_call_details
+    )
+    continuation.assert_not_called()
+    assert isinstance(result, _AbortingHandler)
+
+
+async def test_auth_interceptor_rejects_expired_jwt(auth_interceptor):
+    """Expired JWT token should be rejected."""
+    from datetime import UTC, datetime, timedelta
+
+    import jwt as pyjwt
+
+    from blackbeard.auth.jwt import _ALGORITHM, _AUDIENCE, _ISSUER, _get_secret
+    from blackbeard.grpc.server import _AbortingHandler
+
+    now = datetime.now(UTC)
+    payload = {
+        "sub": str(uuid.uuid4()),
+        "type": "access",
+        "iss": _ISSUER,
+        "aud": _AUDIENCE,
+        "iat": now - timedelta(hours=2),
+        "exp": now - timedelta(hours=1),
+    }
+    expired_token = pyjwt.encode(payload, _get_secret(), algorithm=_ALGORITHM)
+
+    handler_call_details = MagicMock()
+    handler_call_details.method = "/blackbeard.BlackbeardService/GetExecution"
+    handler_call_details.invocation_metadata = [
+        ("authorization", f"Bearer {expired_token}"),
+    ]
+
+    continuation = AsyncMock()
+    result = await auth_interceptor.intercept_service(
+        continuation, handler_call_details
+    )
+    continuation.assert_not_called()
+    assert isinstance(result, _AbortingHandler)
+
+
+async def test_grpc_server_starts_with_auth_interceptor():
+    """gRPC server should start with the AuthInterceptor installed."""
+    from blackbeard.grpc.server import start_grpc_server
+
+    server = await start_grpc_server(port=0)
+    assert server is not None
+    await server.stop(grace=0)

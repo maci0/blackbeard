@@ -16,6 +16,7 @@ __all__ = [
     "ExecutionError",
     "ExecutionNotFoundError",
     "cancel_execution",
+    "cleanup_orphaned_keys",
     "get_execution",
     "get_execution_status",
     "get_pool_status",
@@ -36,8 +37,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import defer, load_only, selectinload
 
 from blackbeard.config import settings
+from blackbeard.engine.budget import derive_budget_limits as _derive_budget_limits
+from blackbeard.engine.budget import extract_policy_specs as _extract_policy_specs
+from blackbeard.engine.budget import get_pii_config as _get_pii_config
 from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-from blackbeard.engine.loader import LoaderError, ResourceLoader
+from blackbeard.engine.flow_runner import _call_hook
+from blackbeard.engine.flow_runner import run_flow_steps as _run_flow_steps
+from blackbeard.engine.loader import ResourceLoader
 from blackbeard.kinds import ResourceKind
 from blackbeard.logging_config import request_id_var
 from blackbeard.models import (
@@ -94,125 +100,14 @@ def _sanitize_error(error_msg: str) -> str:
     return "Execution failed — check server logs for details"
 
 
-def _extract_policy_specs(
-    resource_snapshot: dict[str, dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    """Extract AgentPolicy specs from a resource snapshot (policy name → spec)."""
-    return {
-        snap["name"]: snap.get("spec", {})
-        for snap in resource_snapshot.values()
-        if snap.get("kind") == "AgentPolicy"
-    }
-
-
-def _get_pii_config(
-    resource_snapshot: dict[str, dict[str, Any]],
-    crew_name: str,
-) -> dict[str, Any] | None:
-    """Extract PII redaction config from applicable AgentPolicy resources.
-
-    Scans the crew's agents for policy refs (agent-level then crew-level
-    default) and returns the first PII config block that has ``enabled=True``.
-    Returns ``None`` if no policy enables PII redaction.
-    """
-    from blackbeard.engine.policy import resolve_policy
-
-    crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
-    crew_spec = crew_snap.get("spec", {})
-    policy_specs = _extract_policy_specs(resource_snapshot)
-
-    # Check each agent's resolved policy for a PII block
-    agent_refs = crew_spec.get("agents", [])
-    for agent_ref in agent_refs:
-        ref = parse_ref(agent_ref)
-        if not ref:
-            continue
-        agent_snap = resource_snapshot.get(f"Agent/{ref.name}", {})
-        agent_spec = agent_snap.get("spec", {})
-
-        policy = resolve_policy(agent_spec, crew_spec, policy_specs)
-        pii = policy.spec.get("pii")
-        if isinstance(pii, dict) and pii.get("enabled"):
-            return pii
-
-    # Check crew-level default policy directly
-    default_ref = crew_spec.get("default_agent_policy")
-    if default_ref:
-        name = parse_ref(default_ref)
-        policy_name = name.name if name else default_ref
-        policy_spec = policy_specs.get(policy_name, {})
-        pii = policy_spec.get("pii")
-        if isinstance(pii, dict) and pii.get("enabled"):
-            return pii
-
-    return None
-
-
-def _derive_budget_limits(
-    resource_snapshot: dict[str, dict[str, Any]],
-    crew_name: str,
-    policy_specs: dict[str, dict[str, Any]] | None = None,
-) -> tuple[float | None, int | None]:
-    """Derive the most restrictive budget limits from applicable policies.
-
-    Scans the crew's agents for policy refs (agent-level then crew-level
-    default) and returns the minimum ``max_usd`` and ``max_tokens`` across
-    all resolved policies.
-
-    Returns:
-        ``(max_budget_usd, max_tokens)`` — either may be ``None`` if no
-        policy defines that limit.
-    """
-    from blackbeard.engine.policy import resolve_policy
-
-    crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
-    crew_spec = crew_snap.get("spec", {})
-
-    if policy_specs is None:
-        policy_specs = _extract_policy_specs(resource_snapshot)
-
-    budgets: list[float] = []
-    token_limits: list[int] = []
-
-    # Resolve policy for each agent referenced by the crew
-    agent_refs = crew_spec.get("agents", [])
-    for agent_ref in agent_refs:
-        ref = parse_ref(agent_ref)
-        if not ref:
-            continue
-        agent_snap = resource_snapshot.get(f"Agent/{ref.name}", {})
-        agent_spec = agent_snap.get("spec", {})
-
-        policy = resolve_policy(agent_spec, crew_spec, policy_specs)
-        if policy.max_budget_usd is not None:
-            budgets.append(policy.max_budget_usd)
-        if policy.max_tokens is not None:
-            token_limits.append(policy.max_tokens)
-
-    max_budget = min(budgets) if budgets else None
-    max_tokens = min(token_limits) if token_limits else None
-
-    if max_budget is not None or max_tokens is not None:
-        logger.info(
-            "Budget limits derived for crew '%s': max_usd=%s max_tokens=%s",
-            crew_name,
-            max_budget,
-            max_tokens,
-            extra={
-                "event": "budget_limits_derived",
-                "crew_name": crew_name,
-                "max_budget_usd": max_budget,
-                "max_tokens": max_tokens,
-                "agent_count": len(agent_refs),
-                "policy_count": len(budgets) + len(token_limits),
-            },
-        )
-
-    return max_budget, max_tokens
-
-
 _executor: ThreadPoolExecutor | None = None
 _executor_lock = threading.Lock()
+
+# Shared database engine for background executor threads (Issue #5).
+# Each thread still creates its own event loop, but they all share one
+# connection pool instead of each thread creating a separate engine.
+_bg_engine: AsyncEngine | None = None
+_bg_engine_lock = threading.Lock()
 
 
 def _get_executor() -> ThreadPoolExecutor:
@@ -257,14 +152,65 @@ def get_pool_status() -> dict[str, object]:
     }
 
 
+def _get_bg_engine() -> AsyncEngine:
+    """Return the shared background engine, creating it on first use (thread-safe)."""
+    global _bg_engine
+    if _bg_engine is None:
+        with _bg_engine_lock:
+            if _bg_engine is None:
+                from sqlalchemy.ext.asyncio import create_async_engine
+
+                _bg_engine = create_async_engine(
+                    settings.database_url.get_secret_value(),
+                    echo=False,
+                    pool_size=5,
+                    max_overflow=10,
+                    pool_pre_ping=True,
+                    pool_timeout=30,
+                    pool_recycle=3600,
+                    connect_args=CONNECT_ARGS,
+                )
+                logger.info(
+                    "Shared background DB engine created: pool_size=5 max_overflow=10",
+                    extra={
+                        "event": "bg_engine_created",
+                        "pool_size": 5,
+                        "max_overflow": 10,
+                    },
+                )
+    return _bg_engine
+
+
 def shutdown_executor(wait: bool = False) -> None:
     """Shutdown the thread pool executor and dispose the sync DB engine."""
-    global _executor
+    global _executor, _bg_engine
     with _executor_lock:
         if _executor is not None:
             _executor.shutdown(wait=wait, cancel_futures=True)
             _executor = None
     logger.info("Execution thread pool shut down", extra={"event": "executor_shutdown"})
+
+    # Dispose the shared background engine used by executor threads.
+    with _bg_engine_lock:
+        bg = _bg_engine
+        _bg_engine = None
+    if bg is not None:
+        import asyncio
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            loop.create_task(bg.dispose())
+        else:
+            _loop = asyncio.new_event_loop()
+            try:
+                _loop.run_until_complete(bg.dispose())
+            finally:
+                _loop.close()
+        logger.info("Background DB engine disposed", extra={"event": "bg_engine_disposed"})
+
     from blackbeard.engine.execution_listener import dispose_sync_engine
 
     dispose_sync_engine()
@@ -332,6 +278,25 @@ async def _load_crew_resources(
     resources = {f"{r.kind.value}/{r.name}": r for r in rows}
     if f"Crew/{crew_name}" not in resources:
         raise ExecutionNotFoundError(f"Crew '{crew_name}' not found in namespace '{namespace}'")
+
+    # TODO(perf): Replace namespace-wide load with recursive ref resolution
+    # starting from the crew resource. Walk spec.agents, spec.tasks refs;
+    # for each agent walk spec.tools, spec.llm, spec.knowledge_sources;
+    # for each task walk spec.agent, spec.context. Load only needed resources.
+    if len(resources) > 100:
+        logger.warning(
+            "Loaded %d resources for crew '%s' in namespace '%s' — "
+            "consider splitting into smaller namespaces for performance",
+            len(resources),
+            crew_name,
+            namespace,
+            extra={
+                "event": "large_namespace_load",
+                "resource_count": len(resources),
+                "crew_name": crew_name,
+                "namespace": namespace,
+            },
+        )
 
     return resources
 
@@ -735,7 +700,7 @@ def _run_crew_sync(
     )
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    thread_session, thread_engine = _thread_session_factory()
+    thread_session = _thread_session_factory()
     try:
         loop.run_until_complete(
             _run_crew_async(
@@ -764,47 +729,38 @@ def _run_crew_sync(
         )
         raise
     finally:
-        loop.run_until_complete(thread_engine.dispose())
+        # Shared engine is NOT disposed here -- shutdown_executor handles it.
         loop.close()
 
 
-def _thread_session_factory() -> tuple[async_sessionmaker[AsyncSession], AsyncEngine]:
-    """Create a fresh engine+session factory for the current thread's event loop.
+def _thread_session_factory() -> async_sessionmaker[AsyncSession]:
+    """Create a session factory backed by the shared background engine.
 
-    asyncpg connections are bound to the event loop that created them, so the
-    executor thread (which runs its own loop) cannot share the main engine.
-    Returns (session_factory, engine) so callers can dispose the engine.
+    All executor threads share one connection pool (``_get_bg_engine()``)
+    instead of each thread creating its own engine, which avoids N pools
+    growing linearly with concurrent executions.
+
+    The shared engine must NOT be disposed per-thread -- ``shutdown_executor``
+    handles cleanup at application shutdown.
     """
     from sqlalchemy.ext.asyncio import (
         AsyncSession as _AsyncSession,
     )
     from sqlalchemy.ext.asyncio import (
         async_sessionmaker,
-        create_async_engine,
     )
 
-    thread_engine = create_async_engine(
-        settings.database_url.get_secret_value(),
-        echo=False,
-        pool_size=1,
-        max_overflow=2,
-        pool_pre_ping=True,
-        pool_timeout=30,
-        pool_recycle=3600,
-        connect_args=CONNECT_ARGS,
-    )
-    factory = async_sessionmaker(thread_engine, class_=_AsyncSession, expire_on_commit=False)
+    engine = _get_bg_engine()
+    factory = async_sessionmaker(engine, class_=_AsyncSession, expire_on_commit=False)
     logger.debug(
-        "Thread DB pool created: thread=%s pool_size=1 max_overflow=2",
+        "Thread session factory created: thread=%s (shared engine)",
         threading.current_thread().name,
         extra={
-            "event": "thread_db_pool_created",
+            "event": "thread_session_factory_created",
             "thread_name": threading.current_thread().name,
-            "pool_size": 1,
-            "max_overflow": 2,
         },
     )
-    return factory, thread_engine
+    return factory
 
 
 def _resolve_eval_llm(
@@ -854,312 +810,6 @@ def _resolve_eval_llm(
 
     # Last resort: use a reasonable default
     return "gpt-4o"
-
-
-def _call_hook(
-    loader: ResourceLoader,
-    hook_path: str,
-    arg: Any,
-    hook_name: str,
-) -> None:
-    """Resolve and call a hook callable, logging warnings on failure."""
-    try:
-        fn = loader._import_callable(hook_path)
-        if fn is not None:
-            fn(arg)
-            logger.info(
-                "Hook '%s' executed: %s",
-                hook_name,
-                hook_path,
-                extra={
-                    "event": "hook_executed",
-                    "hook_name": hook_name,
-                    "hook_path": hook_path,
-                },
-            )
-        else:
-            logger.warning(
-                "Hook '%s' could not be imported: %s",
-                hook_name,
-                hook_path,
-                extra={
-                    "event": "hook_import_failed",
-                    "hook_name": hook_name,
-                    "hook_path": hook_path,
-                },
-            )
-    except Exception:
-        logger.warning(
-            "Hook '%s' raised an exception: %s",
-            hook_name,
-            hook_path,
-            exc_info=True,
-            extra={
-                "event": "hook_execution_failed",
-                "hook_name": hook_name,
-                "hook_path": hook_path,
-            },
-        )
-
-
-def _run_flow_steps(
-    loader: Any,
-    resource_snapshot: dict[str, dict[str, Any]],
-    flow_name: str,
-    inputs: dict[str, Any],
-    listener: Any,
-) -> Any:
-    """Execute a Flow resource by running its steps sequentially.
-
-    Each step of type "crew" builds and kicks off the referenced crew.
-    Step outputs are chained: the result of step N is available to step N+1.
-    """
-    from crewai.crews.crew_output import CrewOutput
-
-    flow_snap = resource_snapshot.get(f"Flow/{flow_name}")
-    if not flow_snap:
-        raise LoaderError(f"Flow '{flow_name}' not found in resource snapshot")
-
-    flow_spec = flow_snap.get("spec", {})
-    steps = flow_spec.get("steps", [])
-    step_outputs: dict[str, Any] = {}
-    last_result: Any = None
-
-    for step in steps:
-        step_name = step.get("name", "unnamed")
-        step_type = step.get("type", "crew")
-        step_hooks = step.get("hooks", {})
-
-        if step_type == "crew":
-            crew_ref = step.get("crew")
-            if not crew_ref:
-                logger.warning(
-                    "Flow step '%s' has no crew ref — skipped",
-                    step_name,
-                    extra={
-                        "event": "flow_step_skipped",
-                        "flow_name": flow_name,
-                        "step_name": step_name,
-                        "reason": "no_crew_ref",
-                    },
-                )
-                continue
-
-            crew = loader.build_crew(crew_ref.split("/")[-1] if "/" in crew_ref else crew_ref)
-            step_inputs = {**inputs, **step_outputs}
-
-            if step_hooks.get("before"):
-                _call_hook(loader, step_hooks["before"], step_inputs, f"step:{step_name}:before")
-
-            try:
-                result = crew.kickoff(inputs=step_inputs)
-            except Exception as step_exc:
-                if step_hooks.get("on_error"):
-                    _call_hook(
-                        loader,
-                        step_hooks["on_error"],
-                        step_exc,
-                        f"step:{step_name}:on_error",
-                    )
-                raise
-
-            if isinstance(result, CrewOutput):
-                step_outputs[step_name] = result.raw
-                last_result = result
-            else:
-                step_outputs[step_name] = str(result) if result else ""
-                last_result = result
-
-            if step_hooks.get("after"):
-                _call_hook(loader, step_hooks["after"], last_result, f"step:{step_name}:after")
-
-            logger.info(
-                "Flow step '%s' completed (crew=%s)",
-                step_name,
-                crew_ref,
-                extra={
-                    "event": "flow_step_completed",
-                    "flow_name": flow_name,
-                    "step_name": step_name,
-                    "crew_ref": crew_ref,
-                },
-            )
-
-        elif step_type == "function":
-            fn_path = step.get("function_path", "")
-            if fn_path and ":" in fn_path:
-                module_path, fn_name = fn_path.rsplit(":", 1)
-                from blackbeard.resources import (
-                    ALLOWED_CALLABLE_MODULE_PREFIXES,
-                    BLOCKED_CALLABLE_MODULES,
-                )
-
-                top_module = module_path.split(".")[0]
-                if top_module in BLOCKED_CALLABLE_MODULES:
-                    logger.warning(
-                        "Flow step '%s' blocked: module '%s' is not allowed",
-                        step_name,
-                        top_module,
-                        extra={
-                            "event": "flow_step_blocked",
-                            "flow_name": flow_name,
-                            "step_name": step_name,
-                            "blocked_module": top_module,
-                        },
-                    )
-                    step_outputs[step_name] = "error: blocked module"
-                elif not fn_path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
-                    logger.warning(
-                        "Flow step '%s' blocked: function_path '%s' not in allowlist",
-                        step_name,
-                        fn_path,
-                        extra={
-                            "event": "flow_step_blocked",
-                            "flow_name": flow_name,
-                            "step_name": step_name,
-                            "function_path": fn_path,
-                        },
-                    )
-                    step_outputs[step_name] = "error: function not in allowlist"
-                else:
-                    try:
-                        import importlib
-
-                        mod = importlib.import_module(module_path)
-                        fn = getattr(mod, fn_name)
-                        step_result = fn({**inputs, **step_outputs})
-                        step_outputs[step_name] = step_result
-                    except Exception as exc:
-                        logger.warning(
-                            "Flow function step '%s' failed: %s",
-                            step_name,
-                            exc,
-                            exc_info=True,
-                            extra={
-                                "event": "flow_function_step_failed",
-                                "flow_name": flow_name,
-                                "step_name": step_name,
-                                "function_path": fn_path,
-                                "error_type": type(exc).__name__,
-                            },
-                        )
-                        step_outputs[step_name] = "error: step execution failed"
-
-        elif step_type == "router":
-            fn_path = step.get("function_path", "")
-            routes = step.get("routes", {})
-            if fn_path and ":" in fn_path:
-                fn = ResourceLoader._import_callable(fn_path)
-                if fn:
-                    try:
-                        route_key = str(fn({**inputs, **step_outputs}))
-                        step_outputs[step_name] = route_key
-                        next_step = routes.get(route_key)
-                        if next_step:
-                            logger.info(
-                                "Router '%s' chose route '%s' → '%s'",
-                                step_name,
-                                route_key,
-                                next_step,
-                            )
-                        else:
-                            logger.warning(
-                                "Router '%s' returned unknown route: %s",
-                                step_name,
-                                route_key,
-                            )
-                    except Exception as exc:
-                        logger.warning("Router step '%s' failed: %s", step_name, exc)
-                        step_outputs[step_name] = f"error: {type(exc).__name__}"
-
-        elif step_type == "condition":
-            condition = step.get("condition", "")
-            routes = step.get("routes", {})
-            if condition:
-                result = _evaluate_condition(condition, {**inputs, **step_outputs})
-                route_key = "true" if result else "false"
-                step_outputs[step_name] = result
-                next_step = routes.get(route_key)
-                logger.info(
-                    "Condition '%s' evaluated to %s → '%s'",
-                    step_name,
-                    route_key,
-                    next_step or "(no route)",
-                )
-
-        elif step_type == "transform":
-            wasm_ref = step.get("wasm_module")
-            if wasm_ref:
-                try:
-                    import json as _json
-
-                    from blackbeard.engine.sandbox.wasm_runtime import WasmSandbox
-
-                    sandbox = WasmSandbox()
-                    transform_input = _json.dumps({**inputs, **step_outputs})
-                    wasm_result = sandbox.execute(wasm_ref, transform_input)
-                    step_outputs[step_name] = (
-                        _json.loads(wasm_result.output) if wasm_result.output else {}
-                    )
-                except Exception as exc:
-                    logger.warning("Transform step '%s' failed: %s", step_name, exc)
-                    step_outputs[step_name] = f"error: {type(exc).__name__}"
-            else:
-                logger.warning("Transform step '%s' has no wasm_module — skipped", step_name)
-
-    return last_result
-
-
-def _evaluate_condition(expr: str, context: dict[str, Any]) -> bool:
-    """Evaluate a simple condition expression safely (NO eval/exec).
-
-    Supports: key comparisons like "score > 0.8", "status == completed",
-    key existence like "error in outputs", and boolean keys.
-    """
-    expr = expr.strip()
-
-    for op, fn in [
-        (">=", lambda a, b: a >= b),
-        ("<=", lambda a, b: a <= b),
-        ("!=", lambda a, b: a != b),
-        ("==", lambda a, b: a == b),
-        (">", lambda a, b: a > b),
-        ("<", lambda a, b: a < b),
-    ]:
-        if op in expr:
-            left, right = expr.split(op, 1)
-            left_val = _resolve_dotted(left.strip().strip("'\""), context)
-            right_str = right.strip().strip("'\"")
-            try:
-                right_val = float(right_str)
-            except ValueError:
-                right_val = right_str
-            try:
-                return bool(fn(left_val, right_val))
-            except TypeError:
-                return False
-
-    if " in " in expr:
-        key, container = expr.split(" in ", 1)
-        container_val = _resolve_dotted(container.strip(), context)
-        if isinstance(container_val, (dict, list, str)):
-            return key.strip().strip("'\"") in container_val
-        return False
-
-    val = _resolve_dotted(expr, context)
-    return bool(val)
-
-
-def _resolve_dotted(path: str, context: dict[str, Any]) -> Any:
-    """Resolve a dotted path like 'outputs.score' against a context dict."""
-    parts = path.split(".")
-    current: Any = context
-    for part in parts:
-        if isinstance(current, dict) and part in current:
-            current = current[part]
-        else:
-            return None
-    return current
 
 
 async def _run_crew_async(
@@ -1254,6 +904,7 @@ async def _run_crew_async(
                         name=f"exec-{execution_id}",
                         max_budget=max_budget,
                         max_tokens=max_tokens,
+                        duration="4h",
                         metadata={
                             "execution_id": str(execution_id),
                             "crew_name": crew_name,
@@ -1281,9 +932,7 @@ async def _run_crew_async(
                     )
                     virtual_api_key = None
 
-            loader = ResourceLoader(
-                mock_resources, api_key=virtual_api_key, policies=policy_specs
-            )
+            loader = ResourceLoader(mock_resources, api_key=virtual_api_key, policies=policy_specs)
             crew = loader.build_crew(crew_name)
 
             # Wire up execution event listener for real-time streaming.
@@ -1300,9 +949,7 @@ async def _run_crew_async(
             hooks = crew_spec.get("hooks", {})
 
             if execution_type == ExecutionType.FLOW:
-                result = _run_flow_steps(
-                    loader, resource_snapshot, crew_name, inputs, listener
-                )
+                result = _run_flow_steps(loader, resource_snapshot, crew_name, inputs, listener)
             elif execution_type == ExecutionType.TRAIN:
                 crew.train(
                     n_iterations=n_iterations,
@@ -1719,6 +1366,75 @@ async def cancel_execution(session: AsyncSession, execution_id: UUID) -> Executi
     return execution
 
 
+async def cleanup_orphaned_keys() -> int:
+    """Delete LiteLLM virtual keys from crashed executions.
+
+    Called during app startup.  Finds executions that were in 'running' or
+    'queued' status (interrupted by crash) and still have a ``litellm_key``
+    set, then deletes those keys from the LiteLLM proxy.
+
+    Returns the number of keys deleted.
+    """
+    from blackbeard.litellm.key_manager import VirtualKeyManager
+
+    keys_deleted = 0
+    async with async_session() as session:
+        stale = await session.execute(
+            select(Execution).where(
+                Execution.status.in_([ExecutionStatus.QUEUED, ExecutionStatus.RUNNING]),
+                Execution.litellm_key.isnot(None),
+            )
+        )
+        for execution in stale.scalars():
+            key_mgr = VirtualKeyManager(
+                proxy_url=settings.litellm_proxy_url,
+                master_key=settings.litellm_master_key.get_secret_value(),
+            )
+            try:
+                deleted = await key_mgr.delete_key(execution.litellm_key)
+                if deleted:
+                    keys_deleted += 1
+                    logger.info(
+                        "Orphaned virtual key deleted for execution %s",
+                        execution.id,
+                        extra={
+                            "event": "orphaned_key_deleted",
+                            "execution_id": str(execution.id),
+                        },
+                    )
+                else:
+                    logger.warning(
+                        "Failed to delete orphaned virtual key for execution %s",
+                        execution.id,
+                        extra={
+                            "event": "orphaned_key_delete_failed",
+                            "execution_id": str(execution.id),
+                        },
+                    )
+            except Exception:
+                logger.warning(
+                    "Error deleting orphaned virtual key for execution %s",
+                    execution.id,
+                    exc_info=True,
+                    extra={
+                        "event": "orphaned_key_delete_error",
+                        "execution_id": str(execution.id),
+                    },
+                )
+
+    if keys_deleted > 0:
+        logger.info(
+            "Cleaned up %d orphaned virtual keys on startup",
+            keys_deleted,
+            extra={
+                "event": "orphaned_keys_cleanup",
+                "keys_deleted": keys_deleted,
+            },
+        )
+
+    return keys_deleted
+
+
 async def recover_stale_executions() -> int:
     """Mark any QUEUED or RUNNING executions as FAILED on startup.
 
@@ -1728,8 +1444,22 @@ async def recover_stale_executions() -> int:
     clean up stale rows so users see a clear failure rather than an execution
     that is stuck forever.
 
+    Also cleans up orphaned LiteLLM virtual keys from crashed executions
+    before marking them as failed (so the key reference is still available
+    for lookup).
+
     Returns the number of executions recovered.
     """
+    # Clean up orphaned virtual keys before marking executions as failed
+    try:
+        await cleanup_orphaned_keys()
+    except Exception:
+        logger.warning(
+            "Orphaned key cleanup failed — continuing with stale execution recovery",
+            exc_info=True,
+            extra={"event": "orphaned_key_cleanup_error"},
+        )
+
     now = datetime.now(UTC)
     async with async_session() as session:
         result = await session.execute(

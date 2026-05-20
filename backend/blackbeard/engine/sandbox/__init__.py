@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from blackbeard.engine.sandbox.base import (
+    BaseSandbox,
+    SandboxResult,
+    SandboxRuntimeError,
+    SandboxTimeoutError,
+)
 from blackbeard.engine.sandbox.container_runtime import (
     ContainerResult,
     ContainerRuntimeError,
@@ -27,6 +33,7 @@ from blackbeard.engine.sandbox.selector import TIER_ORDER, select_sandbox, tier_
 
 __all__ = [
     "TIER_ORDER",
+    "BaseSandbox",
     "ContainerResult",
     "ContainerRuntimeError",
     "ContainerSandbox",
@@ -40,6 +47,9 @@ __all__ = [
     "MicroVMRuntimeError",
     "MicroVMSandbox",
     "MicroVMTimeoutError",
+    "SandboxResult",
+    "SandboxRuntimeError",
+    "SandboxTimeoutError",
     "is_gvisor_available",
     "is_krun_available",
     "select_sandbox",

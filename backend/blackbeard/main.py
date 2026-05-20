@@ -187,6 +187,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     scheduler = AutomationScheduler()
     await scheduler.start()
+    # Store on app.state so resource CRUD can trigger reload on Automation changes.
+    app.state.scheduler = scheduler
 
     # Start gRPC server alongside FastAPI
     grpc_server = None

@@ -55,7 +55,17 @@ from blackbeard.models.execution_schemas import (
 
 logger = logging.getLogger(__name__)
 
-_MAX_STREAM_POLLS = 400  # ~32 min with progressive backoff (2s→3s→5s)
+# Progressive poll backoff — balances responsiveness with DB load.
+# Phase 1 (polls 1-30, ~30s): 1s interval — fast feedback at start
+# Phase 2 (polls 31-60, ~90s): 3s interval — medium cadence
+# Phase 3 (polls 61+):         5s interval — steady state
+# Total ~37 min before timeout.
+#
+# TODO(perf): Replace DB polling with Valkey pub/sub. After writing an
+# execution event to the DB, publish to a ``exec:{execution_id}`` channel.
+# The SSE/WS handler subscribes instead of polling. This would give
+# near-instant delivery with zero DB load per connected client.
+_MAX_STREAM_POLLS = 400
 
 router = APIRouter(tags=["executions"])
 
@@ -566,6 +576,86 @@ async def respond_to_execution(
     return HITLResponseResult(status="recorded", execution_id=str(execution_id))
 
 
+@router.post(
+    "/executions/{execution_id}/retry",
+    response_model=ExecutionResponse,
+    status_code=202,
+    responses={
+        202: {"description": "New execution created from the original's configuration"},
+        404: {"description": "Execution not found"},
+        409: {"description": "Can only retry terminal executions"},
+    },
+)
+async def retry_execution(
+    request: Request,
+    response: Response,
+    execution_id: UUID = Path(..., description="Execution UUID to retry"),
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(get_current_user),
+) -> ExecutionResponse:
+    """Retry a failed or cancelled execution.
+
+    Creates a new execution with the same crew, namespace, and inputs as the
+    original. Only terminal executions (completed, failed, cancelled) can be
+    retried. Returns the new execution immediately with status=queued.
+    """
+    original = await _executor_mod.get_execution(session, execution_id)
+    if not original:
+        raise HTTPException(status_code=404, detail=f"Execution '{execution_id}' not found")
+    if original.status not in TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Can only retry terminal executions, current status is '{original.status.value}'"
+            ),
+        )
+
+    try:
+        new_execution = await _executor_mod.kickoff(
+            session,
+            original.crew_name,
+            original.inputs,
+            original.crew_namespace,
+            user=user,
+        )
+    except ExecutionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ExecutionError as exc:
+        logger.error(
+            "Retry failed for execution %s: %s",
+            execution_id,
+            exc,
+            exc_info=True,
+            extra={
+                "event": "retry_failed",
+                "original_execution_id": str(execution_id),
+                "crew_name": original.crew_name,
+                "error_type": type(exc).__name__,
+            },
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Retry could not create a new execution. Check server logs.",
+        ) from exc
+
+    await log_audit(
+        session,
+        action="execution_retried",
+        resource_type="Execution",
+        resource_id=str(execution_id),
+        detail={
+            "new_execution_id": str(new_execution.id),
+            "crew_name": original.crew_name,
+            "namespace": original.crew_namespace,
+        },
+        **audit_from_request(request, user),
+    )
+    await session.commit()
+
+    response.headers["Location"] = f"/api/v1/executions/{new_execution.id}"
+    return ExecutionResponse.from_db(new_execution)
+
+
 @router.patch(
     "/executions/{execution_id}/cancel",
     response_model=ExecutionResponse,
@@ -726,7 +816,8 @@ async def stream_execution(
                             )
                             break
 
-                    await asyncio.sleep(2 if polls < 10 else 3 if polls < 30 else 5)
+                    # Progressive backoff: 1s (first 30s) → 3s (30s-2min) → 5s (2min+)
+                    await asyncio.sleep(1 if polls < 30 else 3 if polls < 60 else 5)
                 else:
                     logger.warning(
                         "SSE stream timeout: execution_id=%s polls=%d",
@@ -777,6 +868,7 @@ async def stream_execution(
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "X-Accel-Buffering": "no",
+            "X-Poll-Interval": "1s/3s/5s (progressive)",
         },
     )
 
@@ -859,9 +951,7 @@ async def ws_execution(
                     await websocket.send_json({"event": "status", "data": data})
                     last_status = current_status
                 else:
-                    current_status = await _executor_mod.get_execution_status(
-                        session, execution_id
-                    )
+                    current_status = await _executor_mod.get_execution_status(session, execution_id)
                     if current_status is None:
                         await websocket.send_json(
                             {"event": "error", "data": {"detail": "Execution not found"}}
@@ -883,20 +973,23 @@ async def ws_execution(
                     session, execution_id, after=last_event_seq, limit=50
                 )
                 for ev in new_events:
-                    await websocket.send_json({
-                        "event": ev.event_type,
-                        "data": {
-                            "sequence": ev.sequence,
-                            "timestamp": ev.timestamp.isoformat(),
-                            **ev.data,
-                        },
-                    })
+                    await websocket.send_json(
+                        {
+                            "event": ev.event_type,
+                            "data": {
+                                "sequence": ev.sequence,
+                                "timestamp": ev.timestamp.isoformat(),
+                                **ev.data,
+                            },
+                        }
+                    )
                     last_event_seq = ev.sequence
 
                 if current_status in TERMINAL_STATUSES:
                     break
 
-            await asyncio.sleep(2 if polls < 10 else 3 if polls < 30 else 5)
+            # Progressive backoff: 1s (first 30s) → 3s (30s-2min) → 5s (2min+)
+            await asyncio.sleep(1 if polls < 30 else 3 if polls < 60 else 5)
 
     except WebSocketDisconnect:
         pass

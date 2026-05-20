@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
 from blackbeard.api.collaboration import (
     ALLOWED_MESSAGE_TYPES,
-    _broadcast,
+    _broadcast_local,
     _rooms,
+    _validate_ws_auth,
     get_room_stats,
     router,
 )
+from blackbeard.api.middleware import _EXPECTED_API_KEY
+from blackbeard.auth.jwt import create_access_token
 
 # ---------------------------------------------------------------------------
 # Minimal app for WebSocket integration tests — avoids the full lifespan
@@ -21,6 +26,50 @@ from blackbeard.api.collaboration import (
 # ---------------------------------------------------------------------------
 _ws_app = FastAPI()
 _ws_app.include_router(router, prefix="/api/v1")
+
+
+def _auth_qs() -> str:
+    """Return query string with valid API key for WebSocket auth."""
+    return f"?api_key={_EXPECTED_API_KEY}"
+
+
+def _jwt_qs() -> str:
+    """Return query string with valid JWT token for WebSocket auth."""
+    token = create_access_token(
+        user_id=str(uuid.uuid4()), email="test@example.com"
+    )
+    return f"?token={token}"
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for auth validation
+# ---------------------------------------------------------------------------
+
+
+class TestValidateWsAuth:
+    def test_valid_api_key(self) -> None:
+        assert _validate_ws_auth("", _EXPECTED_API_KEY) is True
+
+    def test_invalid_api_key(self) -> None:
+        assert _validate_ws_auth("", "wrong-key") is False
+
+    def test_empty_credentials(self) -> None:
+        assert _validate_ws_auth("", "") is False
+
+    def test_valid_jwt(self) -> None:
+        token = create_access_token(
+            user_id=str(uuid.uuid4()), email="test@example.com"
+        )
+        assert _validate_ws_auth(token, "") is True
+
+    def test_invalid_jwt(self) -> None:
+        assert _validate_ws_auth("invalid.jwt.token", "") is False
+
+    def test_refresh_token_rejected(self) -> None:
+        from blackbeard.auth.jwt import create_refresh_token
+
+        token = create_refresh_token(user_id=str(uuid.uuid4()))
+        assert _validate_ws_auth(token, "") is False
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +148,7 @@ class TestBroadcast:
         _rooms["test-crew"] = {sender, other1, other2}  # type: ignore[arg-type]
 
         msg = {"type": "node_move", "data": {"id": "n1", "x": 10, "y": 20}}
-        await _broadcast("test-crew", sender, msg)  # type: ignore[arg-type]
+        await _broadcast_local("test-crew", sender, msg)  # type: ignore[arg-type]
 
         assert msg in other1.sent
         assert msg in other2.sent
@@ -112,7 +161,7 @@ class TestBroadcast:
         sender = FakeWebSocket()
         _rooms["test-crew"] = {sender}  # type: ignore[arg-type]
 
-        await _broadcast("test-crew", sender, {"type": "node_add", "data": {}})  # type: ignore[arg-type]
+        await _broadcast_local("test-crew", sender, {"type": "node_add", "data": {}})  # type: ignore[arg-type]
 
         assert len(sender.sent) == 0
         _rooms.clear()
@@ -125,7 +174,7 @@ class TestBroadcast:
         alive = FakeWebSocket()
         _rooms["test-crew"] = {sender, dead, alive}  # type: ignore[arg-type]
 
-        await _broadcast("test-crew", sender, {"type": "node_delete", "data": {"id": "n1"}})  # type: ignore[arg-type]
+        await _broadcast_local("test-crew", sender, {"type": "node_delete", "data": {"id": "n1"}})  # type: ignore[arg-type]
 
         # Dead connection should have been removed
         assert dead not in _rooms["test-crew"]
@@ -138,8 +187,57 @@ class TestBroadcast:
         _rooms.clear()
         sender = FakeWebSocket()
         # Room doesn't exist — should not raise
-        await _broadcast("nonexistent", sender, {"type": "node_add", "data": {}})  # type: ignore[arg-type]
+        await _broadcast_local("nonexistent", sender, {"type": "node_add", "data": {}})  # type: ignore[arg-type]
         _rooms.clear()
+
+
+# ---------------------------------------------------------------------------
+# WebSocket authentication integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_websocket_rejects_no_auth() -> None:
+    """WebSocket connection without credentials should be rejected with 4401."""
+    _rooms.clear()
+    with TestClient(_ws_app) as tc:
+        with pytest.raises(Exception):
+            with tc.websocket_connect("/api/v1/ws/collab/test-crew"):
+                pass  # Should not reach here
+    _rooms.clear()
+
+
+def test_websocket_rejects_invalid_api_key() -> None:
+    """WebSocket connection with wrong API key should be rejected."""
+    _rooms.clear()
+    with TestClient(_ws_app) as tc:
+        with pytest.raises(Exception):
+            with tc.websocket_connect(
+                "/api/v1/ws/collab/test-crew?api_key=wrong-key"
+            ):
+                pass
+    _rooms.clear()
+
+
+def test_websocket_accepts_valid_api_key() -> None:
+    """WebSocket connection with valid API key should be accepted."""
+    _rooms.clear()
+    with TestClient(_ws_app) as tc, tc.websocket_connect(
+        f"/api/v1/ws/collab/test-crew{_auth_qs()}"
+    ) as ws:
+        msg = ws.receive_json()
+        assert msg["type"] == "room_state"
+    _rooms.clear()
+
+
+def test_websocket_accepts_valid_jwt() -> None:
+    """WebSocket connection with valid JWT should be accepted."""
+    _rooms.clear()
+    with TestClient(_ws_app) as tc, tc.websocket_connect(
+        f"/api/v1/ws/collab/test-crew{_jwt_qs()}"
+    ) as ws:
+        msg = ws.receive_json()
+        assert msg["type"] == "room_state"
+    _rooms.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +249,9 @@ class TestBroadcast:
 def test_websocket_connect_and_room_state() -> None:
     """Client connects and receives room_state with participant count."""
     _rooms.clear()
-    with TestClient(_ws_app) as tc, tc.websocket_connect("/api/v1/ws/collab/test-crew") as ws:
+    with TestClient(_ws_app) as tc, tc.websocket_connect(
+        f"/api/v1/ws/collab/test-crew{_auth_qs()}"
+    ) as ws:
         msg = ws.receive_json()
         assert msg["type"] == "room_state"
         assert msg["data"]["participants"] == 1
@@ -161,10 +261,14 @@ def test_websocket_connect_and_room_state() -> None:
 def test_two_clients_broadcast() -> None:
     """Two clients in same room: messages from one are received by the other."""
     _rooms.clear()
-    with TestClient(_ws_app) as tc, tc.websocket_connect("/api/v1/ws/collab/crew-x") as ws1:
+    with TestClient(_ws_app) as tc, tc.websocket_connect(
+        f"/api/v1/ws/collab/crew-x{_auth_qs()}"
+    ) as ws1:
         ws1.receive_json()  # room_state for ws1
 
-        with tc.websocket_connect("/api/v1/ws/collab/crew-x") as ws2:
+        with tc.websocket_connect(
+            f"/api/v1/ws/collab/crew-x{_auth_qs()}"
+        ) as ws2:
             ws2_room = ws2.receive_json()  # room_state for ws2
             assert ws2_room["data"]["participants"] == 2
 
@@ -186,10 +290,14 @@ def test_two_clients_broadcast() -> None:
 def test_invalid_message_type_ignored() -> None:
     """Messages with invalid types are silently ignored (not broadcast)."""
     _rooms.clear()
-    with TestClient(_ws_app) as tc, tc.websocket_connect("/api/v1/ws/collab/crew-y") as ws1:
+    with TestClient(_ws_app) as tc, tc.websocket_connect(
+        f"/api/v1/ws/collab/crew-y{_auth_qs()}"
+    ) as ws1:
         ws1.receive_json()  # room_state
 
-        with tc.websocket_connect("/api/v1/ws/collab/crew-y") as ws2:
+        with tc.websocket_connect(
+            f"/api/v1/ws/collab/crew-y{_auth_qs()}"
+        ) as ws2:
             ws2.receive_json()  # room_state
             ws1.receive_json()  # participant_joined
 
@@ -213,11 +321,15 @@ def test_different_crews_are_isolated() -> None:
     _rooms.clear()
     with (
         TestClient(_ws_app) as tc,
-        tc.websocket_connect("/api/v1/ws/collab/crew-alpha") as ws_alpha,
+        tc.websocket_connect(
+            f"/api/v1/ws/collab/crew-alpha{_auth_qs()}"
+        ) as ws_alpha,
     ):
         ws_alpha.receive_json()  # room_state
 
-        with tc.websocket_connect("/api/v1/ws/collab/crew-beta") as ws_beta:
+        with tc.websocket_connect(
+            f"/api/v1/ws/collab/crew-beta{_auth_qs()}"
+        ) as ws_beta:
             ws_beta.receive_json()  # room_state
 
             # Send message in crew-alpha
@@ -235,10 +347,14 @@ def test_different_crews_are_isolated() -> None:
 def test_disconnect_updates_participant_count() -> None:
     """When a client disconnects, remaining clients get participant_left."""
     _rooms.clear()
-    with TestClient(_ws_app) as tc, tc.websocket_connect("/api/v1/ws/collab/crew-dc") as ws1:
+    with TestClient(_ws_app) as tc, tc.websocket_connect(
+        f"/api/v1/ws/collab/crew-dc{_auth_qs()}"
+    ) as ws1:
         ws1.receive_json()  # room_state
 
-        with tc.websocket_connect("/api/v1/ws/collab/crew-dc") as ws2:
+        with tc.websocket_connect(
+            f"/api/v1/ws/collab/crew-dc{_auth_qs()}"
+        ) as ws2:
             ws2.receive_json()  # room_state
             ws1.receive_json()  # participant_joined
 
@@ -254,7 +370,9 @@ def test_room_cleanup_on_last_disconnect() -> None:
     _rooms.clear()
     with (
         TestClient(_ws_app) as tc,
-        tc.websocket_connect("/api/v1/ws/collab/crew-cleanup") as ws,
+        tc.websocket_connect(
+            f"/api/v1/ws/collab/crew-cleanup{_auth_qs()}"
+        ) as ws,
     ):
         ws.receive_json()  # room_state
         assert "crew-cleanup" in _rooms
@@ -269,11 +387,15 @@ def test_all_message_types_broadcast() -> None:
     _rooms.clear()
     with (
         TestClient(_ws_app) as tc,
-        tc.websocket_connect("/api/v1/ws/collab/crew-types") as ws1,
+        tc.websocket_connect(
+            f"/api/v1/ws/collab/crew-types{_auth_qs()}"
+        ) as ws1,
     ):
         ws1.receive_json()  # room_state
 
-        with tc.websocket_connect("/api/v1/ws/collab/crew-types") as ws2:
+        with tc.websocket_connect(
+            f"/api/v1/ws/collab/crew-types{_auth_qs()}"
+        ) as ws2:
             ws2.receive_json()  # room_state
             ws1.receive_json()  # participant_joined
 

@@ -12,6 +12,8 @@ from typing import Any, cast
 
 import httpx
 
+from blackbeard.http_client import get_client
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,11 +26,34 @@ class VirtualKeyManager:
 
     Uses the LiteLLM proxy's admin API (authenticated with the master key)
     to create and delete virtual keys with budget constraints.
+
+    An optional ``client`` parameter allows injecting a shared
+    ``httpx.AsyncClient`` instead of creating one per call.  When omitted,
+    a module-level shared client is obtained via ``get_client()``.
     """
 
-    def __init__(self, proxy_url: str, master_key: str) -> None:
+    def __init__(
+        self,
+        proxy_url: str,
+        master_key: str,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
         self._proxy_url = proxy_url.rstrip("/")
         self._master_key = master_key
+        self._client = client
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return the shared httpx client for LiteLLM key operations."""
+        if self._client is not None:
+            return self._client
+        return get_client(
+            "litellm-keys",
+            timeout=10.0,
+            headers={
+                "Authorization": f"Bearer {self._master_key}",
+                "Content-Type": "application/json",
+            },
+        )
 
     async def create_key(
         self,
@@ -36,6 +61,7 @@ class VirtualKeyManager:
         name: str,
         max_budget: float | None = None,
         max_tokens: int | None = None,
+        duration: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create a virtual key with optional budget limits.
@@ -45,6 +71,9 @@ class VirtualKeyManager:
             max_budget: Maximum spend in USD.  ``None`` means unlimited.
             max_tokens: Maximum total tokens (mapped to LiteLLM ``tpm_limit``).
                 ``None`` means unlimited.
+            duration: Key TTL as a duration string (e.g. ``"4h"``, ``"30m"``).
+                ``None`` means no expiry.  Sets auto-expiration so keys are
+                cleaned up even if the process crashes before ``delete_key``.
             metadata: Arbitrary metadata stored on the key.
 
         Returns:
@@ -59,21 +88,23 @@ class VirtualKeyManager:
             payload["max_budget"] = max_budget
         if max_tokens is not None:
             payload["tpm_limit"] = max_tokens
+        if duration is not None:
+            payload["duration"] = duration
         if metadata is not None:
             payload["metadata"] = metadata
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(
-                    f"{self._proxy_url}/key/generate",
-                    json=payload,
-                    headers={
-                        "Authorization": f"Bearer {self._master_key}",
-                        "Content-Type": "application/json",
-                    },
-                )
-                resp.raise_for_status()
-                data = cast("dict[str, Any]", resp.json())
+            client = self._get_client()
+            resp = await client.post(
+                f"{self._proxy_url}/key/generate",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {self._master_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            resp.raise_for_status()
+            data = cast("dict[str, Any]", resp.json())
         except httpx.HTTPStatusError as exc:
             raise VirtualKeyError(
                 f"LiteLLM /key/generate failed: {exc.response.status_code} "
@@ -110,16 +141,16 @@ class VirtualKeyManager:
             ``True`` if deletion succeeded, ``False`` otherwise.
         """
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(
-                    f"{self._proxy_url}/key/delete",
-                    json={"keys": [key]},
-                    headers={
-                        "Authorization": f"Bearer {self._master_key}",
-                        "Content-Type": "application/json",
-                    },
-                )
-                resp.raise_for_status()
+            client = self._get_client()
+            resp = await client.post(
+                f"{self._proxy_url}/key/delete",
+                json={"keys": [key]},
+                headers={
+                    "Authorization": f"Bearer {self._master_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            resp.raise_for_status()
         except httpx.HTTPError as exc:
             logger.warning(
                 "Failed to delete virtual key: %s",

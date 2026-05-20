@@ -375,18 +375,20 @@ def test_collaboration_non_dict_message_ignored():
     from starlette.testclient import TestClient
 
     from blackbeard.api.collaboration import _rooms, router
+    from blackbeard.api.middleware import _EXPECTED_API_KEY
 
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
 
+    auth_qs = f"?api_key={_EXPECTED_API_KEY}"
     _rooms.clear()
     with (
         TestClient(app) as tc,
-        tc.websocket_connect("/api/v1/ws/collab/test-nondict") as ws1,
+        tc.websocket_connect(f"/api/v1/ws/collab/test-nondict{auth_qs}") as ws1,
     ):
         ws1.receive_json()  # room_state
 
-        with tc.websocket_connect("/api/v1/ws/collab/test-nondict") as ws2:
+        with tc.websocket_connect(f"/api/v1/ws/collab/test-nondict{auth_qs}") as ws2:
             ws2.receive_json()  # room_state
             ws1.receive_json()  # participant_joined
 

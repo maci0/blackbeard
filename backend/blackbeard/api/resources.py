@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import get_current_user
-from blackbeard.kinds import NAME_PATTERN, PLURAL_TO_KIND
+from blackbeard.kinds import NAME_PATTERN, PLURAL_TO_KIND, ResourceKind
 from blackbeard.models import User, get_session
 from blackbeard.models.resource_schemas import (
     ResourceCreate,
@@ -29,6 +29,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["resources"])
 
 _KIND_PATTERN = "^(" + "|".join(PLURAL_TO_KIND.keys()) + ")$"
+
+_AUTOMATION_KIND = ResourceKind.AUTOMATION.value
+
+
+async def _maybe_reload_scheduler(request: Request, kind: str) -> None:
+    """Trigger scheduler reload when an Automation resource is modified."""
+    if kind != _AUTOMATION_KIND:
+        return
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is not None:
+        try:
+            await scheduler.reload()
+        except Exception:
+            logger.warning(
+                "Scheduler reload failed after Automation change",
+                exc_info=True,
+                extra={"event": "scheduler_reload_failed"},
+            )
 
 
 def _resolve_kind(kind_plural: str) -> str:
@@ -169,6 +187,7 @@ async def create_resource(
         response.headers["Location"] = f"/api/v1/{kind_plural}/{data.metadata.name}?namespace={ns}"
     else:
         response.status_code = 200
+    await _maybe_reload_scheduler(request, url_kind)
     return ResourceResponse.from_db(resource)
 
 
@@ -297,6 +316,7 @@ async def update_resource(
             status_code=422,
             detail=[e.to_dict() for e in exc.errors],
         ) from exc
+    await _maybe_reload_scheduler(request, kind)
     return ResourceResponse.from_db(resource)
 
 
@@ -349,3 +369,5 @@ async def delete_resource(
                 "namespace": namespace,
             },
         )
+    else:
+        await _maybe_reload_scheduler(request, kind)

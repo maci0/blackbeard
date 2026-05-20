@@ -7,6 +7,7 @@ providing a high-performance gRPC interface alongside the REST API.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -34,6 +35,97 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _unauthenticated_handler(_request: Any, context: grpc.aio.ServicerContext) -> None:
+    """Abort the call with UNAUTHENTICATED status."""
+    context.abort(grpc.StatusCode.UNAUTHENTICATED, "Authentication required")
+
+
+class _AbortingHandler(grpc.GenericRpcHandler):
+    """RPC handler that aborts every call with UNAUTHENTICATED."""
+
+    def service(self, handler_call_details: Any) -> grpc.RpcMethodHandler:
+        return grpc.unary_unary_rpc_method_handler(_unauthenticated_handler)
+
+
+class AuthInterceptor(grpc.aio.ServerInterceptor):
+    """gRPC server interceptor that validates API key or JWT Bearer token.
+
+    Allows the ``Health`` RPC without authentication.  All other RPCs
+    require either an ``x-api-key`` metadata entry matching the configured
+    API key, or an ``authorization: Bearer <JWT>`` metadata entry with a
+    valid access token.
+    """
+
+    async def intercept_service(
+        self,
+        continuation: Any,
+        handler_call_details: grpc.HandlerCallDetails,
+    ) -> Any:
+        # Allow Health checks without auth
+        method = handler_call_details.method
+        if method.endswith("/Health"):
+            return await continuation(handler_call_details)
+
+        metadata = dict(handler_call_details.invocation_metadata)
+
+        # Check API key
+        api_key = metadata.get("x-api-key", "")
+        if api_key:
+            from blackbeard.api.middleware import _EXPECTED_API_KEY
+
+            if hmac.compare_digest(api_key, _EXPECTED_API_KEY):
+                return await continuation(handler_call_details)
+
+            logger.warning(
+                "gRPC auth failed: invalid API key for %s",
+                method,
+                extra={
+                    "event": "grpc_auth_failure",
+                    "method": method,
+                    "reason": "invalid_api_key",
+                },
+            )
+            return _AbortingHandler()
+
+        # Check Bearer token
+        auth = metadata.get("authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+            import jwt as pyjwt
+
+            from blackbeard.auth.jwt import decode_token
+
+            try:
+                payload = decode_token(token)
+                if payload.get("type") != "access":
+                    raise pyjwt.InvalidTokenError("Not an access token")
+                return await continuation(handler_call_details)
+            except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError) as exc:
+                logger.warning(
+                    "gRPC auth failed: invalid JWT for %s (%s)",
+                    method,
+                    type(exc).__name__,
+                    extra={
+                        "event": "grpc_auth_failure",
+                        "method": method,
+                        "reason": type(exc).__name__,
+                    },
+                )
+                return _AbortingHandler()
+
+        # No credentials provided
+        logger.warning(
+            "gRPC auth failed: no credentials for %s",
+            method,
+            extra={
+                "event": "grpc_auth_failure",
+                "method": method,
+                "reason": "no_credentials",
+            },
+        )
+        return _AbortingHandler()
+
+
 def _resource_to_proto(resource: Any) -> blackbeard_pb2.Resource:
     """Convert a Resource ORM object to a protobuf Resource message."""
     return blackbeard_pb2.Resource(
@@ -55,7 +147,9 @@ def _execution_to_proto(execution: Any) -> blackbeard_pb2.Execution:
         id=str(execution.id) if execution.id else "",
         crew_name=execution.crew_name or "",
         namespace=execution.crew_namespace or "default",
-        status=execution.status.value if hasattr(execution.status, "value") else str(execution.status),
+        status=execution.status.value
+        if hasattr(execution.status, "value")
+        else str(execution.status),
         execution_type=(
             execution.execution_type.value
             if hasattr(execution.execution_type, "value")
@@ -314,7 +408,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
 
 async def start_grpc_server(port: int = 50051) -> grpc.aio.Server:
     """Create and start the gRPC server."""
-    server = grpc.aio.server()
+    server = grpc.aio.server(interceptors=[AuthInterceptor()])
     servicer = BlackbeardServicer()
     blackbeard_pb2_grpc.add_BlackbeardServiceServicer_to_server(servicer, server)
     server.add_insecure_port(f"[::]:{port}")
