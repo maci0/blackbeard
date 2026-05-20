@@ -14,6 +14,15 @@ from blackbeard.engine.sandbox.container_runtime import (
     ContainerSandbox,
     ContainerTimeoutError,
 )
+from blackbeard.engine.sandbox.firecracker import (
+    FirecrackerConfigError,
+    FirecrackerError,
+    FirecrackerResult,
+    FirecrackerRuntimeError,
+    FirecrackerSandbox,
+    FirecrackerTimeoutError,
+    is_firecracker_available,
+)
 from blackbeard.engine.sandbox.gvisor_runtime import (
     GVisorResult,
     GVisorRuntimeError,
@@ -29,7 +38,12 @@ from blackbeard.engine.sandbox.microvm_runtime import (
     MicroVMTimeoutError,
     is_krun_available,
 )
-from blackbeard.engine.sandbox.selector import TIER_ORDER, select_sandbox, tier_rank
+from blackbeard.engine.sandbox.selector import (
+    TIER_ORDER,
+    select_microvm_backend,
+    select_sandbox,
+    tier_rank,
+)
 
 __all__ = [
     "TIER_ORDER",
@@ -38,6 +52,12 @@ __all__ = [
     "ContainerRuntimeError",
     "ContainerSandbox",
     "ContainerTimeoutError",
+    "FirecrackerConfigError",
+    "FirecrackerError",
+    "FirecrackerResult",
+    "FirecrackerRuntimeError",
+    "FirecrackerSandbox",
+    "FirecrackerTimeoutError",
     "GVisorResult",
     "GVisorRuntimeError",
     "GVisorSandbox",
@@ -50,8 +70,10 @@ __all__ = [
     "SandboxResult",
     "SandboxRuntimeError",
     "SandboxTimeoutError",
+    "is_firecracker_available",
     "is_gvisor_available",
     "is_krun_available",
+    "select_microvm_backend",
     "select_sandbox",
     "tier_rank",
 ]

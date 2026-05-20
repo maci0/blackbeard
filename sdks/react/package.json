@@ -1,0 +1,31 @@
+{
+  "name": "@blackbeard/react",
+  "version": "0.1.0",
+  "description": "Embeddable React components for Blackbeard Agent Management Platform",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "@types/react": "^19.1.0",
+    "typescript": "^5.8.0"
+  },
+  "files": ["dist"],
+  "license": "MIT"
+}

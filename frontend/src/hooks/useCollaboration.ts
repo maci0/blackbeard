@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useStudioStore } from '@/stores/studioStore'
+import type { RemoteCursor } from '@/components/studio/CursorOverlay'
 import type { Node, Edge } from '@xyflow/react'
 
 /* ------------------------------------------------------------------ */
@@ -18,6 +19,10 @@ interface UseCollaborationReturn {
   connected: boolean
   /** Send a collaboration message to other participants. */
   broadcast: (type: string, data: Record<string, unknown>) => void
+  /** Throttled cursor position broadcast (call on every mousemove). */
+  broadcastCursor: (data: Record<string, unknown>) => void
+  /** Map of remote collaborator cursors keyed by userId. */
+  remoteCursors: Map<string, RemoteCursor>
 }
 
 /* ------------------------------------------------------------------ */
@@ -28,6 +33,10 @@ interface UseCollaborationReturn {
 const RECONNECT_DELAY_MS = 2000
 /** Maximum reconnect attempts before giving up. */
 const MAX_RECONNECT_ATTEMPTS = 5
+/** Minimum interval between cursor broadcast messages (ms). */
+const CURSOR_THROTTLE_MS = 50
+/** Color palette for remote collaborators. */
+const CURSOR_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899']
 
 /* ------------------------------------------------------------------ */
 /* Hook                                                                */
@@ -47,11 +56,14 @@ const MAX_RECONNECT_ATTEMPTS = 5
 export function useCollaboration(crewName: string, enabled: boolean): UseCollaborationReturn {
   const [participants, setParticipants] = useState(1)
   const [connected, setConnected] = useState(false)
+  const [remoteCursors, setRemoteCursors] = useState<Map<string, RemoteCursor>>(new Map())
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectAttemptsRef = useRef(0)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** Flag to suppress re-broadcasting incoming remote changes. */
   const applyingRemoteRef = useRef(false)
+  /** Counter for assigning deterministic colors to new participants. */
+  const colorIndexRef = useRef(0)
 
   useEffect(() => {
     if (!enabled || !crewName) {
@@ -62,6 +74,8 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
       }
       setConnected(false)
       setParticipants(1)
+      setRemoteCursors(new Map())
+      colorIndexRef.current = 0
       return
     }
 
@@ -80,6 +94,7 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
       ws.onclose = () => {
         setConnected(false)
         setParticipants(1)
+        setRemoteCursors(new Map())
         wsRef.current = null
 
         // Auto-reconnect with backoff
@@ -116,6 +131,8 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
       }
       setConnected(false)
       setParticipants(1)
+      setRemoteCursors(new Map())
+      colorIndexRef.current = 0
     }
   }, [crewName, enabled])
 
@@ -202,16 +219,65 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
         break
       }
 
+      case 'cursor_move': {
+        const userId = msg.data['userId'] as string | undefined
+        const name = msg.data['name'] as string | undefined
+        const x = msg.data['x'] as number | undefined
+        const y = msg.data['y'] as number | undefined
+        if (userId && typeof x === 'number' && typeof y === 'number') {
+          setRemoteCursors((prev) => {
+            const next = new Map(prev)
+            const existing = next.get(userId)
+            const colorIdx = colorIndexRef.current++ % CURSOR_COLORS.length
+            const color = existing?.color ?? CURSOR_COLORS[colorIdx] ?? '#6b7280'
+            next.set(userId, {
+              userId,
+              name: name ?? 'Anonymous',
+              x,
+              y,
+              color,
+            })
+            return next
+          })
+        }
+        break
+      }
+
       case 'participant_joined':
-      case 'participant_left':
       case 'room_state':
         setParticipants((msg.data['count'] as number) ?? 1)
         break
 
-      // cursor_move and selection_change could be handled here for
-      // presence features — skipped for MVP
+      case 'participant_left': {
+        setParticipants((msg.data['count'] as number) ?? 1)
+        // Clean up cursor for the departing user if their userId is provided
+        const leftUserId = msg.data['userId'] as string | undefined
+        if (leftUserId) {
+          setRemoteCursors((prev) => {
+            const next = new Map(prev)
+            next.delete(leftUserId)
+            return next
+          })
+        }
+        break
+      }
     }
   }
 
-  return { participants, connected, broadcast }
+  /**
+   * Throttled cursor broadcast. Call on every mousemove; only sends at
+   * most once per CURSOR_THROTTLE_MS.
+   */
+  const lastCursorBroadcastRef = useRef(0)
+  const broadcastCursor = useCallback(
+    (data: Record<string, unknown>) => {
+      const now = Date.now()
+      if (now - lastCursorBroadcastRef.current < CURSOR_THROTTLE_MS) return
+      lastCursorBroadcastRef.current = now
+      broadcast('cursor_move', data)
+    },
+    [broadcast],
+  )
+
+  return { participants, connected, broadcast, broadcastCursor, remoteCursors }
 }

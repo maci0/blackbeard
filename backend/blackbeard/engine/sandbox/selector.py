@@ -10,12 +10,21 @@ Higher tier = more isolation. Policy floor promotes lower tiers upward.
 
 Docker and podman share the same isolation level (container-based).
 gVisor adds syscall-level isolation on top of container runtimes.
-MicroVM provides the highest isolation via Firecracker or Cloud Hypervisor.
+MicroVM provides the highest isolation via Firecracker or libkrun.
+
+The "microvm" tier supports two backends:
+- **Firecracker** (preferred): standalone VMM, each tool gets a dedicated VM
+  with its own kernel. Requires firecracker binary + kernel + rootfs + /dev/kvm.
+- **libkrun** (fallback): OCI runtime wrapping KVM via crun/krun, uses
+  Docker/Podman as the container manager. Lighter setup requirements.
+
+``select_microvm_backend()`` determines which backend to use at runtime.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -78,3 +87,60 @@ def select_sandbox(
         effective = policy_minimum
 
     return effective
+
+
+def select_microvm_backend() -> str:
+    """Determine which MicroVM backend to use at runtime.
+
+    Selection order:
+    1. If ``FIRECRACKER_KERNEL`` is set and ``firecracker`` is available,
+       use Firecracker.
+    2. Else if ``krun``/``crun`` is available, use libkrun.
+    3. Else return ``"none"`` (no microvm backend available).
+
+    This function performs lazy imports to avoid circular dependencies
+    and to skip availability checks for backends that are not needed.
+
+    Returns:
+        ``"firecracker"``, ``"krun"``, or ``"none"``.
+    """
+    # Check Firecracker first — it provides stronger isolation
+    firecracker_kernel = os.environ.get("FIRECRACKER_KERNEL", "")
+    if firecracker_kernel:
+        from blackbeard.engine.sandbox.firecracker import is_firecracker_available
+
+        if is_firecracker_available():
+            logger.info(
+                "MicroVM backend: firecracker (kernel=%s)",
+                firecracker_kernel,
+                extra={
+                    "event": "microvm_backend_selected",
+                    "backend": "firecracker",
+                    "kernel": firecracker_kernel,
+                },
+            )
+            return "firecracker"
+        logger.warning(
+            "FIRECRACKER_KERNEL is set but firecracker binary or /dev/kvm "
+            "not found -- falling back to libkrun",
+            extra={
+                "event": "firecracker_fallback",
+                "kernel": firecracker_kernel,
+            },
+        )
+
+    # Fall back to libkrun
+    from blackbeard.engine.sandbox.microvm_runtime import is_krun_available
+
+    if is_krun_available():
+        logger.info(
+            "MicroVM backend: krun (libkrun)",
+            extra={"event": "microvm_backend_selected", "backend": "krun"},
+        )
+        return "krun"
+
+    logger.warning(
+        "No MicroVM backend available (neither firecracker nor krun found)",
+        extra={"event": "microvm_backend_none"},
+    )
+    return "none"

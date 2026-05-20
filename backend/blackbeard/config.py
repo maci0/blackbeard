@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     # MicroVM sandbox settings (requires crun-krun + /dev/kvm)
     microvm_enabled: bool = True
 
+    # Firecracker MicroVM settings (alternative to libkrun for microvm tier)
+    # Requires: firecracker binary, kernel image, rootfs image, /dev/kvm
+    firecracker_bin: str = "firecracker"
+    firecracker_kernel: str = ""
+    firecracker_rootfs: str = ""
+
     # MuninnDB cognitive memory settings
     muninndb_url: str = "http://localhost:8475"
 

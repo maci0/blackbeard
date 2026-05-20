@@ -16,6 +16,7 @@ import type { RunStatus } from '@/lib/types'
 import { RunDialog, type RunParams } from '@/components/studio/RunDialog'
 import { Toolbar } from '@/components/studio/Toolbar'
 import { CopilotDialog, type CopilotResource } from '@/components/studio/CopilotDialog'
+import { CursorOverlay } from '@/components/studio/CursorOverlay'
 import { YamlEditor } from '@/components/studio/YamlEditor'
 import { autoLayout } from '@/components/studio/autoLayout'
 import type { Node, Edge } from '@xyflow/react'
@@ -162,6 +163,8 @@ function StudioInner() {
     participants: collabParticipants,
     connected: collabConnected,
     broadcast,
+    broadcastCursor,
+    remoteCursors,
   } = useCollaboration(crewName, collabEnabled)
 
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -782,9 +785,26 @@ function StudioInner() {
         collabParticipants={collabParticipants}
       />
 
-      <div className="relative flex flex-1 overflow-hidden">
+      <div
+        className="relative flex flex-1 overflow-hidden"
+        onMouseMove={
+          collabEnabled && collabConnected
+            ? (e) => {
+                broadcastCursor({
+                  x: e.clientX,
+                  y: e.clientY,
+                  userId: 'self',
+                  name: 'You',
+                })
+              }
+            : undefined
+        }
+      >
         <Palette />
         <Canvas onLoadExample={handleLoadExample} />
+        {collabEnabled && collabConnected && (
+          <CursorOverlay cursors={Array.from(remoteCursors.values())} />
+        )}
         {selectedNodeId && <PropertyPanel />}
         {yamlOpen && (
           <div className="w-[360px] shrink-0">
