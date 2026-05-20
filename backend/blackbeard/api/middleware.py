@@ -33,7 +33,10 @@ _auth_failures: dict[str, collections.deque[float]] = {}
 _HEALTH_PATHS = {"/api/v1/health", "/api/v1/health/ready"}
 _DOCS_PATHS = {"/docs", "/openapi.json", "/redoc"}
 _AUTH_PATHS = {"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh"}
-PUBLIC_PATHS = _HEALTH_PATHS | _AUTH_PATHS | (_DOCS_PATHS if settings.debug else set())
+_OIDC_PATHS = {"/api/v1/auth/oidc/login", "/api/v1/auth/oidc/callback", "/api/v1/config/public"}
+PUBLIC_PATHS = (
+    _HEALTH_PATHS | _AUTH_PATHS | _OIDC_PATHS | (_DOCS_PATHS if settings.debug else set())
+)
 
 # Default API key from settings; may be replaced at runtime via set_api_key()
 _EXPECTED_API_KEY = settings.blackbeard_api_key.get_secret_value()

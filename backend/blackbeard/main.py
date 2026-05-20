@@ -339,4 +339,15 @@ app.include_router(webhooks_router, prefix="/api/v1")
 app.include_router(automations_router, prefix="/api/v1")
 app.include_router(collaboration_router, prefix="/api/v1")
 app.include_router(copilot_router, prefix="/api/v1")
+
+if settings.oidc_issuer:
+    from blackbeard.api.oidc import router as oidc_router
+
+    app.include_router(oidc_router, prefix="/api/v1")
+    from starlette.middleware.sessions import SessionMiddleware
+
+    app.add_middleware(
+        SessionMiddleware, secret_key=settings.jwt_secret.get_secret_value()
+    )
+
 app.include_router(resources_router, prefix="/api/v1")

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Anchor, LogIn } from 'lucide-react'
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
+import { Anchor, LogIn, Shield } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useDocumentTitle } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
@@ -21,7 +21,26 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+  const [oidcEnabled, setOidcEnabled] = useState(false)
+  const [searchParams] = useSearchParams()
   const clearError = () => setLocalError(null)
+
+  useEffect(() => {
+    fetch('/api/v1/config/public')
+      .then((r) => r.json())
+      .then((d: { oidc_enabled?: boolean }) => setOidcEnabled(d.oidc_enabled === true))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const token = searchParams.get('token')
+    const refresh = searchParams.get('refresh')
+    if (token && refresh) {
+      localStorage.setItem('blackbeard_token', token)
+      localStorage.setItem('blackbeard_refresh_token', refresh)
+      void navigate(redirectTo, { replace: true })
+    }
+  }, [searchParams, navigate, redirectTo])
 
   const error = localError ?? storeError
 
@@ -117,6 +136,27 @@ export default function Login() {
             </button>
           </fieldset>
         </form>
+
+        {/* SSO button */}
+        {oidcEnabled && (
+          <>
+            <div className="relative my-5">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-background px-2 text-muted-foreground">or</span>
+              </div>
+            </div>
+            <a
+              href="/api/v1/auth/oidc/login"
+              className="flex w-full items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Shield className="h-4 w-4" />
+              Sign in with SSO
+            </a>
+          </>
+        )}
 
         {/* Register link */}
         <p className="mt-6 text-center text-sm text-muted-foreground">

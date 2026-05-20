@@ -46,6 +46,13 @@ class Settings(BaseSettings):
 
     otel_endpoint: str | None = None
 
+    # OIDC / SSO (optional — any OIDC provider: Google, Azure AD, Okta, Keycloak, Authentik)
+    oidc_issuer: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: SecretStr | None = None
+    oidc_redirect_uri: str | None = None
+    oidc_scopes: str = "openid email profile"
+
     # Container sandbox settings
     container_runtime: str = "auto"  # "docker", "podman", or "auto"
     container_default_image: str = "python:3.13-slim"

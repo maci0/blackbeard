@@ -60,6 +60,14 @@ class ReadinessResponse(BaseModel):
     checks: dict[str, ComponentCheck]
 
 
+@router.get("/config/public")
+async def public_config() -> dict[str, bool]:
+    """Public configuration — no auth required."""
+    from blackbeard.config import settings as _settings
+
+    return {"oidc_enabled": bool(_settings.oidc_issuer)}
+
+
 @router.get("/health", response_model=HealthResponse)
 async def health(response: Response) -> HealthResponse:
     response.headers["Cache-Control"] = _NO_CACHE

@@ -198,7 +198,10 @@ async def login(
     user = result.scalar_one_or_none()
 
     password_hash = user.password_hash if user else _DUMMY_HASH
-    valid = verify_password(data.password, password_hash) and user is not None
+    if password_hash == "OIDC_USER_NO_PASSWORD":
+        valid = False
+    else:
+        valid = verify_password(data.password, password_hash) and user is not None
     if not valid:
         logger.warning(
             "Login failed: %s",
