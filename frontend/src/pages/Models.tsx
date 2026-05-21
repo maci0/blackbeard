@@ -15,7 +15,9 @@ import {
   Thermometer,
   Hash,
   Settings,
+  Zap,
 } from 'lucide-react'
+import { api } from '@/api/client'
 import { useResourceStore } from '@/stores/resourceStore'
 import type { Resource } from '@/lib/types'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -76,10 +78,12 @@ function ModelCard({
   resource,
   onDelete,
   onNavigate,
+  onTest,
 }: {
   resource: Resource
   onDelete: () => void
   onNavigate: () => void
+  onTest: () => void
 }) {
   const spec = resource.spec as {
     provider?: string
@@ -100,7 +104,7 @@ function ModelCard({
         }
       }}
       aria-label={`LLM connection: ${resource.metadata.name}`}
-      className="group flex cursor-pointer flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex cursor-pointer flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {/* Header */}
       <div className="border-b bg-muted/20 px-4 pb-3 pt-4">
@@ -118,18 +122,33 @@ function ModelCard({
               )}
             </div>
           </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete()
-            }}
-            onKeyDown={(e) => e.stopPropagation()}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
-            title={`Delete ${resource.metadata.name}`}
-            aria-label={`Delete connection ${resource.metadata.name}`}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex shrink-0 gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onTest()
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+              className="flex h-8 items-center gap-1 rounded border px-2 text-[10px] font-medium text-muted-foreground transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:border-emerald-700 dark:hover:bg-emerald-950 dark:hover:text-emerald-400 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
+              title={`Test connectivity to ${resource.metadata.name}`}
+              aria-label={`Test connection ${resource.metadata.name}`}
+            >
+              <Zap className="h-3 w-3" />
+              Test
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete()
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
+              title={`Delete ${resource.metadata.name}`}
+              aria-label={`Delete connection ${resource.metadata.name}`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -467,6 +486,25 @@ export default function Models() {
     }
   }, [])
 
+  const handleTestModel = async (resource: Resource) => {
+    const name = resource.metadata.name
+    const spec = resource.spec as { provider?: string; model?: string }
+    useToastStore.getState().info(`Testing ${name}...`)
+    try {
+      const resp = await api.post<{ success: boolean; latency_ms?: number; error?: string }>(
+        `/api/v1/models/test`,
+        { provider: spec.provider, model: spec.model },
+      )
+      if (resp.success) {
+        useToastStore.getState().success(`${name} connected (${resp.latency_ms ?? 0}ms)`)
+      } else {
+        useToastStore.getState().error(`${name} failed: ${resp.error ?? 'Unknown error'}`)
+      }
+    } catch (err) {
+      useToastStore.getState().error(`${name}: ${getErrorMessage(err, 'Connection test failed')}`)
+    }
+  }
+
   useDocumentTitle('Models')
 
   useEffect(() => {
@@ -602,6 +640,7 @@ export default function Models() {
                 onNavigate={() =>
                   void navigate(`/resources/llm-connections/${resource.metadata.name}`)
                 }
+                onTest={() => void handleTestModel(resource)}
               />
             ))}
           </div>
