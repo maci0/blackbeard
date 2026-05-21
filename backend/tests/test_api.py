@@ -442,3 +442,80 @@ async def test_create_task_with_dangling_ref_succeeds(client: AsyncClient):
     assert data["kind"] == "Task"
     assert data["metadata"]["name"] == "orphan-task"
     assert data["spec"]["agent"] == "ref:agents/nonexistent"
+
+
+# ---------------------------------------------------------------------------
+# Namespace CRUD
+# ---------------------------------------------------------------------------
+
+
+def _namespace_payload(name: str = "default", description: str = "Default namespace") -> dict:
+    return {
+        "apiVersion": "blackbeard/v1",
+        "kind": "Namespace",
+        "metadata": {"name": name},
+        "spec": {"description": description},
+    }
+
+
+async def test_create_namespace(client: AsyncClient):
+    """POST /namespaces with a valid body should return 201."""
+    response = await client.post(
+        "/api/v1/namespaces", json=_namespace_payload(), headers=API_KEY_HEADER
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["kind"] == "Namespace"
+    assert data["metadata"]["name"] == "default"
+    assert data["spec"]["description"] == "Default namespace"
+
+
+async def test_create_namespace_full_spec(client: AsyncClient):
+    """POST /namespaces with all spec fields should return 201."""
+    payload = {
+        "apiVersion": "blackbeard/v1",
+        "kind": "Namespace",
+        "metadata": {"name": "production"},
+        "spec": {
+            "description": "Production namespace",
+            "labels": {"team": "backend", "env": "prod"},
+            "default_agent_policy": "ref:agent-policies/standard",
+            "resource_quota": {
+                "max_resources": 500,
+                "max_executions_per_hour": 100,
+            },
+        },
+    }
+    response = await client.post("/api/v1/namespaces", json=payload, headers=API_KEY_HEADER)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["spec"]["resource_quota"]["max_resources"] == 500
+
+
+async def test_get_namespace(client: AsyncClient):
+    """GET /namespaces/{name} should return the created namespace."""
+    await client.post("/api/v1/namespaces", json=_namespace_payload(), headers=API_KEY_HEADER)
+    response = await client.get("/api/v1/namespaces/default", headers=API_KEY_HEADER)
+    assert response.status_code == 200
+    assert response.json()["metadata"]["name"] == "default"
+
+
+async def test_list_namespaces(client: AsyncClient):
+    """GET /namespaces should list created namespaces."""
+    await client.post(
+        "/api/v1/namespaces", json=_namespace_payload("ns-a", "A"), headers=API_KEY_HEADER
+    )
+    await client.post(
+        "/api/v1/namespaces", json=_namespace_payload("ns-b", "B"), headers=API_KEY_HEADER
+    )
+    response = await client.get("/api/v1/namespaces", headers=API_KEY_HEADER)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 2
+
+
+async def test_delete_namespace(client: AsyncClient):
+    """DELETE /namespaces/{name} should return 204."""
+    await client.post("/api/v1/namespaces", json=_namespace_payload(), headers=API_KEY_HEADER)
+    response = await client.delete("/api/v1/namespaces/default", headers=API_KEY_HEADER)
+    assert response.status_code == 204

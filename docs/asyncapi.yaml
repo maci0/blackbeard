@@ -1,0 +1,98 @@
+asyncapi: '2.6.0'
+info:
+  title: Blackbeard Webhooks
+  version: '0.1.0'
+  description: |
+    Webhook events delivered to registered URLs when execution state changes.
+    Register webhooks via POST /api/v1/webhooks.
+    Events are signed with HMAC-SHA256 (X-Webhook-Signature header).
+
+channels:
+  execution.started:
+    subscribe:
+      message:
+        $ref: '#/components/messages/ExecutionEvent'
+  execution.completed:
+    subscribe:
+      message:
+        $ref: '#/components/messages/ExecutionEvent'
+  execution.failed:
+    subscribe:
+      message:
+        $ref: '#/components/messages/ExecutionEvent'
+  task.started:
+    subscribe:
+      message:
+        $ref: '#/components/messages/TaskEvent'
+  task.completed:
+    subscribe:
+      message:
+        $ref: '#/components/messages/TaskEvent'
+  tool.started:
+    subscribe:
+      message:
+        $ref: '#/components/messages/ToolEvent'
+  tool.finished:
+    subscribe:
+      message:
+        $ref: '#/components/messages/ToolEvent'
+  llm.started:
+    subscribe:
+      message:
+        $ref: '#/components/messages/LLMEvent'
+  llm.completed:
+    subscribe:
+      message:
+        $ref: '#/components/messages/LLMEvent'
+
+components:
+  messages:
+    ExecutionEvent:
+      headers:
+        type: object
+        properties:
+          X-Webhook-Signature:
+            type: string
+            description: HMAC-SHA256 signature of the body
+          X-Blackbeard-Event:
+            type: string
+            description: Event type
+      payload:
+        type: object
+        required: [execution_id, event_type, timestamp]
+        properties:
+          execution_id:
+            type: string
+            format: uuid
+          event_type:
+            type: string
+          timestamp:
+            type: string
+            format: date-time
+          crew_name:
+            type: string
+          status:
+            type: string
+            enum: [queued, running, completed, failed, cancelled]
+    TaskEvent:
+      payload:
+        type: object
+        properties:
+          execution_id: { type: string }
+          task_name: { type: string }
+          agent_name: { type: string }
+          status: { type: string }
+    ToolEvent:
+      payload:
+        type: object
+        properties:
+          execution_id: { type: string }
+          tool_name: { type: string }
+          tool_type: { type: string }
+    LLMEvent:
+      payload:
+        type: object
+        properties:
+          execution_id: { type: string }
+          model: { type: string }
+          tokens: { type: integer }

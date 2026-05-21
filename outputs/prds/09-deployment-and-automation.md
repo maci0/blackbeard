@@ -6,7 +6,7 @@ Manage the full lifecycle of deployed crews and flows: build, deploy, version, r
 
 ### 1.1 MVP Scope
 
-**Implemented:** Docker Compose deployment + Helm chart for Kubernetes. Automation resource kind with cron, webhook, and API triggers. Background cron scheduler runs in FastAPI lifespan. Webhook trigger endpoint validates HMAC secrets. Crews and Flows can be automated with configurable inputs and max concurrency.
+**Implemented:** Docker Compose deployment + Helm chart for Kubernetes. Automation resource kind with cron, webhook, and API triggers. Background cron scheduler runs in FastAPI lifespan. Webhook trigger endpoint validates HMAC secrets. Crews and Flows can be automated with configurable inputs and max concurrency. Webhooks with register/deliver and HMAC signing. Workflow hooks (before/after on crews and flow steps).
 
 **Deferred to post-MVP:** Deployment lifecycle (build/deploy/version/rollback), versioning strategies, blue-green/canary deployments, A2A protocol endpoints, Automations Dashboard UI, replica scaling.
 
@@ -302,7 +302,7 @@ spec:
 
 ## 9. React Component Export
 
-See PRD 11, section 7 for the React component export specification. This feature is post-v1.
+See PRD 11, section 7 for the React component export specification. Shipped as `@blackbeard/react` SDK in `sdks/react/`.
 
 ## 10. Automations Dashboard (UI)
 

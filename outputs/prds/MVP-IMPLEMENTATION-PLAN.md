@@ -9,47 +9,40 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 | Feature | Scope for MVP |
 |---------|---------------|
 | Resource model | All 12 kinds: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding, Flow (all step types: crew/function/router/condition/transform), KnowledgeSource, Automation (cron/webhook/API triggers). No EnvironmentVariable, Namespace, or standalone ServiceAccount. |
-| Visual editor | Canvas with Agent/Task/Tool/FlowStep nodes, CrewGroup compound nodes, edges for context/tool assignment, property panel, YAML editor (Monaco, bidirectional sync), ELK.js auto-layout, Run/Train/Test mode selector, undo/redo (30 snapshots) |
-| Execution | Sequential + hierarchical crews. Flow steps: crew, function, router (Python dispatch), condition (safe eval), transform (WASM). Train/test via CrewAI native. HITL. Workflow hooks (before/after kickoff, task, flow step). Automation scheduler (cron). gRPC API on :50051. |
-| LLM routing | Fully implemented: LiteLLM Proxy with config generation, virtual keys, spend tracking, per-user registration |
-| Sandbox | `none` and `wasm` tiers (no Docker/MicroVM sandbox) |
+| Visual editor | Canvas with Agent/Task/Tool/FlowStep nodes, CrewGroup compound nodes, edges for context/tool assignment, property panel, YAML editor (Monaco, bidirectional sync), ELK.js auto-layout, Run/Train/Test mode selector, undo/redo (30 snapshots). AI Copilot (prompt-to-crew via LiteLLM). Live collaboration (WebSocket rooms + Valkey pub/sub). Cursor presence (colored cursors + names). |
+| Execution | Sequential + hierarchical crews. Flow steps: crew, function, router (Python dispatch), condition (safe eval), transform (WASM). Train/test via CrewAI native. HITL (`POST /executions/{id}/respond`). Workflow hooks (before/after kickoff, task, flow step). Automation scheduler (cron/webhook/API). gRPC API on :50051 with auth interceptor. Schema guardrails (JSON Schema output validation). Budget enforcement via per-execution LiteLLM virtual keys. |
+| LLM routing | Fully implemented: LiteLLM Proxy with config generation, virtual keys, spend tracking, per-user registration, budget enforcement |
+| Sandbox | Full hierarchy: `none` < `wasm` < `docker/podman` (ContainerSandbox) < `gVisor` (GVisorSandbox) < `MicroVM` (Firecracker + libkrun) |
 | Tools | Python tools (`BaseTool`), WASM tools, MCP tools (stdio + HTTP), builtin tools. Tool discovery. Marketplace import from git. No Composio, no OAuth connectors, no tool compilation CLI |
-| Agent policy | Tool allowlists/denylists, LLM budget enforcement via per-execution LiteLLM virtual keys, delegation constraints (allowed/targets), sandbox tier promotion. Audit logging on all mutations. No network/FS policy enforcement at runtime. |
-| Guardrails | Task-level guardrails (function-based, LLM-based, and schema-based) — wired through CrewAI's built-in guardrail system. No composite chains, no namespace or crew-level guardrails |
-| Observability | Execution event log + SSE streaming + WebSocket streaming + LiteLLM dashboard + token/cost tracking + audit log API + optional OpenTelemetry export |
-| API | REST CRUD for all resource kinds + execution lifecycle + auth + health + audit + marketplace + webhooks + HITL. OpenAPI schema auto-generated. Python + TypeScript SDKs. No gRPC |
-| Auth & RBAC | Built-in email/password auth with JWT tokens (access + refresh). User and Group models (with member management). Role and RoleBinding resource kinds with predefined roles and policies. Authorization middleware accepts both `X-API-Key` and `Authorization: Bearer <jwt>`. Principal chain tracking. WebSocket auth. Visual RBAC editor (Roles, Users, RoleBindings). No SSO/OIDC, no SpiceDB, no OPA. |
+| Agent policy | Tool allowlists/denylists, LLM budget enforcement via per-execution LiteLLM virtual keys, delegation constraints (allowed/targets), sandbox tier promotion. Audit logging on all mutations. PII redaction via Presidio. No network/FS policy enforcement at runtime. |
+| Guardrails | Task-level guardrails (function-based, LLM-based, and schema-based) -- wired through CrewAI's built-in guardrail system. PII guardrail type via Presidio integration. No composite chains, no namespace or crew-level guardrails |
+| Observability | Execution event log + SSE streaming + WebSocket streaming + LiteLLM dashboard + token/cost tracking + audit log API (all mutations logged) + optional OpenTelemetry export |
+| API | REST CRUD for all resource kinds + execution lifecycle + auth + health + audit + marketplace + webhooks (register/deliver with HMAC signing) + HITL. OpenAPI schema auto-generated. gRPC API on :50051 with auth interceptor. Python SDK (`sdks/python/`) + TypeScript SDK (`sdks/typescript/`). React component export via `@blackbeard/react` (`sdks/react/`). |
+| Auth & RBAC | Built-in email/password auth with JWT tokens (access + refresh). User and Group models (with member management). Role and RoleBinding resource kinds with predefined roles and policies. Authorization middleware accepts both `X-API-Key` and `Authorization: Bearer <jwt>`. Principal chain tracking. WebSocket auth. Visual RBAC editor (Roles, Users, RoleBindings). SSO/OIDC via generic OIDC client (`api/oidc.py`). No SpiceDB, no OPA. |
 | CLI | Fully implemented as standalone package with 25+ commands: `apply`, `validate`, `kickoff`, `status`, `get`, `list`, `delete`, `export`, `login`/`logout`/`whoami`/`register`, `user list/invite`, `group list/create/delete/add-member/remove-member/members`, `role list/describe`, `rolebinding list/create`, `executions`, `events --follow`, `cancel`, `apikey generate/rotate/show`, `health`. JWT credential storage in `~/.config/blackbeard/`. |
+| Memory | MuninnDB cognitive memory backend (temporal priority, Hebbian learning, semantic triggers) alongside lancedb/chromadb/qdrant |
 | Onboarding | 5-step welcome wizard dialog on first visit |
-| Deployment | `docker compose up` (5 containers) + Helm chart. No Git deploy, no triggers |
+| Deployment | `docker compose up` (5 containers) + Helm chart. Automation triggers (cron, webhook, API). |
 
 ### Out of scope (post-MVP)
 
 | Feature | Why deferred |
 |---------|-------------|
-| Ory Kratos/Hydra (SSO/OIDC) | Built-in auth covers MVP; SSO deferred |
+| Ory Kratos/Hydra (full identity management) | Generic OIDC client covers SSO needs; full Ory stack deferred |
 | SpiceDB (relationship-based AC) | Role-based RBAC covers MVP; entity-level permissions deferred |
-| OPA (policy-as-code) | MVP policies are simple allowlists — in-process Python check is fine |
+| OPA (policy-as-code) | MVP policies are simple allowlists -- in-process Python check is fine |
 | Temporal (workflow orchestration) | In-process ThreadPoolExecutor is sufficient; durable execution deferred |
-| Presidio (PII redaction) | Not critical for MVP; execution events are stored in own DB |
 | Infisical (secrets) | `.env` files are fine for MVP |
 | MinIO (object storage) | Git-based asset management via export/apply; no blob store needed |
-| Flow router/condition steps | Sequential flow steps work; dynamic routing deferred |
-| Docker/MicroVM sandbox tiers | `none` + `wasm` covers most cases |
 | OAuth integrations (Gmail, Slack, etc.) | Complex, not core |
 | A2A protocol | Inter-agent comms deferred |
 | Asset repository (custom registry) | Git-based via export/apply; MinIO-backed registry deferred |
-| React component export | Post-MVP UX feature |
 | Plugin SDK | Post-MVP extensibility |
 | Namespace-level / crew-level guardrails | Task-level guardrails are sufficient for MVP |
 | Composite guardrail chains | Individual guardrails sufficient for MVP |
-| gRPC API | REST only for MVP |
 | Principal chain intersection | Principal chain is tracked but intersection algorithm deferred |
 | Network/filesystem policy enforcement | Policy is defined but runtime enforcement at sandbox level deferred |
-| AI Copilot (Studio) | Visual editing sufficient for MVP |
-| Live collaboration | Single-user editing for MVP |
 | Guided tour (onboarding) | Welcome wizard sufficient for MVP |
-| Automation resource + triggers | Direct crew kickoff via API sufficient for MVP |
 
 ---
 
@@ -528,13 +521,16 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 - [ ] All LLM calls route through LiteLLM (verified in LiteLLM logs)
 - [ ] Execution event log complete with correct event sequence; live SSE streaming works
 - [ ] Studio: can drag agents/tasks/tools, connect with arrows, edit properties, click Run
-- [ ] WASM sandbox: a tool compiled to `.wasm` runs with fuel limits and capability restrictions
-- [ ] Agent policy: tool allowlist blocks unauthorized tool use; LLM budget stops execution
-- [ ] API: full CRUD on all resource kinds + kickoff/status endpoints
-- [ ] CLI: `apply`, `validate`, `kickoff`, `status` commands work
+- [ ] Full sandbox hierarchy: WASM, Docker/Podman, gVisor, and MicroVM (Firecracker + libkrun) sandboxes run with appropriate isolation
+- [ ] Agent policy: tool allowlist blocks unauthorized tool use; LLM budget stops execution; PII redaction via Presidio
+- [ ] API: full CRUD on all resource kinds + kickoff/status + gRPC on :50051 + webhooks with HMAC signing
+- [ ] CLI: `apply`, `validate`, `kickoff`, `status` + 25 more commands work
+- [ ] SDKs: Python, TypeScript, and React component export (`@blackbeard/react`) available
 - [ ] Zero custom LLM provider code (all handled by LiteLLM)
 - [ ] Execution events stored in PostgreSQL; LLM request details available in LiteLLM dashboard
-- [ ] No external trace backend -- observability via execution_events + LiteLLM
+- [ ] No external trace backend -- observability via execution_events + LiteLLM + optional OpenTelemetry export
+- [ ] SSO/OIDC via generic OIDC client; live collaboration with cursor presence
+- [ ] AI Copilot: prompt-to-crew generation via LiteLLM
 - [ ] CI pipeline green: lint, type-check, unit tests, integration tests all pass
 - [ ] No secrets in Docker images, logs, or API responses (verified in security review)
 - [ ] README gets a developer from clone to running crew in < 5 minutes

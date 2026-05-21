@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   Anchor,
+  Timer,
   PanelLeftClose,
   PanelLeftOpen,
   Sun,
@@ -34,6 +35,7 @@ const navItems = [
   { to: '/users', label: 'Users', icon: Users },
   { to: '/roles', label: 'Roles', icon: Shield },
   { to: '/marketplace', label: 'Marketplace', icon: Store },
+  { to: '/automations', label: 'Automations', icon: Timer },
 ]
 
 function BlackbeardLogo({ size = 28 }: { size?: number }) {

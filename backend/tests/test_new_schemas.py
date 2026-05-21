@@ -6,6 +6,73 @@ from blackbeard.resources.validator import validate_resource
 from tests.conftest import has_validation_error as _has_error
 
 # ---------------------------------------------------------------------------
+# Namespace schema
+# ---------------------------------------------------------------------------
+
+
+def test_valid_namespace_minimal():
+    """Namespace with no spec fields should pass (all optional)."""
+    errors, _ = validate_resource("Namespace", {})
+    assert errors == []
+
+
+def test_valid_namespace_with_description():
+    spec = {"description": "Default namespace"}
+    errors, _ = validate_resource("Namespace", spec)
+    assert errors == []
+
+
+def test_valid_namespace_full():
+    spec = {
+        "description": "Production namespace",
+        "labels": {"team": "backend", "env": "prod"},
+        "default_agent_policy": "ref:agent-policies/standard",
+        "resource_quota": {
+            "max_resources": 500,
+            "max_executions_per_hour": 100,
+        },
+    }
+    errors, _ = validate_resource("Namespace", spec)
+    assert errors == []
+
+
+def test_namespace_extra_field():
+    spec = {"unknown_field": "bad"}
+    errors, _ = validate_resource("Namespace", spec)
+    assert len(errors) > 0
+    assert _has_error(errors, msg_contains="additional")
+
+
+def test_namespace_quota_bounds():
+    spec = {"resource_quota": {"max_resources": 0}}
+    errors, _ = validate_resource("Namespace", spec)
+    assert len(errors) > 0
+    assert _has_error(errors, field_contains="max_resources")
+
+
+def test_namespace_quota_extra_field():
+    spec = {"resource_quota": {"max_resources": 10, "unknown": True}}
+    errors, _ = validate_resource("Namespace", spec)
+    assert len(errors) > 0
+    assert _has_error(errors, msg_contains="additional")
+
+
+def test_namespace_labels_value_too_long():
+    spec = {"labels": {"team": "x" * 256}}
+    errors, _ = validate_resource("Namespace", spec)
+    assert len(errors) > 0
+    assert _has_error(errors, field_contains="team")
+
+
+def test_namespace_kind_registered():
+    """Namespace must exist in kinds registry."""
+    from blackbeard.kinds import ALL_KINDS, KIND_TO_PLURAL
+
+    assert "Namespace" in ALL_KINDS
+    assert KIND_TO_PLURAL["Namespace"] == "namespaces"
+
+
+# ---------------------------------------------------------------------------
 # AgentPolicy schema
 # ---------------------------------------------------------------------------
 

@@ -6,9 +6,9 @@ Provide a browser-based drag-and-drop canvas where users compose agents, tasks, 
 
 ### 1.1 MVP Scope
 
-**Implemented:** Canvas with Agent/Task/Tool nodes, edges for context and tool assignment, property panel with spec fields, YAML editor with bidirectional sync (Monaco), save to API, Run/Train/Test mode selector, FlowStep nodes, CrewGroup compound nodes (bounding box), ELK.js auto-layout, undo/redo (30 snapshots), execution view with status badges. AI Copilot (prompt-to-crew via LiteLLM, Sparkles button + dialog). Live collaboration (WebSocket rooms, participant count, node/edge sync, auto-reconnect).
+**Implemented:** Canvas with Agent/Task/Tool nodes, edges for context and tool assignment, property panel with spec fields, YAML editor with bidirectional sync (Monaco), save to API, Run/Train/Test mode selector, FlowStep nodes, CrewGroup compound nodes (bounding box), ELK.js auto-layout, undo/redo (30 snapshots), execution view with status badges. AI Copilot (prompt-to-crew via LiteLLM, Sparkles button + dialog, `api/copilot.py` + `engine/copilot.py`). Live collaboration (WebSocket rooms, participant count, node/edge sync, auto-reconnect). Cursor presence (colored cursors + names for collaborating users).
 
-**Deferred to post-MVP:** Export ZIP/PNG/SVG/React, drag reparenting, cursor presence (showing other users' cursors).
+**Deferred to post-MVP:** Export ZIP/PNG/SVG/React, drag reparenting.
 
 ---
 
@@ -229,7 +229,7 @@ An optional chat sidebar (left panel) for prompt-based creation:
 
 Copilot always generates YAML that passes validation. User can accept/reject each change.
 
-*AI Copilot is deferred to post-MVP. See MVP Implementation Plan.*
+*AI Copilot is implemented. Prompt-to-crew generation via LiteLLM with Sparkles button + dialog (`api/copilot.py`, `engine/copilot.py`).*
 
 ## 9. Import / Export
 
@@ -265,7 +265,7 @@ Copilot always generates YAML that passes validation. User can accept/reject eac
 - **Parse**: YAML files → typed resource objects → node/edge graph.
 - **On-change**: User edits on canvas → update resource graph → trigger YAML serialisation.
 - **Conflict resolution**: If YAML is edited directly in the YAML tab, re-parse and reconcile with canvas state. Last-write-wins with undo history.
-- **Live collaboration** (v2): OT/CRDT-based multi-user editing. Not required for v1.
+- **Live collaboration**: Implemented via WebSocket rooms with Valkey pub/sub, participant count, node/edge sync, auto-reconnect, and cursor presence (colored cursors + names).
 
 ## 12. Canvas Persistence
 
@@ -290,7 +290,7 @@ Indexes:
 - Layout is saved automatically on every canvas change (debounced, 500ms) and on explicit "Save".
 - A canvas displays **one Crew or Flow** at a time. Multi-crew canvases are deferred to post-MVP.
 - If no layout exists (e.g., resource created via CLI), the canvas auto-layouts using ELK.js on first open.
-- **Concurrent editing (v1)**: v1 is single-user. If two browser tabs save the same canvas, last-write-wins. The canvas layout is non-critical data -- losing a layout just triggers auto-layout on next open. Multi-user conflict resolution (OT/CRDT) is deferred to v2.
+- **Concurrent editing**: Live collaboration is implemented via WebSocket rooms with Valkey pub/sub. Multiple users can edit the same canvas simultaneously with node/edge sync, cursor presence, and auto-reconnect. Canvas layout conflicts use last-write-wins -- the canvas layout is non-critical data, and losing a layout just triggers auto-layout on next open.
 
 ## 13. Accessibility
 

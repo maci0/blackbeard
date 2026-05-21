@@ -65,6 +65,15 @@ seed() {
 
 echo "Seeding Blackbeard at $API ..."
 
+# ── Default Namespace ──────────────────────────────────────────────
+
+seed "Namespace/default" -X POST "$API/api/v1/namespaces" "${H[@]}" -d '{
+  "apiVersion": "blackbeard/v1",
+  "kind": "Namespace",
+  "metadata": {"name": "default"},
+  "spec": {"description": "Default namespace"}
+}'
+
 # ── RBAC Roles ──────────────────────────────────────────────────────
 
 seed "Role/owner" -X POST "$API/api/v1/roles" "${H[@]}" -d '{

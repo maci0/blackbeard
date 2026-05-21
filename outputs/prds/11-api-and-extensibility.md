@@ -6,9 +6,9 @@ Define the public API surface, webhook streaming protocol, plugin SDK, and exten
 
 ### 1.1 MVP Scope
 
-**Implemented:** REST CRUD for all 12 resource kinds (including Automation), execution lifecycle endpoints (kickoff, train, test, flow run, status, cancel, stream, events), auth endpoints (register, login, refresh, whoami), health check endpoints, audit log API, marketplace import, webhook configuration, HITL respond endpoint, automation trigger endpoints (cron, webhook, API), gRPC API on :50051 (ListResources, GetResource, CreateResource, DeleteResource, Kickoff, GetExecution, StreamEvents, Health). OpenAPI schema at `/api/v1/docs`. SDKs: Python + TypeScript. CLI: standalone package, 25+ commands.
+**Implemented:** REST CRUD for all 12 resource kinds (including Automation), execution lifecycle endpoints (kickoff, train, test, flow run, status, cancel, stream, events), auth endpoints (register, login, refresh, whoami), health check endpoints, audit log API, marketplace import, webhook configuration (register/deliver with HMAC signing), HITL respond endpoint (`POST /executions/{id}/respond`), automation trigger endpoints (cron, webhook, API), gRPC API on :50051 with auth interceptor (ListResources, GetResource, CreateResource, DeleteResource, Kickoff, GetExecution, StreamEvents, Health). OpenAPI schema at `/api/v1/docs`. SDKs: Python (`sdks/python/`) + TypeScript (`sdks/typescript/`). React component export via `@blackbeard/react` SDK (`sdks/react/`). CLI: standalone package, 25+ commands.
 
-**Deferred to post-MVP:** React component export (`@blackbeard/react` widget), Plugin SDK, AsyncAPI spec for webhook events.
+**Deferred to post-MVP:** Plugin SDK, AsyncAPI spec for webhook events.
 
 ## 2. REST API
 
@@ -175,7 +175,7 @@ service BlackbeardAPI {
 }
 ```
 
-*gRPC API is post-MVP. The proto definition above is a design target, not a v1 deliverable. `ExecutionEvent` message definition will be specified when gRPC implementation begins. MVP exposes REST API only.*
+*gRPC API is implemented on :50051 with auth interceptor. The proto definition above reflects the shipped API surface.*
 
 ## 4. Webhook Streaming
 
@@ -553,7 +553,7 @@ The widget provides:
 - Output display (rendered markdown, JSON, or custom template).
 - HITL feedback UI (when human-in-the-loop is triggered).
 
-*This feature is post-v1 and requires a separate technical design document. The specification above is a design target describing the intended user experience. Implementation details (component props, auth handling, bundle strategy, SSR support) will be specified before work begins.*
+*React component export is shipped as the `@blackbeard/react` SDK in `sdks/react/`.*
 
 ## 8. OpenAPI / AsyncAPI
 
@@ -564,11 +564,11 @@ The widget provides:
 
 ## 9. SDKs
 
-*Python and TypeScript SDKs are post-MVP. The examples below show the target developer experience.*
+*Python and TypeScript SDKs are shipped (`sdks/python/`, `sdks/typescript/`).*
 
 ### 9.1 Python SDK
 
-*Post-MVP. SDKs will be auto-generated from the OpenAPI specification.*
+*Shipped in `sdks/python/`.*
 
 ```python
 from blackbeard import BlackbeardClient
@@ -595,7 +595,7 @@ print(result.outputs)
 
 ### 9.2 TypeScript SDK
 
-*Post-MVP. SDKs will be auto-generated from the OpenAPI specification.*
+*Shipped in `sdks/typescript/`.*
 
 ```typescript
 import { BlackbeardClient } from '@blackbeard/sdk';
@@ -623,12 +623,14 @@ for await (const event of execution.stream()) {
 4. CLI `blackbeard kickoff` starts an execution and `blackbeard status` shows progress.
 5. OpenAPI spec is auto-generated and valid; Swagger UI renders correctly.
 
+### Implemented (beyond MVP)
+6. gRPC API on :50051 mirrors REST API functionality with auth interceptor.
+7. Webhook streaming delivers signed events with retry on failure (HMAC signing).
+9. React component export via `@blackbeard/react` SDK produces a working embeddable widget.
+10. Python and TypeScript SDKs can create resources, kick off crews, and stream results.
+
 ### Post-MVP
-6. gRPC API mirrors REST API functionality.
-7. Webhook streaming delivers signed events with retry on failure.
 8. Plugin SDK allows registering a custom tool, LLM provider, and sandbox provider.
-9. React component export produces a working embeddable widget.
-10. Python and TypeScript SDKs can create resources, kick off crews (MVP) or automations (post-MVP), and stream results.
 
 ## Error Code Taxonomy
 

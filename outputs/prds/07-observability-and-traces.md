@@ -12,9 +12,9 @@ Provide comprehensive visibility into every crew, flow, and agent execution thro
 
 ### 1.1 MVP Scope
 
-**Implemented:** Execution event log (`execution_events` table) with SSE and WebSocket streaming to the frontend, REST endpoint for historical event replay, LiteLLM dashboard at `:4000/ui` for LLM-level request inspection, token and cost tracking per execution, audit log API for RBAC and resource mutation events, optional OpenTelemetry export configuration.
+**Implemented:** Execution event log (`execution_events` table) with SSE and WebSocket streaming to the frontend, REST endpoint for historical event replay, LiteLLM dashboard at `:4000/ui` for LLM-level request inspection, token and cost tracking per execution, audit log API for RBAC and resource mutation events (all mutations logged), optional OpenTelemetry export configuration.
 
-**Deferred to post-MVP:** PII redaction on event data (Presidio integration), custom trace backend integration, execution timeline (Gantt) view, advanced dashboards (policy denials, sandbox usage, budget utilization charts).
+**Deferred to post-MVP:** Custom trace backend integration, execution timeline (Gantt) view, advanced dashboards (policy denials, sandbox usage, budget utilization charts).
 
 ### What LiteLLM provides (LLM-level)
 

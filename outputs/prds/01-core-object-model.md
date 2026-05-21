@@ -6,9 +6,9 @@ Define the canonical data model for every first-class resource in Blackbeard. Al
 
 ## 1.1 MVP Scope
 
-**Implemented:** All 11 resource kinds are registered in the kind registry (`kinds.py`) with full CRUD, JSON Schema validation, and `ref:` resolution: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding, Flow, and KnowledgeSource. Role and RoleBinding are fully working with predefined roles and authorization enforcement. Agent spec supports an optional `serviceAccount` field (defaults to `sa-<agent-name>`) for principal chain tracking. Flow and KnowledgeSource have CRUD but limited execution wiring — Flow supports sequential step execution, KnowledgeSource is not yet passed through to CrewAI at runtime.
+**Implemented:** All 11 resource kinds are registered in the kind registry (`kinds.py`) with full CRUD, JSON Schema validation, and `ref:` resolution: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding, Flow, and KnowledgeSource. Role and RoleBinding are fully working with predefined roles and authorization enforcement. Agent spec supports an optional `serviceAccount` field (defaults to `sa-<agent-name>`) for principal chain tracking. Flow supports all step types: crew, function, router, condition, and transform (WASM data massaging). Automation resource kind with cron/webhook/API triggers. Audit logging on all mutations.
 
-**Deferred to post-MVP:** EnvironmentVariable, Namespace (beyond `default`), ServiceAccount (as a standalone resource kind — agents use inline `serviceAccount` field for now), SSOConfig, APIKey. The schemas and YAML examples below cover the full v1 design; see the MVP Implementation Plan for what ships first.
+**Deferred to post-MVP:** EnvironmentVariable, Namespace (beyond `default`), ServiceAccount (as a standalone resource kind -- agents use inline `serviceAccount` field for now), SSOConfig, APIKey. The schemas and YAML examples below cover the full v1 design; see the MVP Implementation Plan for what ships first.
 
 ---
 
