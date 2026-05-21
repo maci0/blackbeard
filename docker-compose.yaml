@@ -44,7 +44,6 @@ services:
     mem_limit: 2g
     cpus: 2
     pids_limit: 256
-    read_only: true
     tmpfs:
       - /tmp
     security_opt:
@@ -72,11 +71,8 @@ services:
     restart: unless-stopped
     init: true
     logging: *default-logging
-    read_only: true
     tmpfs:
       - /tmp
-      - /var/cache/nginx
-      - /var/run
     security_opt:
       - no-new-privileges:true
     cap_drop:
