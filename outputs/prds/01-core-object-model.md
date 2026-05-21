@@ -8,7 +8,54 @@ Define the canonical data model for every first-class resource in Blackbeard. Al
 
 **Implemented:** All 11 resource kinds are registered in the kind registry (`kinds.py`) with full CRUD, JSON Schema validation, and `ref:` resolution: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding, Flow, and KnowledgeSource. Role and RoleBinding are fully working with predefined roles and authorization enforcement. Agent spec supports an optional `serviceAccount` field (defaults to `sa-<agent-name>`) for principal chain tracking. Flow supports all step types: crew, function, router, condition, and transform (WASM data massaging). Automation resource kind with cron/webhook/API triggers. Audit logging on all mutations.
 
-**Deferred to post-MVP:** EnvironmentVariable, Namespace (beyond `default`), ServiceAccount (as a standalone resource kind -- agents use inline `serviceAccount` field for now), SSOConfig, APIKey. The schemas and YAML examples below cover the full v1 design; see the MVP Implementation Plan for what ships first.
+**Implemented additionally:** Namespace as a first-class resource kind (13th kind) with description, labels, default_agent_policy, and resource_quota (max_resources, max_executions_per_hour). Default namespace seeded automatically.
+
+**Deferred to post-MVP:** Nested namespaces (hierarchical namespace tree with inheritance — e.g., `org/team/project`), EnvironmentVariable, ServiceAccount (as a standalone resource kind), SSOConfig, APIKey. See below for nested namespace design.
+
+#### Nested Namespaces (Post-MVP)
+
+Namespaces can form a hierarchy using `/`-separated paths:
+
+```yaml
+apiVersion: blackbeard/v1
+kind: Namespace
+metadata:
+  name: acme
+spec:
+  description: "ACME Corp top-level namespace"
+
+---
+apiVersion: blackbeard/v1
+kind: Namespace
+metadata:
+  name: acme/ml-team
+spec:
+  description: "ML team under ACME"
+  parent: acme
+  inherit_policies: true  # inherit AgentPolicy from parent
+
+---
+apiVersion: blackbeard/v1
+kind: Namespace
+metadata:
+  name: acme/ml-team/research
+spec:
+  description: "Research project"
+  parent: acme/ml-team
+  resource_quota:
+    max_resources: 100
+    max_executions_per_hour: 50
+```
+
+**Inheritance rules:**
+- Child namespaces inherit `default_agent_policy` from parent unless overridden
+- Child namespaces inherit `resource_quota` limits (child cannot exceed parent)
+- Role bindings scoped to a parent namespace grant access to all children
+- Resources in a child can reference resources in the parent via `ref:` (but not siblings)
+
+**Resolution order:** `acme/ml-team/research` → `acme/ml-team` → `acme` → `default`
+
+**API:** `GET /api/v1/namespaces?parent=acme` returns children. `GET /api/v1/namespaces/acme/ml-team/research` returns the leaf. Namespace deletion requires all child namespaces and resources to be deleted first (no cascade).
 
 ---
 
