@@ -68,8 +68,8 @@ describe('Login', () => {
     it('renders email and password fields', () => {
       renderLogin()
 
-      expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/^email/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/^password/i)).toBeInTheDocument()
     })
 
     it('renders sign in button', () => {
@@ -101,7 +101,7 @@ describe('Login', () => {
       renderLogin()
 
       const emailInput = screen.getByLabelText(/email/i)
-      const passwordInput = screen.getByLabelText(/password/i)
+      const passwordInput = screen.getByLabelText(/^password/i)
 
       // Type a space into each field so they pass HTML required check
       // but fail the trim() check in handleSubmit
@@ -133,7 +133,7 @@ describe('Login', () => {
 
       const user = userEvent.setup()
       await user.type(screen.getByLabelText(/email/i), 'bad@example.com')
-      await user.type(screen.getByLabelText(/password/i), 'wrong')
+      await user.type(screen.getByLabelText(/^password/i), 'wrong')
 
       await user.click(screen.getByRole('button', { name: /sign in/i }))
 
@@ -148,7 +148,7 @@ describe('Login', () => {
       renderLogin()
 
       await user.type(screen.getByLabelText(/email/i), 'test@example.com')
-      await user.type(screen.getByLabelText(/password/i), 'secretpassword')
+      await user.type(screen.getByLabelText(/^password/i), 'secretpassword')
       await user.click(screen.getByRole('button', { name: /sign in/i }))
 
       expect(mockLogin).toHaveBeenCalledWith('test@example.com', 'secretpassword')
@@ -162,7 +162,7 @@ describe('Login', () => {
       renderLogin()
 
       await user.type(screen.getByLabelText(/email/i), 'test@example.com')
-      await user.type(screen.getByLabelText(/password/i), 'password')
+      await user.type(screen.getByLabelText(/^password/i), 'password')
       await user.click(screen.getByRole('button', { name: /sign in/i }))
 
       expect(mockNavigate).toHaveBeenCalledWith('/studio', { replace: true })
@@ -184,7 +184,7 @@ describe('Login', () => {
       renderLogin()
 
       expect(screen.getByLabelText(/email/i)).toBeDisabled()
-      expect(screen.getByLabelText(/password/i)).toBeDisabled()
+      expect(screen.getByLabelText(/^password/i)).toBeDisabled()
     })
   })
 })
