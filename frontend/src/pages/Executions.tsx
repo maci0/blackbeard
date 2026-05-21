@@ -107,7 +107,7 @@ export default function Executions() {
         ) : (
           <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
             <div className="max-h-[calc(100vh-16rem)] overflow-auto">
-              <table className="w-full text-sm" aria-label="Executions">
+              <table className="w-full min-w-[640px] text-sm" aria-label="Executions">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b bg-muted/60">
                     {TABLE_HEADERS.map((h) => (

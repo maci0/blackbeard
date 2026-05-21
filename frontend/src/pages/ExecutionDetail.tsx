@@ -566,8 +566,16 @@ export default function ExecutionDetail() {
             <li aria-hidden="true" className="text-muted-foreground/40">
               ›
             </li>
+            <li>
+              <span className="text-foreground/80">{execution.crew_name}</span>
+            </li>
+            <li aria-hidden="true" className="text-muted-foreground/40">
+              ›
+            </li>
             <li aria-current="page">
-              <span className="font-medium text-foreground">{execution.crew_name}</span>
+              <span className="font-medium text-foreground" title={execution.id}>
+                {execution.id.slice(0, 8)}
+              </span>
             </li>
           </ol>
         </nav>

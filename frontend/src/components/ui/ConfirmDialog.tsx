@@ -73,6 +73,7 @@ export function ConfirmDialog({
             <button
               className="absolute right-3 top-3 flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Close"
+              title="Close"
             >
               <X className="h-4 w-4" />
             </button>

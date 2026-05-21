@@ -191,7 +191,7 @@ export default function Resources() {
         ) : (
           <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
             <div className="max-h-[calc(100vh-16rem)] overflow-auto">
-              <table className="w-full text-sm" aria-label="Resources">
+              <table className="w-full min-w-[640px] text-sm" aria-label="Resources">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b bg-muted/60">
                     {(

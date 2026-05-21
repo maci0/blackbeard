@@ -49,7 +49,10 @@ export default function Login() {
   }, [navigate, redirectTo])
 
   const error = localError ?? storeError
-  const isFieldError = localError === 'Email and password are required.'
+  const emailMissing =
+    localError === 'Email is required.' || localError === 'Email and password are required.'
+  const passwordMissing =
+    localError === 'Password is required.' || localError === 'Email and password are required.'
 
   useDocumentTitle('Sign In')
 
@@ -57,8 +60,16 @@ export default function Login() {
     e.preventDefault()
     setLocalError(null)
 
-    if (!email.trim() || !password.trim()) {
+    if (!email.trim() && !password.trim()) {
       setLocalError('Email and password are required.')
+      return
+    }
+    if (!email.trim()) {
+      setLocalError('Email is required.')
+      return
+    }
+    if (!password.trim()) {
+      setLocalError('Password is required.')
       return
     }
 
@@ -102,11 +113,22 @@ export default function Login() {
                 autoComplete="email"
                 autoFocus
                 required
-                aria-invalid={(isFieldError ? !email.trim() : !!error) || undefined}
-                aria-describedby={error ? 'login-error' : undefined}
+                aria-invalid={(emailMissing ? !email.trim() : !!error) || undefined}
+                aria-describedby={
+                  emailMissing && !email.trim()
+                    ? 'login-email-error login-error'
+                    : error
+                      ? 'login-error'
+                      : undefined
+                }
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="you@example.com"
               />
+              {emailMissing && !email.trim() && (
+                <p id="login-email-error" className="mt-1 text-xs text-destructive">
+                  Email is required
+                </p>
+              )}
             </div>
 
             <div>
@@ -124,8 +146,14 @@ export default function Login() {
                   }}
                   autoComplete="current-password"
                   required
-                  aria-invalid={(isFieldError ? !password.trim() : !!error) || undefined}
-                  aria-describedby={error ? 'login-error' : undefined}
+                  aria-invalid={(passwordMissing ? !password.trim() : !!error) || undefined}
+                  aria-describedby={
+                    passwordMissing && !password.trim()
+                      ? 'login-password-error login-error'
+                      : error
+                        ? 'login-error'
+                        : undefined
+                  }
                   className="w-full rounded-md border bg-background px-3 py-2 pr-10 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                   placeholder="Enter your password"
                 />
@@ -138,6 +166,11 @@ export default function Login() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {passwordMissing && !password.trim() && (
+                <p id="login-password-error" className="mt-1 text-xs text-destructive">
+                  Password is required
+                </p>
+              )}
             </div>
 
             <button

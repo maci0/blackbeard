@@ -452,6 +452,7 @@ function CreateAutomationDialog({
             <button
               className="absolute right-3 top-3 flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Close"
+              title="Close"
             >
               <X className="h-4 w-4" />
             </button>
@@ -756,7 +757,7 @@ export default function Automations() {
         ) : (
           <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
             <div className="max-h-[calc(100vh-16rem)] overflow-auto">
-              <table className="w-full text-sm" aria-label="Automations">
+              <table className="w-full min-w-[640px] text-sm" aria-label="Automations">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b bg-muted/60">
                     {TABLE_HEADERS.map((h) => (

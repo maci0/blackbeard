@@ -302,6 +302,7 @@ function AddModelDialog({
             <Dialog.Close
               className="flex h-11 w-11 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Close"
+              title="Close"
             >
               <X className="h-4 w-4" />
             </Dialog.Close>
