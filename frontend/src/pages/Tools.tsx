@@ -95,7 +95,7 @@ function ToolCard({ resource }: { resource: Resource }) {
     <Link
       to={`/resources/tools/${resource.metadata.name}`}
       aria-label={`Tool: ${resource.metadata.name}${spec.type ? ` (${TYPE_DISPLAY[spec.type] ?? spec.type})` : ''}`}
-      className="flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {/* Header */}
       <div className="border-b bg-muted/20 px-4 pb-3 pt-4">

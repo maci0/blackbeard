@@ -19,16 +19,13 @@ export default memo(function ToolNode({ data, selected }: NodeProps) {
       sourcePosition={Position.Right}
     >
       <p
-        className="text-2xs truncate font-semibold leading-tight text-foreground"
+        className="truncate text-xs font-semibold leading-tight text-foreground"
         title={name || 'Unnamed Tool'}
       >
         {name || 'Unnamed Tool'}
       </p>
       {description ? (
-        <p
-          className="line-clamp-1 text-[10px] leading-snug text-muted-foreground"
-          title={description}
-        >
+        <p className="truncate text-[10px] leading-snug text-muted-foreground" title={description}>
           {description}
         </p>
       ) : null}

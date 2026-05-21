@@ -69,7 +69,7 @@ export default memo(function PIINode({ data, selected }: NodeProps) {
           )}
         </div>
       ) : (
-        <p className="text-2xs italic text-muted-foreground/60">No entities</p>
+        <p className="text-[10px] italic text-muted-foreground/60">No entities</p>
       )}
     </NodeShell>
   )

@@ -69,7 +69,7 @@ export function NodeShell({
   label,
   ariaLabel,
   selected,
-  width = 'w-[120px]',
+  width = 'w-[140px]',
   targetPosition = Position.Top,
   sourcePosition = Position.Bottom,
   headerGradientTo,
@@ -81,33 +81,35 @@ export function NodeShell({
       aria-label={ariaLabel}
       className={cn(
         width,
-        'overflow-hidden rounded-xl border bg-card shadow-sm transition-all duration-150',
+        'overflow-hidden rounded-lg border bg-card shadow-sm transition-all duration-150',
         selected ? theme.selected : theme.unselected,
       )}
     >
       <Handle
         type="target"
         position={targetPosition}
-        className={cn('!h-2.5 !w-2.5 !border-2 !bg-white', theme.handle)}
+        className={cn('!h-2 !w-2 !border-[1.5px] !bg-white', theme.handle)}
       />
 
       <div
         className={cn(
-          'flex items-center gap-1.5 bg-gradient-to-r px-2 py-1',
+          'flex h-6 items-center gap-1 bg-gradient-to-r px-1.5',
           theme.from,
           headerGradientTo ?? theme.to,
         )}
       >
-        <Icon className="h-3 w-3 text-white/90" />
-        <span className="text-2xs font-bold uppercase tracking-wider text-white/90">{label}</span>
+        <Icon className="h-3 w-3 shrink-0 text-white/90" />
+        <span className="text-[10px] font-bold uppercase tracking-wider text-white/90">
+          {label}
+        </span>
       </div>
 
-      <div className="space-y-0.5 px-2 py-1.5">{children}</div>
+      <div className="space-y-0.5 px-1.5 py-1">{children}</div>
 
       <Handle
         type="source"
         position={sourcePosition}
-        className={cn('!h-2.5 !w-2.5 !border-2 !bg-white', theme.handle)}
+        className={cn('!h-2 !w-2 !border-[1.5px] !bg-white', theme.handle)}
       />
     </div>
   )

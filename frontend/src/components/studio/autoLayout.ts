@@ -3,8 +3,8 @@ import type { Node, Edge } from '@xyflow/react'
 
 const elk = new ELK()
 
-const NODE_WIDTH = 220
-const NODE_HEIGHT = 160
+const NODE_WIDTH = 160
+const NODE_HEIGHT = 120
 const GROUP_PADDING = { top: 40, right: 20, bottom: 20, left: 20 }
 
 export async function autoLayout(

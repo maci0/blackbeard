@@ -227,7 +227,7 @@ spec:
 
 **Replay protection**: Each webhook delivery includes `X-Blackbeard-Timestamp` and `X-Blackbeard-Signature` (HMAC-SHA256 of `timestamp.body` using the webhook secret). Receivers should reject deliveries older than 5 minutes. Failed deliveries are retried with the same signature — receivers must be idempotent (use `execution_id` + `event` as dedup key).
 
-**Webhook management:** Webhook subscriptions are configured as part of the Automation resource's `spec.triggers` array (PRD 09). For MVP (before Automations exist), webhooks are not available — SSE is the only real-time event mechanism. Post-MVP, webhooks are managed through the Automation CRUD API:
+**Webhook management:** Webhook subscriptions are configured as part of the Automation resource's `spec.triggers` array (PRD 09). Webhooks support register/deliver with HMAC signing. Webhooks are managed through the Automation CRUD API:
 ```
 POST   /api/v1/automations/{name}                 # Create automation with webhook trigger
 PATCH  /api/v1/automations/{name}                 # Update webhook config (hot-updatable)

@@ -19,17 +19,17 @@ export default memo(function AgentNode({ data, selected }: NodeProps) {
       selected={!!selected}
     >
       <p
-        className="text-2xs truncate font-semibold leading-tight text-foreground"
+        className="truncate text-xs font-semibold leading-tight text-foreground"
         title={role || 'Unnamed Agent'}
       >
         {role || 'Unnamed Agent'}
       </p>
       {goal ? (
-        <p className="line-clamp-2 text-[10px] leading-snug text-muted-foreground" title={goal}>
+        <p className="truncate text-[10px] leading-snug text-muted-foreground" title={goal}>
           {goal}
         </p>
       ) : (
-        <p className="text-2xs italic text-muted-foreground/60">No goal set</p>
+        <p className="text-[10px] italic text-muted-foreground/60">No goal set</p>
       )}
 
       {llmDisplay && (

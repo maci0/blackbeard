@@ -522,9 +522,9 @@ export default function Users() {
           />
         ) : (
           <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-            <div className="overflow-x-auto">
+            <div className="max-h-[calc(100vh-16rem)] overflow-auto">
               <table className="w-full text-sm" aria-label="Users">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="border-b bg-muted/60">
                     {(
                       ['Email', 'Display Name', 'Role', 'Status', 'Last Login', 'Created'] as const
@@ -542,7 +542,7 @@ export default function Users() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border/50">
+                <tbody className="divide-y divide-border">
                   {filtered.map((user) => (
                     <tr
                       key={user.id}
@@ -557,7 +557,7 @@ export default function Users() {
                       role="row"
                       aria-label={`${user.email} — press Enter to view details`}
                       className={cn(
-                        'group cursor-pointer transition-colors duration-150 hover:bg-muted/40 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                        'group cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                         selectedUser?.id === user.id && 'bg-muted/60',
                       )}
                     >

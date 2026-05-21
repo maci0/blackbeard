@@ -190,9 +190,9 @@ export default function Resources() {
           />
         ) : (
           <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-            <div className="overflow-x-auto">
+            <div className="max-h-[calc(100vh-16rem)] overflow-auto">
               <table className="w-full text-sm" aria-label="Resources">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="border-b bg-muted/60">
                     {(
                       [
@@ -216,7 +216,7 @@ export default function Resources() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border/50">
+                <tbody className="divide-y divide-border">
                   {filtered.map((resource) => (
                     <tr
                       key={`${resource.kindPlural}/${resource.metadata.name}`}
@@ -234,7 +234,7 @@ export default function Resources() {
                       tabIndex={0}
                       role="row"
                       aria-label={`${resource.kind}: ${resource.metadata.name} — press Enter to view details`}
-                      className="group cursor-pointer transition-colors duration-150 hover:bg-muted/40 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      className="group cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     >
                       <td className="px-4 py-3">
                         <KindBadge kind={resource.kind} />

@@ -107,7 +107,7 @@ function TagBadge({ tag }: { tag: string }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium',
+        'inline-flex items-center gap-0.5 rounded-full border px-1.5 py-px text-[10px] font-medium',
         TAG_CLASSES[tag] ??
           'border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300',
       )}
@@ -137,8 +137,8 @@ function RepoCard({
   return (
     <div
       className={cn(
-        'flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-shadow',
-        !isComingSoon && 'hover:shadow-md',
+        'flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-all duration-200',
+        !isComingSoon && 'hover:-translate-y-0.5 hover:shadow-lg',
       )}
     >
       {/* Header */}

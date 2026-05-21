@@ -18,16 +18,13 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
       selected={!!selected}
     >
       <p
-        className="text-2xs truncate font-semibold leading-tight text-foreground"
+        className="truncate text-xs font-semibold leading-tight text-foreground"
         title={name || 'Unnamed Task'}
       >
         {name || 'Unnamed Task'}
       </p>
       {description ? (
-        <p
-          className="line-clamp-2 text-[10px] leading-snug text-muted-foreground"
-          title={description}
-        >
+        <p className="truncate text-[10px] leading-snug text-muted-foreground" title={description}>
           {description}
         </p>
       ) : (

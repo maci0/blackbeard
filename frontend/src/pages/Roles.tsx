@@ -60,7 +60,7 @@ function RoleCard({
       aria-label={`Role: ${role.name} — press Enter to view details`}
       aria-pressed={selected}
       className={cn(
-        'flex w-full flex-col overflow-hidden rounded-lg border bg-card text-left shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'flex w-full flex-col overflow-hidden rounded-lg border bg-card text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         selected && 'ring-2 ring-primary',
       )}
     >

@@ -106,9 +106,9 @@ export default function Executions() {
           />
         ) : (
           <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-            <div className="overflow-x-auto">
+            <div className="max-h-[calc(100vh-16rem)] overflow-auto">
               <table className="w-full text-sm" aria-label="Executions">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="border-b bg-muted/60">
                     {TABLE_HEADERS.map((h) => (
                       <th
@@ -124,7 +124,7 @@ export default function Executions() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border/50">
+                <tbody className="divide-y divide-border">
                   {executions.map((execution) => (
                     <tr
                       key={execution.id}
@@ -138,7 +138,7 @@ export default function Executions() {
                       tabIndex={0}
                       role="row"
                       aria-label={`${execution.crew_name} — ${execution.status} — press Enter to view details`}
-                      className="group cursor-pointer transition-colors duration-150 hover:bg-muted/40 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      className="group cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     >
                       <td className="px-4 py-3">
                         <StatusBadge status={execution.status} />

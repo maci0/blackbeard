@@ -235,7 +235,7 @@ spec:
 | CrewAI event capture | **CrewAI** (emits events) + **Blackbeard** (captures) | Register `BaseEventListener`, write to `execution_events` |
 | Execution event storage + SSE streaming | **Blackbeard** | Build and maintain |
 | Execution dashboards (crew/task/tool metrics) | **Blackbeard** | Build and maintain |
-| OpenTelemetry export | **Blackbeard** | Optional bridge to external systems (post-MVP) |
+| OpenTelemetry export | **Blackbeard** | Optional bridge to external systems (implemented) |
 
 ---
 

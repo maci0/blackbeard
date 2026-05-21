@@ -544,7 +544,7 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 | **Resource** | Any YAML-defined entity in Blackbeard (Agent, Task, Crew, Tool, etc.) | All PRDs |
 | **Kickoff** | Starting an execution of a crew or flow | PRDs 05, 09 |
 | **Execution** | A single run of a crew/flow, identified by `execution_id` | PRDs 05, 07 |
-| **Automation** | A deployed instance of a Crew or Flow with triggers, versioning, and runtime config (post-MVP) | PRD 09 |
+| **Automation** | A deployed instance of a Crew or Flow with triggers (cron/webhook/API), versioning, and runtime config | PRD 09 |
 | **Namespace** | A logical isolation boundary for resources, scoping RBAC and defaults | PRDs 01, 03 |
 | **Sandbox** | An isolated execution environment for tool code (none/wasm/docker/microvm) | PRDs 03, 05 |
 | **Tier** | The isolation level of a sandbox (none < wasm < docker < microvm) | PRD 05 |

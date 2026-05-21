@@ -213,12 +213,12 @@ export default function Layout() {
               title={collapsed ? label : undefined}
               aria-label={label}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                `flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   collapsed ? 'md:justify-center md:px-0' : ''
                 } ${
                   isActive
                     ? 'bg-accent text-foreground ring-2 ring-inset ring-primary/20'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    : 'text-muted-foreground hover:translate-x-0.5 hover:bg-accent hover:text-foreground'
                 }`
               }
             >

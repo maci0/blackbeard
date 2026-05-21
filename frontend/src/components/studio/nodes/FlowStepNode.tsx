@@ -46,7 +46,7 @@ export default memo(function FlowStepNode({ data, selected }: NodeProps) {
       width="w-[140px]"
     >
       <p
-        className="text-2xs truncate font-semibold leading-tight text-foreground"
+        className="truncate text-xs font-semibold leading-tight text-foreground"
         title={name || 'Unnamed Step'}
       >
         {name || 'Unnamed Step'}

@@ -755,9 +755,9 @@ export default function Automations() {
           />
         ) : (
           <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-            <div className="overflow-x-auto">
+            <div className="max-h-[calc(100vh-16rem)] overflow-auto">
               <table className="w-full text-sm" aria-label="Automations">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="border-b bg-muted/60">
                     {TABLE_HEADERS.map((h) => (
                       <th
@@ -770,7 +770,7 @@ export default function Automations() {
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border/50">
+                <tbody className="divide-y divide-border">
                   {filtered.map((automation) => {
                     const isToggling = togglingName === automation.name
                     const isTriggering = triggeringName === automation.name
@@ -780,7 +780,7 @@ export default function Automations() {
                         tabIndex={0}
                         role="row"
                         aria-label={`Automation: ${automation.name}, target: ${automation.spec.target_name ?? 'none'}, trigger: ${automation.spec.trigger_type ?? 'none'}`}
-                        className="group transition-colors duration-150 hover:bg-muted/40 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                        className="group transition-colors duration-150 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                       >
                         {/* Name */}
                         <td className="px-4 py-3 font-medium">{automation.name}</td>
