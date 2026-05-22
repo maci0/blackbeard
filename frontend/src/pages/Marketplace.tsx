@@ -39,31 +39,31 @@ const FEATURED_REPOS: FeaturedRepo[] = [
   {
     name: 'Content Pipeline',
     description: 'Multi-step content creation pipeline with SEO optimization',
-    url: 'coming-soon',
+    url: 'built-in',
     tags: ['content', 'pipeline'],
   },
   {
     name: 'Customer Support Triage',
     description: 'AI-powered support ticket classification and routing with sentiment analysis',
-    url: 'coming-soon',
+    url: 'built-in',
     tags: ['support', 'classification', 'sentiment'],
   },
   {
     name: 'Code Review Pipeline',
     description: 'Automated code review with security scanning, style checking, and PR summary',
-    url: 'coming-soon',
+    url: 'built-in',
     tags: ['devtools', 'code-review', 'security'],
   },
   {
     name: 'Data Analysis Crew',
     description: 'Multi-agent data analysis: cleaner, analyst, and visualizer working together',
-    url: 'coming-soon',
+    url: 'built-in',
     tags: ['data', 'analysis', 'visualization'],
   },
   {
     name: 'SEO Content Writer',
     description: 'Research keywords, write SEO-optimized articles, and generate meta descriptions',
-    url: 'coming-soon',
+    url: 'built-in',
     tags: ['content', 'seo', 'marketing'],
   },
 ]

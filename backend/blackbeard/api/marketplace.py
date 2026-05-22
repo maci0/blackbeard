@@ -214,16 +214,20 @@ async def import_from_url(
     error_details: list[str] = []
 
     if url == "built-in":
-        # Import from bundled examples directory
-        example_dir = _EXAMPLES_DIR / "research-crew"
-        if not example_dir.is_dir():
+        # Import from ALL bundled example directories
+        if not _EXAMPLES_DIR.is_dir():
             raise HTTPException(
                 status_code=500,
                 detail="Built-in examples not found on server",
             )
-        yaml_files = _find_yaml_files(example_dir)
-        raw_resources, parse_errors = _parse_yaml_resources(yaml_files)
-        error_details.extend(parse_errors)
+        raw_resources = []
+        for example_dir in sorted(_EXAMPLES_DIR.iterdir()):
+            if not example_dir.is_dir() or example_dir.name.startswith("."):
+                continue
+            yaml_files = _find_yaml_files(example_dir)
+            resources, parse_errors = _parse_yaml_resources(yaml_files)
+            raw_resources.extend(resources)
+            error_details.extend(parse_errors)
     else:
         # Validate URL scheme and reject embedded credentials
         if not any(url.startswith(scheme) for scheme in _ALLOWED_URL_SCHEMES):
