@@ -21,6 +21,7 @@ const Users = lazy(() => import('@/pages/Users'))
 const Roles = lazy(() => import('@/pages/Roles'))
 const Marketplace = lazy(() => import('@/pages/Marketplace'))
 const Automations = lazy(() => import('@/pages/Automations'))
+const Settings = lazy(() => import('@/pages/Settings'))
 
 const PUBLIC_PATHS = new Set(['/login', '/register'])
 
@@ -113,6 +114,7 @@ function App() {
                 <Route path="roles" element={<Roles />} />
                 <Route path="marketplace" element={<Marketplace />} />
                 <Route path="automations" element={<Automations />} />
+                <Route path="settings" element={<Settings />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Routes>

@@ -19,6 +19,7 @@ import {
   Moon,
   Monitor,
   LogOut,
+  Settings as SettingsIcon,
 } from 'lucide-react'
 import { useDarkMode } from '@/hooks'
 import { STORAGE_KEYS } from '@/lib/utils'
@@ -37,6 +38,7 @@ const navItems = [
   { to: '/roles', label: 'Roles', icon: Shield },
   { to: '/marketplace', label: 'Marketplace', icon: Store },
   { to: '/automations', label: 'Automations', icon: Timer },
+  { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ]
 
 function BlackbeardLogo({ size = 28 }: { size?: number }) {
