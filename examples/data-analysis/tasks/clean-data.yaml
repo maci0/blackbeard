@@ -1,0 +1,22 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: clean-data
+  namespace: default
+spec:
+  description: >
+    Validate and clean the following dataset: {dataset_description}
+
+    Perform these data quality checks:
+    1. Identify and handle missing values (report count per field)
+    2. Detect and remove duplicate records
+    3. Find and flag outliers using statistical methods
+    4. Validate data types and format consistency
+    5. Standardize categorical values and fix encoding issues
+    6. Document all transformations applied
+  expected_output: >
+    A data quality report containing: count of records processed,
+    missing values found per field and how they were handled,
+    duplicates removed, outliers flagged, format corrections applied,
+    and a summary of the cleaned dataset's shape and completeness.
+  agent: "ref:agents/data-cleaner"

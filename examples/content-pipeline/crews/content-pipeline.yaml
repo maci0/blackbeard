@@ -1,0 +1,23 @@
+apiVersion: blackbeard/v1
+kind: Crew
+metadata:
+  name: content-pipeline
+  namespace: default
+  labels:
+    type: content
+spec:
+  description: "Multi-step content creation pipeline that researches a topic, writes an article, and optimizes it for SEO"
+  process: sequential
+  agents:
+    - "ref:agents/content-researcher"
+    - "ref:agents/content-writer"
+    - "ref:agents/seo-optimizer"
+  tasks:
+    - "ref:tasks/research-topic"
+    - "ref:tasks/write-article"
+    - "ref:tasks/optimize-seo"
+  verbose: true
+  inputs:
+    - name: topic
+      description: "The topic to research and write about"
+      required: true

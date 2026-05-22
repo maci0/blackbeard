@@ -1,0 +1,26 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: write-seo-article
+  namespace: default
+spec:
+  description: >
+    Write a 1500-word SEO-optimized article for the niche: {niche}
+
+    Use the keyword research to guide content creation:
+    1. Include the primary keyword in the title, first paragraph, and naturally throughout
+    2. Use secondary keywords in subheadings and body text
+    3. Structure with proper H1/H2/H3 heading hierarchy
+    4. Write an engaging introduction with a hook and clear value proposition
+    5. Include actionable tips, examples, or data where relevant
+    6. Add a FAQ section addressing common questions (using long-tail keywords)
+    7. Write a conclusion with a clear call to action
+    8. Maintain keyword density between 1-2% for the primary keyword
+  expected_output: >
+    A 1500-word SEO-optimized article in markdown format with proper
+    heading hierarchy, naturally integrated keywords, a FAQ section,
+    and a compelling call to action. The article should read naturally
+    while targeting the recommended primary keyword from the research.
+  agent: "ref:agents/seo-article-writer"
+  context:
+    - "ref:tasks/research-keywords"

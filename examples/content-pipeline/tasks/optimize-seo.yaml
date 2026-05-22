@@ -1,0 +1,25 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: optimize-seo
+  namespace: default
+spec:
+  description: >
+    Optimize the article for search engines. Perform the following:
+
+    1. Write a compelling meta description (150-160 characters)
+    2. Identify primary and secondary target keywords
+    3. Optimize headings to include target keywords naturally
+    4. Suggest internal and external linking opportunities
+    5. Ensure keyword density is appropriate (1-2%)
+    6. Add alt text suggestions for any images
+    7. Verify the article has proper heading hierarchy (H1, H2, H3)
+  expected_output: >
+    The fully optimized article in markdown format with an SEO summary
+    block containing: meta description, primary keyword, secondary
+    keywords, suggested title tag, and any recommended changes that
+    were applied to improve search visibility.
+  agent: "ref:agents/seo-optimizer"
+  context:
+    - "ref:tasks/research-topic"
+    - "ref:tasks/write-article"

@@ -1,0 +1,22 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: research-keywords
+  namespace: default
+spec:
+  description: >
+    Research keywords for the following niche: {niche}
+
+    Perform a comprehensive keyword analysis:
+    1. Identify 1 primary keyword with estimated search volume and difficulty
+    2. Find 5-10 secondary keywords and long-tail variations
+    3. Categorize each keyword by search intent (informational, commercial, transactional)
+    4. Identify content gaps and opportunities competitors may have missed
+    5. Suggest semantic keywords and LSI terms for topical depth
+    6. Recommend the optimal keyword to target for a new article
+  expected_output: >
+    A keyword research report containing: primary keyword with estimated
+    volume and difficulty, secondary keywords table with intent classification,
+    long-tail variations, semantic keyword clusters, content gap opportunities,
+    and a recommended target keyword with justification.
+  agent: "ref:agents/keyword-researcher"

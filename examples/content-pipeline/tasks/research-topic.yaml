@@ -1,0 +1,22 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: research-topic
+  namespace: default
+spec:
+  description: >
+    Research the following topic thoroughly: {topic}
+
+    Gather the following information:
+    1. Key facts and recent developments
+    2. Relevant statistics and data points
+    3. Expert opinions and notable quotes
+    4. Common questions people ask about this topic
+    5. Related subtopics worth covering
+    6. Credible sources for attribution
+  expected_output: >
+    A structured research brief containing key facts, statistics,
+    expert perspectives, frequently asked questions, and a list of
+    credible sources. Each finding should include its source for
+    proper attribution in the final article.
+  agent: "ref:agents/content-researcher"

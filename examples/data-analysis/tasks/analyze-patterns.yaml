@@ -1,0 +1,25 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: analyze-patterns
+  namespace: default
+spec:
+  description: >
+    Perform statistical analysis on the cleaned dataset to identify
+    meaningful patterns:
+
+    1. Calculate descriptive statistics (mean, median, mode, std dev)
+    2. Identify correlations between key variables
+    3. Detect trends over time if temporal data is present
+    4. Segment the data into meaningful groups
+    5. Test any notable hypotheses with appropriate statistical tests
+    6. Identify anomalies or unexpected patterns
+  expected_output: >
+    A structured analysis containing: descriptive statistics summary,
+    correlation matrix highlights, identified trends with direction
+    and magnitude, segmentation results, hypothesis test outcomes
+    with confidence levels, and a ranked list of the most significant
+    findings.
+  agent: "ref:agents/data-analyst"
+  context:
+    - "ref:tasks/clean-data"

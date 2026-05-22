@@ -1,0 +1,25 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: generate-meta
+  namespace: default
+spec:
+  description: >
+    Generate complete SEO metadata for the article:
+
+    1. Write a title tag (50-60 characters) with the primary keyword near the front
+    2. Write a meta description (150-160 characters) that encourages clicks
+    3. Create Open Graph tags (og:title, og:description, og:type)
+    4. Create Twitter Card tags (twitter:title, twitter:description)
+    5. Generate JSON-LD Article schema markup
+    6. Suggest an SEO-friendly URL slug
+    7. Write alt text suggestions for any recommended images
+  expected_output: >
+    A complete metadata package in structured format containing: title tag,
+    meta description, Open Graph tags, Twitter Card tags, JSON-LD schema
+    markup block, recommended URL slug, and image alt text suggestions.
+    All metadata should incorporate target keywords naturally.
+  agent: "ref:agents/meta-generator"
+  context:
+    - "ref:tasks/research-keywords"
+    - "ref:tasks/write-seo-article"

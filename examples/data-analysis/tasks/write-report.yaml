@@ -1,0 +1,26 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: write-report
+  namespace: default
+spec:
+  description: >
+    Write an executive analysis report based on the data cleaning
+    and statistical analysis findings.
+
+    The report should include:
+    1. Executive summary (key takeaways in 3-5 bullet points)
+    2. Data overview (dataset description, quality, and completeness)
+    3. Key findings with supporting statistics
+    4. Descriptions of recommended charts and visualizations
+    5. Business recommendations based on the analysis
+    6. Limitations and suggested follow-up analyses
+  expected_output: >
+    A polished executive report in markdown format with clear sections,
+    data-backed insights, chart descriptions (bar, line, scatter as
+    appropriate), actionable business recommendations, and noted
+    limitations. Written for a non-technical executive audience.
+  agent: "ref:agents/report-writer"
+  context:
+    - "ref:tasks/clean-data"
+    - "ref:tasks/analyze-patterns"

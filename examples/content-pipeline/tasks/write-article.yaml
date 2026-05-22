@@ -1,0 +1,24 @@
+apiVersion: blackbeard/v1
+kind: Task
+metadata:
+  name: write-article
+  namespace: default
+spec:
+  description: >
+    Using the research findings, write a 1000-word article on: {topic}
+
+    The article should include:
+    1. An attention-grabbing headline and introduction
+    2. Well-organized body sections with clear subheadings
+    3. Data points and statistics woven naturally into the narrative
+    4. Practical takeaways or actionable advice for the reader
+    5. A strong conclusion that summarizes key points
+    6. Proper attribution of sources where applicable
+  expected_output: >
+    A polished 1000-word article in markdown format with a compelling
+    headline, structured sections with H2/H3 headings, embedded
+    statistics, and a clear conclusion. The tone should be professional
+    yet accessible.
+  agent: "ref:agents/content-writer"
+  context:
+    - "ref:tasks/research-topic"

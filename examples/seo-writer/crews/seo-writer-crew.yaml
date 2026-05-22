@@ -1,0 +1,23 @@
+apiVersion: blackbeard/v1
+kind: Crew
+metadata:
+  name: seo-writer-crew
+  namespace: default
+  labels:
+    type: seo
+spec:
+  description: "End-to-end SEO content creation: keyword research, article writing, and meta tag generation"
+  process: sequential
+  agents:
+    - "ref:agents/keyword-researcher"
+    - "ref:agents/seo-article-writer"
+    - "ref:agents/meta-generator"
+  tasks:
+    - "ref:tasks/research-keywords"
+    - "ref:tasks/write-seo-article"
+    - "ref:tasks/generate-meta"
+  verbose: true
+  inputs:
+    - name: niche
+      description: "The niche or topic area to create SEO content for"
+      required: true

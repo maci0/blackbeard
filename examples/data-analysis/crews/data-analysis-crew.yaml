@@ -1,0 +1,23 @@
+apiVersion: blackbeard/v1
+kind: Crew
+metadata:
+  name: data-analysis-crew
+  namespace: default
+  labels:
+    type: analytics
+spec:
+  description: "Multi-agent data analysis pipeline that cleans data, performs statistical analysis, and produces an executive report"
+  process: sequential
+  agents:
+    - "ref:agents/data-cleaner"
+    - "ref:agents/data-analyst"
+    - "ref:agents/report-writer"
+  tasks:
+    - "ref:tasks/clean-data"
+    - "ref:tasks/analyze-patterns"
+    - "ref:tasks/write-report"
+  verbose: true
+  inputs:
+    - name: dataset_description
+      description: "Description of the dataset to analyze, including its structure and fields"
+      required: true

@@ -1,0 +1,14 @@
+apiVersion: blackbeard/v1
+kind: LLMConnection
+metadata:
+  name: seo-llm
+  namespace: default
+  labels:
+    provider: ollama
+    tier: local
+spec:
+  provider: ollama
+  model: qwen3.6
+  parameters:
+    temperature: 0.3
+    max_tokens: 4096
