@@ -63,11 +63,9 @@ $COMPOSE down --remove-orphans 2>/dev/null || true
 echo "Building images..."
 $COMPOSE build
 
-# Determine admin password — fixed in DEBUG mode, random otherwise
+# Admin password — defaults to "blackbeard" for dev convenience
+export BLACKBEARD_ADMIN_PASSWORD="${BLACKBEARD_ADMIN_PASSWORD:-blackbeard}"
 DEBUG_MODE=$(grep -s '^DEBUG=' .env | cut -d= -f2 || echo "false")
-if [ "$DEBUG_MODE" = "true" ]; then
-  export BLACKBEARD_ADMIN_PASSWORD="${BLACKBEARD_ADMIN_PASSWORD:-blackbeard}"
-fi
 
 echo ""
 echo "Starting Blackbeard..."
