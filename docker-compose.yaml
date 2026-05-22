@@ -44,10 +44,9 @@ services:
     mem_limit: 2g
     cpus: 2
     pids_limit: 256
-    read_only: true
+    # read_only: true — disabled; CrewAI needs ~/.local, asyncpg needs ~/.postgresql
     tmpfs:
       - /tmp:size=100m
-      - /home/appuser:size=200m
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -73,11 +72,9 @@ services:
     restart: unless-stopped
     init: true
     logging: *default-logging
-    read_only: true
+    # read_only: true — disabled; nginx envsubst writes to /etc/nginx/conf.d at startup
     tmpfs:
       - /tmp:size=10m
-      - /var/cache/nginx:size=50m
-      - /var/run:size=1m
     security_opt:
       - no-new-privileges:true
     cap_drop:
