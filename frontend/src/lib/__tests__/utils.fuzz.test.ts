@@ -165,11 +165,14 @@ describe('fuzz: capitalize', () => {
     )
   })
 
-  it('preserves string length', () => {
+  it('preserves string length and uppercases first char', () => {
     fc.assert(
       fc.property(fc.string(), (s) => {
         const result = capitalize(s)
         expect(result.length).toBe(s.length)
+        if (s.length > 0) {
+          expect(result[0]).toBe(s[0]!.toUpperCase())
+        }
       }),
       { numRuns: NUM_RUNS },
     )

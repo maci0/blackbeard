@@ -17,12 +17,15 @@ from blackbeard.api.middleware import record_auth_failure
 from blackbeard.auth.api_key import get_api_key
 from blackbeard.auth.jwt import decode_token
 from blackbeard.config import settings
+from blackbeard.kinds import NAME_PATTERN
+from blackbeard.models.execution_schemas import exceeds_depth as _exceeds_depth
 
 logger = logging.getLogger(__name__)
 
 _SINGLE_REPLICA_WARNING = (
-    "Live collaboration requires a single API replica. "
-    "Set api.replicas=1 in Helm values or use sticky sessions."
+    "Multiple workers detected (WEB_CONCURRENCY != 1) — "
+    "cross-worker collaboration requires the Valkey pub/sub backend. "
+    "Ensure VALKEY_URL is configured, or set WEB_CONCURRENCY=1."
 )
 
 if settings.web_concurrency != 1:
@@ -33,7 +36,7 @@ if settings.web_concurrency != 1:
 
 router = APIRouter(tags=["collaboration"])
 
-_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9\-]*$")
+_NAME_RE = re.compile(NAME_PATTERN)
 _MAX_CREW_NAME_LEN = 255
 
 ALLOWED_MESSAGE_TYPES = frozenset(
@@ -58,17 +61,6 @@ _HIGH_FREQ_TYPES = frozenset({"cursor_move", "selection_change"})
 _MAX_MESSAGE_DATA_DEPTH = 5
 
 
-def _exceeds_depth(obj: object, limit: int, current: int = 0) -> bool:
-    """Return True if *obj* contains nested dicts/lists beyond *limit* levels."""
-    if current >= limit:
-        return True
-    if isinstance(obj, dict):
-        return any(_exceeds_depth(v, limit, current + 1) for v in obj.values())
-    if isinstance(obj, list):
-        return any(_exceeds_depth(v, limit, current + 1) for v in obj)
-    return False
-
-
 # In-memory room state — maps crew_name to set of WebSocket connections.
 # Used by all deployments for local WebSocket fan-out.  When a Valkey
 # backend is available, messages are also published to Valkey pub/sub so
@@ -76,6 +68,24 @@ def _exceeds_depth(obj: object, limit: int, current: int = 0) -> bool:
 _rooms: dict[str, set[WebSocket]] = {}
 _rooms_lock = asyncio.Lock()
 _MAX_ROOMS = 500  # prevent unbounded memory growth from room creation
+
+
+def _log_collab_task_exception(task: asyncio.Task[None]) -> None:
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.error(
+            "Collab background task '%s' failed: %s",
+            task.get_name(),
+            exc,
+            exc_info=exc,
+            extra={
+                "event": "collab_task_failed",
+                "task_name": task.get_name(),
+                "error_type": type(exc).__name__,
+            },
+        )
 
 
 class ValkeyCollabBackend:
@@ -103,12 +113,17 @@ class ValkeyCollabBackend:
         """Publish a collaboration message to the Valkey channel."""
         try:
             await self._redis.publish(f"collab:{room}", json.dumps(message))
-        except Exception:
+        except Exception as exc:
             logger.error(
                 "Valkey publish failed for room %s — other replicas will not receive this message",
                 room,
                 exc_info=True,
-                extra={"event": "valkey_publish_failed", "room": room},
+                extra={
+                    "event": "valkey_publish_failed",
+                    "room": room,
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc)[:200],
+                },
             )
 
     async def subscribe(self, room: str) -> None:
@@ -123,6 +138,7 @@ class ValkeyCollabBackend:
                 return
 
             task = asyncio.create_task(self._listen(room), name=f"valkey-collab-{room}")
+            task.add_done_callback(_log_collab_task_exception)
             self._subscriptions[room] = task
 
     async def unsubscribe(self, room: str) -> None:
@@ -132,43 +148,78 @@ class ValkeyCollabBackend:
             if task is not None:
                 task.cancel()
 
+    _MAX_LISTEN_RETRIES = 3
+
     async def _listen(self, room: str) -> None:
         """Background listener that forwards Valkey messages to local WebSockets."""
         import redis.asyncio as aioredis
 
-        try:
-            pubsub: aioredis.client.PubSub = self._redis.pubsub()
-            await pubsub.subscribe(f"collab:{room}")
-            async for raw_message in pubsub.listen():
-                if raw_message["type"] != "message":
-                    continue
-                try:
-                    message = json.loads(raw_message["data"])
-                except (json.JSONDecodeError, TypeError):
-                    logger.debug(
-                        "Valkey collab message parse failed for room %s — skipping",
+        retries = 0
+        while True:
+            try:
+                pubsub: aioredis.client.PubSub = self._redis.pubsub()
+                await pubsub.subscribe(f"collab:{room}")
+                retries = 0
+                async for raw_message in pubsub.listen():
+                    if raw_message["type"] != "message":
+                        continue
+                    try:
+                        message = json.loads(raw_message["data"])
+                    except (json.JSONDecodeError, TypeError):
+                        logger.warning(
+                            "Valkey collab message parse failed for room %s — skipping",
+                            room,
+                            exc_info=True,
+                            extra={"event": "valkey_collab_parse_error", "room": room},
+                        )
+                        continue
+                    # Broadcast to all local connections (sender=None since the
+                    # original sender is on a different replica)
+                    await _broadcast_local(room, sender=None, message=message)
+            except asyncio.CancelledError:
+                logger.debug(
+                    "Valkey listener cancelled for room %s",
+                    room,
+                    extra={"event": "valkey_listen_cancelled", "room": room},
+                )
+                break
+            except Exception:
+                retries += 1
+                if retries > self._MAX_LISTEN_RETRIES:
+                    logger.error(
+                        "Valkey listener for room %s failed %d times — giving up; "
+                        "cross-replica messages will be lost until a new client joins",
                         room,
+                        retries,
                         exc_info=True,
-                        extra={"event": "valkey_collab_parse_error", "room": room},
+                        extra={
+                            "event": "valkey_listen_failed",
+                            "room": room,
+                            "retries": retries,
+                        },
                     )
-                    continue
-                # Broadcast to all local connections (sender=None since the
-                # original sender is on a different replica)
-                await _broadcast_local(room, sender=None, message=message)
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            logger.error(
-                "Valkey subscription listener died for room %s — "
-                "cross-replica collaboration messages will be lost until reconnect",
-                room,
-                exc_info=True,
-                extra={"event": "valkey_listen_failed", "room": room},
-            )
+                    break
+                delay = min(2**retries, 30)
+                logger.warning(
+                    "Valkey listener for room %s failed — reconnecting in %ds (attempt %d/%d)",
+                    room,
+                    delay,
+                    retries,
+                    self._MAX_LISTEN_RETRIES,
+                    exc_info=True,
+                    extra={
+                        "event": "valkey_listen_reconnect",
+                        "room": room,
+                        "retry": retries,
+                        "delay_s": delay,
+                    },
+                )
+                await asyncio.sleep(delay)
+
+        async with self._subscriber_lock:
+            self._subscriptions.pop(room, None)
 
 
-# Initialise Valkey backend lazily — only when the Valkey URL is configured
-# and the redis library is available.
 _valkey_backend: ValkeyCollabBackend | None = None
 _valkey_init_done = False
 
@@ -232,7 +283,17 @@ async def _broadcast_local(
             continue
         try:
             await ws.send_json(message)
-        except Exception:
+        except Exception as send_err:
+            logger.warning(
+                "WebSocket send failed in room %s — marking connection dead",
+                room,
+                exc_info=True,
+                extra={
+                    "event": "collab_ws_send_failed",
+                    "room": room,
+                    "error_type": type(send_err).__name__,
+                },
+            )
             dead.add(ws)
 
     if dead:
@@ -286,8 +347,15 @@ def validate_ws_auth(token: str, api_key: str) -> bool:
             payload = decode_token(token)
             if payload.get("type") == "access":
                 return True
-        except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError):
-            pass
+        except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError) as exc:
+            logger.warning(
+                "Collab WS auth: token validation failed",
+                exc_info=True,
+                extra={
+                    "event": "collab_ws_token_invalid",
+                    "error_type": type(exc).__name__,
+                },
+            )
 
     return bool(api_key and hmac.compare_digest(api_key, get_api_key()))
 
@@ -315,11 +383,17 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
         await websocket.close(code=4422, reason="Invalid crew name")
         return
 
+    from blackbeard.api.middleware import is_rate_limited
+
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    if is_rate_limited(client_ip):
+        await websocket.close(code=4429, reason="Too many authentication failures")
+        return
+
     token = websocket.query_params.get("token", "")
     api_key = websocket.query_params.get("api_key", "")
 
     if not validate_ws_auth(token, api_key):
-        client_ip = websocket.client.host if websocket.client else "unknown"
         record_auth_failure(client_ip)
         logger.warning(
             "Collaboration WebSocket auth failed: crew=%s from %s",
@@ -430,7 +504,11 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
 
             await _broadcast(crew_name, websocket, message)
     except WebSocketDisconnect:
-        pass
+        logger.debug(
+            "Collaboration WS client disconnected: room=%s",
+            crew_name,
+            extra={"event": "collab_ws_disconnected", "crew_name": crew_name},
+        )
     except Exception:
         logger.exception(
             "Collaboration: unexpected error in room %s",

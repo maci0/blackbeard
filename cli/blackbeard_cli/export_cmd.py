@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,7 @@ import httpx
 import yaml
 
 from blackbeard_cli.helpers import (
+    HelpCommand,
     console,
     handle_http_error,
     handle_request_error,
@@ -82,6 +84,7 @@ def _resources_to_yaml(resources: list[dict[str, Any]]) -> str:
 
 @click.command(
     "export",
+    cls=HelpCommand,
     epilog="""\b
 Examples:
   blackbeard export Agent researcher          # single resource
@@ -96,8 +99,15 @@ Examples:
     type=click.Choice(sorted(ALL_KINDS), case_sensitive=False),
 )
 @click.argument("name", required=False)
-@click.option("--all", "export_all", is_flag=True, help="Export all resource kinds")
-@click.option("-o", "--output", "output_path", type=click.Path(), help="Write to file or directory")
+@click.option("--all", "-a", "export_all", is_flag=True, help="Export all resource kinds")
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    type=click.Path(),
+    metavar="PATH",
+    help="Write to file or directory",
+)
 @json_opt
 @click.pass_context
 def export_cmd(
@@ -108,7 +118,7 @@ def export_cmd(
     output_path: str | None,
     output_json: bool = False,
 ) -> None:
-    """Export resources as YAML."""
+    """Export resources as YAML (or JSON with --json)."""
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
@@ -121,13 +131,13 @@ def export_cmd(
     if export_all and kind:
         console.print(
             f"[red bold]Error:[/] --all cannot be combined with Kind argument '{kind}'.\n"
-            "  Use [bold]blackbeard export --all[/] or [bold]blackbeard export {kind}[/]."
+            f"  Use [bold]blackbeard export --all[/] or [bold]blackbeard export {kind}[/]."
         )
         raise SystemExit(2)
     if export_all and name:
         console.print(
             f"[red bold]Error:[/] --all cannot be combined with Name argument '{name}'.\n"
-            "  Use [bold]blackbeard export --all[/] or [bold]blackbeard export {kind} {name}[/]."
+            f"  Use [bold]blackbeard export --all[/] or [bold]blackbeard export <KIND> {name}[/]."
         )
         raise SystemExit(2)
 
@@ -152,10 +162,8 @@ def export_cmd(
         if output_path:
             p = Path(output_path)
             p.parent.mkdir(parents=True, exist_ok=True)
-            import json as _json
-
             p.write_text(
-                _json.dumps(resources, indent=2, default=str, ensure_ascii=False) + "\n",
+                json.dumps(resources, indent=2, default=str, ensure_ascii=False) + "\n",
                 encoding="utf-8",
             )
             console.print(f"[green]Wrote[/] {p} ({len(resources)} resource(s), JSON)")
@@ -198,9 +206,12 @@ def _export_all(
 ) -> list[dict[str, Any]]:
     """Fetch all resources of all kinds."""
     all_resources: list[dict[str, Any]] = []
-    for kind in sorted(ALL_KINDS):
-        resources = _fetch_resources(client, server, headers, kind, namespace)
-        all_resources.extend(resources)
+    kinds = sorted(ALL_KINDS)
+    with console.status("Exporting resources...") as status:
+        for i, kind in enumerate(kinds, 1):
+            status.update(f"Fetching {kind} ({i}/{len(kinds)})...")
+            resources = _fetch_resources(client, server, headers, kind, namespace)
+            all_resources.extend(resources)
     return all_resources
 
 

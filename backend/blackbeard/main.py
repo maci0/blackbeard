@@ -90,35 +90,42 @@ def _validate_startup_config() -> None:
             'Generate a strong key with: python -c "import secrets; '
             'print(secrets.token_urlsafe(32))"'
         )
-    jwt_secret = settings.jwt_secret.get_secret_value()
-    if jwt_secret == "change-jwt-secret-in-production":
-        if not settings.debug:
+    def _check_secret(
+        value: str,
+        env_var: str,
+        defaults: tuple[str, ...],
+        event: str,
+        warn_msg: str,
+    ) -> None:
+        if value in defaults:
+            if not settings.debug:
+                raise _fatal(
+                    f"Refusing to start: {env_var} is set to the insecure default. "
+                    "Set a strong random value via environment variable, "
+                    "or set DEBUG=true for local development."
+                )
+            logger.warning(warn_msg, extra={"event": event})
+        elif len(value) < 16:
             raise _fatal(
-                "Refusing to start: JWT_SECRET is set to the insecure default. "
-                "Set a strong random value via environment variable, "
-                "or set DEBUG=true for local development."
+                f"Refusing to start: {env_var} is too short (minimum 16 characters). "
+                'Generate a strong key with: python -c "import secrets; '
+                'print(secrets.token_urlsafe(32))"'
             )
-        logger.warning(
-            "SECURITY: Using default JWT secret — set JWT_SECRET",
-            extra={"event": "insecure_default_jwt_secret"},
-        )
-    elif len(jwt_secret) < 16:
-        raise _fatal(
-            "Refusing to start: JWT_SECRET is too short (minimum 16 characters). "
-            'Generate a strong key with: python -c "import secrets; '
-            'print(secrets.token_urlsafe(32))"'
-        )
-    if settings.litellm_master_key.get_secret_value() == "sk-litellm-master-key":
-        if not settings.debug:
-            raise _fatal(
-                "Refusing to start: LITELLM_MASTER_KEY is set to the insecure default. "
-                "Set a strong random value via environment variable, "
-                "or set DEBUG=true for local development."
-            )
-        logger.warning(
-            "SECURITY: Using default LiteLLM master key — set LITELLM_MASTER_KEY",
-            extra={"event": "insecure_default_litellm_key"},
-        )
+
+    _check_secret(
+        settings.jwt_secret.get_secret_value(),
+        "JWT_SECRET",
+        ("change-jwt-secret-in-production!", "change-jwt-secret-in-production"),
+        "insecure_default_jwt_secret",
+        "SECURITY: Using default JWT secret — set JWT_SECRET",
+    )
+    _check_secret(
+        settings.litellm_master_key.get_secret_value(),
+        "LITELLM_MASTER_KEY",
+        ("sk-litellm-master-key",),
+        "insecure_default_litellm_key",
+        "SECURITY: Using default LiteLLM master key — set LITELLM_MASTER_KEY",
+    )
     if "*" in settings.cors_origins and not settings.debug:
         raise _fatal(
             "Refusing to start: CORS_ORIGINS contains wildcard '*'. "
@@ -144,9 +151,7 @@ def _validate_startup_config() -> None:
                 "or set DEBUG=true for local development."
             )
         if not settings.oidc_client_id:
-            raise _fatal(
-                "Refusing to start: OIDC_ISSUER is set but OIDC_CLIENT_ID is missing."
-            )
+            raise _fatal("Refusing to start: OIDC_ISSUER is set but OIDC_CLIENT_ID is missing.")
     if settings.forwarded_allow_ips == "*" and not settings.debug:
         logger.warning(
             "SECURITY: FORWARDED_ALLOW_IPS='*' trusts X-Forwarded-For from any source. "
@@ -188,6 +193,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             "db_pool_size": pool.size(),
             "db_pool_max_overflow": pool.overflow(),
             "db_pool_timeout": pool.timeout(),
+            "oidc_enabled": bool(settings.oidc_issuer),
+            "otel_configured": bool(settings.otel_endpoint),
+            "valkey_configured": bool(settings.valkey_url.get_secret_value()),
         },
     )
     recovered = await recover_stale_executions()
@@ -196,7 +204,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from blackbeard.engine.scheduler import AutomationScheduler
 
     scheduler = AutomationScheduler()
-    await scheduler.start()
+    try:
+        await scheduler.start()
+    except Exception:
+        logger.warning(
+            "Automation scheduler failed to start — cron automations disabled until restart",
+            exc_info=True,
+            extra={"event": "scheduler_start_failed"},
+        )
     # Store on app.state so resource CRUD can trigger reload on Automation changes.
     app.state.scheduler = scheduler
 
@@ -244,6 +259,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         logger.info("Executor shut down", extra={"event": "executor_shutdown"})
         shutdown_webhook_executor()
         shutdown_otel()
+        from blackbeard.resources import shutdown_dns_executor
+
+        shutdown_dns_executor()
     finally:
         try:
             await shutdown_health_clients()
@@ -327,9 +345,7 @@ app.add_middleware(
     expose_headers=["X-Request-Id"],
 )
 
-# HTTP middleware stack (LIFO — last registered = outermost).
-# CORSMiddleware (above) wraps all of these.
-# Execution order: security_headers → api_key_middleware → body_size_limiter
+# Middleware stack (LIFO): security_headers → api_key_middleware → body_size_limiter
 app.middleware("http")(body_size_limiter)
 app.middleware("http")(api_key_middleware)
 app.middleware("http")(security_headers_middleware)
@@ -354,12 +370,14 @@ if settings.oidc_issuer:
     from blackbeard.api.oidc import router as oidc_router
 
     app.include_router(oidc_router, prefix="/api/v1")
-    import hashlib
+    import hmac as _hmac
 
     from starlette.middleware.sessions import SessionMiddleware
 
-    _session_key = hashlib.sha256(
-        b"session:" + settings.jwt_secret.get_secret_value().encode()
+    _session_key = _hmac.new(
+        settings.jwt_secret.get_secret_value().encode(),
+        b"blackbeard-session-middleware",
+        "sha256",
     ).hexdigest()
     app.add_middleware(
         SessionMiddleware,

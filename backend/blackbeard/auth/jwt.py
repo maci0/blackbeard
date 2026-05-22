@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -28,20 +29,18 @@ def _create_token(token_type: str, expires_delta: timedelta, **extra: Any) -> st
     payload: dict[str, Any] = {
         **extra,
         "type": token_type,
+        "jti": uuid.uuid4().hex,
         "iss": _ISSUER,
         "aud": _AUDIENCE,
         "iat": now,
+        "nbf": now,
         "exp": now + expires_delta,
     }
     return jwt.encode(payload, _get_secret(), algorithm=_ALGORITHM)
 
 
-def create_access_token(user_id: str, email: str = "") -> str:
-    """Create a short-lived JWT access token (default 15 minutes).
-
-    email parameter is accepted for call-site compatibility but NOT
-    embedded in the token — use /auth/me to resolve the user profile.
-    """
+def create_access_token(user_id: str) -> str:
+    """Create a short-lived JWT access token (default 15 minutes)."""
     return _create_token(
         "access",
         timedelta(minutes=settings.jwt_access_token_expire_minutes),
@@ -72,5 +71,5 @@ def decode_token(token: str) -> dict[str, Any]:
         algorithms=[_ALGORITHM],
         issuer=_ISSUER,
         audience=_AUDIENCE,
-        options={"require": ["exp", "iss", "sub", "aud", "type"]},
+        options={"require": ["exp", "iat", "nbf", "iss", "sub", "aud", "type", "jti"]},
     )

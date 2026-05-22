@@ -40,25 +40,27 @@ export const useResourceStore = create<ResourceState>((set, get) => ({
     if (get().loadingKinds[kindPlural]) return
     set((state) => {
       const next = { ...state.loadingKinds, [kindPlural]: true as const }
-      return { loadingKinds: next, loading: Object.keys(next).length > 0, error: null }
+      return { loadingKinds: next, loading: true, error: null }
     })
     try {
       const result = await api.get<{ items: Resource[]; total: number }>(`/api/v1/${kindPlural}`)
       set((state) => {
         const next: Record<string, true> = { ...state.loadingKinds }
         delete next[kindPlural]
+        const hasLoading = Object.keys(next).length > 0
         return {
           resources: { ...state.resources, [kindPlural]: result.items },
           loadingKinds: next,
-          loading: Object.keys(next).length > 0,
+          loading: hasLoading,
         }
       })
     } catch (err) {
       set((state) => {
         const next: Record<string, true> = { ...state.loadingKinds }
         delete next[kindPlural]
+        const hasLoading = Object.keys(next).length > 0
         const message = getErrorMessage(err, 'Failed to fetch resources')
-        return { error: message, loadingKinds: next, loading: Object.keys(next).length > 0 }
+        return { error: message, loadingKinds: next, loading: hasLoading }
       })
     }
   },
@@ -67,7 +69,7 @@ export const useResourceStore = create<ResourceState>((set, get) => ({
     set((state) => {
       const next = { ...state.loadingKinds }
       for (const k of ALL_PLURALS) next[k] = true
-      return { loadingKinds: next, loading: Object.keys(next).length > 0, error: null }
+      return { loadingKinds: next, loading: true, error: null }
     })
     const results = await Promise.allSettled(
       ALL_PLURALS.map((kind) =>
@@ -88,10 +90,11 @@ export const useResourceStore = create<ResourceState>((set, get) => ({
     set((state) => {
       const next = { ...state.loadingKinds }
       for (const k of ALL_PLURALS) delete next[k]
+      const hasLoading = Object.keys(next).length > 0
       return {
         resources: { ...state.resources, ...updated },
         loadingKinds: next,
-        loading: Object.keys(next).length > 0,
+        loading: hasLoading,
         error: failedKinds.length > 0 ? `Failed to load some resources: ${failedKinds[0]}` : null,
       }
     })

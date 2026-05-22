@@ -343,7 +343,6 @@ dependencies = [
     { name = "grpcio" },
     { name = "httpx" },
     { name = "jsonschema" },
-    { name = "muninn-python" },
     { name = "presidio-analyzer" },
     { name = "presidio-anonymizer" },
     { name = "psycopg", extra = ["binary"] },
@@ -371,6 +370,9 @@ dev = [
     { name = "ruff" },
     { name = "types-pyyaml" },
 ]
+muninn = [
+    { name = "muninn-python" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -389,7 +391,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100,<7" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
-    { name = "muninn-python", specifier = ">=0.1,<1" },
+    { name = "muninn-python", marker = "extra == 'muninn'", specifier = ">=0.1,<1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15,<2" },
     { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.9,<3" },
     { name = "presidio-analyzer", specifier = ">=2.2,<3" },
@@ -410,7 +412,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34,<1" },
     { name = "wasmtime", specifier = ">=44,<45" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "muninn"]
 
 [[package]]
 name = "blis"

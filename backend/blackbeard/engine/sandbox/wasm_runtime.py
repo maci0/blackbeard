@@ -21,19 +21,16 @@ import wasmtime
 
 logger = logging.getLogger(__name__)
 
-# Immutable base directory for WASM module path validation (set once at import time)
 _APP_BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Safe environment variables to pass through to WASM tools (never leak secrets)
+# Only pass non-secret env vars into WASM sandboxes
 _SAFE_ENV_VARS = ("LANG", "LC_ALL", "TZ", "TERM")
 
-# Default fuel limit (~100M instructions; actual wall-clock time varies by host CPU)
+# ~100M instructions; actual wall-clock time varies by host CPU
 DEFAULT_FUEL = 100_000_000
 
-# Default module cache size
 DEFAULT_CACHE_SIZE = 50
 
-# Maximum output size from a WASM tool (1 MB)
 MAX_OUTPUT_BYTES = 1_024 * 1_024
 
 

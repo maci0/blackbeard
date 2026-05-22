@@ -43,9 +43,7 @@ def _auth_qs() -> str:
 
 def _jwt_qs() -> str:
     """Return query string with valid JWT token for WebSocket auth."""
-    token = create_access_token(
-        user_id=str(uuid.uuid4()), email="test@example.com"
-    )
+    token = create_access_token(user_id=str(uuid.uuid4()))
     return f"?token={token}"
 
 
@@ -65,9 +63,7 @@ class TestValidateWsAuth:
         assert validate_ws_auth("", "") is False
 
     def test_valid_jwt(self) -> None:
-        token = create_access_token(
-            user_id=str(uuid.uuid4()), email="test@example.com"
-        )
+        token = create_access_token(user_id=str(uuid.uuid4()))
         assert validate_ws_auth(token, "") is True
 
     def test_invalid_jwt(self) -> None:
@@ -192,20 +188,26 @@ class TestBroadcast:
 
 def test_websocket_rejects_no_auth() -> None:
     """WebSocket connection without credentials should be rejected with 4401."""
+    from starlette.websockets import WebSocketDisconnect
+
     with TestClient(_ws_app) as tc:
-        with pytest.raises(Exception):
+        with pytest.raises(WebSocketDisconnect) as exc_info:
             with tc.websocket_connect("/api/v1/ws/collab/test-crew"):
                 pass  # Should not reach here
+        assert exc_info.value.code == 4401
 
 
 def test_websocket_rejects_invalid_api_key() -> None:
     """WebSocket connection with wrong API key should be rejected."""
+    from starlette.websockets import WebSocketDisconnect
+
     with TestClient(_ws_app) as tc:
-        with pytest.raises(Exception):
+        with pytest.raises(WebSocketDisconnect) as exc_info:
             with tc.websocket_connect(
                 "/api/v1/ws/collab/test-crew?api_key=wrong-key"
             ):
                 pass
+        assert exc_info.value.code == 4401
 
 
 def test_websocket_accepts_valid_api_key() -> None:

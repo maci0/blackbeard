@@ -10,6 +10,8 @@ spec:
   serviceName: {{ include "blackbeard.fullname" . }}-postgres
   replicas: 1
   revisionHistoryLimit: 5
+  updateStrategy:
+    type: OnDelete
   selector:
     matchLabels:
       {{- include "blackbeard.selectorLabels" (dict "context" . "component" "postgres") | nindent 6 }}
@@ -98,6 +100,17 @@ spec:
             - "idle_in_transaction_session_timeout={{ .Values.postgres.config.idleInTransactionSessionTimeout }}"
             - "-c"
             - "statement_timeout={{ .Values.postgres.config.statementTimeout }}"
+          startupProbe:
+            exec:
+              command:
+                - pg_isready
+                - "-U"
+                - {{ .Values.database.user | quote }}
+                - "-d"
+                - {{ .Values.database.name | quote }}
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 60
           readinessProbe:
             exec:
               command:
@@ -106,10 +119,9 @@ spec:
                 - {{ .Values.database.user | quote }}
                 - "-d"
                 - {{ .Values.database.name | quote }}
-            initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 5
-            failureThreshold: 10
+            failureThreshold: 3
           livenessProbe:
             exec:
               command:
@@ -118,10 +130,9 @@ spec:
                 - {{ .Values.database.user | quote }}
                 - "-d"
                 - {{ .Values.database.name | quote }}
-            initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 10
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.postgres.resources | nindent 12 }}
           volumeMounts:

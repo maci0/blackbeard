@@ -9,8 +9,8 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request, Response
-from pydantic import BaseModel, Field
-from sqlalchemy import select
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
@@ -18,6 +18,7 @@ from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.config import settings
 from blackbeard.engine.execution_listener import invalidate_webhook_cache
+from blackbeard.logging_config import safe_log_url
 from blackbeard.models import User, Webhook, get_session
 from blackbeard.resources import check_url_ssrf
 
@@ -44,6 +45,15 @@ class WebhookCreateRequest(BaseModel):
             "Empty list means all events."
         ),
     )
+
+    @field_validator("events")
+    @classmethod
+    def _validate_event_strings(cls, v: list[str]) -> list[str]:
+        for event in v:
+            if not event or len(event) > 100:
+                raise ValueError("Each event type must be 1-100 characters")
+        return v
+
     secret: str | None = Field(
         default=None,
         min_length=16,
@@ -60,6 +70,16 @@ class WebhookResponse(BaseModel):
     events: list[str]
     active: bool
     created_at: datetime | None = None
+
+
+class WebhookListResponse(BaseModel):
+    """Paginated webhook list."""
+
+    items: list[WebhookResponse]
+    total: int
+    limit: int = 100
+    offset: int = 0
+    has_more: bool = False
 
 
 class WebhookCreateResponse(WebhookResponse):
@@ -114,15 +134,16 @@ async def create_webhook(
     session.add(webhook)
     await session.flush()
 
+    safe_url = safe_log_url(webhook.url)
     logger.info(
         "Webhook created: id=%s url=%s events=%s",
         webhook.id,
-        webhook.url,
+        safe_url,
         webhook.events,
         extra={
             "event": "webhook_created",
             "webhook_id": str(webhook.id),
-            "webhook_url": webhook.url,
+            "webhook_url": safe_url,
             "event_types": webhook.events,
         },
     )
@@ -131,7 +152,7 @@ async def create_webhook(
         action="webhook_created",
         resource_type="Webhook",
         resource_id=str(webhook.id),
-        detail={"url": webhook.url, "events": webhook.events},
+        detail={"url": safe_url, "events": webhook.events},
         **audit_from_request(request, user),
     )
     await session.commit()
@@ -150,15 +171,15 @@ async def create_webhook(
 
 @router.get(
     "",
-    response_model=list[WebhookResponse],
-    responses={200: {"description": "List of registered webhooks"}},
+    response_model=WebhookListResponse,
+    responses={200: {"description": "Paginated list of registered webhooks"}},
 )
 async def list_webhooks(
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     session: AsyncSession = Depends(get_session),
     _user: User | None = Depends(get_current_user),
-) -> list[WebhookResponse]:
+) -> WebhookListResponse:
     """List all registered webhooks (secrets are not returned)."""
     result = await session.execute(
         select(Webhook)
@@ -168,7 +189,7 @@ async def list_webhooks(
         .offset(offset)
     )
     webhooks = list(result.scalars())
-    return [
+    items = [
         WebhookResponse(
             id=str(w.id),
             url=w.url,
@@ -178,6 +199,18 @@ async def list_webhooks(
         )
         for w in webhooks
     ]
+    if len(items) < limit and (len(items) > 0 or offset == 0):
+        total = offset + len(items)
+    else:
+        count_result = await session.execute(select(func.count()).select_from(Webhook))
+        total = count_result.scalar_one()
+    return WebhookListResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=(offset + limit) < total,
+    )
 
 
 @router.delete(
@@ -212,13 +245,14 @@ async def delete_webhook(
         )
         return
 
+    safe_url = safe_log_url(webhook.url)
     await session.delete(webhook)
     await log_audit(
         session,
         action="webhook_deleted",
         resource_type="Webhook",
         resource_id=str(webhook_id),
-        detail={"url": webhook.url},
+        detail={"url": safe_url},
         **audit_from_request(request, user),
     )
     await session.commit()
@@ -227,10 +261,10 @@ async def delete_webhook(
     logger.info(
         "Webhook deleted: id=%s url=%s",
         webhook_id,
-        webhook.url,
+        safe_url,
         extra={
             "event": "webhook_deleted",
             "webhook_id": str(webhook_id),
-            "webhook_url": webhook.url,
+            "webhook_url": safe_url,
         },
     )

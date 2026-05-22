@@ -44,9 +44,9 @@ class TestExecutionListenerSequencing:
         for t in threads:
             t.join()
 
-        # All 400 values should be unique
+        # All 400 values should be unique and cover exactly 0..399
         assert len(results) == 400
-        assert len(set(results)) == 400
+        assert set(results) == set(range(400))
 
     def test_task_order_independent_of_seq(self):
         """_task_order should start at 0 and be independent of _seq."""

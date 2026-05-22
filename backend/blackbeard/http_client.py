@@ -12,6 +12,14 @@ from typing import Any
 
 import httpx
 
+__all__ = [
+    "close_all_clients",
+    "close_client",
+    "get_client",
+    "get_litellm_client",
+    "get_sync_client",
+]
+
 logger = logging.getLogger(__name__)
 
 _clients: dict[str, httpx.AsyncClient] = {}
@@ -70,6 +78,14 @@ def get_sync_client(name: str, **kwargs: Any) -> httpx.Client:
             extra={"event": "http_client_created", "client_name": name, "client_type": "sync"},
         )
         return client
+
+
+def get_litellm_client(name: str, timeout: float = _DEFAULT_TIMEOUT) -> httpx.AsyncClient:
+    """Return a shared httpx client pre-configured with LiteLLM Bearer auth."""
+    from blackbeard.config import settings
+
+    key = settings.litellm_master_key.get_secret_value()
+    return get_client(name, timeout=timeout, headers={"Authorization": f"Bearer {key}"})
 
 
 async def close_client(name: str) -> None:

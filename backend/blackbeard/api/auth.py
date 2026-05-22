@@ -19,30 +19,29 @@ from blackbeard.audit import log_audit
 from blackbeard.auth.dependencies import require_user
 from blackbeard.auth.jwt import create_access_token, create_refresh_token, decode_token
 from blackbeard.auth.passwords import hash_password, verify_password
-from blackbeard.logging_config import request_id_var
 from blackbeard.models import User, get_session
 from blackbeard.models.user_schemas import UserResponse, user_response
 
 logger = logging.getLogger(__name__)
 
 
+def _bearer_401(detail: str) -> HTTPException:
+    return HTTPException(status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"})
+
+
 async def _register_litellm_user(user_id: str) -> None:
     """Register user in LiteLLM for per-user spend tracking (best-effort)."""
     try:
         from blackbeard.config import settings
-        from blackbeard.http_client import get_client
+        from blackbeard.http_client import get_litellm_client
 
         url = f"{settings.litellm_proxy_url}/user/new"
-        master_key = settings.litellm_master_key.get_secret_value()
-        client = get_client(
-            "litellm-user-reg",
-            timeout=5,
-            headers={"Authorization": f"Bearer {master_key}"},
-        )
-        await client.post(
+        client = get_litellm_client("litellm-user-reg", timeout=5)
+        resp = await client.post(
             url,
             json={"user_id": user_id},
         )
+        resp.raise_for_status()
     except Exception:
         logger.warning(
             "Could not register user in LiteLLM (proxy may not be running) — "
@@ -111,7 +110,7 @@ class TokenResponse(BaseModel):
 def _auth_response(user: User) -> AuthResponse:
     """Build an AuthResponse with fresh access + refresh tokens."""
     return AuthResponse(
-        access_token=create_access_token(str(user.id), user.email),
+        access_token=create_access_token(str(user.id)),
         refresh_token=create_refresh_token(str(user.id)),
         user=user_response(user),
     )
@@ -162,7 +161,6 @@ async def register(
         resource_type="User",
         resource_id=str(user.id),
         ip_address=client_ip if client_ip != "unknown" else None,
-        request_id=request_id_var.get("-"),
     )
     await session.commit()
     await session.refresh(user)
@@ -175,7 +173,6 @@ async def register(
             "event": "user_registered",
             "user_id": str(user.id),
             "client_ip": client_ip,
-            "request_id": request_id_var.get("-"),
         },
     )
 
@@ -207,6 +204,15 @@ async def login(
     if not password_hash.startswith("$2"):
         await asyncio.to_thread(verify_password, data.password, _DUMMY_HASH)
         valid = False
+        if user is not None:
+            logger.warning(
+                "User %s has non-bcrypt password hash — login will always fail until reset",
+                user.id,
+                extra={
+                    "event": "corrupted_password_hash",
+                    "user_id": str(user.id),
+                },
+            )
     else:
         matched = await asyncio.to_thread(verify_password, data.password, password_hash)
         valid = matched and user is not None
@@ -217,24 +223,18 @@ async def login(
             extra={
                 "event": "login_failed",
                 "client_ip": ip or "unknown",
-                "request_id": request_id_var.get("-"),
             },
         )
         await log_audit(
             session,
             action="login_failed",
             actor_type="user",
-            actor_id=email,
+            actor_id=str(user.id) if user is not None else "unknown",
             detail={"reason": "invalid_credentials"},
             ip_address=ip,
-            request_id=request_id_var.get("-"),
         )
         await session.commit()
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _bearer_401("Invalid email or password")
 
     assert user is not None  # narrowing: valid=True implies user is not None
     if not user.is_active:
@@ -256,14 +256,9 @@ async def login(
             actor_email=user.email,
             detail={"reason": "account_deactivated"},
             ip_address=ip,
-            request_id=request_id_var.get("-"),
         )
         await session.commit()
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _bearer_401("Invalid email or password")
 
     user.last_login_at = datetime.now(UTC)
     await log_audit(
@@ -275,7 +270,6 @@ async def login(
         resource_type="User",
         resource_id=str(user.id),
         ip_address=ip,
-        request_id=request_id_var.get("-"),
     )
     await session.commit()
     await session.refresh(user)
@@ -288,7 +282,6 @@ async def login(
             "event": "user_login",
             "user_id": str(user.id),
             "client_ip": ip or "unknown",
-            "request_id": request_id_var.get("-"),
         },
     )
 
@@ -312,21 +305,13 @@ async def refresh(
             "Refresh token expired",
             extra={"event": "refresh_token_expired"},
         )
-        raise HTTPException(
-            status_code=401,
-            detail="Refresh token has expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
+        raise _bearer_401("Refresh token has expired") from None
     except pyjwt.InvalidTokenError:
         logger.warning(
             "Invalid refresh token",
             extra={"event": "refresh_token_invalid"},
         )
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid refresh token",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
+        raise _bearer_401("Invalid refresh token") from None
 
     if payload.get("type") != "refresh":
         logger.warning(
@@ -334,11 +319,7 @@ async def refresh(
             payload.get("type"),
             extra={"event": "refresh_token_wrong_type", "token_type": payload.get("type")},
         )
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid token type",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _bearer_401("Invalid token type")
 
     user_id = payload.get("sub")
     if not user_id:
@@ -346,14 +327,12 @@ async def refresh(
             "Refresh token missing sub claim",
             extra={"event": "refresh_token_missing_sub"},
         )
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid token payload",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _bearer_401("Invalid token payload")
 
     result = await session.execute(
-        select(User).where(User.id == user_id).options(defer(User.password_hash))
+        select(User)
+        .where(User.id == user_id)
+        .options(defer(User.password_hash), defer(User.api_key))
     )
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
@@ -362,13 +341,9 @@ async def refresh(
             user_id,
             extra={"event": "refresh_user_invalid", "user_id": str(user_id)},
         )
-        raise HTTPException(
-            status_code=401,
-            detail="User not found or inactive",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _bearer_401("User not found or inactive")
 
-    access_token = create_access_token(str(user.id), user.email)
+    access_token = create_access_token(str(user.id))
     new_refresh_token = create_refresh_token(str(user.id))
     logger.info(
         "Token refreshed: user_id=%s",
@@ -376,7 +351,6 @@ async def refresh(
         extra={
             "event": "token_refreshed",
             "user_id": str(user.id),
-            "request_id": request_id_var.get("-"),
         },
     )
     return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)

@@ -87,6 +87,27 @@ _BLOCKED_ENV_PREFIXES = (
     "DISCORD_",
     "NPM_",
     "JWT_",
+    "OIDC_",
+    "OTEL_",
+    "SESSION_",
+    "SENTRY_",
+    "CORS_",
+    "FORWARDED_",
+    "GRPC_",
+    "CONTAINER_",
+    "FIRECRACKER_",
+    "MUNINNDB_",
+    "CELERY_",
+    "FLOWER_",
+    "KAFKA_",
+    "RABBITMQ_",
+    "AMQP_",
+    "ELASTIC_",
+    "MONGO_",
+    "DATADOG_",
+    "DD_",
+    "NEWRELIC_",
+    "SPLUNK_",
 )
 
 _BLOCKED_ENV_EXACT = frozenset(
@@ -110,6 +131,14 @@ _BLOCKED_ENV_EXACT = frozenset(
         "GPG_AGENT_INFO",
         "KUBECONFIG",
         "WANDB_API_KEY",
+        "OTEL_ENDPOINT",
+        "CORS_ORIGINS",
+        "FORWARDED_ALLOW_IPS",
+        "WEB_CONCURRENCY",
+        "LITELLM_DATABASE_URL",
+        "ENCRYPTION_KEY",
+        "SIGNING_KEY",
+        "MASTER_KEY",
     }
 )
 
@@ -175,7 +204,7 @@ def is_internal_host(hostname: str) -> bool:
 def _validate_llm_connection_extra(spec: dict[str, Any], errors: list[ValidationError]) -> None:
     """Block SSRF via base_url and env var exfiltration via api_key_env."""
     api_key_env = spec.get("api_key_env")
-    if isinstance(api_key_env, str) and _is_blocked_env_name(api_key_env):
+    if isinstance(api_key_env, str) and is_blocked_env_name(api_key_env):
         errors.append(
             ValidationError(
                 "spec.api_key_env",
@@ -192,7 +221,7 @@ def _validate_llm_connection_extra(spec: dict[str, Any], errors: list[Validation
 _SAFE_PATH_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/ -]*$")
 
 
-def _is_blocked_env_name(name: str) -> bool:
+def is_blocked_env_name(name: str) -> bool:
     """Check if an environment variable name is on the blocklist."""
     upper = name.upper()
     return upper.startswith(_BLOCKED_ENV_PREFIXES) or upper in _BLOCKED_ENV_EXACT
@@ -453,7 +482,7 @@ def _validate_tool_extra(spec: dict[str, Any], errors: list[ValidationError]) ->
     env = spec.get("env")
     if isinstance(env, dict):
         for key, value in env.items():
-            if isinstance(key, str) and _is_blocked_env_name(key):
+            if isinstance(key, str) and is_blocked_env_name(key):
                 errors.append(
                     ValidationError(
                         f"spec.env.{key}",
@@ -587,7 +616,7 @@ def _has_blocked_env_expansion(val: str) -> bool:
 
 def _is_blocked_env_reference(val: str) -> bool:
     """Check if a config value references a blocked environment variable."""
-    return _is_blocked_env_name(val) or _has_blocked_env_expansion(val)
+    return is_blocked_env_name(val) or _has_blocked_env_expansion(val)
 
 
 def _validate_crew_config_block(

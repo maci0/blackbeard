@@ -21,6 +21,7 @@ import {
   LogOut,
 } from 'lucide-react'
 import { useDarkMode } from '@/hooks'
+import { STORAGE_KEYS } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import WelcomeDialog from './onboarding/WelcomeDialog'
 import GuidedTour from './onboarding/GuidedTour'
@@ -75,13 +76,13 @@ export default function Layout() {
   const [tourKey, setTourKey] = useState(0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem('blackbeard_sidebar_collapsed') === 'true',
+    () => localStorage.getItem(STORAGE_KEYS.SIDEBAR_COLLAPSED) === 'true',
   )
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
-    localStorage.setItem('blackbeard_sidebar_collapsed', String(collapsed))
+    localStorage.setItem(STORAGE_KEYS.SIDEBAR_COLLAPSED, String(collapsed))
   }, [collapsed])
 
   useEffect(() => {
@@ -113,7 +114,7 @@ export default function Layout() {
   }, [sidebarOpen, handleKeyDown])
 
   useEffect(() => {
-    if (!localStorage.getItem('blackbeard_onboarding_completed')) {
+    if (!localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED)) {
       setShowWelcome(true)
     }
   }, [])
@@ -137,7 +138,7 @@ export default function Layout() {
   }
 
   const handleRestartTour = () => {
-    localStorage.removeItem('blackbeard_tour_completed')
+    localStorage.removeItem(STORAGE_KEYS.TOUR_COMPLETED)
     void navigate('/studio')
     setTimeout(() => {
       setTourKey((k) => k + 1)
@@ -161,7 +162,7 @@ export default function Layout() {
           onClick={() => setSidebarOpen((v) => !v)}
           aria-label={sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
           aria-expanded={sidebarOpen}
-          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
@@ -188,6 +189,7 @@ export default function Layout() {
       >
         {/* Branding */}
         <button
+          type="button"
           onClick={() => void navigate('/studio')}
           className={`flex items-center gap-3 border-b p-4 text-left transition-all hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
             collapsed ? 'md:justify-center md:px-2' : ''
@@ -239,6 +241,7 @@ export default function Layout() {
           >
             {collapsed ? (
               <button
+                type="button"
                 onClick={() => {
                   logout()
                   void navigate('/login')
@@ -267,13 +270,14 @@ export default function Layout() {
                   )}
                 </div>
                 <button
+                  type="button"
                   onClick={() => {
                     logout()
                     void navigate('/login')
                   }}
                   aria-label="Sign out"
                   title="Sign out"
-                  className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <LogOut className="h-4 w-4" />
                 </button>
@@ -296,10 +300,11 @@ export default function Layout() {
               v0.1.0
             </span>
             <button
+              type="button"
               onClick={cycle}
               aria-label={`Theme: ${preference}. Click to cycle theme.`}
               title={`Theme: ${preference}`}
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {preference === 'dark' ? (
                 <Moon className="h-4 w-4" />
@@ -310,9 +315,10 @@ export default function Layout() {
               )}
             </button>
             <button
+              type="button"
               onClick={() => setCollapsed((v) => !v)}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              className="hidden rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
+              className="hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
             >
               {collapsed ? (
                 <PanelLeftOpen className="h-4 w-4" />

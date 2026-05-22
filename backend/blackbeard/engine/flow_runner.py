@@ -6,9 +6,26 @@ Handles step types: crew, function, router, condition, transform.
 from __future__ import annotations
 
 import logging
+import operator
 from typing import Any
 
+__all__ = [
+    "call_hook",
+    "evaluate_condition",
+    "resolve_dotted",
+    "run_flow_steps",
+]
+
 from blackbeard.engine.loader import LoaderError, ResourceLoader
+
+_CONDITION_OPS: tuple[tuple[str, Any], ...] = (
+    (">=", operator.ge),
+    ("<=", operator.le),
+    ("!=", operator.ne),
+    ("==", operator.eq),
+    (">", operator.gt),
+    ("<", operator.lt),
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +62,7 @@ def call_hook(
                     "hook_path": hook_path,
                 },
             )
-    except Exception:
+    except Exception as exc:
         logger.warning(
             "Hook '%s' raised an exception: %s",
             hook_name,
@@ -55,6 +72,8 @@ def call_hook(
                 "event": "hook_execution_failed",
                 "hook_name": hook_name,
                 "hook_path": hook_path,
+                "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
             },
         )
 
@@ -104,6 +123,23 @@ def run_flow_steps(
                 continue
 
             crew = loader.build_crew(crew_ref.split("/")[-1] if "/" in crew_ref else crew_ref)
+            failed_deps = [
+                k for k, v in step_outputs.items()
+                if isinstance(v, str) and v.startswith("error:")
+            ]
+            if failed_deps:
+                logger.warning(
+                    "Flow step '%s' receives error outputs from steps %s — "
+                    "downstream results may be unreliable",
+                    step_name,
+                    failed_deps,
+                    extra={
+                        "event": "flow_step_error_propagation",
+                        "flow_name": flow_name,
+                        "step_name": step_name,
+                        "failed_dependencies": failed_deps,
+                    },
+                )
             step_inputs = {**inputs, **step_outputs}
 
             if step_hooks.get("before"):
@@ -123,10 +159,9 @@ def run_flow_steps(
 
             if isinstance(result, CrewOutput):
                 step_outputs[step_name] = result.raw
-                last_result = result
             else:
                 step_outputs[step_name] = str(result) if result else ""
-                last_result = result
+            last_result = result
 
             if step_hooks.get("after"):
                 call_hook(loader, step_hooks["after"], last_result, f"step:{step_name}:after")
@@ -205,7 +240,7 @@ def run_flow_steps(
                                 "error_type": type(exc).__name__,
                             },
                         )
-                        step_outputs[step_name] = f"error: {type(exc).__name__}: {exc}"
+                        step_outputs[step_name] = "error: step failed"
 
         elif step_type == "router":
             fn_path = step.get("function_path", "")
@@ -257,7 +292,7 @@ def run_flow_steps(
                                 "error_type": type(exc).__name__,
                             },
                         )
-                        step_outputs[step_name] = f"error: {type(exc).__name__}"
+                        step_outputs[step_name] = "error: router failed"
 
         elif step_type == "condition":
             condition = step.get("condition", "")
@@ -309,7 +344,7 @@ def run_flow_steps(
                             "error_type": type(exc).__name__,
                         },
                     )
-                    step_outputs[step_name] = f"error: {type(exc).__name__}: {exc}"
+                    step_outputs[step_name] = "error: step failed"
             else:
                 logger.warning(
                     "Transform step '%s' has no wasm_module — skipped",
@@ -325,18 +360,39 @@ def run_flow_steps(
     completed_steps = [
         s.get("name", "unnamed") for s in steps if s.get("name", "unnamed") in step_outputs
     ]
-    logger.info(
-        "Flow '%s' completed: %d/%d steps produced output",
-        flow_name,
-        len(completed_steps),
-        total_steps,
-        extra={
-            "event": "flow_completed",
-            "flow_name": flow_name,
-            "total_steps": total_steps,
-            "completed_steps": len(completed_steps),
-        },
-    )
+    failed_steps = [
+        name
+        for name in completed_steps
+        if isinstance(step_outputs.get(name), str) and step_outputs[name].startswith("error:")
+    ]
+    if failed_steps:
+        logger.warning(
+            "Flow '%s' completed with %d/%d steps in error state: %s",
+            flow_name,
+            len(failed_steps),
+            total_steps,
+            failed_steps,
+            extra={
+                "event": "flow_completed_with_errors",
+                "flow_name": flow_name,
+                "total_steps": total_steps,
+                "completed_steps": len(completed_steps),
+                "failed_steps": failed_steps,
+            },
+        )
+    else:
+        logger.info(
+            "Flow '%s' completed: %d/%d steps produced output",
+            flow_name,
+            len(completed_steps),
+            total_steps,
+            extra={
+                "event": "flow_completed",
+                "flow_name": flow_name,
+                "total_steps": total_steps,
+                "completed_steps": len(completed_steps),
+            },
+        )
     return last_result
 
 
@@ -348,14 +404,7 @@ def evaluate_condition(expr: str, context: dict[str, Any]) -> bool:
     """
     expr = expr.strip()
 
-    for op, fn in [
-        (">=", lambda a, b: a >= b),
-        ("<=", lambda a, b: a <= b),
-        ("!=", lambda a, b: a != b),
-        ("==", lambda a, b: a == b),
-        (">", lambda a, b: a > b),
-        ("<", lambda a, b: a < b),
-    ]:
+    for op, fn in _CONDITION_OPS:
         if op in expr:
             left, right = expr.split(op, 1)
             left_val = resolve_dotted(left.strip().strip("'\""), context)

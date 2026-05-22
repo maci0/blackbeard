@@ -146,6 +146,7 @@ class Execution(Base):
             "crew_namespace",
             created_at.desc(),
         ),
+        Index("ix_execution_crew_name_created", "crew_name", created_at.desc()),
         Index("ix_execution_ns_status_created", "crew_namespace", "status", created_at.desc()),
         Index("ix_execution_status_created", "status", "created_at"),
         Index("ix_execution_created_at", "created_at"),
@@ -183,6 +184,14 @@ class Execution(Base):
         CheckConstraint(
             "training_file IS NULL OR length(training_file) >= 1",
             name="ck_execution_training_file_nonempty",
+        ),
+        CheckConstraint(
+            "training_file IS NULL OR execution_type = 'train'",
+            name="ck_execution_training_file_train_only",
+        ),
+        CheckConstraint(
+            "n_iterations IS NULL OR execution_type IN ('train', 'test')",
+            name="ck_execution_n_iterations_train_test_only",
         ),
     )
 

@@ -14,12 +14,8 @@ const MAX_HISTORY = 30
 const HISTORY_DEBOUNCE_MS = 100
 const NODE_DATA_DEBOUNCE_MS = 500
 
-function cloneNodes(nodes: Node[]): Node[] {
-  return nodes.map((n) => ({ ...n, data: { ...n.data }, position: { ...n.position } }))
-}
-
-function cloneEdges(edges: Edge[]): Edge[] {
-  return edges.map((e) => ({ ...e, data: e.data ? { ...e.data } : e.data }))
+function cloneSnapshot(nodes: Node[], edges: Edge[]): HistorySnapshot {
+  return structuredClone({ nodes, edges })
 }
 
 interface HistorySnapshot {
@@ -61,7 +57,7 @@ export const useStudioStore = create<StudioState>()((set, get) => {
 
     const { nodes, edges, history, historyIndex } = get()
     const newHistory = history.slice(0, historyIndex + 1)
-    newHistory.push({ nodes: cloneNodes(nodes), edges: cloneEdges(edges) })
+    newHistory.push(cloneSnapshot(nodes, edges))
     if (newHistory.length > MAX_HISTORY) newHistory.shift()
     const newIndex = newHistory.length - 1
     set({
@@ -157,10 +153,7 @@ export const useStudioStore = create<StudioState>()((set, get) => {
       // Save the live canvas state at the tip so redo can restore it
       let currentHistory = history
       if (historyIndex === history.length - 1) {
-        currentHistory = [
-          ...history,
-          { nodes: cloneNodes(state.nodes), edges: cloneEdges(state.edges) },
-        ]
+        currentHistory = [...history, cloneSnapshot(state.nodes, state.edges)]
         if (currentHistory.length > MAX_HISTORY + 1) currentHistory.shift()
       }
       const prev = currentHistory[historyIndex]

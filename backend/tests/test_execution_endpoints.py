@@ -184,6 +184,7 @@ async def test_kickoff_crew_internal_error(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 500
+    assert "detail" in resp.json()
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +227,7 @@ async def test_train_crew_not_found(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 404
+    assert "not found" in resp.json()["detail"].lower()
 
 
 async def test_train_crew_internal_error(client: AsyncClient):
@@ -243,6 +245,7 @@ async def test_train_crew_internal_error(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 500
+    assert resp.json()["detail"], "Error response must include non-empty detail"
 
 
 # ---------------------------------------------------------------------------
@@ -267,6 +270,7 @@ async def test_test_crew_success(client: AsyncClient):
     assert resp.status_code == 202
     data = resp.json()
     assert data["status"] == "queued"
+    assert data["crew_name"] == "test-crew"
 
 
 async def test_test_crew_not_found(client: AsyncClient):
@@ -284,6 +288,7 @@ async def test_test_crew_not_found(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 404
+    assert "not found" in resp.json()["detail"].lower()
 
 
 async def test_test_crew_internal_error(client: AsyncClient):
@@ -301,6 +306,7 @@ async def test_test_crew_internal_error(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 500
+    assert resp.json()["detail"], "Error response must include non-empty detail"
 
 
 # ---------------------------------------------------------------------------
@@ -325,6 +331,7 @@ async def test_run_flow_success(client: AsyncClient):
     assert resp.status_code == 202
     data = resp.json()
     assert data["status"] == "queued"
+    assert data["crew_name"] == "test-flow"
 
 
 async def test_run_flow_not_found(client: AsyncClient):
@@ -342,6 +349,7 @@ async def test_run_flow_not_found(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 404
+    assert "not found" in resp.json()["detail"].lower()
 
 
 async def test_run_flow_internal_error(client: AsyncClient):
@@ -359,6 +367,7 @@ async def test_run_flow_internal_error(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 500
+    assert resp.json()["detail"], "Error response must include non-empty detail"
 
 
 # ---------------------------------------------------------------------------
@@ -497,6 +506,7 @@ async def test_list_execution_events_not_found(client: AsyncClient):
             f"/api/v1/executions/{fake_id}/events", headers=API_KEY_HEADER
         )
     assert resp.status_code == 404
+    assert "detail" in resp.json()
 
 
 async def test_list_execution_events_empty(client: AsyncClient):
@@ -600,6 +610,7 @@ async def test_cancel_execution_not_found(client: AsyncClient):
             f"/api/v1/executions/{fake_id}/cancel", headers=API_KEY_HEADER
         )
     assert resp.status_code == 404
+    assert "not found" in resp.json()["detail"].lower()
 
 
 async def test_cancel_execution_already_terminal(client: AsyncClient):
@@ -617,6 +628,7 @@ async def test_cancel_execution_already_terminal(client: AsyncClient):
             f"/api/v1/executions/{fake_id}/cancel", headers=API_KEY_HEADER
         )
     assert resp.status_code == 409
+    assert resp.json()["detail"], "Conflict response must include non-empty detail"
 
 
 async def test_cancel_execution_returns_none(client: AsyncClient):
@@ -632,6 +644,7 @@ async def test_cancel_execution_returns_none(client: AsyncClient):
             f"/api/v1/executions/{fake_id}/cancel", headers=API_KEY_HEADER
         )
     assert resp.status_code == 404
+    assert "detail" in resp.json()
 
 
 # ---------------------------------------------------------------------------
@@ -681,6 +694,7 @@ async def test_hitl_respond_not_found(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 404
+    assert resp.json()["detail"], "404 response must include non-empty detail"
 
 
 async def test_hitl_respond_terminal_status(client: AsyncClient):
@@ -700,6 +714,7 @@ async def test_hitl_respond_terminal_status(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 409
+    assert resp.json()["detail"], "Conflict response must include non-empty detail"
 
 
 # ---------------------------------------------------------------------------
@@ -720,6 +735,7 @@ async def test_execution_spend_not_found(client: AsyncClient):
             f"/api/v1/executions/{fake_id}/spend", headers=API_KEY_HEADER
         )
     assert resp.status_code == 404
+    assert "detail" in resp.json()
 
 
 # ---------------------------------------------------------------------------

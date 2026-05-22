@@ -1,7 +1,14 @@
-import ELK, { type ElkNode, type ElkExtendedEdge } from 'elkjs/lib/elk.bundled.js'
+import type { ELK, ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk.bundled.js'
 import type { Node, Edge } from '@xyflow/react'
 
-const elk = new ELK()
+let elk: ELK | null = null
+
+async function getElk(): Promise<ELK> {
+  if (elk) return elk
+  const { default: ELK } = await import('elkjs/lib/elk.bundled.js')
+  elk = new ELK()
+  return elk
+}
 
 const NODE_WIDTH = 160
 const NODE_HEIGHT = 120
@@ -37,7 +44,8 @@ export async function autoLayout(
       targets: [e.target],
     }))
 
-  const graph = await elk.layout({
+  const elkInstance = await getElk()
+  const graph = await elkInstance.layout({
     id: 'root',
     layoutOptions: {
       'elk.algorithm': 'layered',

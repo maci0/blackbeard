@@ -30,7 +30,7 @@ This document describes how Blackbeard is structured: the backend API, the front
      ┌────────▼────────┐ ┌──────▼──────┐  ┌─────────▼─────────┐
      │   PostgreSQL    │ │   Valkey    │  │     LiteLLM       │
      │   18            │ │   9         │  │     Proxy         │
-     │                 │ │   (cache)   │  │     :4000         │
+     │                 │ │  (pub/sub)  │  │     :4000         │
      │ - resources     │ └─────────────┘  └─────────┬─────────┘
      │ - executions    │                            │
      │ - users/groups  │               ┌────────────┼────────────┐
@@ -59,7 +59,7 @@ All entities in Blackbeard are **resources**. Every resource shares a common env
 
 ```yaml
 apiVersion: blackbeard/v1
-kind: Agent          # one of 12 kinds
+kind: Agent          # one of 13 kinds
 metadata:
   name: researcher
   namespace: default
@@ -161,6 +161,9 @@ Each execution gets its own thread with an isolated asyncio event loop. This pre
 | `POST /crews/{name}/train`            | `train`   | Iterative training with data persistence |
 | `POST /crews/{name}/test`             | `test`    | Test run with performance metrics        |
 | `POST /flows/{name}/run`              | `flow`    | Multi-step flow execution                |
+| `POST /automations/{name}/trigger`    | varies    | API-triggered automation                 |
+
+Executions can also be triggered by Automation resources via cron schedules or incoming webhooks. An `AutomationScheduler` starts during application lifespan and polls for cron-triggered automations.
 
 **Budget enforcement chain:**
 
@@ -176,7 +179,7 @@ Blackbeard supports two authentication methods:
 - **API key** -- `X-API-Key` header, validated with `hmac.compare_digest` against `BLACKBEARD_API_KEY`
 - **JWT Bearer** -- `Authorization: Bearer <token>`, with 15-minute access tokens and 7-day refresh tokens
 
-**Public endpoints** (no auth required): health checks (`/api/v1/health`, `/api/v1/health/ready`), auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), and API docs (`/docs`, `/redoc` in debug mode).
+**Public endpoints** (no auth required): health checks (`/api/v1/health`, `/api/v1/health/ready`), auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), automation webhook paths (`/automations/{name}/webhook` -- use their own HMAC validation), and API docs (`/docs`, `/redoc` in debug mode).
 
 **RBAC model:**
 
@@ -213,6 +216,10 @@ The API server manages LiteLLM's configuration and uses it as a proxy for all LL
 
 LiteLLM's own data (spend tracking, virtual keys) is stored in a separate `litellm` database within the same PostgreSQL instance.
 
+### gRPC Interface
+
+A gRPC server (`blackbeard/grpc/server.py`) starts alongside FastAPI during the application lifespan on port `GRPC_PORT` (default 50051). It delegates to the same `ResourceService` and executor used by the REST API, providing a high-performance interface for programmatic clients. Auth uses the same API key validation (via gRPC metadata). If the gRPC server fails to start, the application continues without it.
+
 ---
 
 ## Frontend Architecture
@@ -235,13 +242,14 @@ LiteLLM's own data (spend tracking, virtual keys) is stored in a separate `litel
 /                     → Studio (default)
 /studio               → Visual crew editor
 /resources            → Generic resource list (all kinds)
-/resources/:kind/:name→ Resource detail view
+/resources/:kindPlural/:name → Resource detail view
 /executions           → Execution list
 /executions/:id       → Execution detail with task breakdown
 /models               → LLM model management + connectivity test
 /tools                → Tool management
 /roles                → RBAC role management
 /users                → User management
+/automations          → Automation management (cron, webhook, API triggers)
 /login                → Login form
 /register             → Registration form
 /marketplace          → Import crews from git

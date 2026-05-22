@@ -6,11 +6,15 @@ from typing import Any
 
 import httpx
 
+from blackbeard_sdk.errors import raise_for_status
+
 
 class AuthMixin:
     """Authentication methods mixed into BlackbeardClient."""
 
     _http: httpx.Client
+    _token: str | None
+    _api_key: str | None
 
     def login(self, email: str, password: str) -> dict[str, Any]:
         """Authenticate with email and password.
@@ -23,7 +27,7 @@ class AuthMixin:
             "/api/v1/auth/login",
             json={"email": email, "password": password},
         )
-        resp.raise_for_status()
+        raise_for_status(resp)
         data: dict[str, Any] = resp.json()
         self._set_bearer_token(data["access_token"])
         return data
@@ -42,7 +46,7 @@ class AuthMixin:
                 "display_name": display_name,
             },
         )
-        resp.raise_for_status()
+        raise_for_status(resp)
         data: dict[str, Any] = resp.json()
         self._set_bearer_token(data["access_token"])
         return data
@@ -57,18 +61,20 @@ class AuthMixin:
             "/api/v1/auth/refresh",
             json={"refresh_token": refresh_token},
         )
-        resp.raise_for_status()
+        raise_for_status(resp)
         data: dict[str, Any] = resp.json()
         self._set_bearer_token(data["access_token"])
         return data
 
     def _set_bearer_token(self, token: str) -> None:
         """Switch auth to Bearer token, removing any API key header."""
+        self._token = token
+        self._api_key = None
         self._http.headers.pop("X-API-Key", None)
         self._http.headers["Authorization"] = f"Bearer {token}"
 
     def whoami(self) -> dict[str, Any]:
         """Get the currently authenticated user's profile."""
         resp = self._http.get("/api/v1/auth/me")
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()

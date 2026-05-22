@@ -11,10 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from blackbeard.auth.jwt import decode_token
-from blackbeard.logging_config import request_id_var
 from blackbeard.models import User, get_session
 
 logger = logging.getLogger(__name__)
+
+
+def _bearer_401(detail: str) -> HTTPException:
+    return HTTPException(status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"})
 
 
 async def get_current_user(
@@ -37,23 +40,15 @@ async def get_current_user(
         except pyjwt.ExpiredSignatureError:
             logger.info(
                 "JWT expired",
-                extra={"event": "jwt_expired", "request_id": request_id_var.get("-")},
+                extra={"event": "jwt_expired"},
             )
-            raise HTTPException(
-                status_code=401,
-                detail="Token has expired",
-                headers={"WWW-Authenticate": "Bearer"},
-            ) from None
+            raise _bearer_401("Token has expired") from None
         except pyjwt.InvalidTokenError:
             logger.warning(
                 "JWT invalid",
-                extra={"event": "jwt_invalid", "request_id": request_id_var.get("-")},
+                extra={"event": "jwt_invalid"},
             )
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid token",
-                headers={"WWW-Authenticate": "Bearer"},
-            ) from None
+            raise _bearer_401("Invalid token") from None
 
         if payload.get("type") != "access":
             logger.warning(
@@ -62,29 +57,22 @@ async def get_current_user(
                 extra={
                     "event": "jwt_wrong_type",
                     "token_type": payload.get("type"),
-                    "request_id": request_id_var.get("-"),
                 },
             )
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid token type",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise _bearer_401("Invalid token type")
 
         user_id = payload.get("sub")
         if not user_id:
             logger.warning(
                 "JWT missing sub claim",
-                extra={"event": "jwt_missing_sub", "request_id": request_id_var.get("-")},
+                extra={"event": "jwt_missing_sub"},
             )
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid token payload",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise _bearer_401("Invalid token payload")
 
         result = await session.execute(
-            select(User).where(User.id == user_id).options(defer(User.password_hash))
+            select(User)
+            .where(User.id == user_id)
+            .options(defer(User.password_hash), defer(User.api_key))
         )
         user = result.scalar_one_or_none()
         if user is None or not user.is_active:
@@ -94,14 +82,9 @@ async def get_current_user(
                 extra={
                     "event": "jwt_user_invalid",
                     "user_id": str(user_id),
-                    "request_id": request_id_var.get("-"),
                 },
             )
-            raise HTTPException(
-                status_code=401,
-                detail="User not found or inactive",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise _bearer_401("User not found or inactive")
         return user
 
     # Try resolving the X-API-Key to a user (optional — API key may belong to
@@ -132,14 +115,7 @@ async def require_user(
     if user is None:
         logger.warning(
             "Authentication required but no credentials provided",
-            extra={
-                "event": "auth_required_no_credentials",
-                "request_id": request_id_var.get("-"),
-            },
+            extra={"event": "auth_required_no_credentials"},
         )
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required. Provide a Bearer token or user API key.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _bearer_401("Authentication required. Provide a Bearer token or user API key.")
     return user

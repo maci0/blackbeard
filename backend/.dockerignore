@@ -15,6 +15,7 @@ credentials.json
 *.key
 htmlcov/
 .coverage
+scripts/
 *.md
 LICENSE*
 .DS_Store

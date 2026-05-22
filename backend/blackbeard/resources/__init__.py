@@ -16,7 +16,9 @@ from blackbeard.resources.validator import (
     BLOCKED_CALLABLE_MODULES,
     BLOCKED_TOOL_SUBMODULES,
     check_url_ssrf,
+    is_blocked_env_name,
     is_internal_host,
+    shutdown_dns_executor,
     validate_resource,
 )
 
@@ -33,7 +35,9 @@ __all__ = [
     "build_adjacency",
     "check_url_ssrf",
     "detect_cycles",
+    "is_blocked_env_name",
     "is_internal_host",
     "parse_ref",
+    "shutdown_dns_executor",
     "validate_resource",
 ]

@@ -947,7 +947,7 @@ def test_jwt_access_token_roundtrip():
     """Access token can be decoded and contains expected claims."""
     from blackbeard.auth.jwt import create_access_token, decode_token
 
-    token = create_access_token("user-123", "user@test.com")
+    token = create_access_token("user-123")
     payload = decode_token(token)
     assert payload["sub"] == "user-123"
     assert "email" not in payload, "Email must not be embedded in JWT tokens"

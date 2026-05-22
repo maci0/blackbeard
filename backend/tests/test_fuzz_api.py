@@ -5,7 +5,7 @@ public endpoint surface.  The invariant under test is always the same:
 
     **No input should ever produce a 500 Internal Server Error.**
 
-We allow 200, 201, 400, 401, 403, 404, 408, 409, 413, 422, 429 — those are
+We allow 200, 201, 400, 401, 403, 404, 409, 413, 422, 429, 504 — those are
 all intentional rejections or successes.  A 500 means the server crashed on
 attacker-controlled input and must be fixed.
 """
@@ -224,7 +224,7 @@ async def test_evil_marketplace_urls(client, url):
     )
     assert resp.status_code != 500, f"500 on marketplace import url={url!r}"
     # Should be a client error (rejected), not a success
-    assert resp.status_code in (400, 401, 408, 422), (
+    assert resp.status_code in (400, 401, 422, 504), (
         f"Expected client error for evil URL, got {resp.status_code}"
     )
 

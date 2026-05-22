@@ -3,11 +3,12 @@ import { useBlackbeard } from './BlackbeardProvider'
 import { apiFetch } from './fetch'
 import { ExecutionStatus } from './ExecutionStatus'
 import type { Execution } from './types'
+import { TERMINAL_STATUSES } from './types'
 
 export interface CrewRunnerProps {
   /** Name of the crew to run. */
   crewName: string
-  /** Optional namespace (reserved for multi-tenant). */
+  /** Namespace containing the crew (defaults to "default"). */
   namespace?: string
   /** Callback fired when the execution reaches a terminal state. */
   onComplete?: (execution: Execution) => void
@@ -25,6 +26,8 @@ export function CrewRunner({ crewName, namespace, onComplete }: CrewRunnerProps)
   const [submitting, setSubmitting] = useState(false)
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const activeRef = useRef(true)
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
 
   useEffect(() => {
     activeRef.current = true
@@ -55,22 +58,22 @@ export function CrewRunner({ crewName, namespace, onComplete }: CrewRunnerProps)
       const ns = namespace ?? 'default'
       const result = await apiFetch<{ id: string }>(
         config,
-        `/api/v1/crews/${crewName}/kickoff?namespace=${encodeURIComponent(ns)}`,
+        `/api/v1/crews/${encodeURIComponent(crewName)}/kickoff?namespace=${encodeURIComponent(ns)}`,
         { method: 'POST', body: { inputs: parsedInputs } },
       )
       setExecutionId(result.id)
 
-      if (onComplete) {
+      if (onCompleteRef.current) {
         const poll = async () => {
           if (!activeRef.current) return
           try {
             const exec = await apiFetch<Execution>(
               config,
-              `/api/v1/executions/${result.id}`,
+              `/api/v1/executions/${encodeURIComponent(result.id)}`,
             )
             if (!activeRef.current) return
-            if (['completed', 'failed', 'cancelled'].includes(exec.status)) {
-              onComplete(exec)
+            if (TERMINAL_STATUSES.has(exec.status)) {
+              onCompleteRef.current?.(exec)
             } else {
               pollTimerRef.current = setTimeout(() => void poll(), 3000)
             }
@@ -85,7 +88,7 @@ export function CrewRunner({ crewName, namespace, onComplete }: CrewRunnerProps)
     } finally {
       setSubmitting(false)
     }
-  }, [config, crewName, inputsJson, onComplete])
+  }, [config, crewName, namespace, inputsJson])
 
   // Read-only resource fetch not needed — we accept raw JSON input to
   // keep this widget dependency-free and simple.
@@ -144,6 +147,10 @@ export function CrewRunner({ crewName, namespace, onComplete }: CrewRunnerProps)
           <ExecutionStatus executionId={executionId} />
           <button
             onClick={() => {
+              if (pollTimerRef.current) {
+                clearTimeout(pollTimerRef.current)
+                pollTimerRef.current = null
+              }
               setExecutionId(null)
               setError(null)
             }}

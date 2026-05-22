@@ -19,7 +19,9 @@ from blackbeard.models.execution_schemas import (
     KickoffRequest,
     TestRequest,
     TrainRequest,
-    _exceeds_depth,
+)
+from blackbeard.models.execution_schemas import (
+    exceeds_depth as _exceeds_depth,
 )
 from tests.conftest import API_KEY_HEADER
 
@@ -105,6 +107,7 @@ async def test_kickoff_crew_not_found(client: AsyncClient):
         headers=API_KEY_HEADER,
     )
     assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
 
 
 async def test_kickoff_crew(client: AsyncClient):
@@ -141,9 +144,15 @@ async def test_kickoff_crew_has_tasks(client: AsyncClient):
     assert response.status_code == 202
     data = response.json()
     assert len(data["tasks"]) == 1
-    assert data["tasks"][0]["task_name"] == "test-task"
-    assert data["tasks"][0]["status"] == "pending"
-    assert data["tasks"][0]["order"] == 0
+    task = data["tasks"][0]
+    assert task["task_name"] == "test-task"
+    assert task["status"] == "pending"
+    assert task["order"] == 0
+    assert "id" in task
+    assert "agent_name" in task
+    assert task["tokens_used"] == 0
+    assert task["output"] is None
+    assert task["error"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -408,6 +417,7 @@ def test_sanitize_error_redacts_internal_details():
     msg = "sqlalchemy.exc.OperationalError: connection refused"
     result = _sanitize_error(msg)
     assert "sqlalchemy" not in result
+    assert "connection refused" not in result
     assert result == "Execution failed — check server logs for details"
 
 
@@ -425,6 +435,8 @@ def test_sanitize_error_redacts_file_path():
     msg = 'File "/home/user/blackbeard/engine/loader.py", line 99, in build_crew'
     result = _sanitize_error(msg)
     assert "/home" not in result
+    assert "loader.py" not in result
+    assert "line 99" not in result
     assert result == "Execution failed — check server logs for details"
 
 
@@ -686,7 +698,9 @@ def test_build_principal_chain_with_user():
     }
     chain = _build_principal_chain(user, "my-crew", resources)
     assert chain["user"]["id"] == "12345678-1234-1234-1234-123456789abc"
-    assert "email" not in chain["user"]
+    assert "email" not in chain["user"], "Email must not leak into principal chain"
+    assert "password_hash" not in chain["user"], "Password hash must not leak into principal chain"
+    assert "password" not in str(chain["user"]).lower(), "No password data in principal chain"
     assert chain["crew"] == "my-crew"
 
 
@@ -780,6 +794,8 @@ def test_snapshot_resource_spec_is_copy():
     snap = _snapshot_resource(r)
     snap["spec"]["injected"] = "bad"
     assert "injected" not in original_spec
+    original_spec["mutated"] = "also-bad"
+    assert "mutated" not in snap["spec"]
 
 
 # ---------------------------------------------------------------------------
@@ -1094,6 +1110,7 @@ async def test_train_crew_not_found(client: AsyncClient):
         headers=API_KEY_HEADER,
     )
     assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
 
 
 async def test_train_crew(client: AsyncClient):
@@ -1172,6 +1189,7 @@ async def test_test_crew_not_found(client: AsyncClient):
         headers=API_KEY_HEADER,
     )
     assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
 
 
 async def test_test_crew(client: AsyncClient):

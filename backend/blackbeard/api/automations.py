@@ -4,19 +4,23 @@ from __future__ import annotations
 
 import hmac
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request, Response
+
+if TYPE_CHECKING:
+    from blackbeard.models import Execution
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from blackbeard.api.middleware import record_auth_failure
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.engine import ExecutionError, ExecutionNotFoundError
 from blackbeard.engine import executor as _executor_mod
 from blackbeard.kinds import NAME_PATTERN
 from blackbeard.models import User, get_session
-from blackbeard.models.execution_schemas import ExecutionResponse
+from blackbeard.models.execution_schemas import ExecutionResponse, validate_inputs
 from blackbeard.resources import ResourceNotFoundError, ResourceService
 
 logger = logging.getLogger(__name__)
@@ -29,12 +33,22 @@ class TriggerRequest(BaseModel):
 
     inputs: dict[str, Any] = Field(default_factory=dict, description="Override inputs")
 
+    @model_validator(mode="after")
+    def _validate_input_sizes(self) -> TriggerRequest:
+        validate_inputs(self.inputs)
+        return self
+
 
 class WebhookTriggerRequest(BaseModel):
     """Request body for webhook-triggered automations."""
 
     secret: str = Field(..., min_length=1, max_length=255, description="Webhook secret")
     inputs: dict[str, Any] = Field(default_factory=dict, description="Event payload inputs")
+
+    @model_validator(mode="after")
+    def _validate_input_sizes(self) -> WebhookTriggerRequest:
+        validate_inputs(self.inputs)
+        return self
 
 
 class TriggerResponse(BaseModel):
@@ -71,6 +85,7 @@ async def _get_automation_spec(
 )
 async def trigger_automation(
     request: Request,
+    response: Response,
     name: str = Path(
         ...,
         pattern=NAME_PATTERN,
@@ -97,9 +112,7 @@ async def trigger_automation(
     merged_inputs = {**spec.get("inputs", {}), **body.inputs}
     target_namespace = spec.get("namespace", namespace)
 
-    execution = await _execute_target(
-        session, target, merged_inputs, target_namespace, user
-    )
+    execution = await _execute_target(session, target, merged_inputs, target_namespace, user)
 
     await log_audit(
         session,
@@ -114,6 +127,9 @@ async def trigger_automation(
         **audit_from_request(request, user),
     )
     await session.commit()
+
+    if execution is not None:
+        response.headers["Location"] = f"/api/v1/executions/{execution.id}"
 
     logger.info(
         "Automation '%s' triggered via API: %s/%s",
@@ -149,6 +165,7 @@ async def trigger_automation(
 )
 async def webhook_trigger(
     request: Request,
+    response: Response,
     name: str = Path(
         ...,
         pattern=NAME_PATTERN,
@@ -178,10 +195,13 @@ async def webhook_trigger(
         )
 
     expected_secret = trigger.get("webhook_secret", "")
-    if not expected_secret or not hmac.compare_digest(body.secret, expected_secret):
+    secret_valid = (
+        bool(expected_secret)
+        and len(expected_secret) >= 16
+        and hmac.compare_digest(body.secret, expected_secret)
+    )
+    if not secret_valid:
         client_ip = request.client.host if request.client else "unknown"
-        from blackbeard.api.middleware import record_auth_failure
-
         record_auth_failure(client_ip)
         logger.warning(
             "Webhook auth failed for automation '%s'",
@@ -192,15 +212,17 @@ async def webhook_trigger(
                 "client_ip": client_ip,
             },
         )
-        raise HTTPException(status_code=401, detail="Invalid webhook secret")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid webhook secret",
+            headers={"WWW-Authenticate": "HMAC-SHA256"},
+        )
 
     target = spec.get("target", {})
     merged_inputs = {**spec.get("inputs", {}), **body.inputs}
     target_namespace = spec.get("namespace", namespace)
 
-    execution = await _execute_target(
-        session, target, merged_inputs, target_namespace, user=None
-    )
+    execution = await _execute_target(session, target, merged_inputs, target_namespace, user=None)
 
     await log_audit(
         session,
@@ -217,6 +239,9 @@ async def webhook_trigger(
         ip_address=request.client.host if request.client else None,
     )
     await session.commit()
+
+    if execution is not None:
+        response.headers["Location"] = f"/api/v1/executions/{execution.id}"
 
     logger.info(
         "Automation '%s' triggered via webhook: %s/%s",
@@ -245,7 +270,7 @@ async def _execute_target(
     inputs: dict[str, Any],
     namespace: str,
     user: User | None,
-) -> Any:
+) -> Execution | None:
     """Execute the target Crew or Flow."""
     target_kind = target.get("kind", "Crew")
     target_name = target.get("name", "")
@@ -282,7 +307,9 @@ async def _execute_target(
                 "event": "automation_execute_failed",
                 "target_kind": target_kind,
                 "target_name": target_name,
+                "namespace": namespace,
                 "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
             },
         )
         raise HTTPException(

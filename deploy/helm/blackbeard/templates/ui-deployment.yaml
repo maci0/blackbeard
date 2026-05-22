@@ -57,6 +57,10 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.ui.resources | nindent 12 }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
           volumeMounts:
             - name: tmp
               mountPath: /tmp

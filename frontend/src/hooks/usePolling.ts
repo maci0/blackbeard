@@ -18,7 +18,9 @@ export function usePolling(
       if (!active) return
       void savedCallback
         .current()
-        .catch(() => {})
+        .catch((err: unknown) => {
+          console.warn('[usePolling] callback failed:', err)
+        })
         .finally(() => {
           if (active) timeoutId = setTimeout(tick, intervalMs)
         })

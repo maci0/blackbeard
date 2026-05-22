@@ -27,3 +27,9 @@ export function parseRef(ref: string): string {
 export function getErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
 }
+
+export const STORAGE_KEYS = {
+  ONBOARDING_COMPLETED: 'blackbeard_onboarding_completed',
+  TOUR_COMPLETED: 'blackbeard_tour_completed',
+  SIDEBAR_COLLAPSED: 'blackbeard_sidebar_collapsed',
+} as const

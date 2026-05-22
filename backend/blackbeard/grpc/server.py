@@ -104,7 +104,6 @@ class AuthInterceptor(grpc.aio.ServerInterceptor):
         for key, value in handler_call_details.invocation_metadata:
             metadata[key.lower()] = value
 
-        # Check API key
         api_key = metadata.get("x-api-key", "")
         if api_key:
             from blackbeard.auth.api_key import get_api_key
@@ -123,7 +122,6 @@ class AuthInterceptor(grpc.aio.ServerInterceptor):
             )
             return _AbortingHandler()
 
-        # Check Bearer token
         auth = metadata.get("authorization", "")
         if auth.startswith("Bearer "):
             token = auth[7:]

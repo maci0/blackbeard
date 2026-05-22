@@ -15,7 +15,7 @@ from blackbeard.engine.copilot import (
     NoLLMConnectionError,
     generate_resources,
 )
-from blackbeard.logging_config import request_id_var
+from blackbeard.kinds import NAME_PATTERN
 from blackbeard.models import User, get_session
 
 logger = logging.getLogger(__name__)
@@ -34,11 +34,13 @@ class CopilotRequest(BaseModel):
     )
     llm_connection: str | None = Field(
         default=None,
+        pattern=NAME_PATTERN,
         max_length=255,
         description="Name of the LLMConnection to use (uses first available if omitted)",
     )
     namespace: str = Field(
         default="default",
+        pattern=NAME_PATTERN,
         max_length=255,
         description="Namespace to look up the LLMConnection in",
     )
@@ -97,7 +99,6 @@ async def generate_crew(
             "llm_connection": body.llm_connection,
             "namespace": body.namespace,
             "user_id": str(user.id) if user else None,
-            "request_id": request_id_var.get("-"),
         },
     )
 
@@ -112,10 +113,7 @@ async def generate_crew(
         logger.info(
             "Copilot no LLMConnection: %s",
             e,
-            extra={
-                "event": "copilot_no_llm",
-                "request_id": request_id_var.get("-"),
-            },
+            extra={"event": "copilot_no_llm"},
         )
         raise HTTPException(status_code=424, detail=str(e)) from e
     except CopilotError as e:
@@ -125,7 +123,6 @@ async def generate_crew(
             extra={
                 "event": "copilot_error",
                 "error": str(e),
-                "request_id": request_id_var.get("-"),
             },
         )
         raise HTTPException(status_code=502, detail=str(e)) from e

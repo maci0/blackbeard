@@ -2,9 +2,23 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from blackbeard.pii import redact_dict, redact_text, reset_engines
+
+# ---------------------------------------------------------------------------
+# Shared fixture — reset Presidio singletons before each test so that tests
+# are independent regardless of execution order.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _reset_pii_engines():
+    reset_engines()
+
 
 # ---------------------------------------------------------------------------
 # redact_text
@@ -15,43 +29,27 @@ class TestRedactText:
     """Tests for redact_text()."""
 
     def test_redact_email(self):
-        from blackbeard.pii import redact_text, reset_engines
-
-        reset_engines()
         text = "Contact john.doe@example.com for details."
         result = redact_text(text)
         assert "john.doe@example.com" not in result
         assert "<EMAIL_ADDRESS>" in result
 
     def test_redact_phone_number(self):
-        from blackbeard.pii import redact_text, reset_engines
-
-        reset_engines()
         text = "Call me at 212-555-1234 for more info."
         result = redact_text(text)
         assert "212-555-1234" not in result
         assert "<PHONE_NUMBER>" in result
 
     def test_no_pii_unchanged(self):
-        from blackbeard.pii import redact_text, reset_engines
-
-        reset_engines()
         text = "The weather is sunny today."
         result = redact_text(text)
         assert result == text
 
     def test_empty_string(self):
-        from blackbeard.pii import redact_text, reset_engines
-
-        reset_engines()
         assert redact_text("") == ""
 
     def test_redact_specific_entities(self):
-        from blackbeard.pii import redact_text, reset_engines
-
-        reset_engines()
         text = "Email john.doe@example.com or call 212-555-1234."
-        # Only redact emails, not phone numbers
         result = redact_text(text, entities=["EMAIL_ADDRESS"])
         assert "john.doe@example.com" not in result
         assert "<EMAIL_ADDRESS>" in result
@@ -59,9 +57,6 @@ class TestRedactText:
         assert "212-555-1234" in result
 
     def test_redact_credit_card(self):
-        from blackbeard.pii import redact_text, reset_engines
-
-        reset_engines()
         text = "My card number is 4111111111111111."
         result = redact_text(text, entities=["CREDIT_CARD"])
         assert "4111111111111111" not in result
@@ -77,9 +72,6 @@ class TestRedactDict:
     """Tests for redact_dict()."""
 
     def test_nested_pii(self):
-        from blackbeard.pii import redact_dict, reset_engines
-
-        reset_engines()
         data = {
             "result": "Contact john.doe@example.com",
             "metadata": {
@@ -88,12 +80,12 @@ class TestRedactDict:
         }
         result = redact_dict(data)
         assert "john.doe@example.com" not in result["result"]
+        assert "<EMAIL_ADDRESS>" in result["result"]
         assert "212-555-1234" not in result["metadata"]["phone"]
+        assert "<PHONE_NUMBER>" in result["metadata"]["phone"]
+        assert "john.doe@example.com" in data["result"], "Original dict must not be mutated"
 
     def test_non_string_values_unchanged(self):
-        from blackbeard.pii import redact_dict, reset_engines
-
-        reset_engines()
         data = {
             "count": 42,
             "active": True,
@@ -104,9 +96,6 @@ class TestRedactDict:
         assert result == data
 
     def test_max_depth_respected(self):
-        from blackbeard.pii import redact_dict, reset_engines
-
-        reset_engines()
         data = {
             "level1": {
                 "level2": {
@@ -120,15 +109,13 @@ class TestRedactDict:
         assert result["level1"]["level2"]["email"] == "john.doe@example.com"
 
     def test_lists_in_dict(self):
-        from blackbeard.pii import redact_dict, reset_engines
-
-        reset_engines()
         data = {
             "contacts": ["john.doe@example.com", "jane.doe@example.com"],
         }
         result = redact_dict(data)
         for item in result["contacts"]:
             assert "@example.com" not in item
+            assert "<EMAIL_ADDRESS>" in item
 
 
 # ---------------------------------------------------------------------------
@@ -286,9 +273,8 @@ class TestLLMPIIRecognizer:
         mock_client.post.return_value = mock_response
 
         with patch("blackbeard.http_client.get_sync_client", return_value=mock_client):
-            results = recognizer.analyze("some text", entities=["PERSON"])
-
-        assert results == []
+            with pytest.raises(RuntimeError, match="HTTP 500"):
+                recognizer.analyze("some text", entities=["PERSON"])
 
     def test_llm_recognizer_connection_error(self):
         from blackbeard.pii import LLMPIIRecognizer
@@ -299,9 +285,8 @@ class TestLLMPIIRecognizer:
         mock_client.post.side_effect = ConnectionError("Connection refused")
 
         with patch("blackbeard.http_client.get_sync_client", return_value=mock_client):
-            results = recognizer.analyze("some text", entities=["PERSON"])
-
-        assert results == []
+            with pytest.raises(ConnectionError):
+                recognizer.analyze("some text", entities=["PERSON"])
 
     def test_llm_recognizer_malformed_json(self):
         from blackbeard.pii import LLMPIIRecognizer
@@ -318,9 +303,8 @@ class TestLLMPIIRecognizer:
         mock_client.post.return_value = mock_response
 
         with patch("blackbeard.http_client.get_sync_client", return_value=mock_client):
-            results = recognizer.analyze("some text", entities=["PERSON"])
-
-        assert results == []
+            with pytest.raises((ValueError, json.JSONDecodeError)):
+                recognizer.analyze("some text", entities=["PERSON"])
 
 
 # ---------------------------------------------------------------------------
@@ -332,7 +316,7 @@ class TestGetPIIConfig:
     """Tests for PII config resolution from resource snapshots."""
 
     def test_returns_none_when_no_pii_policy(self):
-        from blackbeard.engine.executor import _get_pii_config
+        from blackbeard.engine.budget import get_pii_config as _get_pii_config
 
         snapshot = {
             "Crew/test-crew": {
@@ -359,7 +343,7 @@ class TestGetPIIConfig:
         assert _get_pii_config(snapshot, "test-crew") is None
 
     def test_returns_pii_config_from_agent_policy(self):
-        from blackbeard.engine.executor import _get_pii_config
+        from blackbeard.engine.budget import get_pii_config as _get_pii_config
 
         snapshot = {
             "Crew/test-crew": {
@@ -402,7 +386,7 @@ class TestGetPIIConfig:
         assert config["entities"] == ["EMAIL_ADDRESS"]
 
     def test_returns_none_when_pii_disabled(self):
-        from blackbeard.engine.executor import _get_pii_config
+        from blackbeard.engine.budget import get_pii_config as _get_pii_config
 
         snapshot = {
             "Crew/test-crew": {
@@ -440,7 +424,7 @@ class TestGetPIIConfig:
         assert _get_pii_config(snapshot, "test-crew") is None
 
     def test_returns_pii_from_crew_default_policy(self):
-        from blackbeard.engine.executor import _get_pii_config
+        from blackbeard.engine.budget import get_pii_config as _get_pii_config
 
         snapshot = {
             "Crew/test-crew": {
@@ -494,12 +478,6 @@ class TestResetEngines:
     """Tests for reset_engines()."""
 
     def test_reset_clears_singletons(self):
-        from blackbeard.pii import reset_engines
-
-        # Call reset
-        reset_engines()
-
-        # Re-import to check the module-level state
         import blackbeard.pii as pii_mod
 
         assert pii_mod._analyzer is None

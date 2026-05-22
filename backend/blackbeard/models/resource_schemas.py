@@ -13,6 +13,14 @@ if TYPE_CHECKING:
 
 from blackbeard.kinds import ALL_KINDS, API_VERSION, NAME_PATTERN
 
+__all__ = [
+    "ResourceCreate",
+    "ResourceListResponse",
+    "ResourceMetadata",
+    "ResourceResponse",
+    "ResourceUpdate",
+]
+
 # Label key/value constraints (prevent abuse via oversized JSONB labels)
 _MAX_LABEL_KEY_LEN = 63
 _MAX_LABEL_VALUE_LEN = 255

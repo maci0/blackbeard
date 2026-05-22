@@ -6,9 +6,11 @@ from typing import Any
 
 import click
 import httpx
+from rich.markup import escape
 from rich.table import Table
 
 from blackbeard_cli.helpers import (
+    HelpCommand,
     console,
     handle_http_error,
     handle_request_error,
@@ -25,11 +27,21 @@ ALL_VERBS = ["get", "list", "create", "update", "delete", "run", "invoke", "dele
 # ── Role subgroup ────────────────────────────────────────────────────────────
 
 
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.group(
+    context_settings={"help_option_names": ["-h", "--help"]},
+    epilog="""\b
+Examples:
+  blackbeard role list
+  blackbeard role describe admin
+""",
+)
 @click.pass_context
 def role(ctx: click.Context) -> None:
     """Manage RBAC roles."""
     ctx.ensure_object(dict)
+
+
+role.command_class = HelpCommand
 
 
 @role.command(
@@ -93,7 +105,11 @@ def role_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
         table.add_row(name, desc[:60], str(len(rules)))
 
     out.print(table)
-    out.print(f"[dim]{len(items)} role(s)[/]")
+    total = len(items) if isinstance(data, list) else data.get("total", len(items))
+    if total > len(items):
+        out.print(f"[dim]Showing {len(items)} of {total} (increase --limit to see more)[/]")
+    else:
+        out.print(f"[dim]{len(items)} role(s)[/]")
 
 
 @role.command(
@@ -164,7 +180,7 @@ def role_describe(ctx: click.Context, name: str, output_json: bool = False) -> N
         cells = []
         for verb in ALL_VERBS:
             if verb in verbs_set:
-                cells.append("[green]x[/]")
+                cells.append("[green]✓[/]")
             else:
                 cells.append("[dim]·[/]")
         table.add_row(res, *cells)
@@ -175,11 +191,21 @@ def role_describe(ctx: click.Context, name: str, output_json: bool = False) -> N
 # ── RoleBinding subgroup ─────────────────────────────────────────────────────
 
 
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.group(
+    context_settings={"help_option_names": ["-h", "--help"]},
+    epilog="""\b
+Examples:
+  blackbeard rolebinding list
+  blackbeard rolebinding create dev-binding -r developer --subject User:dev@example.com
+""",
+)
 @click.pass_context
 def rolebinding(ctx: click.Context) -> None:
     """Manage role bindings."""
     ctx.ensure_object(dict)
+
+
+rolebinding.command_class = HelpCommand
 
 
 @rolebinding.command(
@@ -244,29 +270,38 @@ def rolebinding_list(ctx: click.Context, limit: int, output_json: bool = False) 
         table.add_row(name, role_name, subj_str or "—")
 
     out.print(table)
-    out.print(f"[dim]{len(items)} binding(s)[/]")
+    total = len(items) if isinstance(data, list) else data.get("total", len(items))
+    if total > len(items):
+        out.print(f"[dim]Showing {len(items)} of {total} (increase --limit to see more)[/]")
+    else:
+        out.print(f"[dim]{len(items)} binding(s)[/]")
 
 
 @rolebinding.command(
     "create",
     epilog="""\b
 Examples:
-  blackbeard rolebinding create dev-binding -r developer -s User:dev@example.com
-  blackbeard rolebinding create team-binding -r admin -s Group:backend-team
+  blackbeard rolebinding create dev-binding -r developer --subject User:dev@example.com
+  blackbeard rolebinding create team-binding -r admin --subject Group:backend-team
 """,
 )
 @click.argument("name")
 @click.option("--role", "-r", "role_name", required=True, help="Role to bind")
 @click.option(
     "--subject",
-    "-s",
     "subjects",
     multiple=True,
     required=True,
     metavar="KIND:NAME",
     help="Subject as Kind:Name (repeatable)",
 )
-@click.option("--namespace", "scope_ns", default=None, help="Scope namespace")
+@click.option(
+    "--scope-namespace",
+    "scope_ns",
+    default=None,
+    metavar="NS",
+    help="Restrict binding to this namespace (separate from global -n)",
+)
 @json_opt
 @click.pass_context
 def rolebinding_create(
@@ -286,15 +321,21 @@ def rolebinding_create(
     parsed_subjects = []
     for s in subjects:
         if ":" not in s:
-            console.print(f"[red bold]Error:[/] Invalid --subject: expected KIND:NAME, got: {s!r}")
+            console.print(
+                f"[red bold]Error:[/] Invalid --subject: expected KIND:NAME, got: {escape(repr(s))}"
+            )
             console.print("[dim]Example: --subject User:admin@blackbeard.sh[/]")
             raise SystemExit(2)
         kind, _, subj_name = s.partition(":")
         if not kind:
-            console.print(f"[red bold]Error:[/] Invalid --subject: kind cannot be empty in {s!r}")
+            console.print(
+                f"[red bold]Error:[/] Invalid --subject: kind cannot be empty in {escape(repr(s))}"
+            )
             raise SystemExit(2)
         if not subj_name:
-            console.print(f"[red bold]Error:[/] Invalid --subject: name cannot be empty in {s!r}")
+            console.print(
+                f"[red bold]Error:[/] Invalid --subject: name cannot be empty in {escape(repr(s))}"
+            )
             raise SystemExit(2)
         parsed_subjects.append({"kind": kind, "name": subj_name})
 
@@ -327,5 +368,7 @@ def rolebinding_create(
         print_json(data)
         return
 
-    subj_display = ", ".join(f"{s['kind']}:{s['name']}" for s in parsed_subjects)
-    out.print(f"[green]Created[/] binding [bold]{name}[/]: {role_name} -> {subj_display}")
+    subj_display = ", ".join(f"{escape(s['kind'])}:{escape(s['name'])}" for s in parsed_subjects)
+    out.print(
+        f"[green]Created[/] binding [bold]{escape(name)}[/]: {escape(role_name)} -> {subj_display}"
+    )

@@ -10,6 +10,11 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
     from blackbeard.models.user import User
 
+__all__ = [
+    "UserResponse",
+    "user_response",
+]
+
 
 class UserResponse(BaseModel):
     """Public user profile.

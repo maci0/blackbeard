@@ -564,9 +564,11 @@ class TestWebhookAPI:
         resp = await client.get("/api/v1/webhooks", headers=API_KEY_HEADER)
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data) >= 2
+        assert len(data["items"]) >= 2
+        assert "total" in data
+        assert "has_more" in data
         # Secrets should not be in list response
-        for webhook in data:
+        for webhook in data["items"]:
             assert "secret" not in webhook
 
     async def test_delete_webhook(self, client):
@@ -630,13 +632,23 @@ class TestWebhookDelivery:
     """Test webhook delivery mechanics."""
 
     def test_hmac_signature_generation(self):
-        """Webhook payloads should be signed with HMAC-SHA256."""
+        """Webhook payloads should be signed with HMAC-SHA256 using the full envelope."""
         secret = "test-secret-for-hmac"
-        payload = json.dumps({"event_type": "crew_started", "data": {}})
-        expected_sig = hmac.new(
-            secret.encode(), payload.encode(), hashlib.sha256
-        ).hexdigest()
-        assert len(expected_sig) == 64  # SHA256 hex digest is 64 chars
+        event_type = "crew_started"
+        execution_id = "exec-test-123"
+        data = {"crew_name": "test"}
+        envelope = json.dumps(
+            {"event_type": event_type, "execution_id": execution_id, "data": data},
+            default=str,
+        )
+        sig = hmac.new(secret.encode(), envelope.encode(), hashlib.sha256).hexdigest()
+        assert len(sig) == 64
+        # Verify determinism: same inputs always produce same signature
+        sig2 = hmac.new(secret.encode(), envelope.encode(), hashlib.sha256).hexdigest()
+        assert sig == sig2
+        # Verify different secret produces different signature
+        sig_diff = hmac.new(b"other-secret", envelope.encode(), hashlib.sha256).hexdigest()
+        assert sig != sig_diff
 
     def test_deliver_webhooks_handles_no_webhooks(self):
         """Delivery with no webhooks in DB should not raise."""

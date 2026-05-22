@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useDocumentTitle } from '@/hooks'
 import { Wrench, Search, RefreshCw, Code2, Box, Shield, X } from 'lucide-react'
@@ -101,8 +101,11 @@ function ToolCard({ resource }: { resource: Resource }) {
       <div className="border-b bg-muted/20 px-4 pb-3 pt-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <div className="shrink-0 rounded-md border border-emerald-200 bg-emerald-100 p-1.5">
-              <Wrench className="h-4 w-4 text-emerald-600" />
+            <div className="shrink-0 rounded-md border border-emerald-200 bg-emerald-100 p-1.5 dark:border-emerald-800 dark:bg-emerald-900/50">
+              <Wrench
+                className="h-4 w-4 text-emerald-600 dark:text-emerald-400"
+                aria-hidden="true"
+              />
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold" title={resource.metadata.name}>
@@ -128,7 +131,10 @@ function ToolCard({ resource }: { resource: Resource }) {
         {spec.class_path && (
           <div>
             <p className="mb-0.5 text-xs text-muted-foreground/70">Class path</p>
-            <p className="truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs text-foreground/80">
+            <p
+              className="truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs text-foreground/80"
+              title={spec.class_path}
+            >
               {spec.class_path}
             </p>
           </div>
@@ -137,7 +143,10 @@ function ToolCard({ resource }: { resource: Resource }) {
         {spec.command && (
           <div>
             <p className="mb-0.5 text-xs text-muted-foreground/70">Command</p>
-            <p className="truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs text-foreground/80">
+            <p
+              className="truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs text-foreground/80"
+              title={`${spec.command}${spec.args && spec.args.length > 0 ? ` ${spec.args.join(' ')}` : ''}`}
+            >
               {spec.command}
               {spec.args && spec.args.length > 0 ? ` ${spec.args.join(' ')}` : ''}
             </p>
@@ -147,7 +156,10 @@ function ToolCard({ resource }: { resource: Resource }) {
         {spec.url && (
           <div>
             <p className="mb-0.5 text-xs text-muted-foreground/70">URL</p>
-            <p className="truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs text-foreground/80">
+            <p
+              className="truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs text-foreground/80"
+              title={spec.url}
+            >
               {spec.url}
             </p>
           </div>
@@ -156,7 +168,10 @@ function ToolCard({ resource }: { resource: Resource }) {
         {spec.entrypoint && (
           <div>
             <p className="mb-0.5 text-xs text-muted-foreground/70">Entrypoint</p>
-            <p className="truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs text-foreground/80">
+            <p
+              className="truncate rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs text-foreground/80"
+              title={spec.entrypoint}
+            >
               {spec.entrypoint}
             </p>
           </div>
@@ -168,7 +183,12 @@ function ToolCard({ resource }: { resource: Resource }) {
         {spec.sandbox ? (
           <SandboxLabel tier={spec.sandbox} />
         ) : (
-          <span className="text-xs text-muted-foreground/50">--</span>
+          <>
+            <span aria-hidden="true" className="text-xs text-muted-foreground/50">
+              --
+            </span>
+            <span className="sr-only">No sandbox</span>
+          </>
         )}
         <span className="text-xs text-muted-foreground">v{resource.version}</span>
       </div>
@@ -192,6 +212,7 @@ export default function Tools() {
     })),
   )
   const [search, setSearch] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useDocumentTitle('Tools')
 
@@ -266,6 +287,7 @@ export default function Tools() {
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
               />
               <input
+                ref={searchRef}
                 id="tools-search"
                 type="search"
                 placeholder="Search tools…"
@@ -281,7 +303,10 @@ export default function Tools() {
                   {filtered.length} of {tools.length} tools
                 </span>
                 <button
-                  onClick={() => setSearch('')}
+                  onClick={() => {
+                    setSearch('')
+                    searchRef.current?.focus()
+                  }}
                   aria-label="Clear search"
                   className="inline-flex min-h-[44px] items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >

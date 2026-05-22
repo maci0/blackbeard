@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator
 from uuid import UUID
 
-import httpx
 from fastapi import (
     APIRouter,
     Body,
@@ -25,13 +23,13 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
-from blackbeard.api import sse_state
+from blackbeard import sse as sse_state
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.config import settings
 from blackbeard.engine import ExecutionError, ExecutionNotFoundError
 from blackbeard.engine import executor as _executor_mod
-from blackbeard.http_client import get_client
+from blackbeard.http_client import get_litellm_client
 from blackbeard.kinds import NAME_PATTERN
 from blackbeard.logging_config import request_id_var
 from blackbeard.models import (
@@ -101,16 +99,6 @@ async def _require_execution_status(
 router = APIRouter(tags=["executions"])
 
 
-def _get_spend_client() -> httpx.AsyncClient:
-    """Return a shared httpx client for LiteLLM spend queries."""
-    key = settings.litellm_master_key.get_secret_value()
-    return get_client(
-        "litellm-spend",
-        timeout=10,
-        headers={"Authorization": f"Bearer {key}"},
-    )
-
-
 @router.post(
     "/crews/{crew_name}/kickoff",
     response_model=ExecutionResponse,
@@ -160,6 +148,7 @@ async def kickoff_crew(
                 "crew_name": crew_name,
                 "namespace": namespace,
                 "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
             },
         )
         raise HTTPException(
@@ -233,6 +222,7 @@ async def train_crew_endpoint(
                 "crew_name": crew_name,
                 "namespace": namespace,
                 "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
             },
         )
         raise HTTPException(
@@ -305,6 +295,7 @@ async def test_crew_endpoint(
                 "crew_name": crew_name,
                 "namespace": namespace,
                 "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
             },
         )
         raise HTTPException(
@@ -331,6 +322,7 @@ async def test_crew_endpoint(
     responses={
         202: {"description": "Flow execution queued"},
         404: {"description": "Flow not found"},
+        500: {"description": "Internal execution error"},
     },
 )
 async def run_flow_endpoint(
@@ -373,7 +365,8 @@ async def run_flow_endpoint(
                 "event": "flow_run_error",
                 "flow_name": flow_name,
                 "namespace": namespace,
-                "error": str(exc)[:500],
+                "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
             },
         )
         raise HTTPException(
@@ -418,6 +411,7 @@ async def list_executions(
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     session: AsyncSession = Depends(get_session),
+    _user: User | None = Depends(get_current_user),
 ) -> ExecutionListResponse:
     """List executions with optional filters."""
     items, total = await _executor_mod.list_executions(
@@ -446,6 +440,7 @@ async def list_executions(
 async def get_execution(
     execution_id: UUID = Path(..., description="Execution UUID"),
     session: AsyncSession = Depends(get_session),
+    _user: User | None = Depends(get_current_user),
 ) -> ExecutionResponse:
     """Get execution details by ID."""
     execution = await _require_execution(session, execution_id)
@@ -463,12 +458,13 @@ async def get_execution(
 async def get_execution_spend(
     execution_id: UUID = Path(..., description="Execution UUID"),
     session: AsyncSession = Depends(get_session),
+    _user: User | None = Depends(get_current_user),
 ) -> Response:
     """Get LiteLLM spend data for an execution's requests."""
     await _require_execution_status(session, execution_id)
 
     try:
-        client = _get_spend_client()
+        client = get_litellm_client("litellm-spend", timeout=10)
         resp = await client.get(
             f"{settings.litellm_proxy_url}/spend/logs",
             params={"request_id": str(execution_id)},
@@ -526,6 +522,7 @@ async def list_execution_events(
     after: int = Query(default=-1, ge=-1, description="Return events with sequence > after"),
     limit: int = Query(default=200, ge=1, le=1000, description="Max events to return"),
     session: AsyncSession = Depends(get_session),
+    _user: User | None = Depends(get_current_user),
 ) -> ExecutionEventsResponse:
     """List execution events, optionally after a given sequence number."""
     await _require_execution_status(session, execution_id)
@@ -592,7 +589,7 @@ async def respond_to_execution(
         action="hitl_response",
         resource_type="Execution",
         resource_id=str(execution_id),
-        detail={"response": body.response},
+        detail={"response_length": len(body.response)},
         **audit_from_request(request, user),
     )
     await session.commit()
@@ -608,6 +605,7 @@ async def respond_to_execution(
         202: {"description": "New execution created from the original's configuration"},
         404: {"description": "Execution not found"},
         409: {"description": "Can only retry terminal executions"},
+        500: {"description": "Internal execution error"},
     },
 )
 async def retry_execution(
@@ -652,7 +650,9 @@ async def retry_execution(
                 "event": "retry_failed",
                 "original_execution_id": str(execution_id),
                 "crew_name": original.crew_name,
+                "namespace": original.crew_namespace,
                 "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
             },
         )
         raise HTTPException(
@@ -732,32 +732,27 @@ async def stream_execution(
     logger.info(
         "SSE stream opened: execution_id=%s active=%d/%d",
         execution_id,
-        sse_state.active_count,
-        sse_state.MAX_CONCURRENT_SSE,
+        sse_state.get_active_count(),
+        settings.max_concurrent_sse,
         extra={
             "event": "sse_stream_opened",
             "execution_id": str(execution_id),
-            "active_streams": sse_state.active_count,
-            "max_concurrent_sse": sse_state.MAX_CONCURRENT_SSE,
+            "active_streams": sse_state.get_active_count(),
+            "max_concurrent_sse": settings.max_concurrent_sse,
         },
     )
 
     async def event_generator() -> AsyncGenerator[dict[str, str]]:
-        # Non-blocking acquire: fail fast if all SSE slots are taken.
-        acquired = False
-        try:
-            await asyncio.wait_for(sse_state.semaphore.acquire(), timeout=0)
-            acquired = True
-            sse_state.active_count += 1
-        except TimeoutError:
-            msg = json.dumps({"detail": "Too many concurrent SSE streams"})
-            yield {"event": "error", "data": msg}
-            return
-        last_status: ExecutionStatus | None = None
-        current_status: ExecutionStatus | None = None
-        last_event_seq = -1
-        polls = 0
-        try:
+        async with sse_state.acquire_stream() as acquired:
+            if not acquired:
+                msg = json.dumps({"detail": "Too many concurrent SSE streams"})
+                yield {"event": "error", "data": msg}
+                return
+            last_status: ExecutionStatus | None = None
+            current_status: ExecutionStatus | None = None
+            last_event_seq = -1
+            prev_had_events = True
+            polls = 0
             try:
                 while polls < _MAX_STREAM_POLLS:
                     polls += 1
@@ -801,21 +796,34 @@ async def stream_execution(
                                     "data": json.dumps(heartbeat),
                                 }
 
-                        new_events = await _executor_mod.list_execution_events(
-                            session, execution_id, after=last_event_seq, limit=50
+                        # Skip events query when: status unchanged, non-terminal,
+                        # and previous poll found no new events (saves a DB round
+                        # trip on idle polls).
+                        skip_events = (
+                            not prev_had_events
+                            and current_status == last_status
+                            and current_status not in TERMINAL_STATUSES
                         )
-                        for ev in new_events:
-                            yield {
-                                "event": ev.event_type,
-                                "data": json.dumps(
-                                    {
-                                        "sequence": ev.sequence,
-                                        "timestamp": ev.timestamp.isoformat(),
-                                        **ev.data,
-                                    }
-                                ),
-                            }
-                            last_event_seq = ev.sequence
+                        if not skip_events:
+                            new_events = await _executor_mod.list_execution_events(
+                                session, execution_id, after=last_event_seq, limit=50
+                            )
+                            prev_had_events = len(new_events) > 0
+                            for ev in new_events:
+                                yield {
+                                    "event": ev.event_type,
+                                    "data": json.dumps(
+                                        {
+                                            "sequence": ev.sequence,
+                                            "timestamp": ev.timestamp.isoformat(),
+                                            **ev.data,
+                                        }
+                                    ),
+                                }
+                                last_event_seq = ev.sequence
+                        else:
+                            # Force a DB check next poll so we skip at most one consecutive poll.
+                            prev_had_events = True
 
                         if current_status in TERMINAL_STATUSES:
                             logger.info(
@@ -823,14 +831,14 @@ async def stream_execution(
                                 execution_id,
                                 current_status.value,
                                 polls,
-                                sse_state.active_count - 1,
-                                sse_state.MAX_CONCURRENT_SSE,
+                                sse_state.get_active_count() - 1,
+                                settings.max_concurrent_sse,
                                 extra={
                                     "event": "sse_stream_closed",
                                     "execution_id": str(execution_id),
                                     "final_status": current_status.value,
                                     "polls": polls,
-                                    "remaining_streams": sse_state.active_count - 1,
+                                    "remaining_streams": sse_state.get_active_count() - 1,
                                 },
                             )
                             break
@@ -876,10 +884,6 @@ async def stream_execution(
                     },
                 )
                 yield {"event": "error", "data": json.dumps({"detail": "Internal stream error"})}
-        finally:
-            if acquired:
-                sse_state.active_count -= 1
-                sse_state.semaphore.release()
 
     return EventSourceResponse(
         event_generator(),
@@ -904,13 +908,17 @@ async def ws_execution(
     string.
     """
     from blackbeard.api.collaboration import validate_ws_auth
-    from blackbeard.api.middleware import record_auth_failure
+    from blackbeard.api.middleware import is_rate_limited, record_auth_failure
+
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    if is_rate_limited(client_ip):
+        await websocket.close(code=4429, reason="Too many authentication failures")
+        return
 
     token = websocket.query_params.get("token", "")
     api_key = websocket.query_params.get("api_key", "")
 
     if not validate_ws_auth(token, api_key):
-        client_ip = websocket.client.host if websocket.client else "unknown"
         record_auth_failure(client_ip)
         logger.warning(
             "WebSocket auth failed: execution_id=%s from %s",
@@ -936,6 +944,7 @@ async def ws_execution(
 
     last_status: ExecutionStatus | None = None
     last_event_seq = -1
+    prev_had_events = True
     polls = 0
 
     try:
@@ -972,21 +981,30 @@ async def ws_execution(
                             {"event": "heartbeat", "data": {"status": current_status.value}}
                         )
 
-                new_events = await _executor_mod.list_execution_events(
-                    session, execution_id, after=last_event_seq, limit=50
+                skip_events = (
+                    not prev_had_events
+                    and current_status == last_status
+                    and current_status not in TERMINAL_STATUSES
                 )
-                for ev in new_events:
-                    await websocket.send_json(
-                        {
-                            "event": ev.event_type,
-                            "data": {
-                                "sequence": ev.sequence,
-                                "timestamp": ev.timestamp.isoformat(),
-                                **ev.data,
-                            },
-                        }
+                if not skip_events:
+                    new_events = await _executor_mod.list_execution_events(
+                        session, execution_id, after=last_event_seq, limit=50
                     )
-                    last_event_seq = ev.sequence
+                    prev_had_events = len(new_events) > 0
+                    for ev in new_events:
+                        await websocket.send_json(
+                            {
+                                "event": ev.event_type,
+                                "data": {
+                                    "sequence": ev.sequence,
+                                    "timestamp": ev.timestamp.isoformat(),
+                                    **ev.data,
+                                },
+                            }
+                        )
+                        last_event_seq = ev.sequence
+                else:
+                    prev_had_events = True
 
                 if current_status in TERMINAL_STATUSES:
                     break
@@ -995,7 +1013,11 @@ async def ws_execution(
             await asyncio.sleep(_poll_backoff(polls))
 
     except WebSocketDisconnect:
-        pass
+        logger.debug(
+            "WS client disconnected: execution_id=%s",
+            execution_id,
+            extra={"event": "ws_client_disconnected", "execution_id": str(execution_id)},
+        )
     except Exception as e:
         logger.error(
             "WS stream error: execution_id=%s error=%s",
@@ -1009,10 +1031,24 @@ async def ws_execution(
                 "error_message": str(e)[:500],
             },
         )
-        with contextlib.suppress(Exception):
+        try:
             await websocket.send_json(
                 {"event": "error", "data": {"detail": "Internal stream error"}}
             )
+        except Exception:
+            logger.debug(
+                "WS error notification send failed: execution_id=%s",
+                execution_id,
+                exc_info=True,
+                extra={"event": "ws_error_send_failed", "execution_id": str(execution_id)},
+            )
     finally:
-        with contextlib.suppress(Exception):
+        try:
             await websocket.close()
+        except Exception:
+            logger.debug(
+                "WS close failed: execution_id=%s",
+                execution_id,
+                exc_info=True,
+                extra={"event": "ws_close_failed", "execution_id": str(execution_id)},
+            )

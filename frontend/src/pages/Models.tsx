@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useDocumentTitle } from '@/hooks'
 import { API_VERSION } from '@/lib/kinds'
@@ -77,13 +77,13 @@ function ProviderBadge({ provider }: { provider: string }) {
 function ModelCard({
   resource,
   onDelete,
-  onNavigate,
   onTest,
+  testing,
 }: {
   resource: Resource
   onDelete: () => void
-  onNavigate: () => void
   onTest: () => void
+  testing?: boolean
 }) {
   const spec = resource.spec as {
     provider?: string
@@ -93,56 +93,57 @@ function ModelCard({
   }
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onNavigate}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onNavigate()
-        }
-      }}
-      aria-label={`LLM connection: ${resource.metadata.name}`}
-      className="group flex cursor-pointer flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
+    <div className="group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
       {/* Header */}
       <div className="border-b bg-muted/20 px-4 pb-3 pt-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <div className="shrink-0 rounded-md border border-amber-200 bg-amber-100 p-1.5">
-              <Cpu className="h-4 w-4 text-amber-600" />
+            <div className="shrink-0 rounded-md border border-amber-200 bg-amber-100 p-1.5 dark:border-amber-800 dark:bg-amber-900/50">
+              <Cpu className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold" title={resource.metadata.name}>
-                {resource.metadata.name}
+                <Link
+                  to={`/resources/llm-connections/${resource.metadata.name}`}
+                  className="after:absolute after:inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  {resource.metadata.name}
+                </Link>
               </p>
               {resource.metadata.namespace && resource.metadata.namespace !== 'default' && (
                 <p className="text-xs text-muted-foreground">{resource.metadata.namespace}</p>
               )}
             </div>
           </div>
-          <div className="flex shrink-0 gap-1">
+          <div className="relative z-10 flex shrink-0 gap-1">
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 onTest()
               }}
               onKeyDown={(e) => e.stopPropagation()}
-              className="flex h-8 items-center gap-1 rounded border px-2 text-[10px] font-medium text-muted-foreground transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:border-emerald-700 dark:hover:bg-emerald-950 dark:hover:text-emerald-400 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
+              disabled={testing}
+              aria-busy={testing || undefined}
+              className="flex h-[44px] items-center gap-1 rounded border px-2 text-[10px] font-medium text-muted-foreground transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950 dark:hover:text-emerald-400 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
               title={`Test connectivity to ${resource.metadata.name}`}
-              aria-label={`Test connection ${resource.metadata.name}`}
+              aria-label={
+                testing
+                  ? `Testing connection ${resource.metadata.name}`
+                  : `Test connection ${resource.metadata.name}`
+              }
             >
-              <Zap className="h-3 w-3" />
-              Test
+              {testing ? <Spinner size="sm" /> : <Zap className="h-3 w-3" />}
+              {testing ? 'Testing…' : 'Test'}
             </button>
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 onDelete()
               }}
               onKeyDown={(e) => e.stopPropagation()}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
+              className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
               title={`Delete ${resource.metadata.name}`}
               aria-label={`Delete connection ${resource.metadata.name}`}
             >
@@ -458,7 +459,6 @@ function AddModelDialog({
 const EMPTY_MODELS: Resource[] = []
 
 export default function Models() {
-  const navigate = useNavigate()
   const { models, loading, error, fetchResources, createResource, deleteResource } =
     useResourceStore(
       useShallow((s) => ({
@@ -479,6 +479,7 @@ export default function Models() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [testingModel, setTestingModel] = useState<string | null>(null)
   const deleteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -490,19 +491,26 @@ export default function Models() {
   const handleTestModel = async (resource: Resource) => {
     const name = resource.metadata.name
     const spec = resource.spec as { provider?: string; model?: string }
-    useToastStore.getState().info(`Testing ${name}...`)
+    setTestingModel(name)
+    useToastStore.getState().info(`Checking connection to ${name}…`)
     try {
       const resp = await api.post<{ success: boolean; latency_ms?: number; error?: string }>(
         `/api/v1/models/test`,
         { provider: spec.provider, model: spec.model },
       )
       if (resp.success) {
-        useToastStore.getState().success(`${name} connected (${resp.latency_ms ?? 0}ms)`)
+        useToastStore.getState().success(`Connected to ${name} (${resp.latency_ms ?? 0} ms)`)
       } else {
-        useToastStore.getState().error(`${name} failed: ${resp.error ?? 'Unknown error'}`)
+        useToastStore
+          .getState()
+          .error(`Connection to ${name} failed: ${resp.error ?? 'Unknown error'}`)
       }
     } catch (err) {
-      useToastStore.getState().error(`${name}: ${getErrorMessage(err, 'Connection test failed')}`)
+      useToastStore
+        .getState()
+        .error(`Connection to ${name} failed: ${getErrorMessage(err, 'check provider settings')}`)
+    } finally {
+      setTestingModel(null)
     }
   }
 
@@ -567,6 +575,7 @@ export default function Models() {
             actions={
               <>
                 <button
+                  type="button"
                   onClick={() => void fetchResources('llm-connections')}
                   className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Refresh models"
@@ -580,6 +589,7 @@ export default function Models() {
                   Refresh
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     setSubmitError(null)
                     setAddOpen(true)
@@ -638,10 +648,8 @@ export default function Models() {
                 key={resource.id}
                 resource={resource}
                 onDelete={() => setDeleteTarget(resource.metadata.name)}
-                onNavigate={() =>
-                  void navigate(`/resources/llm-connections/${resource.metadata.name}`)
-                }
                 onTest={() => void handleTestModel(resource)}
+                testing={testingModel === resource.metadata.name}
               />
             ))}
           </div>

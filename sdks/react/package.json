@@ -26,6 +26,7 @@
     "@types/react": "^19.1.0",
     "typescript": "^5.8.0"
   },
+  "sideEffects": false,
   "files": ["dist"],
   "license": "MIT"
 }

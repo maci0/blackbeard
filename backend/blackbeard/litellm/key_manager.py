@@ -106,11 +106,34 @@ class VirtualKeyManager:
             resp.raise_for_status()
             data = cast("dict[str, Any]", resp.json())
         except httpx.HTTPStatusError as exc:
+            logger.warning(
+                "Virtual key creation failed: status=%d body=%s",
+                exc.response.status_code,
+                exc.response.text[:200],
+                extra={
+                    "event": "virtual_key_create_http_error",
+                    "key_name": name,
+                    "http_status": exc.response.status_code,
+                    "max_budget": max_budget,
+                    "max_tokens": max_tokens,
+                },
+            )
             raise VirtualKeyError(
                 f"LiteLLM /key/generate failed: {exc.response.status_code} "
                 f"{exc.response.text[:200]}"
             ) from exc
         except httpx.HTTPError as exc:
+            logger.warning(
+                "Virtual key creation request failed: %s: %s",
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+                extra={
+                    "event": "virtual_key_create_request_error",
+                    "key_name": name,
+                    "error_type": type(exc).__name__,
+                },
+            )
             raise VirtualKeyError(f"LiteLLM /key/generate request failed: {exc}") from exc
 
         key = data.get("key")
@@ -155,6 +178,7 @@ class VirtualKeyManager:
             logger.warning(
                 "Failed to delete virtual key: %s",
                 exc,
+                exc_info=True,
                 extra={
                     "event": "virtual_key_delete_failed",
                     "error_type": type(exc).__name__,

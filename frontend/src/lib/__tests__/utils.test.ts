@@ -79,7 +79,7 @@ describe('capitalize()', () => {
     expect(capitalize('Agent')).toBe('Agent')
   })
 
-  it('only capitalizes first character', () => {
+  it('capitalizes first character and preserves the rest', () => {
     expect(capitalize('hELLO')).toBe('HELLO')
   })
 

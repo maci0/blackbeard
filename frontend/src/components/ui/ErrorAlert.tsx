@@ -31,6 +31,7 @@ export function ErrorAlert({
       </span>
       {onAction && (
         <button
+          type="button"
           onClick={onAction}
           className="flex h-[44px] shrink-0 items-center rounded px-3 text-xs font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={ariaLabel ?? actionLabel}

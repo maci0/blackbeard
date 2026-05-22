@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { useStudioStore } from '../studioStore'
 import type { Node, Edge, Connection } from '@xyflow/react'
 
@@ -132,10 +132,15 @@ describe('studioStore', () => {
   })
 
   describe('undo / redo', () => {
-    it('undo restores previous state', () => {
-      // Need to space out operations to bypass the 100ms debounce in pushHistory
+    beforeEach(() => {
       vi.useFakeTimers()
+    })
 
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('undo restores previous state', () => {
       const node1 = makeNode('node-1')
       useStudioStore.getState().addNode(node1)
       expect(useStudioStore.getState().nodes).toHaveLength(1)
@@ -153,12 +158,9 @@ describe('studioStore', () => {
       expect(state.nodes).toHaveLength(1)
       expect(state.nodes[0]!.id).toBe('node-1')
       expect(state.dirty).toBe(true)
-
-      vi.useRealTimers()
     })
 
     it('redo restores undone state', () => {
-      vi.useFakeTimers()
       vi.advanceTimersByTime(200)
 
       useStudioStore.getState().addNode(makeNode('node-1'))
@@ -173,6 +175,7 @@ describe('studioStore', () => {
       // snapshot taken before addNode('node-2').
       useStudioStore.getState().undo()
       expect(useStudioStore.getState().nodes).toHaveLength(1)
+      expect(useStudioStore.getState().nodes[0]!.id).toBe('node-1')
       expect(useStudioStore.getState().canRedo).toBe(true)
 
       // Redo: steps forward through history, restoring the next snapshot.
@@ -180,8 +183,11 @@ describe('studioStore', () => {
       useStudioStore.getState().redo()
       useStudioStore.getState().redo()
       expect(useStudioStore.getState().nodes).toHaveLength(2)
-
-      vi.useRealTimers()
+      const ids = useStudioStore
+        .getState()
+        .nodes.map((n) => n.id)
+        .sort()
+      expect(ids).toEqual(['node-1', 'node-2'])
     })
 
     it('undo is a no-op when there is no history', () => {
@@ -193,8 +199,6 @@ describe('studioStore', () => {
     })
 
     it('redo is a no-op when there is nothing to redo', () => {
-      vi.useFakeTimers()
-
       useStudioStore.getState().addNode(makeNode('node-1'))
       vi.advanceTimersByTime(200)
 
@@ -202,8 +206,6 @@ describe('studioStore', () => {
 
       // Should still have 1 node — redo did nothing
       expect(useStudioStore.getState().nodes).toHaveLength(1)
-
-      vi.useRealTimers()
     })
   })
 

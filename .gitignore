@@ -38,12 +38,15 @@ coverage/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+playwright-report/
+test-results/
 
 # Build artifacts
 *.wasm
 credentials.json
 
 # Tool state
+.claude/
 .sisyphus/
 .playwright-mcp/
 test-*.png

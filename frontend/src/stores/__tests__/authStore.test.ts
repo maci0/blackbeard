@@ -157,7 +157,7 @@ describe('authStore', () => {
       await expect(useAuthStore.getState().login('test@example.com', 'password')).rejects.toThrow()
 
       const state = useAuthStore.getState()
-      expect(state.error).toBe('Login failed')
+      expect(state.error).toBe('Network error')
       expect(state.loading).toBe(false)
     })
 

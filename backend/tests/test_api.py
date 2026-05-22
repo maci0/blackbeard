@@ -362,6 +362,12 @@ async def test_resource_response_shape(client: AsyncClient):
     assert required.issubset(data.keys()), f"Missing: {required - set(data.keys())}"
     assert data["apiVersion"] == "blackbeard/v1"
     assert data["metadata"]["namespace"] == "default"
+    assert isinstance(data["version"], int)
+    assert isinstance(data["id"], str)
+    assert isinstance(data["spec"], dict)
+    assert isinstance(data["metadata"], dict)
+    assert data["metadata"]["name"] == "researcher"
+    assert data["kind"] == "Agent"
 
 
 # ---------------------------------------------------------------------------
@@ -382,9 +388,14 @@ async def test_list_agents_pagination(client: AsyncClient):
     assert len(data["items"]) == 2
     assert data["total"] == 5
     assert data["has_more"] is True
-    assert all("metadata" in item and "name" in item["metadata"] for item in data["items"]), (
-        "Paginated items should contain full resource objects"
-    )
+    for item in data["items"]:
+        assert "metadata" in item and "name" in item["metadata"], (
+            "Paginated items should contain full resource objects"
+        )
+        assert "spec" in item
+        assert "kind" in item
+        assert item["kind"] == "Agent"
+        assert "id" in item
 
     response = await client.get("/api/v1/agents?limit=2&offset=4", headers=API_KEY_HEADER)
     data = response.json()

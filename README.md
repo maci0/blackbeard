@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://github.com/blackbeard/blackbeard/actions/workflows/ci.yaml"><img src="https://github.com/blackbeard/blackbeard/actions/workflows/ci.yaml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
-  <img src="https://img.shields.io/badge/node-18%2B-green" alt="Node 18+">
+  <img src="https://img.shields.io/badge/bun-1.2%2B-green" alt="Bun 1.2+">
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License: MIT">
 </p>
 
@@ -24,7 +24,7 @@ Blackbeard gives you a self-hosted platform to build, deploy, and manage AI agen
 **Key differentiators:**
 
 - **Visual graph editor** -- drag-and-drop Studio built on React Flow for designing crews
-- **Declarative resource model** -- 12 resource kinds (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation)
+- **Declarative resource model** -- 13 resource kinds (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Namespace)
 - **Full RBAC** -- JWT authentication with roles, role bindings, and per-resource permissions
 - **LiteLLM routing** -- multi-provider model access (Vertex AI, OpenAI, Ollama, etc.) with built-in spend/token/latency tracking
 - **Budget enforcement** -- per-execution spending limits via AgentPolicy and LiteLLM virtual keys
@@ -51,7 +51,7 @@ Open **http://localhost:3000** in your browser. The API is at **http://localhost
 | API      | http://localhost:8000   | FastAPI REST API                  |
 | LiteLLM  | http://localhost:4000   | LLM routing proxy                 |
 | Postgres | localhost:5432          | Resource and execution storage    |
-| Valkey   | localhost:6379          | Cache (Redis-compatible)          |
+| Valkey   | localhost:6379          | Pub/sub & health (Redis-compatible)|
 
 Seed the database with example resources (RBAC roles, a research crew, builtin tools, and MCP server tools):
 
@@ -63,7 +63,7 @@ Then run the example crew:
 
 ```bash
 cd cli && uv sync
-blackbeard kickoff research-crew --input topic="AI agents" --wait
+uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 ```
 
 > See [docs/quickstart.md](docs/quickstart.md) for a full walkthrough.
@@ -109,13 +109,13 @@ blackbeard kickoff research-crew --input topic="AI agents" --wait
 
 ## Features
 
-- **12 resource kinds** -- Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation
+- **13 resource kinds** -- Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Namespace
 - **Visual graph editor** -- drag-and-drop crew design with React Flow, undo/redo, YAML preview
 - **Full RBAC** -- JWT auth (access + refresh tokens), predefined roles (owner, admin, developer, operator, viewer, policy-admin), user/group management
-- **CLI with 25+ commands** -- apply, validate, kickoff, train, test-crew, export, pull, status, login, and more
+- **CLI with 28 commands** -- apply, validate, kickoff, train, test-crew, export, pull, status, login, and more
 - **Budget enforcement** -- per-execution spending caps via AgentPolicy `max_usd`/`max_tokens` and LiteLLM virtual keys
 - **Multi-provider LLM routing** -- Vertex AI, OpenAI, Anthropic, Ollama, and any LiteLLM-supported provider
-- **Execution streaming** -- SSE stream and event replay for real-time execution monitoring
+- **Execution streaming** -- SSE and WebSocket streams with event replay for real-time execution monitoring
 - **Tool ecosystem** -- Python tools, builtin CrewAI tools, sandboxed tools (WASM/Docker/gVisor/MicroVM), MCP servers (stdio + HTTP)
 - **Marketplace** -- import crews from git repositories (`blackbeard pull`)
 - **Train/test** -- CrewAI native training and testing via CLI or API
@@ -141,6 +141,7 @@ blackbeard kickoff research-crew --input topic="AI agents" --wait
 | `Role`            | RBAC role defining resource/verb permissions              |
 | `RoleBinding`     | Binds roles to users, groups, agents, or crews           |
 | `Automation`      | Cron, webhook, or API-triggered crew/flow executions     |
+| `Namespace`       | Logical grouping for resource isolation                  |
 
 > See [docs/yaml-reference.md](docs/yaml-reference.md) for the full field-by-field reference.
 
@@ -215,7 +216,7 @@ uv run ruff check blackbeard_cli/          # lint
 | Frontend     | React 19, TypeScript, Vite, Tailwind CSS, Radix UI |
 | Graph Editor | React Flow (@xyflow/react v12)                |
 | Database     | PostgreSQL 18                                 |
-| Cache        | Valkey 9                                      |
+| Pub/sub      | Valkey 9 (collaboration, health checks)       |
 | LLM Gateway  | LiteLLM Proxy                                |
 | WASM Runtime | wasmtime-py                                   |
 | Orchestration| CrewAI                                        |
@@ -281,7 +282,7 @@ Key variables (see [.env.example](.env.example) for the full list):
 | Variable                        | Description                                      | Default                    |
 |---------------------------------|--------------------------------------------------|----------------------------|
 | `BLACKBEARD_API_KEY`            | API key for `X-API-Key` header auth              | `change-me-in-production`  |
-| `JWT_SECRET`                    | Secret for signing JWT tokens                    | `change-jwt-secret-in-production` |
+| `JWT_SECRET`                    | Secret for signing JWT tokens                    | `change-jwt-secret-in-production!` |
 | `DATABASE_URL`                  | PostgreSQL connection string (asyncpg)           | See `.env.example`         |
 | `LITELLM_MASTER_KEY`           | LiteLLM proxy master key                         | `sk-litellm-master-key`    |
 | `GOOGLE_APPLICATION_CREDENTIALS`| Path to GCP service account key (for Vertex AI)  | Empty placeholder          |

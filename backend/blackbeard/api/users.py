@@ -5,17 +5,18 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import require_user
-from blackbeard.models import Group, GroupMember, User, get_session
+from blackbeard.models import AuditLog, Group, GroupMember, User, get_session
 from blackbeard.models.user_schemas import UserResponse, user_response
 
 logger = logging.getLogger(__name__)
@@ -64,7 +65,7 @@ class GroupUpdateRequest(BaseModel):
 class GroupMemberAddRequest(BaseModel):
     """Add a user to a group."""
 
-    user_id: str = Field(..., min_length=1, max_length=36)
+    user_id: uuid.UUID
 
 
 class GroupMemberAddResponse(BaseModel):
@@ -95,6 +96,20 @@ class GroupListResponse(BaseModel):
     has_more: bool = False
 
 
+async def _smart_total(
+    session: AsyncSession,
+    items: list[Any],
+    limit: int,
+    offset: int,
+    count_stmt: Any,
+) -> int:
+    """Derive total count without a query when possible."""
+    if len(items) < limit and (len(items) > 0 or offset == 0):
+        return offset + len(items)
+    result = await session.execute(count_stmt)
+    return result.scalar_one()
+
+
 def group_response(group: Group) -> GroupResponse:
     return GroupResponse(
         id=str(group.id),
@@ -118,9 +133,7 @@ async def _require_group(
     return group
 
 
-def _require_self_only(
-    current_user: User, user_id: uuid.UUID, action: str
-) -> None:
+def _require_self_only(current_user: User, user_id: uuid.UUID, action: str) -> None:
     """Raise 403 if current_user is not the target user."""
     if current_user.id != user_id:
         logger.warning(
@@ -151,17 +164,15 @@ async def list_users(
     """List users with pagination (requires authentication)."""
     result = await session.execute(
         select(User)
-        .options(defer(User.password_hash))
+        .options(defer(User.password_hash), defer(User.api_key))
         .order_by(User.created_at)
         .limit(limit)
         .offset(offset)
     )
     users = list(result.scalars().all())
-    if len(users) < limit and (len(users) > 0 or offset == 0):
-        total = offset + len(users)
-    else:
-        total_result = await session.execute(select(func.count()).select_from(User))
-        total = total_result.scalar_one()
+    total = await _smart_total(
+        session, users, limit, offset, select(func.count()).select_from(User)
+    )
     return UserListResponse(
         items=[user_response(u) for u in users],
         total=total,
@@ -186,7 +197,9 @@ async def get_user(
 ) -> UserResponse:
     """Get a user by ID."""
     result = await session.execute(
-        select(User).where(User.id == user_id).options(defer(User.password_hash))
+        select(User)
+        .where(User.id == user_id)
+        .options(defer(User.password_hash), defer(User.api_key))
     )
     user = result.scalar_one_or_none()
     if user is None:
@@ -214,7 +227,10 @@ async def update_user(
     _require_self_only(current_user, user_id, "modify")
 
     result = await session.execute(
-        select(User).where(User.id == user_id).options(defer(User.password_hash)).with_for_update()
+        select(User)
+        .where(User.id == user_id)
+        .options(defer(User.password_hash), defer(User.api_key))
+        .with_for_update()
     )
     user = result.scalar_one_or_none()
     if user is None:
@@ -264,11 +280,21 @@ async def deactivate_user(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
+    original_email = user.email
     user.is_active = False
     user.password_hash = "!deactivated"
     user.api_key = None
-    user.email = f"deleted-{user.id}@deactivated.local"
+    anonymized_email = f"deleted-{user.id}@deactivated.local"
+    user.email = anonymized_email
     user.display_name = "Deleted User"
+    # Scrub PII from historical audit log entries (GDPR right to erasure).
+    # Match by UUID (normal entries) and by original email (legacy failed-login entries
+    # that used email as actor_id before the fix to use UUID).
+    await session.execute(
+        update(AuditLog)
+        .where((AuditLog.actor_id == str(user.id)) | (AuditLog.actor_id == original_email))
+        .values(actor_email=None, ip_address=None)
+    )
     await log_audit(
         session,
         action="user_deactivated",
@@ -299,11 +325,9 @@ async def list_groups(
     """List groups with pagination."""
     result = await session.execute(select(Group).order_by(Group.name).limit(limit).offset(offset))
     groups = list(result.scalars().all())
-    if len(groups) < limit and (len(groups) > 0 or offset == 0):
-        total = offset + len(groups)
-    else:
-        total_result = await session.execute(select(func.count()).select_from(Group))
-        total = total_result.scalar_one()
+    total = await _smart_total(
+        session, groups, limit, offset, select(func.count()).select_from(Group)
+    )
     return GroupListResponse(
         items=[group_response(g) for g in groups],
         total=total,
@@ -510,21 +534,19 @@ async def list_group_members(
         select(User)
         .join(GroupMember, GroupMember.user_id == User.id)
         .where(GroupMember.group_id == group_id)
-        .options(defer(User.password_hash))
+        .options(defer(User.password_hash), defer(User.api_key))
         .order_by(User.email)
         .limit(limit)
         .offset(offset)
     )
     users = list(result.scalars().all())
-    if len(users) < limit and (len(users) > 0 or offset == 0):
-        total = offset + len(users)
-    else:
-        total_result = await session.execute(
-            select(func.count())
-            .select_from(GroupMember)
-            .where(GroupMember.group_id == group_id)
-        )
-        total = total_result.scalar_one()
+    total = await _smart_total(
+        session,
+        users,
+        limit,
+        offset,
+        select(func.count()).select_from(GroupMember).where(GroupMember.group_id == group_id),
+    )
     return GroupMemberListResponse(
         items=[user_response(u) for u in users],
         total=total,
@@ -548,22 +570,23 @@ async def add_group_member(
     group_id: uuid.UUID,
     data: GroupMemberAddRequest,
     request: Request,
+    response: Response,
     current_user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ) -> GroupMemberAddResponse:
     """Add a user to a group."""
-    # Validate user_id is a valid UUID
-    try:
-        target_user_id = uuid.UUID(data.user_id)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="Invalid user_id format") from None
+    target_user_id = data.user_id
 
     group = await _require_group(session, group_id)
 
     # Verify user exists
-    user_result = await session.execute(select(User).where(User.id == target_user_id))
+    user_result = await session.execute(
+        select(User)
+        .where(User.id == target_user_id)
+        .options(defer(User.password_hash), defer(User.api_key))
+    )
     target_user = user_result.scalar_one_or_none()
-    if target_user is None:
+    if target_user is None or not target_user.is_active:
         raise HTTPException(status_code=404, detail="User not found")
 
     membership = GroupMember(group_id=group_id, user_id=target_user_id)
@@ -580,25 +603,28 @@ async def add_group_member(
         session,
         action="group_member_added",
         resource_type="GroupMember",
-        resource_id=f"{group.name}/{data.user_id}",
+        resource_id=f"{group.name}/{target_user_id}",
         **audit_from_request(request, current_user),
     )
     await session.commit()
 
+    response.headers["Location"] = f"/api/v1/groups/{group_id}/members/{target_user_id}"
     logger.info(
         "Member added to group %s: user %s by %s",
         group.name,
-        data.user_id,
+        target_user_id,
         current_user.id,
         extra={
             "event": "group_member_added",
             "group_id": str(group_id),
             "group_name": group.name,
-            "target_user_id": data.user_id,
+            "target_user_id": str(target_user_id),
             "actor_user_id": str(current_user.id),
         },
     )
-    return GroupMemberAddResponse(group_id=str(group_id), user_id=data.user_id, status="added")
+    return GroupMemberAddResponse(
+        group_id=str(group_id), user_id=str(target_user_id), status="added"
+    )
 
 
 @router.delete(

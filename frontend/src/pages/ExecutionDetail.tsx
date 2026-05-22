@@ -156,7 +156,7 @@ const EVENT_COLORS: Record<string, string> = {
   llm_completed: 'text-violet-400',
 }
 
-const eventTimeFmt = new Intl.DateTimeFormat('en-US', {
+const eventTimeFmt = new Intl.DateTimeFormat(undefined, {
   hour12: false,
   hour: '2-digit',
   minute: '2-digit',

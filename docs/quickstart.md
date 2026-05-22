@@ -97,7 +97,7 @@ Install the CLI and kick off an execution.
 ```bash
 cd cli
 uv sync
-blackbeard kickoff research-crew --input topic="AI agents" --wait
+uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 ```
 
 The `--wait` flag polls until the execution completes. You will see a panel with the execution ID, status, and -- once finished -- the outputs and token usage.

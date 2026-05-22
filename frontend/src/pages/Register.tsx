@@ -65,7 +65,7 @@ export default function Register() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center">
-          <div className="mb-3 flex h-12 w-12 animate-[logo-pulse_2s_ease-in-out] items-center justify-center rounded-xl bg-slate-900 dark:border dark:border-slate-700">
+          <div className="mb-3 flex h-12 w-12 animate-[logo-pulse_2s_ease-in-out] items-center justify-center rounded-xl bg-slate-900 motion-reduce:animate-none dark:border dark:border-slate-700">
             <Anchor className="h-7 w-7 text-indigo-400" />
           </div>
           <h1 className="text-xl font-bold tracking-tight">Create your account</h1>

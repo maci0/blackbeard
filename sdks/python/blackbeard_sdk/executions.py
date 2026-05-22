@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import time
 from typing import Any
+from urllib.parse import quote
 
 import httpx
+
+from blackbeard_sdk.errors import raise_for_status
+
+TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
 
 
 class ExecutionMixin:
@@ -30,11 +35,11 @@ class ExecutionMixin:
             Execution dict with status=queued.
         """
         resp = self._http.post(
-            f"/api/v1/crews/{crew_name}/kickoff",
+            f"/api/v1/crews/{quote(crew_name, safe='')}/kickoff",
             params={"namespace": namespace},
             json={"inputs": inputs or {}},
         )
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()
 
     def train(
@@ -58,7 +63,7 @@ class ExecutionMixin:
             Execution dict with status=queued.
         """
         resp = self._http.post(
-            f"/api/v1/crews/{crew_name}/train",
+            f"/api/v1/crews/{quote(crew_name, safe='')}/train",
             params={"namespace": namespace},
             json={
                 "inputs": inputs or {},
@@ -66,7 +71,7 @@ class ExecutionMixin:
                 "filename": filename,
             },
         )
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()
 
     def test(
@@ -88,14 +93,14 @@ class ExecutionMixin:
             Execution dict with status=queued.
         """
         resp = self._http.post(
-            f"/api/v1/crews/{crew_name}/test",
+            f"/api/v1/crews/{quote(crew_name, safe='')}/test",
             params={"namespace": namespace},
             json={
                 "inputs": inputs or {},
                 "n_iterations": n_iterations,
             },
         )
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()
 
     def run_flow(
@@ -115,11 +120,11 @@ class ExecutionMixin:
             Execution dict with status=queued.
         """
         resp = self._http.post(
-            f"/api/v1/flows/{flow_name}/run",
+            f"/api/v1/flows/{quote(flow_name, safe='')}/run",
             params={"namespace": namespace},
             json={"inputs": inputs or {}},
         )
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()
 
     def get_execution(self, execution_id: str) -> dict[str, Any]:
@@ -131,8 +136,8 @@ class ExecutionMixin:
         Returns:
             Execution dict.
         """
-        resp = self._http.get(f"/api/v1/executions/{execution_id}")
-        resp.raise_for_status()
+        resp = self._http.get(f"/api/v1/executions/{quote(execution_id, safe='')}")
+        raise_for_status(resp)
         return resp.json()
 
     def list_executions(
@@ -164,7 +169,7 @@ class ExecutionMixin:
         if status:
             params["status"] = status
         resp = self._http.get("/api/v1/executions", params=params)
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()["items"]
 
     def cancel(self, execution_id: str) -> dict[str, Any]:
@@ -176,21 +181,25 @@ class ExecutionMixin:
         Returns:
             Updated execution dict.
         """
-        resp = self._http.patch(f"/api/v1/executions/{execution_id}/cancel")
-        resp.raise_for_status()
+        resp = self._http.patch(
+            f"/api/v1/executions/{quote(execution_id, safe='')}/cancel"
+        )
+        raise_for_status(resp)
         return resp.json()
 
-    def get_execution_spend(self, execution_id: str) -> dict[str, Any]:
+    def get_execution_spend(self, execution_id: str) -> list[dict[str, Any]]:
         """Get LiteLLM spend data for an execution.
 
         Args:
             execution_id: Execution UUID string.
 
         Returns:
-            Spend data dict from LiteLLM.
+            List of spend records from LiteLLM.
         """
-        resp = self._http.get(f"/api/v1/executions/{execution_id}/spend")
-        resp.raise_for_status()
+        resp = self._http.get(
+            f"/api/v1/executions/{quote(execution_id, safe='')}/spend"
+        )
+        raise_for_status(resp)
         return resp.json()
 
     def get_execution_events(
@@ -211,10 +220,10 @@ class ExecutionMixin:
             Dict with events list, next_sequence, and has_more.
         """
         resp = self._http.get(
-            f"/api/v1/executions/{execution_id}/events",
+            f"/api/v1/executions/{quote(execution_id, safe='')}/events",
             params={"after": after, "limit": limit},
         )
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()
 
     def respond(
@@ -232,10 +241,10 @@ class ExecutionMixin:
             Dict with status and execution_id confirming the response was recorded.
         """
         resp = self._http.post(
-            f"/api/v1/executions/{execution_id}/respond",
+            f"/api/v1/executions/{quote(execution_id, safe='')}/respond",
             json={"response": response},
         )
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()
 
     def retry(self, execution_id: str) -> dict[str, Any]:
@@ -250,8 +259,10 @@ class ExecutionMixin:
         Returns:
             New execution dict with status=queued.
         """
-        resp = self._http.post(f"/api/v1/executions/{execution_id}/retry")
-        resp.raise_for_status()
+        resp = self._http.post(
+            f"/api/v1/executions/{quote(execution_id, safe='')}/retry"
+        )
+        raise_for_status(resp)
         return resp.json()
 
     def wait(
@@ -276,11 +287,10 @@ class ExecutionMixin:
         Raises:
             TimeoutError: If the execution does not complete within the timeout.
         """
-        terminal = {"completed", "failed", "cancelled"}
         deadline = time.monotonic() + timeout
         while True:
             execution = self.get_execution(execution_id)
-            if execution.get("status") in terminal:
+            if execution.get("status") in TERMINAL_STATUSES:
                 return execution
             if time.monotonic() >= deadline:
                 raise TimeoutError(

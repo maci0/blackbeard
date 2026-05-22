@@ -12,8 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from blackbeard.auth.dependencies import require_user
-from blackbeard.models import User, get_session
-from blackbeard.models.audit import AuditLog
+from blackbeard.models import AuditLog, User, get_session
 
 logger = logging.getLogger(__name__)
 
@@ -82,19 +81,20 @@ async def list_audit_logs(
     session: AsyncSession = Depends(get_session),
 ) -> AuditLogListResponse:
     """List audit log entries with optional filters. Requires authentication."""
-    query = select(AuditLog)
-
+    filters = []
     if action is not None:
-        query = query.where(AuditLog.action == action)
+        filters.append(AuditLog.action == action)
     if actor_id is not None:
-        query = query.where(AuditLog.actor_id == actor_id)
+        filters.append(AuditLog.actor_id == actor_id)
     if resource_type is not None:
-        query = query.where(AuditLog.resource_type == resource_type)
+        filters.append(AuditLog.resource_type == resource_type)
     if resource_id is not None:
-        query = query.where(AuditLog.resource_id == resource_id)
+        filters.append(AuditLog.resource_id == resource_id)
 
     data_query = (
-        query.order_by(AuditLog.timestamp.desc())
+        select(AuditLog)
+        .where(*filters)
+        .order_by(AuditLog.timestamp.desc())
         .options(defer(AuditLog.actor_email), defer(AuditLog.ip_address))
         .limit(limit)
         .offset(offset)
@@ -105,9 +105,8 @@ async def list_audit_logs(
     if len(logs) < limit and (len(logs) > 0 or offset == 0):
         total = offset + len(logs)
     else:
-        count_query = select(func.count()).select_from(query.subquery())
-        total_result = await session.execute(count_query)
-        total = total_result.scalar_one()
+        count_query = select(func.count(AuditLog.id)).where(*filters)
+        total = (await session.execute(count_query)).scalar_one()
 
     return AuditLogListResponse(
         items=[

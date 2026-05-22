@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import click
 import httpx
+from rich.markup import escape
 from rich.table import Table
 
 from blackbeard_cli.helpers import (
+    HelpCommand,
     console,
     handle_http_error,
     handle_request_error,
@@ -20,11 +22,21 @@ from blackbeard_cli.helpers import (
 # ── User subgroup ────────────────────────────────────────────────────────────
 
 
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.group(
+    context_settings={"help_option_names": ["-h", "--help"]},
+    epilog="""\b
+Examples:
+  blackbeard user list
+  blackbeard user invite -e user@example.com -d "Jane Doe"
+""",
+)
 @click.pass_context
 def user(ctx: click.Context) -> None:
     """Manage platform users."""
     ctx.ensure_object(dict)
+
+
+user.command_class = HelpCommand
 
 
 @user.command(
@@ -67,12 +79,13 @@ def user_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
         print_json(data)
         return
 
-    items = data.get("items", [])
+    items = data if isinstance(data, list) else data.get("items", [])
     if not items:
         out.print("[dim]No users found.[/]")
         return
 
     table = Table(title="Users")
+    table.add_column("ID", style="dim", no_wrap=True)
     table.add_column("Email", style="bold")
     table.add_column("Display Name")
     table.add_column("Status")
@@ -81,6 +94,7 @@ def user_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
     for u in items:
         active = "[green]active[/]" if u.get("is_active") else "[red]inactive[/]"
         table.add_row(
+            str(u.get("id", "—")),
             u.get("email", "—"),
             u.get("display_name", "—"),
             active,
@@ -88,8 +102,11 @@ def user_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
         )
 
     out.print(table)
-    total = data.get("total", len(items))
-    out.print(f"[dim]{total} user(s)[/]")
+    total = len(items) if isinstance(data, list) else data.get("total", len(items))
+    if total > len(items):
+        out.print(f"[dim]Showing {len(items)} of {total} (increase --limit to see more)[/]")
+    else:
+        out.print(f"[dim]{total} user(s)[/]")
 
 
 @user.command(
@@ -100,16 +117,17 @@ Examples:
   blackbeard user invite -e user@example.com -d "Jane Doe" --json
 """,
 )
-@click.option("--email", "-e", required=True, help="Email address")
+@click.option("--email", "-e", required=True, metavar="EMAIL", help="Email address")
 @click.option(
     "--password",
     "-p",
     prompt=True,
     hide_input=True,
     confirmation_prompt=True,
+    metavar="PASS",
     help="Initial password (prompted securely if omitted)",
 )
-@click.option("--name", "-d", "display_name", required=True, help="Display name")
+@click.option("--name", "-d", "display_name", required=True, metavar="NAME", help="Display name")
 @json_opt
 @click.pass_context
 def user_invite(
@@ -147,17 +165,28 @@ def user_invite(
         print_json(data)
         return
 
-    out.print(f"[green]Invited[/] [bold]{display_name}[/] ({email})")
+    out.print(f"[green]Invited[/] [bold]{escape(display_name)}[/] ({escape(email)})")
 
 
 # ── Group subgroup ───────────────────────────────────────────────────────────
 
 
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.group(
+    context_settings={"help_option_names": ["-h", "--help"]},
+    epilog="""\b
+Examples:
+  blackbeard group list
+  blackbeard group create backend-team --description "Backend engineers"
+  blackbeard group delete 1
+""",
+)
 @click.pass_context
 def group(ctx: click.Context) -> None:
     """Manage groups."""
     ctx.ensure_object(dict)
+
+
+group.command_class = HelpCommand
 
 
 @group.command(
@@ -200,26 +229,31 @@ def group_list(ctx: click.Context, limit: int, output_json: bool = False) -> Non
         print_json(data)
         return
 
-    items = data.get("items", [])
+    items = data if isinstance(data, list) else data.get("items", [])
     if not items:
         out.print("[dim]No groups found.[/]")
         return
 
     table = Table(title="Groups")
+    table.add_column("ID", style="dim", no_wrap=True)
     table.add_column("Name", style="bold")
     table.add_column("Description")
     table.add_column("Created")
 
     for g in items:
         table.add_row(
+            str(g.get("id", "—")),
             g.get("name", "—"),
             g.get("description", "—") or "—",
             str(g.get("created_at", "—"))[:19],
         )
 
     out.print(table)
-    total = data.get("total", len(items))
-    out.print(f"[dim]{total} group(s)[/]")
+    total = len(items) if isinstance(data, list) else data.get("total", len(items))
+    if total > len(items):
+        out.print(f"[dim]Showing {len(items)} of {total} (increase --limit to see more)[/]")
+    else:
+        out.print(f"[dim]{total} group(s)[/]")
 
 
 @group.command(
@@ -227,11 +261,11 @@ def group_list(ctx: click.Context, limit: int, output_json: bool = False) -> Non
     epilog="""\b
 Examples:
   blackbeard group create backend-team
-  blackbeard group create backend-team -d "Backend engineers"
+  blackbeard group create backend-team --description "Backend engineers"
 """,
 )
 @click.argument("name")
-@click.option("--description", "-d", default="", help="Group description")
+@click.option("--description", default="", metavar="TEXT", help="Group description")
 @json_opt
 @click.pass_context
 def group_create(
@@ -262,7 +296,7 @@ def group_create(
         print_json(data)
         return
 
-    out.print(f"[green]Created[/] group [bold]{name}[/]")
+    out.print(f"[green]Created[/] group [bold]{escape(name)}[/]")
 
 
 @group.command(
@@ -277,6 +311,7 @@ Examples:
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @click.option(
     "--json",
+    "-j",
     "output_json",
     is_flag=True,
     default=False,
@@ -310,4 +345,4 @@ def group_delete(ctx: click.Context, group_id: str, yes: bool, output_json: bool
         print_json({"deleted": group_id, "status": "deleted"})
         return
 
-    out.print(f"[green]Deleted[/] group [bold]{group_id}[/]")
+    out.print(f"[green]Deleted[/] group [bold]{escape(group_id)}[/]")

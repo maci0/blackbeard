@@ -55,6 +55,7 @@ class Webhook(Base):
         Index("ix_webhook_active", "active", postgresql_where=text("active IS TRUE")),
         CheckConstraint("length(url) >= 1", name="ck_webhook_url_nonempty"),
         CheckConstraint("length(secret) >= 1", name="ck_webhook_secret_nonempty"),
+        CheckConstraint("jsonb_typeof(events) = 'array'", name="ck_webhook_events_is_array"),
     )
 
     def to_dict(self) -> dict[str, Any]:

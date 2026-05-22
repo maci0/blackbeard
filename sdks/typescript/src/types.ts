@@ -1,16 +1,23 @@
+/** Configuration for the Blackbeard API connection. */
 export interface BlackbeardConfig {
+  /** Base URL of the Blackbeard API (e.g. "https://blackbeard.example.com"). */
   baseUrl?: string;
+  /** System API key for authentication (mutually exclusive with token). */
   apiKey?: string;
+  /** JWT access token for authentication (mutually exclusive with apiKey). */
   token?: string;
+  /** Request timeout in milliseconds (default: 30000). */
   timeout?: number;
 }
 
+/** Metadata attached to every Blackbeard resource. */
 export interface ResourceMetadata {
   name: string;
   namespace?: string;
   labels?: Record<string, string>;
 }
 
+/** A generic Blackbeard resource returned from the API. */
 export interface Resource {
   id?: string;
   apiVersion: string;
@@ -22,6 +29,7 @@ export interface Resource {
   updated_at?: string;
 }
 
+/** Paginated list response from the API. */
 export interface ListResponse<T> {
   items: T[];
   total: number;
@@ -30,6 +38,7 @@ export interface ListResponse<T> {
   has_more: boolean;
 }
 
+/** An individual task within an execution. */
 export interface ExecutionTask {
   id: string;
   task_name: string;
@@ -44,6 +53,7 @@ export interface ExecutionTask {
   completed_at: string | null;
 }
 
+/** Execution record returned from the API. */
 export interface Execution {
   id: string;
   crew_name: string;
@@ -64,7 +74,7 @@ export interface Execution {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
-  tasks: ExecutionTask[];
+  tasks?: ExecutionTask[];
 }
 
 export interface User {
@@ -73,9 +83,9 @@ export interface User {
   display_name: string;
   is_active: boolean;
   created_at: string;
-  last_login_at: string | null;
 }
 
+/** Execution event returned from the events endpoint. */
 export interface ExecutionEvent {
   sequence: number;
   event_type: string;
@@ -83,6 +93,7 @@ export interface ExecutionEvent {
   data: Record<string, unknown>;
 }
 
+/** Response shape from GET /executions/:id/events. */
 export interface ExecutionEventsResponse {
   events: ExecutionEvent[];
   next_sequence: number;
@@ -96,6 +107,12 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface TokenResponse {
+  access_token: string;
+  refresh_token: string | null;
+  token_type: string;
+}
+
 export interface HealthResponse {
   status: string;
   service: string;
@@ -103,7 +120,55 @@ export interface HealthResponse {
   uptime_s: number;
 }
 
+export interface ReadinessResponse {
+  status: string;
+  service: string;
+  checks: Record<string, { status: string; latency_ms?: number; error?: string }>;
+}
+
 export interface HITLResponseResult {
   status: string;
   execution_id: string;
+}
+
+export interface SpendRecord {
+  request_id: string;
+  call_type: string;
+  model: string;
+  spend: number;
+  total_tokens: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  startTime: string;
+  endTime: string;
+  [key: string]: unknown;
+}
+
+export const TERMINAL_STATUSES: ReadonlySet<string> = new Set([
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+/** Error thrown when the API returns a non-OK response or a network failure occurs. */
+export class BlackbeardApiError extends Error {
+  readonly status: number;
+  readonly detail: string;
+  readonly body?: Record<string, unknown>;
+
+  constructor(status: number, detail: string, body?: Record<string, unknown>) {
+    super(`HTTP ${status}: ${detail}`);
+    this.name = "BlackbeardApiError";
+    this.status = status;
+    this.detail = detail;
+    this.body = body;
+  }
+
+  get isClientError(): boolean {
+    return this.status >= 400 && this.status < 500;
+  }
+
+  get isServerError(): boolean {
+    return this.status >= 500;
+  }
 }

@@ -1,5 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { LayoutDashboard, Play, Database, Anchor } from 'lucide-react'
+import { STORAGE_KEYS } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
 /* Feature card                                                        */
@@ -39,12 +40,12 @@ interface WelcomeDialogProps {
 
 export default function WelcomeDialog({ open, onStartTour, onSkip }: WelcomeDialogProps) {
   const handleStartTour = () => {
-    localStorage.setItem('blackbeard_onboarding_completed', 'true')
+    localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true')
     onStartTour()
   }
 
   const handleSkip = () => {
-    localStorage.setItem('blackbeard_onboarding_completed', 'true')
+    localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true')
     onSkip()
   }
 

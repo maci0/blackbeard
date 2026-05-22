@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 
 import click
 from rich.console import Console
+from rich.markup import escape
 
 if TYPE_CHECKING:
     import httpx
@@ -26,8 +27,17 @@ STATUS_COLORS: dict[str, str] = {
 TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
 
 json_opt = click.option(
-    "--json", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
+    "--json", "-j", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
 )
+
+
+class HelpCommand(click.Command):
+    """Click Command with -h/--help enabled by default."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        cs = dict(kwargs.pop("context_settings", None) or {})
+        cs.setdefault("help_option_names", ["-h", "--help"])
+        super().__init__(*args, context_settings=cs, **kwargs)
 
 
 def print_json(data: object, *, compact: bool = False) -> None:
@@ -58,10 +68,10 @@ def extract_detail(response: httpx.Response) -> str:
 def handle_request_error(server: str, exc: httpx.RequestError) -> NoReturn:
     """Handle network-level errors with helpful suggestions."""
     console.print(
-        f"[red bold]Error:[/] Cannot reach server at [bold]{server}[/]\n"
-        f"  {exc}\n\n"
+        f"[red bold]Error:[/] Cannot reach server at [bold]{escape(server)}[/]\n"
+        f"  {escape(str(exc))}\n\n"
         f"[dim]Suggestions:\n"
-        f"  - Is the server running? Try: curl {server}/api/v1/health\n"
+        f"  - Is the server running? Try: curl {escape(server)}/api/v1/health\n"
         f"  - Wrong URL? Set --server or BLACKBEARD_SERVER[/]"
     )
     raise SystemExit(1) from exc
@@ -72,8 +82,12 @@ def handle_http_error(response: httpx.Response) -> NoReturn:
     detail = extract_detail(response)
     method = response.request.method
     path = response.request.url.path
-    console.print(f"[red bold]Error:[/] HTTP {response.status_code} on {method} {path}: {detail}")
-    if response.status_code == 401:
+    console.print(
+        f"[red bold]Error:[/] HTTP {response.status_code} on {method} {path}: {escape(detail)}"
+    )
+    if response.status_code == 400:
+        console.print("[dim]Hint: Bad request — check the request body and parameters[/]")
+    elif response.status_code == 401:
         console.print("[dim]Hint: Check your credentials (blackbeard login or --api-key)[/]")
     elif response.status_code == 403:
         console.print("[dim]Hint: Authenticated but lacking permission for this action[/]")
@@ -124,8 +138,9 @@ def require_auth(ctx: click.Context) -> dict[str, str]:
     if creds and creds.server.rstrip("/") != server.rstrip("/"):
         console.print(
             f"[red bold]Error:[/] Authentication required.\n"
-            f"  Logged in to [bold]{creds.server}[/] but targeting [bold]{server}[/].\n"
-            f"  Run: [bold]blackbeard -s {server} login[/]"
+            f"  Logged in to [bold]{escape(creds.server)}[/]"
+            f" but targeting [bold]{escape(server)}[/].\n"
+            f"  Run: [bold]blackbeard -s {escape(server)} login[/]"
         )
     else:
         console.print(
@@ -143,7 +158,7 @@ def validate_name(name: str) -> None:
 
     if not re.fullmatch(NAME_PATTERN, name):
         console.print(
-            f"[red bold]Error:[/] Invalid resource name {name!r}.\n"
+            f"[red bold]Error:[/] Invalid resource name {escape(repr(name))}.\n"
             "  Names must start with a lowercase letter or digit and"
             " contain only lowercase letters, digits, and hyphens."
         )
@@ -173,24 +188,24 @@ def parse_key_value_inputs(items: tuple[str, ...], flag_name: str = "--input") -
 
     Values are parsed as JSON when valid, otherwise kept as strings.
     """
-    import json as _json
-
     result: dict[str, Any] = {}
     for item in items:
         if "=" not in item:
             console.print(
-                f"[red bold]Error:[/] Invalid {flag_name}: expected KEY=VALUE, got: {item!r}"
+                f"[red bold]Error:[/] Invalid {flag_name}:"
+                f" expected KEY=VALUE, got: {escape(repr(item))}"
             )
             console.print(f'[dim]Example: {flag_name} topic="AI agents"[/]')
             raise SystemExit(2)
         key, _, value = item.partition("=")
         if not key:
             console.print(
-                f"[red bold]Error:[/] Invalid {flag_name}: key cannot be empty in {item!r}"
+                f"[red bold]Error:[/] Invalid {flag_name}:"
+                f" key cannot be empty in {escape(repr(item))}"
             )
             raise SystemExit(2)
         try:
-            result[key] = _json.loads(value)
-        except (ValueError, _json.JSONDecodeError):
+            result[key] = json.loads(value)
+        except (ValueError, json.JSONDecodeError):
             result[key] = value
     return result

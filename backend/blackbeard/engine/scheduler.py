@@ -33,9 +33,13 @@ class AutomationScheduler:
         try:
             async with async_session() as session:
                 from sqlalchemy import select
+                from sqlalchemy.orm import load_only
 
                 result = await session.execute(
-                    select(Resource).where(Resource.kind == ResourceKind.AUTOMATION)
+                    select(Resource)
+                    .options(load_only(Resource.name, Resource.namespace, Resource.spec))
+                    .where(Resource.kind == ResourceKind.AUTOMATION)
+                    .limit(1000)
                 )
                 automations = list(result.scalars())
 
@@ -64,11 +68,12 @@ class AutomationScheduler:
                 },
             )
         except Exception:
+            self._running = False
             logger.exception(
                 "Failed to start automation scheduler — no cron automations will run until restart",
                 extra={"event": "scheduler_start_failed"},
             )
-            self._running = False
+            raise
 
     async def stop(self) -> None:
         """Cancel all scheduled tasks."""
@@ -85,6 +90,25 @@ class AutomationScheduler:
             "Automation scheduler stopped",
             extra={"event": "scheduler_stopped"},
         )
+
+    @staticmethod
+    def _log_cron_task_exception(task: asyncio.Task[None]) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error(
+                "Cron task '%s' died unexpectedly: %s",
+                task.get_name(),
+                exc,
+                exc_info=exc,
+                extra={
+                    "event": "cron_task_failed",
+                    "task_name": task.get_name(),
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc)[:500],
+                },
+            )
 
     async def reload(self) -> None:
         """Cancel all tasks and re-load from database.
@@ -115,8 +139,8 @@ class AutomationScheduler:
 
         Validates that the cron expression does not fire more often than
         once per minute.  Rejects sub-minute cron expressions (6-field
-        second-resolution expressions) and expressions that would fire
-        every minute.
+        second-resolution expressions) and expressions whose consecutive
+        firings are less than ``_MIN_INTERVAL_S`` (60s) apart.
         """
         # SECURITY: Reject cron expressions with more than 5 fields
         # (second-resolution crons can fire every second = DoS).
@@ -176,6 +200,7 @@ class AutomationScheduler:
             self._run_cron(automation_name, cron_expr, target, inputs, namespace),
             name=f"cron-{automation_name}",
         )
+        task.add_done_callback(self._log_cron_task_exception)
         self._tasks[automation_name] = task
 
     async def _run_cron(

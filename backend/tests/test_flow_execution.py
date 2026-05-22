@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from blackbeard.engine.executor import _run_flow_steps
+from blackbeard.engine.flow_runner import run_flow_steps as _run_flow_steps
 from blackbeard.engine.loader import LoaderError
 
 # ---------------------------------------------------------------------------

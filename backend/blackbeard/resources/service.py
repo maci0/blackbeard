@@ -72,16 +72,9 @@ class ResourceService:
         if errors:
             raise ResourceValidationError(errors)
 
-        result = await self.session.execute(
-            select(Resource)
-            .where(
-                Resource.kind == kind_enum,
-                Resource.name == data.metadata.name,
-                Resource.namespace == data.metadata.namespace,
-            )
-            .with_for_update()
+        existing = await self._get_for_update(
+            kind_enum, data.metadata.name, data.metadata.namespace
         )
-        existing = result.scalar_one_or_none()
         if existing:
             resource = await self._update_existing(existing, data, raw_yaml, validated_refs)
             duration_ms = round((time.monotonic() - t0) * 1000, 1)
@@ -131,16 +124,9 @@ class ResourceService:
                     "request_id": request_id_var.get("-"),
                 },
             )
-            result = await self.session.execute(
-                select(Resource)
-                .where(
-                    Resource.kind == kind_enum,
-                    Resource.name == data.metadata.name,
-                    Resource.namespace == data.metadata.namespace,
-                )
-                .with_for_update()
+            existing = await self._get_for_update(
+                kind_enum, data.metadata.name, data.metadata.namespace
             )
-            existing = result.scalar_one_or_none()
             if existing:
                 resource = await self._update_existing(existing, data, raw_yaml, validated_refs)
                 return resource, False
@@ -217,7 +203,7 @@ class ResourceService:
             total = offset + len(items)
         else:
             count_query = select(func.count(Resource.id)).where(*filters)
-            total = (await self.session.execute(count_query)).scalar() or 0
+            total = (await self.session.execute(count_query)).scalar_one()
 
         return items, total
 
@@ -233,16 +219,7 @@ class ResourceService:
         t0 = time.monotonic()
         kind_enum = _parse_kind(kind)
 
-        result = await self.session.execute(
-            select(Resource)
-            .where(
-                Resource.kind == kind_enum,
-                Resource.name == name,
-                Resource.namespace == namespace,
-            )
-            .with_for_update()
-        )
-        resource = result.scalar_one_or_none()
+        resource = await self._get_for_update(kind_enum, name, namespace)
         if not resource:
             raise ResourceNotFoundError(kind, name, namespace)
 
@@ -349,6 +326,22 @@ class ResourceService:
                 Resource.namespace == namespace,
             )
             .options(defer(Resource.raw_yaml))
+        )
+        return result.scalar_one_or_none()
+
+    async def _get_for_update(
+        self, kind: ResourceKind, name: str, namespace: str
+    ) -> Resource | None:
+        """Look up a resource with a row-level lock for safe mutation."""
+        result = await self.session.execute(
+            select(Resource)
+            .where(
+                Resource.kind == kind,
+                Resource.name == name,
+                Resource.namespace == namespace,
+            )
+            .options(defer(Resource.raw_yaml))
+            .with_for_update()
         )
         return result.scalar_one_or_none()
 

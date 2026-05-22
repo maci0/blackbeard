@@ -62,6 +62,10 @@ class User(Base):
         Index("ix_users_email_lower", text("lower(email)"), unique=True),
         CheckConstraint("length(email) >= 1", name="ck_user_email_nonempty"),
         CheckConstraint("length(display_name) >= 1", name="ck_user_display_name_nonempty"),
+        CheckConstraint("length(password_hash) >= 1", name="ck_user_password_hash_nonempty"),
+        CheckConstraint(
+            "api_key IS NULL OR length(api_key) >= 1", name="ck_user_api_key_nonempty"
+        ),
     )
 
     def __repr__(self) -> str:

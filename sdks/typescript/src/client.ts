@@ -1,13 +1,18 @@
-import type {
-  BlackbeardConfig,
-  Resource,
-  Execution,
-  ExecutionEventsResponse,
-  ListResponse,
-  AuthResponse,
-  User,
-  HealthResponse,
-  HITLResponseResult,
+import {
+  BlackbeardApiError,
+  TERMINAL_STATUSES,
+  type BlackbeardConfig,
+  type Resource,
+  type Execution,
+  type ExecutionEventsResponse,
+  type ListResponse,
+  type AuthResponse,
+  type TokenResponse,
+  type User,
+  type HealthResponse,
+  type ReadinessResponse,
+  type HITLResponseResult,
+  type SpendRecord,
 } from "./types.js";
 
 export const KIND_PLURALS: Record<string, string> = {
@@ -23,6 +28,7 @@ export const KIND_PLURALS: Record<string, string> = {
   Role: "roles",
   RoleBinding: "role-bindings",
   Automation: "automations",
+  Namespace: "namespaces",
 };
 
 export class BlackbeardClient {
@@ -68,29 +74,38 @@ export class BlackbeardClient {
     path: string,
     body?: unknown
   ): Promise<T> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeout);
-
+    let resp: Response;
     try {
-      const resp = await fetch(`${this.baseUrl}${path}`, {
+      resp = await fetch(`${this.baseUrl}${path}`, {
         method,
         headers: this.headers(body !== undefined),
         body: body !== undefined ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
+        signal: AbortSignal.timeout(this.timeout),
       });
-
-      if (!resp.ok) {
-        const error = await resp.json().catch(() => ({ detail: resp.statusText }));
-        throw new Error(
-          `HTTP ${resp.status}: ${typeof error.detail === "string" ? error.detail : resp.statusText}`
-        );
+    } catch (err) {
+      if (
+        err instanceof DOMException &&
+        (err.name === "TimeoutError" || err.name === "AbortError")
+      ) {
+        throw new BlackbeardApiError(0, `Request timed out after ${this.timeout}ms`);
       }
-
-      if (resp.status === 204) return undefined as T;
-      return (await resp.json()) as T;
-    } finally {
-      clearTimeout(timer);
+      throw new BlackbeardApiError(
+        0,
+        err instanceof Error ? err.message : "Network request failed"
+      );
     }
+
+    if (!resp.ok) {
+      const errorBody = await resp
+        .json()
+        .catch(() => ({ detail: resp.statusText }));
+      const detail =
+        typeof errorBody.detail === "string" ? errorBody.detail : resp.statusText;
+      throw new BlackbeardApiError(resp.status, detail, errorBody);
+    }
+
+    if (resp.status === 204) return undefined as T;
+    return (await resp.json()) as T;
   }
 
   // ── Health ──
@@ -99,8 +114,8 @@ export class BlackbeardClient {
     return this.request<HealthResponse>("GET", "/api/v1/health");
   }
 
-  async readiness(): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(
+  async readiness(): Promise<ReadinessResponse> {
+    return this.request<ReadinessResponse>(
       "GET",
       "/api/v1/health/ready"
     );
@@ -115,6 +130,7 @@ export class BlackbeardClient {
       { email, password }
     );
     this.token = result.access_token;
+    this.apiKey = undefined;
     return result;
   }
 
@@ -129,16 +145,18 @@ export class BlackbeardClient {
       { email, password, display_name: displayName }
     );
     this.token = result.access_token;
+    this.apiKey = undefined;
     return result;
   }
 
-  async refresh(refreshToken: string): Promise<AuthResponse> {
-    const result = await this.request<AuthResponse>(
+  async refresh(refreshToken: string): Promise<TokenResponse> {
+    const result = await this.request<TokenResponse>(
       "POST",
       "/api/v1/auth/refresh",
       { refresh_token: refreshToken }
     );
     this.token = result.access_token;
+    this.apiKey = undefined;
     return result;
   }
 
@@ -344,8 +362,8 @@ export class BlackbeardClient {
 
   async getExecutionSpend(
     executionId: string
-  ): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(
+  ): Promise<SpendRecord[]> {
+    return this.request<SpendRecord[]>(
       "GET",
       `/api/v1/executions/${encodeURIComponent(executionId)}/spend`
     );
@@ -397,18 +415,19 @@ export class BlackbeardClient {
     pollInterval = 2000,
     timeout = 300_000
   ): Promise<Execution> {
-    const terminal = new Set(["completed", "failed", "cancelled"]);
     const deadline = Date.now() + timeout;
 
-    while (Date.now() < deadline) {
+    while (true) {
       const exec = await this.getExecution(executionId);
-      if (terminal.has(exec.status)) return exec;
+      if (TERMINAL_STATUSES.has(exec.status)) return exec;
+      if (Date.now() >= deadline) {
+        throw new BlackbeardApiError(
+          0,
+          `Execution ${executionId} did not complete within ${timeout}ms (current status: ${exec.status})`
+        );
+      }
       await new Promise((r) => setTimeout(r, pollInterval));
     }
-    const last = await this.getExecution(executionId);
-    throw new Error(
-      `Execution ${executionId} did not complete within ${timeout}ms (current status: ${last.status})`
-    );
   }
 
   async exportAll(namespace = "default"): Promise<Resource[]> {

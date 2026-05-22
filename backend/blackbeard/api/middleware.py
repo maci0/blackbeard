@@ -22,15 +22,12 @@ if TYPE_CHECKING:
 from blackbeard.auth.api_key import get_api_key
 from blackbeard.auth.jwt import decode_token
 from blackbeard.config import settings
-from blackbeard.logging_config import request_id_var, user_id_var
+from blackbeard.logging_config import request_id_var, scrub_pii, user_id_var
 
 logger = logging.getLogger(__name__)
 
-# --- Auth failure rate limiting ---
-# Track per-IP failure counts with a sliding window to prevent brute-force attacks.
-_AUTH_FAIL_WINDOW_S = 300  # 5-minute window
-_AUTH_FAIL_MAX = 20  # max failures per IP within the window
-_auth_failures: dict[str, collections.deque[float]] = {}
+# Per-IP sliding-window failure counts (thresholds: AUTH_FAIL_WINDOW_SECONDS, AUTH_FAIL_MAX_PER_IP)
+_auth_failures: collections.OrderedDict[str, collections.deque[float]] = collections.OrderedDict()
 _auth_failures_lock = threading.Lock()
 
 _HEALTH_PATHS = {"/api/v1/health", "/api/v1/health/ready"}
@@ -60,6 +57,16 @@ _SENSITIVE_QS_PARAMS = frozenset(
         "email",
         "ssn",
         "phone",
+        "name",
+        "display_name",
+        "username",
+        "address",
+        "zip_code",
+        "postal_code",
+        "credit_card",
+        "card_number",
+        "date_of_birth",
+        "dob",
     }
 )
 
@@ -72,10 +79,11 @@ def _redact_query_string(query: str) -> str:
     """
     if not query:
         return query
-    query_lower = query.lower()
-    if not any(param in query_lower for param in _SENSITIVE_QS_PARAMS):
-        return query
     pairs = parse_qsl(query, keep_blank_values=True)
+    if not pairs:
+        return query
+    if not any(k.lower() in _SENSITIVE_QS_PARAMS for k, _ in pairs):
+        return query
     redacted = [
         (k, "[REDACTED]") if k.lower() in _SENSITIVE_QS_PARAMS else (k, v) for k, v in pairs
     ]
@@ -84,26 +92,16 @@ def _redact_query_string(query: str) -> str:
 
 def _check_rate_limit(request: Request, request_id: str, client_ip: str) -> JSONResponse | None:
     """Return a 429 response if client_ip exceeds the auth failure threshold, else None."""
-    now = time.monotonic()
-    with _auth_failures_lock:
-        ip_failures = _auth_failures.get(client_ip)
-        if ip_failures is None:
-            return None
-        while ip_failures and ip_failures[0] < now - _AUTH_FAIL_WINDOW_S:
-            ip_failures.popleft()
-        if not ip_failures:
-            del _auth_failures[client_ip]
-            return None
-        if len(ip_failures) < _AUTH_FAIL_MAX:
-            return None
-        failure_count = len(ip_failures)
+    limited, failure_count = _is_rate_limited_with_count(client_ip)
+    if not limited:
+        return None
     response = JSONResponse(
         status_code=429,
         content={
             "detail": "Too many authentication failures. Try again later.",
             "request_id": request_id,
         },
-        headers={"Retry-After": "60"},
+        headers={"Retry-After": str(settings.auth_fail_window_seconds)},
     )
     response.headers["X-Request-Id"] = request_id
     logger.warning(
@@ -124,23 +122,41 @@ def _check_rate_limit(request: Request, request_id: str, client_ip: str) -> JSON
     return response
 
 
-_AUTH_FAIL_MAX_IPS = 200
+def _is_rate_limited_with_count(client_ip: str) -> tuple[bool, int]:
+    """Return (is_limited, failure_count) in a single lock acquisition."""
+    now = time.monotonic()
+    with _auth_failures_lock:
+        ip_failures = _auth_failures.get(client_ip)
+        if ip_failures is None:
+            return False, 0
+        while ip_failures and ip_failures[0] < now - settings.auth_fail_window_seconds:
+            ip_failures.popleft()
+        if not ip_failures:
+            del _auth_failures[client_ip]
+            return False, 0
+        count = len(ip_failures)
+        return count >= settings.auth_fail_max_per_ip, count
+
+
+def is_rate_limited(client_ip: str) -> bool:
+    """Return True if client_ip has exceeded the auth failure threshold."""
+    limited, _ = _is_rate_limited_with_count(client_ip)
+    return limited
 
 
 def record_auth_failure(client_ip: str) -> None:
     """Record an authentication failure for rate limiting and prune stale entries."""
     now = time.monotonic()
     with _auth_failures_lock:
-        if client_ip not in _auth_failures:
-            _auth_failures[client_ip] = collections.deque(maxlen=_AUTH_FAIL_MAX + 10)
+        if client_ip in _auth_failures:
+            _auth_failures.move_to_end(client_ip)
+        else:
+            _auth_failures[client_ip] = collections.deque(
+                maxlen=settings.auth_fail_max_per_ip + 10,
+            )
         _auth_failures[client_ip].append(now)
-        if len(_auth_failures) > _AUTH_FAIL_MAX_IPS:
-            cutoff = now - _AUTH_FAIL_WINDOW_S
-            stale = [ip for ip, dq in _auth_failures.items() if not dq or dq[-1] < cutoff]
-            for ip in stale:
-                _auth_failures.pop(ip, None)
-            while len(_auth_failures) > _AUTH_FAIL_MAX_IPS:
-                _auth_failures.pop(next(iter(_auth_failures)), None)
+        while len(_auth_failures) > settings.auth_fail_max_tracked_ips:
+            _auth_failures.popitem(last=False)
 
 
 def get_request_id(request: Request) -> str:
@@ -169,7 +185,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         response = await call_next(request)
         response.headers["X-Request-Id"] = request_id
 
-        if path in _AUTH_PATHS and response.status_code in (401, 403):
+        if path in _AUTH_PATHS and response.status_code in (401, 403, 409):
             record_auth_failure(client_ip)
 
         _log_request(request, response, start)
@@ -191,17 +207,19 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         )
         return response
 
+    rate_limited = _check_rate_limit(request, request_id, client_ip)
+    if rate_limited is not None:
+        return rate_limited
+
     # Automation webhook paths use their own HMAC auth inside the route
     # handler — let them through without requiring an API key or JWT.
+    # Rate limiting runs ABOVE this check so brute-force attempts against
+    # webhook secrets are throttled.
     if _AUTOMATION_WEBHOOK_RE.match(path):
         response = await call_next(request)
         response.headers["X-Request-Id"] = request_id
         _log_request(request, response, start)
         return response
-
-    rate_limited = _check_rate_limit(request, request_id, client_ip)
-    if rate_limited is not None:
-        return rate_limited
 
     # Validate JWT Bearer token (signature + expiry).  Invalid tokens
     # trigger rate-limit recording to throttle brute-force attempts.
@@ -257,7 +275,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     api_key = request.headers.get("X-API-Key", "")
     if not api_key and path.endswith("/stream"):
         api_key = request.query_params.get("api_key", "")
-    if not api_key or not hmac.compare_digest(api_key, get_api_key()):
+    if not hmac.compare_digest(api_key, get_api_key()):
         record_auth_failure(client_ip)
 
         response = JSONResponse(
@@ -363,6 +381,7 @@ SECURITY_HEADERS = {
     ),
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
     "Cache-Control": "no-store",
+    "Pragma": "no-cache",
     "Cross-Origin-Opener-Policy": "same-origin",
     "Cross-Origin-Resource-Policy": "same-origin",
     "X-Permitted-Cross-Domain-Policies": "none",
@@ -518,9 +537,7 @@ async def validation_exception_handler(_request: Request, exc: Exception) -> JSO
     # values (e.g. passwords) in the HTTP response body.
     if isinstance(errors, list):
         errors = [
-            {k: v for k, v in e.items() if k not in ("input", "ctx")}
-            if isinstance(e, dict)
-            else e
+            {k: v for k, v in e.items() if k not in ("input", "ctx")} if isinstance(e, dict) else e
             for e in errors
         ]
     return JSONResponse(
@@ -539,19 +556,20 @@ async def http_exception_handler(_request: Request, exc: Exception) -> JSONRespo
     if status_code >= 500:
         uid = user_id_var.get("")
         path = _request.url.path
+        scrubbed_detail = scrub_pii(str(detail)[:500])
         logger.error(
             "HTTP %d on %s %s: %s",
             status_code,
             _request.method,
             path,
-            str(detail)[:200],
+            scrubbed_detail[:200],
             exc_info=True,
             extra={
                 "event": "http_exception",
                 "http_method": _request.method,
                 "http_path": path,
                 "http_status": status_code,
-                "error_message": str(detail)[:500],
+                "error_message": scrubbed_detail,
                 "request_id": rid,
                 "user_id": uid or None,
             },
@@ -567,17 +585,18 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     """Catch unhandled exceptions and return a sanitized 500 response."""
     rid = request_id_var.get("-")
     uid = user_id_var.get("")
+    scrubbed_error = scrub_pii(str(exc)[:500])
     logger.error(
         "Unhandled exception on %s %s [request_id=%s]: %s",
         request.method,
         request.url.path,
         rid,
-        exc,
+        scrubbed_error,
         exc_info=True,
         extra={
             "event": "unhandled_exception",
             "error_type": type(exc).__name__,
-            "error_message": str(exc)[:500],
+            "error_message": scrubbed_error,
             "http_method": request.method,
             "http_path": request.url.path,
             "request_id": rid,

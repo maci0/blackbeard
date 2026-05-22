@@ -8,8 +8,12 @@ from typing import Any
 import httpx
 
 from blackbeard_sdk.auth import AuthMixin
+from blackbeard_sdk.errors import BlackbeardApiError, raise_for_status
 from blackbeard_sdk.executions import ExecutionMixin
 from blackbeard_sdk.resources import ResourceMixin
+
+# Re-export so tests/consumers can import from the top-level package
+__all__ = ["BlackbeardClient", "BlackbeardApiError"]
 
 
 class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
@@ -46,6 +50,7 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
         token: str | None = None,
         *,
         timeout: float = 30.0,
+        transport: httpx.BaseTransport | None = None,
     ) -> None:
         """Initialize the Blackbeard client.
 
@@ -57,11 +62,11 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
             token: JWT access token for Bearer authentication.  Falls back to
                 ``BLACKBEARD_TOKEN`` env var.
             timeout: Default request timeout in seconds.
+            transport: Custom httpx transport (useful for testing with mock
+                transports or custom connection pooling).
         """
         if not base_url:
-            base_url = os.environ.get(
-                "BLACKBEARD_BASE_URL", "http://localhost:8000"
-            )
+            base_url = os.environ.get("BLACKBEARD_BASE_URL", "http://localhost:8000")
         if api_key is None:
             api_key = os.environ.get("BLACKBEARD_API_KEY")
         if token is None:
@@ -75,11 +80,15 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
         elif api_key:
             headers["X-API-Key"] = api_key
 
-        self._http = httpx.Client(
-            base_url=base_url,
-            headers=headers,
-            timeout=timeout,
-        )
+        kwargs: dict[str, Any] = {
+            "base_url": base_url,
+            "headers": headers,
+            "timeout": timeout,
+        }
+        if transport is not None:
+            kwargs["transport"] = transport
+
+        self._http = httpx.Client(**kwargs)
 
     def health(self) -> dict[str, Any]:
         """Check API liveness.
@@ -88,7 +97,7 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
             Health response dict with status, service, version, uptime_s.
         """
         resp = self._http.get("/api/v1/health")
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()
 
     def readiness(self) -> dict[str, Any]:
@@ -98,7 +107,7 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
             Readiness response dict with component checks.
         """
         resp = self._http.get("/api/v1/health/ready")
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()
 
     def close(self) -> None:

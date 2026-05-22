@@ -7,7 +7,6 @@ since CrewAI callbacks run on a separate thread.
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import hmac
 import json
@@ -17,6 +16,7 @@ import time as _time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+import httpx
 from crewai.events import (
     BaseEventListener,
     CrewKickoffCompletedEvent,
@@ -36,10 +36,14 @@ if TYPE_CHECKING:
 
     from sqlalchemy import Engine
 
+from urllib.parse import urlparse
+
 from blackbeard.http_client import get_sync_client
-from blackbeard.logging_config import request_id_var
+from blackbeard.logging_config import request_id_var, safe_log_url
 from blackbeard.models import ExecutionEvent, ExecutionTask, TaskStatus
+from blackbeard.models.execution_schemas import redact_sensitive_values
 from blackbeard.pii import redact_dict as _redact_dict
+from blackbeard.resources.validator import is_internal_host
 
 # ---------------------------------------------------------------------------
 # Optional OpenTelemetry integration
@@ -135,23 +139,47 @@ def shutdown_webhook_executor() -> None:
             _webhook_executor = None
 
 
-_webhook_cache: list[Any] | None = None
-_webhook_cache_time: float = 0.0
+def _log_webhook_future_exception(future: Any) -> None:
+    """Log uncaught exceptions from webhook delivery futures."""
+    try:
+        exc = future.exception()
+    except Exception:
+        return
+    if exc is not None:
+        logger.error(
+            "Webhook delivery thread raised unhandled exception: %s",
+            exc,
+            exc_info=exc,
+            extra={
+                "event": "webhook_delivery_thread_error",
+                "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
+            },
+        )
+
+
+_webhook_cache_entry: tuple[float, list[Any]] | None = None
 _webhook_cache_lock = threading.Lock()
 _WEBHOOK_CACHE_TTL = 300.0
 
 
 def _get_cached_webhooks(db_url: str) -> list[Any]:
     """Return active webhooks, cached for 5min to avoid DB hit per event."""
-    global _webhook_cache, _webhook_cache_time
+    global _webhook_cache_entry
 
     now = _time.monotonic()
-    if _webhook_cache is not None and (now - _webhook_cache_time) < _WEBHOOK_CACHE_TTL:
-        return _webhook_cache
+    entry = _webhook_cache_entry
+    if entry is not None:
+        cache_time, cache = entry
+        if (now - cache_time) < _WEBHOOK_CACHE_TTL:
+            return cache
 
     with _webhook_cache_lock:
-        if _webhook_cache is not None and (now - _webhook_cache_time) < _WEBHOOK_CACHE_TTL:
-            return _webhook_cache
+        entry = _webhook_cache_entry
+        if entry is not None:
+            cache_time, cache = entry
+            if (now - cache_time) < _WEBHOOK_CACHE_TTL:
+                return cache
 
         from sqlalchemy import select as sync_select
 
@@ -160,30 +188,48 @@ def _get_cached_webhooks(db_url: str) -> list[Any]:
         session_factory = _get_sync_session_factory(db_url)
         try:
             with session_factory() as session:
-                result = session.execute(sync_select(Webhook).where(Webhook.active.is_(True)))
+                result = session.execute(
+                    sync_select(Webhook).where(Webhook.active.is_(True)).limit(1000)
+                )
                 cached = list(result.scalars())
                 # Detach from session so they can be used outside
                 session.expunge_all()
-        except Exception:
+        except Exception as exc:
+            if entry is not None:
+                logger.warning(
+                    "Failed to refresh webhook cache — using stale data (%d webhooks): %s",
+                    len(entry[1]),
+                    exc,
+                    exc_info=True,
+                    extra={
+                        "event": "webhook_load_failed_using_stale",
+                        "error_type": type(exc).__name__,
+                    },
+                )
+                return entry[1]
             logger.error(
                 "Failed to load webhooks for event delivery — "
-                "webhook notifications will be skipped until next cache refresh",
+                "no stale cache available, webhook notifications will be skipped: %s",
+                exc,
                 exc_info=True,
-                extra={"event": "webhook_load_failed"},
+                extra={
+                    "event": "webhook_load_failed",
+                    "error_type": type(exc).__name__,
+                },
             )
             return []
 
-        _webhook_cache = cached
-        _webhook_cache_time = _time.monotonic()
+        _webhook_cache_entry = (_time.monotonic(), cached)
         return cached
 
 
 def invalidate_webhook_cache() -> None:
     """Clear the webhook cache (call after webhook create/update/delete)."""
-    global _webhook_cache, _webhook_cache_time
+    global _webhook_cache_entry
     with _webhook_cache_lock:
-        _webhook_cache = None
-        _webhook_cache_time = 0.0
+        _webhook_cache_entry = None
+    with _webhook_host_cache_lock:
+        _webhook_host_cache.clear()
 
 
 def _deliver_single_webhook(
@@ -193,6 +239,8 @@ def _deliver_single_webhook(
     execution_id: str = "",
 ) -> None:
     """Deliver a single webhook (called concurrently via ThreadPoolExecutor)."""
+    safe_url = safe_log_url(webhook.url)
+    t0 = _time.monotonic()
     try:
         client = get_sync_client("webhook-deliver", timeout=10, follow_redirects=False)
         sig = hmac.new(webhook.secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
@@ -205,49 +253,74 @@ def _deliver_single_webhook(
                 "X-Blackbeard-Event": event_type,
             },
         )
+        latency_ms = round((_time.monotonic() - t0) * 1000, 1)
         if resp.status_code >= 400:
             logger.warning(
-                "Webhook delivery failed: id=%s url=%s status=%d",
+                "Webhook delivery failed: id=%s url=%s status=%d (%.0fms)",
                 webhook.id,
-                webhook.url,
+                safe_url,
                 resp.status_code,
+                latency_ms,
                 extra={
                     "event": "webhook_delivery_failed",
                     "webhook_id": str(webhook.id),
-                    "webhook_url": webhook.url,
+                    "webhook_url": safe_url,
                     "http_status": resp.status_code,
                     "event_type": event_type,
                     "execution_id": execution_id,
+                    "latency_ms": latency_ms,
                 },
             )
         else:
             logger.debug(
-                "Webhook delivered: id=%s event=%s status=%d",
+                "Webhook delivered: id=%s event=%s status=%d (%.0fms)",
                 webhook.id,
                 event_type,
                 resp.status_code,
+                latency_ms,
                 extra={
                     "event": "webhook_delivered",
                     "webhook_id": str(webhook.id),
                     "http_status": resp.status_code,
                     "event_type": event_type,
                     "execution_id": execution_id,
+                    "latency_ms": latency_ms,
                 },
             )
-    except Exception:
+    except (httpx.HTTPError, OSError):
+        latency_ms = round((_time.monotonic() - t0) * 1000, 1)
         logger.exception(
-            "Webhook delivery error: id=%s url=%s event=%s",
+            "Webhook delivery error: id=%s url=%s event=%s (%.0fms)",
             webhook.id,
-            webhook.url,
+            safe_url,
             event_type,
+            latency_ms,
             extra={
                 "event": "webhook_delivery_error",
                 "webhook_id": str(webhook.id),
-                "webhook_url": webhook.url,
+                "webhook_url": safe_url,
                 "event_type": event_type,
                 "execution_id": execution_id,
+                "latency_ms": latency_ms,
             },
         )
+
+
+_webhook_host_cache: dict[str, str | None] = {}
+_webhook_host_cache_lock = threading.Lock()
+
+
+def _get_webhook_hostname(webhook_url: str) -> str | None:
+    """Return cached parsed hostname for a webhook URL. None if internal (blocked)."""
+    with _webhook_host_cache_lock:
+        cached = _webhook_host_cache.get(webhook_url)
+    if cached is not None:
+        return cached if cached != "" else None
+    hostname = urlparse(webhook_url).hostname or ""
+    is_blocked = is_internal_host(hostname) if hostname else True
+    with _webhook_host_cache_lock:
+        _webhook_host_cache[webhook_url] = "" if is_blocked else hostname
+    return None if is_blocked else hostname
 
 
 def _prepare_webhook_targets(
@@ -257,44 +330,40 @@ def _prepare_webhook_targets(
     db_url: str,
 ) -> tuple[str, list[Any]]:
     """Resolve webhooks and build payload. Returns (payload, targets)."""
-    from urllib.parse import urlparse
-
-    from blackbeard.resources.validator import is_internal_host
-
     webhooks = _get_cached_webhooks(db_url)
     if not webhooks:
+        return "", []
+
+    targets = []
+    for webhook in webhooks:
+        if webhook.events and event_type not in webhook.events:
+            continue
+        hostname = _get_webhook_hostname(webhook.url)
+        if hostname is None:
+            logger.warning(
+                "Webhook delivery blocked (SSRF): id=%s url=%s",
+                webhook.id,
+                safe_log_url(webhook.url),
+                extra={
+                    "event": "webhook_delivery_ssrf_blocked",
+                    "webhook_id": str(webhook.id),
+                    "webhook_url": safe_log_url(webhook.url),
+                },
+            )
+            continue
+        targets.append(webhook)
+
+    if not targets:
         return "", []
 
     payload = json.dumps(
         {
             "event_type": event_type,
             "execution_id": execution_id,
-            "data": data,
+            "data": redact_sensitive_values(data),
         },
         default=str,
     )
-
-    targets = []
-    for webhook in webhooks:
-        if webhook.events and event_type not in webhook.events:
-            continue
-        parsed = urlparse(webhook.url)
-        hostname = parsed.hostname or ""
-        if is_internal_host(hostname):
-            logger.warning(
-                "Webhook delivery blocked (SSRF): id=%s url=%s hostname=%s",
-                webhook.id,
-                webhook.url,
-                hostname,
-                extra={
-                    "event": "webhook_delivery_ssrf_blocked",
-                    "webhook_id": str(webhook.id),
-                    "webhook_url": webhook.url,
-                    "hostname": hostname,
-                },
-            )
-            continue
-        targets.append(webhook)
 
     return payload, targets
 
@@ -349,6 +418,9 @@ def _get_sync_session_factory(db_url: str) -> sessionmaker[Session]:
             },
         )
         _sync_session_factory = sessionmaker(_sync_engine, class_=Session, expire_on_commit=False)
+        from blackbeard.models.database import instrument_engine
+
+        instrument_engine(_sync_engine, label="sync-events")
         logger.info(
             "Sync DB engine created for execution events",
             extra={"event": "sync_engine_created", "pool_size": 5, "max_overflow": 10},
@@ -381,6 +453,8 @@ class BlackbeardExecutionListener(BaseEventListener):
         self._execution_id = execution_id
         self._db_url = db_url
         self._pii_config = pii_config
+        self._pii_redact_events = bool(pii_config and pii_config.get("redact_events", True))
+        self._pii_entities: list[str] | None = pii_config.get("entities") if pii_config else None
         self._seq = 0
         self._task_order = 0  # tracks which task (by order) is currently running
         self._lock = threading.Lock()  # guards _seq, _task_order, and _buffer
@@ -403,12 +477,6 @@ class BlackbeardExecutionListener(BaseEventListener):
                 "pii_enabled": self._pii_config is not None,
             },
         )
-
-    def _next_seq(self) -> int:
-        with self._lock:
-            seq = self._seq
-            self._seq += 1
-            return seq
 
     def _ensure_request_id(self) -> None:
         """Set request_id ContextVar on the current thread for log correlation.
@@ -450,39 +518,102 @@ class BlackbeardExecutionListener(BaseEventListener):
                     },
                 )
         except Exception as exc:
-            logger.exception(
-                "Dropped %d events for %s (flush failed, not retried): %s",
+            with self._lock:
+                self._buffer = to_flush + self._buffer
+            logger.error(
+                "Re-queued %d events for %s (flush failed, will retry on next flush): %s",
                 len(to_flush),
                 self._execution_id,
                 exc,
+                exc_info=True,
                 extra={
                     "event": "event_flush_failed",
                     "execution_id": str(self._execution_id),
-                    "dropped_count": len(to_flush),
-                    "dropped_sequences": [e.sequence for e in to_flush],
-                    "dropped_event_types": [e.event_type for e in to_flush],
+                    "requeued_count": len(to_flush),
+                    "requeued_sequences": [e.sequence for e in to_flush],
+                    "requeued_event_types": [e.event_type for e in to_flush],
                     "error_type": type(exc).__name__,
                     "error_message": str(exc)[:500],
                 },
             )
+
+    _FLUSH_RETRIES = 2
 
     def flush(self) -> None:
         """Force-flush any buffered events. Called at end of execution."""
         with self._lock:
             timer = self._flush_timer
             self._flush_timer = None
+            orphaned_spans = self._otel_active_spans
+            self._otel_active_spans = {}
+            root_span = self._otel_root_span
+            self._otel_root_span = None
         if timer is not None:
             timer.cancel()
         self._flush_buffer()
-        orphaned = len(self._otel_active_spans)
-        for span in self._otel_active_spans.values():
-            with contextlib.suppress(Exception):
+        for attempt in range(self._FLUSH_RETRIES):
+            with self._lock:
+                remaining = len(self._buffer)
+            if remaining == 0:
+                break
+            logger.warning(
+                "Retrying final flush for execution %s: %d events still buffered (attempt %d/%d)",
+                self._execution_id,
+                remaining,
+                attempt + 1,
+                self._FLUSH_RETRIES,
+                extra={
+                    "event": "final_flush_retry",
+                    "execution_id": str(self._execution_id),
+                    "remaining_events": remaining,
+                    "attempt": attempt + 1,
+                },
+            )
+            _time.sleep(0.5)
+            self._flush_buffer()
+        with self._lock:
+            lost = len(self._buffer)
+        if lost > 0:
+            logger.error(
+                "Execution %s: %d events lost — could not flush after %d retries",
+                self._execution_id,
+                lost,
+                self._FLUSH_RETRIES,
+                extra={
+                    "event": "events_lost",
+                    "execution_id": str(self._execution_id),
+                    "lost_count": lost,
+                },
+            )
+        orphaned = len(orphaned_spans)
+        for span_key, span in orphaned_spans.items():
+            try:
                 span.end()
-        self._otel_active_spans.clear()
-        if self._otel_root_span is not None:
-            with contextlib.suppress(Exception):
-                self._otel_root_span.end()
-            self._otel_root_span = None
+            except Exception:
+                logger.warning(
+                    "Failed to end orphaned OTEL span '%s' for execution %s",
+                    span_key,
+                    self._execution_id,
+                    exc_info=True,
+                    extra={
+                        "event": "otel_span_end_failed",
+                        "execution_id": str(self._execution_id),
+                        "span_key": span_key,
+                    },
+                )
+        if root_span is not None:
+            try:
+                root_span.end()
+            except Exception:
+                logger.warning(
+                    "Failed to end root OTEL span for execution %s",
+                    self._execution_id,
+                    exc_info=True,
+                    extra={
+                        "event": "otel_root_span_end_failed",
+                        "execution_id": str(self._execution_id),
+                    },
+                )
         logger.info(
             "Execution listener flushed: execution_id=%s total_events=%d orphaned_spans=%d",
             self._execution_id,
@@ -501,14 +632,17 @@ class BlackbeardExecutionListener(BaseEventListener):
         if self._otel_tracer is None:
             return None
         parent_ctx = None
-        if self._otel_root_span is not None:
-            parent_ctx = trace.set_span_in_context(self._otel_root_span)
+        with self._lock:
+            root = self._otel_root_span
+        if root is not None:
+            parent_ctx = trace.set_span_in_context(root)
         span = self._otel_tracer.start_span(name, context=parent_ctx, attributes=attributes or {})
         return span
 
     def _otel_end_span(self, key: str, attributes: dict[str, Any] | None = None) -> None:
         """End a previously started span identified by key."""
-        span = self._otel_active_spans.pop(key, None)
+        with self._lock:
+            span = self._otel_active_spans.pop(key, None)
         if span is not None:
             if attributes:
                 for k, v in attributes.items():
@@ -533,28 +667,30 @@ class BlackbeardExecutionListener(BaseEventListener):
             exec_id = str(self._execution_id)
             executor = _get_webhook_executor()
             for wh in targets:
-                executor.submit(
+                future = executor.submit(
                     _deliver_single_webhook, wh, payload, event_type, execution_id=exec_id
                 )
-        except Exception:
+                future.add_done_callback(_log_webhook_future_exception)
+        except Exception as exc:
             logger.warning(
-                "Webhook dispatch skipped (executor unavailable): event=%s",
+                "Webhook dispatch skipped (executor unavailable): event=%s error=%s",
                 event_type,
+                exc,
                 exc_info=True,
                 extra={
                     "event": "webhook_dispatch_skipped",
                     "event_type": event_type,
                     "execution_id": str(self._execution_id),
+                    "error_type": type(exc).__name__,
                 },
             )
 
     def _write_event(self, event_type: str, data: dict[str, Any]) -> None:
         self._ensure_request_id()
-        # PII redaction on event data
-        if self._pii_config and self._pii_config.get("redact_events", True):
+        if self._pii_redact_events:
             data = _redact_dict(
                 data,
-                entities=self._pii_config.get("entities"),
+                entities=self._pii_entities,
                 config=self._pii_config,
             )
         now = datetime.now(UTC)
@@ -612,19 +748,45 @@ class BlackbeardExecutionListener(BaseEventListener):
         Also flushes any buffered events to maintain ordering.
         """
         self._ensure_request_id()
-        if self._buffer:
-            self._flush_buffer()
-        try:
-            now = datetime.now(UTC)
-            with self._session_factory() as session:
-                event = ExecutionEvent(
-                    execution_id=self._execution_id,
-                    sequence=self._next_seq(),
-                    event_type=event_type,
-                    timestamp=now,
-                    data=data,
+        if self._pii_redact_events:
+            data = _redact_dict(
+                data,
+                entities=self._pii_entities,
+                config=self._pii_config,
+            )
+            if task_output is not None:
+                from blackbeard.pii import redact_text as _redact_text
+
+                task_output = _redact_text(
+                    task_output,
+                    entities=self._pii_entities,
+                    config=self._pii_config,
                 )
-                session.add(event)
+        # Collect buffered events + new event atomically under lock, then
+        # commit everything in one transaction.  Prevents out-of-order
+        # delivery when a concurrent buffer flush fails but the task event
+        # write succeeds (the SSE consumer would skip the failed events).
+        now = datetime.now(UTC)
+        with self._lock:
+            timer = self._flush_timer
+            self._flush_timer = None
+            seq = self._seq
+            self._seq += 1
+            event = ExecutionEvent(
+                execution_id=self._execution_id,
+                sequence=seq,
+                event_type=event_type,
+                timestamp=now,
+                data=data,
+            )
+            to_flush = list(self._buffer)
+            self._buffer.clear()
+            to_flush.append(event)
+        if timer is not None:
+            timer.cancel()
+        try:
+            with self._session_factory() as session:
+                session.add_all(to_flush)
                 values: dict[str, Any] = {"status": task_status}
                 if task_output is not None:
                     values["output"] = task_output
@@ -644,6 +806,9 @@ class BlackbeardExecutionListener(BaseEventListener):
             # Fire webhook delivery in background
             self._dispatch_webhook(event_type, data)
         except Exception as exc:
+            with self._lock:
+                self._buffer = to_flush + self._buffer
+            self._schedule_flush()
             logger.exception(
                 "Failed to write event+task for %s: type=%s order=%d — "
                 "task status in DB may be stale (expected %s)",
@@ -666,9 +831,10 @@ class BlackbeardExecutionListener(BaseEventListener):
         @crewai_event_bus.on(CrewKickoffStartedEvent)
         def on_crew_started(source: Any, event: CrewKickoffStartedEvent) -> None:
             crew_name = event.crew_name or "unknown"
+            raw_inputs = event.inputs or {}
             data = {
                 "crew_name": crew_name,
-                "inputs": event.inputs or {},
+                "inputs": redact_sensitive_values(raw_inputs) if raw_inputs else {},
             }
             self._write_event("crew_started", data)
             # OTEL: start root span for crew execution
@@ -680,19 +846,20 @@ class BlackbeardExecutionListener(BaseEventListener):
                 },
             )
             if span is not None:
-                self._otel_root_span = span
+                with self._lock:
+                    self._otel_root_span = span
 
         @crewai_event_bus.on(CrewKickoffCompletedEvent)
         def on_crew_completed(source: Any, event: CrewKickoffCompletedEvent) -> None:
             data = {"total_tokens": event.total_tokens}
             self._write_event("crew_completed", data)
             # OTEL: end root span
-            if self._otel_root_span is not None:
-                self._otel_root_span.set_attribute(
-                    "blackbeard.total_tokens", event.total_tokens or 0
-                )
-                self._otel_root_span.end()
+            with self._lock:
+                root_span = self._otel_root_span
                 self._otel_root_span = None
+            if root_span is not None:
+                root_span.set_attribute("blackbeard.total_tokens", event.total_tokens or 0)
+                root_span.end()
 
         @crewai_event_bus.on(TaskStartedEvent)
         def on_task_started(source: Any, event: TaskStartedEvent) -> None:
@@ -721,7 +888,8 @@ class BlackbeardExecutionListener(BaseEventListener):
                 },
             )
             if span is not None:
-                self._otel_active_spans[f"task/{task_name}"] = span
+                with self._lock:
+                    self._otel_active_spans[f"task/{task_name}"] = span
 
         @crewai_event_bus.on(TaskCompletedEvent)
         def on_task_completed(source: Any, event: TaskCompletedEvent) -> None:
@@ -748,9 +916,12 @@ class BlackbeardExecutionListener(BaseEventListener):
 
         @crewai_event_bus.on(ToolUsageStartedEvent)
         def on_tool_started(source: Any, event: ToolUsageStartedEvent) -> None:
+            raw_args = event.tool_args
+            if isinstance(raw_args, dict):
+                raw_args = redact_sensitive_values(raw_args)
             data = {
                 "tool_name": event.tool_name,
-                "tool_args": str(event.tool_args)[:200] if event.tool_args else None,
+                "tool_args": str(raw_args)[:200] if raw_args else None,
                 "agent_role": event.agent_role,
             }
             self._write_event("tool_started", data)
@@ -763,24 +934,32 @@ class BlackbeardExecutionListener(BaseEventListener):
                 },
             )
             if span is not None:
-                self._otel_active_spans[f"tool/{event.tool_name}"] = span
+                with self._lock:
+                    self._otel_active_spans[f"tool/{event.tool_name}"] = span
 
         @crewai_event_bus.on(ToolUsageFinishedEvent)
         def on_tool_finished(source: Any, event: ToolUsageFinishedEvent) -> None:
-            duration_ms = int((event.finished_at - event.started_at).total_seconds() * 1000)
-            data = {
+            duration_ms = None
+            started = getattr(event, "started_at", None)
+            finished = getattr(event, "finished_at", None)
+            if started and finished:
+                duration_ms = int((finished - started).total_seconds() * 1000)
+            data: dict[str, Any] = {
                 "tool_name": event.tool_name,
-                "duration_ms": duration_ms,
                 "from_cache": event.from_cache,
             }
+            if duration_ms is not None:
+                data["duration_ms"] = duration_ms
             self._write_event("tool_finished", data)
             # OTEL: end tool span
+            otel_attrs: dict[str, Any] = {
+                "blackbeard.from_cache": event.from_cache or False,
+            }
+            if duration_ms is not None:
+                otel_attrs["blackbeard.duration_ms"] = duration_ms
             self._otel_end_span(
                 f"tool/{event.tool_name}",
-                attributes={
-                    "blackbeard.duration_ms": duration_ms,
-                    "blackbeard.from_cache": event.from_cache or False,
-                },
+                attributes=otel_attrs,
             )
 
         @crewai_event_bus.on(LLMCallStartedEvent)
@@ -799,7 +978,8 @@ class BlackbeardExecutionListener(BaseEventListener):
                 },
             )
             if span is not None:
-                self._otel_active_spans[f"llm/{event.model or 'unknown'}"] = span
+                with self._lock:
+                    self._otel_active_spans[f"llm/{event.model or 'unknown'}"] = span
 
         @crewai_event_bus.on(LLMCallCompletedEvent)
         def on_llm_completed(source: Any, event: LLMCallCompletedEvent) -> None:

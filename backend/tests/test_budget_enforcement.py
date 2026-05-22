@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from blackbeard.engine.executor import _derive_budget_limits
+from blackbeard.engine.budget import derive_budget_limits as _derive_budget_limits
 from blackbeard.engine.loader import ResourceLoader
 from blackbeard.kinds import ResourceKind
 from blackbeard.litellm.key_manager import VirtualKeyError, VirtualKeyManager

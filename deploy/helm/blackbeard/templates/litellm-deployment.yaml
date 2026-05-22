@@ -72,14 +72,14 @@ spec:
             {{- end }}
           startupProbe:
             httpGet:
-              path: /health/liveness
+              path: /health/readiness
               port: http
             periodSeconds: 5
             timeoutSeconds: 10
             failureThreshold: 24
           readinessProbe:
             httpGet:
-              path: /health/liveness
+              path: /health/readiness
               port: http
             periodSeconds: 15
             timeoutSeconds: 10
@@ -93,6 +93,10 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.litellm.resources | nindent 12 }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
           volumeMounts:
             - name: config
               mountPath: /app/config.yaml

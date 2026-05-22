@@ -53,10 +53,8 @@ def transport() -> MockTransport:
 
 @pytest.fixture
 def client(transport: MockTransport) -> BlackbeardClient:
-    c = BlackbeardClient(base_url="http://test:8000", api_key="test-key")
-    c._http = httpx.Client(
+    return BlackbeardClient(
         base_url="http://test:8000",
-        headers={"X-API-Key": "test-key"},
+        api_key="test-key",
         transport=transport,
     )
-    return c

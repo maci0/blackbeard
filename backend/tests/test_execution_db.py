@@ -209,9 +209,15 @@ async def test_list_executions_pagination(db_session: AsyncSession):
         await _insert_execution(db_session, crew_name=f"crew-{i}")
     await db_session.commit()
 
-    items, total = await list_executions(db_session, limit=2, offset=0)
-    assert len(items) == 2
+    page1, total = await list_executions(db_session, limit=2, offset=0)
+    assert len(page1) == 2
     assert total == 5
+
+    page2, _ = await list_executions(db_session, limit=2, offset=2)
+    assert len(page2) == 2
+    page1_ids = {e.id for e in page1}
+    page2_ids = {e.id for e in page2}
+    assert page1_ids.isdisjoint(page2_ids), "Pages must not overlap"
 
 
 async def test_list_executions_ordered_by_created_at_desc(db_session: AsyncSession):
@@ -224,6 +230,7 @@ async def test_list_executions_ordered_by_created_at_desc(db_session: AsyncSessi
     # Most recent first
     assert items[0].crew_name == "second"
     assert items[1].crew_name == "first"
+    assert items[0].created_at >= items[1].created_at
 
 
 # ---------------------------------------------------------------------------
@@ -296,15 +303,25 @@ async def test_record_hitl_response_with_feedback(db_session: AsyncSession):
     assert event.data["feedback"] == "Need more data"
 
 
-async def test_record_hitl_response_increments_sequence(db_session: AsyncSession):
-    """record_hitl_response starts from sequence 0 when no prior events exist."""
+async def test_record_hitl_response_starts_at_zero(db_session: AsyncSession):
+    """First hitl_response event gets sequence 0 when no prior events exist."""
     e = await _insert_execution(db_session)
     await db_session.commit()
 
-    # First event should get sequence 0
     event = await record_hitl_response(db_session, e.id, response="first")
     assert event.sequence == 0
     assert event.event_type == "hitl_response"
+
+
+async def test_record_hitl_response_after_existing_event(db_session: AsyncSession):
+    """hitl_response sequence starts after the highest existing event sequence."""
+    e = await _insert_execution(db_session)
+    await _insert_event(db_session, e.id, sequence=0, event_type="task_started")
+    await _insert_event(db_session, e.id, sequence=1, event_type="hitl_request")
+    await db_session.commit()
+
+    event = await record_hitl_response(db_session, e.id, response="approved")
+    assert event.sequence == 2
 
 
 # ---------------------------------------------------------------------------

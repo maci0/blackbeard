@@ -131,7 +131,6 @@ def resolve_policy(
     """
     policies = policies or {}
 
-    # Check agent-level policy
     agent_policy_ref = agent_spec.get("policy")
     if agent_policy_ref:
         policy_name = _extract_name(agent_policy_ref)
@@ -147,7 +146,6 @@ def resolve_policy(
             },
         )
 
-    # Check crew-level default
     if crew_spec:
         crew_policy_ref = crew_spec.get("default_agent_policy")
         if crew_policy_ref:

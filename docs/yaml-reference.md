@@ -676,3 +676,32 @@ spec:
 | `inputs` | object | — | Key-value inputs passed to the target execution |
 | `enabled` | boolean | — | Whether the automation is active (default: `true`) |
 | `max_concurrent` | integer (1–10) | — | Maximum concurrent executions (default: `1`) |
+
+---
+
+## Namespace
+
+A Namespace provides logical grouping and resource isolation. Resources belong to a namespace (default: `"default"`).
+
+```yaml
+apiVersion: blackbeard/v1
+kind: Namespace
+metadata:
+  name: production
+spec:
+  description: "Production workloads"
+  labels:
+    env: production
+  default_agent_policy: "ref:agent-policies/strict"
+  resource_quota:
+    max_resources: 500
+    max_executions_per_hour: 100
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string | — | Human-readable description (max 5000 chars) |
+| `labels` | object | — | Arbitrary key-value labels for filtering (max 50) |
+| `default_agent_policy` | string | — | Default AgentPolicy ref applied to all agents in this namespace |
+| `resource_quota.max_resources` | integer (1–10000) | — | Maximum resources allowed in this namespace |
+| `resource_quota.max_executions_per_hour` | integer (1–1000) | — | Maximum executions per hour |

@@ -86,6 +86,7 @@ export default function Resources() {
             actions={
               <>
                 <button
+                  type="button"
                   onClick={() => void fetchAllResources()}
                   aria-label="Refresh resources"
                   className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -99,6 +100,7 @@ export default function Resources() {
                   Refresh
                 </button>
                 <button
+                  type="button"
                   onClick={() => void navigate('/studio')}
                   className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -160,6 +162,7 @@ export default function Resources() {
           </span>
           {(search || kindFilter) && (
             <button
+              type="button"
               onClick={() => {
                 setSearch('')
                 setKindFilter('')

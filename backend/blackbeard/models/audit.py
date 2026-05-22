@@ -40,9 +40,14 @@ class AuditLog(Base):
         Index("ix_audit_actor_time", "actor_id", timestamp.desc()),
         Index("ix_audit_action_time", "action", timestamp.desc()),
         Index("ix_audit_resource_time", "resource_type", "resource_id", timestamp.desc()),
+        Index("ix_audit_request_id", "request_id"),
         CheckConstraint("length(actor_type) >= 1", name="ck_audit_actor_type_nonempty"),
         CheckConstraint("length(actor_id) >= 1", name="ck_audit_actor_id_nonempty"),
         CheckConstraint("length(action) >= 1", name="ck_audit_action_nonempty"),
+        CheckConstraint(
+            "(resource_type IS NULL) = (resource_id IS NULL)",
+            name="ck_audit_resource_pair",
+        ),
     )
 
     def __repr__(self) -> str:
@@ -50,3 +55,6 @@ class AuditLog(Base):
             f"<AuditLog {self.action} actor={self.actor_type}:{self.actor_id}"
             f" resource={self.resource_type}/{self.resource_id}>"
         )
+
+    def __str__(self) -> str:
+        return self.__repr__()

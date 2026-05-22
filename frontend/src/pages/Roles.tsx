@@ -10,7 +10,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { api, ApiError } from '@/api/client'
+import { api } from '@/api/client'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -18,7 +18,7 @@ import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { RuleBuilder, type Rule } from '@/components/rbac/RuleBuilder'
-import { cn } from '@/lib/utils'
+import { cn, getErrorMessage } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
 
@@ -127,7 +127,7 @@ function RoleDetail({
       setDeleteOpen(false)
       onDeleted()
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to delete role'
+      const message = getErrorMessage(err, 'Failed to delete role')
       toasts.error(message)
     } finally {
       setDeleting(false)
@@ -265,7 +265,7 @@ function CreateRoleDialog({
       onOpenChange(false)
       onCreated()
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to create role'
+      const message = getErrorMessage(err, 'Failed to create role')
       setError(message)
       toasts.error(message)
     } finally {
@@ -380,6 +380,7 @@ export default function Roles() {
   const [createOpen, setCreateOpen] = useState(false)
   const [selectedRole, setSelectedRole] = useState<RoleRecord | null>(null)
   const detailPanelRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useDocumentTitle('Roles')
 
@@ -416,7 +417,7 @@ export default function Roles() {
         })),
       )
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to load roles')
+      setError(getErrorMessage(err, 'Failed to load roles'))
     } finally {
       setLoading(false)
     }
@@ -491,6 +492,7 @@ export default function Roles() {
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
               />
               <input
+                ref={searchRef}
                 id="roles-search"
                 type="search"
                 placeholder="Search roles…"
@@ -506,7 +508,10 @@ export default function Roles() {
                   {filtered.length} of {roles.length} roles
                 </span>
                 <button
-                  onClick={() => setSearch('')}
+                  onClick={() => {
+                    setSearch('')
+                    searchRef.current?.focus()
+                  }}
                   aria-label="Clear search"
                   className="inline-flex min-h-[44px] items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -541,6 +546,9 @@ export default function Roles() {
             title={search ? 'No roles match your search' : 'No roles found'}
             description={
               search ? 'Try a different search term' : 'Create roles to manage access control'
+            }
+            action={
+              !search ? { label: 'Create Role', onClick: () => setCreateOpen(true) } : undefined
             }
           />
         ) : (

@@ -41,12 +41,16 @@ async def _maybe_reload_scheduler(request: Request, kind: str) -> None:
     if scheduler is not None:
         try:
             await scheduler.reload()
-        except Exception:
+        except Exception as exc:
             logger.error(
                 "Scheduler reload failed after Automation change — "
                 "cron schedules may be stale until next restart",
                 exc_info=True,
-                extra={"event": "scheduler_reload_failed"},
+                extra={
+                    "event": "scheduler_reload_failed",
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc)[:500],
+                },
             )
 
 
@@ -86,6 +90,7 @@ async def list_resources(
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     session: AsyncSession = Depends(get_session),
+    _user: User | None = Depends(get_current_user),
 ) -> ResourceListResponse:
     """List resources of a given kind."""
     kind = _resolve_kind(kind_plural)
@@ -212,6 +217,7 @@ async def get_resource(
         description="Resource namespace",
     ),
     session: AsyncSession = Depends(get_session),
+    _user: User | None = Depends(get_current_user),
 ) -> ResourceResponse:
     """Get a single resource by kind and name."""
     kind = _resolve_kind(kind_plural)

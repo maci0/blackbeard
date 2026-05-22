@@ -45,7 +45,8 @@ async def test_chat_success(client: AsyncClient):
     data = resp.json()
     assert data["content"] == "Hello, I am an AI assistant."
     assert data["tokens"]["total"] == 30
-    assert "latency_ms" in data
+    assert isinstance(data["latency_ms"], (int, float))
+    assert data["latency_ms"] >= 0
 
 
 async def test_chat_with_temperature(client: AsyncClient):
@@ -72,6 +73,13 @@ async def test_chat_with_temperature(client: AsyncClient):
         )
     assert resp.status_code == 200
 
+    # Verify temperature was forwarded to LiteLLM
+    mock_client.post.assert_called_once()
+    call_kwargs = mock_client.post.call_args
+    sent_body = call_kwargs.kwargs.get("json") or call_kwargs[1].get("json")
+    assert sent_body is not None, "LiteLLM proxy call must include a JSON body"
+    assert sent_body.get("temperature") == 0.5
+
 
 async def test_chat_litellm_500_error(client: AsyncClient):
     """POST /chat returns 502 when LiteLLM returns 500."""
@@ -94,6 +102,7 @@ async def test_chat_litellm_500_error(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 502
+    assert "detail" in resp.json()
 
 
 async def test_chat_litellm_429_rate_limit(client: AsyncClient):
@@ -117,6 +126,7 @@ async def test_chat_litellm_429_rate_limit(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 429
+    assert "detail" in resp.json()
 
 
 async def test_chat_connection_error(client: AsyncClient):
@@ -134,6 +144,7 @@ async def test_chat_connection_error(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 502
+    assert "detail" in resp.json()
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +186,7 @@ async def test_list_models_litellm_error(client: AsyncClient):
     with patch("blackbeard.api.chat._get_litellm_client", return_value=mock_client):
         resp = await client.get("/api/v1/models/available", headers=API_KEY_HEADER)
     assert resp.status_code == 502
+    assert "detail" in resp.json()
 
 
 async def test_list_models_connection_error(client: AsyncClient):
@@ -185,6 +197,7 @@ async def test_list_models_connection_error(client: AsyncClient):
     with patch("blackbeard.api.chat._get_litellm_client", return_value=mock_client):
         resp = await client.get("/api/v1/models/available", headers=API_KEY_HEADER)
     assert resp.status_code == 502
+    assert "detail" in resp.json()
 
 
 # ---------------------------------------------------------------------------

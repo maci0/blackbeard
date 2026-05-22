@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useId, useMemo } from 'react'
 import { useBlackbeard } from './BlackbeardProvider'
 import { apiFetch } from './fetch'
 import type { Resource } from './types'
@@ -6,7 +6,7 @@ import type { Resource } from './types'
 export interface CrewViewerProps {
   /** Name of the crew resource to visualize. */
   crewName: string
-  /** Optional namespace (unused currently, reserved for multi-tenant). */
+  /** Namespace containing the crew (defaults to "default"). */
   namespace?: string
 }
 
@@ -39,6 +39,7 @@ const NODE_COLORS: Record<string, { bg: string; border: string; text: string }> 
  */
 export function CrewViewer({ crewName, namespace }: CrewViewerProps) {
   const config = useBlackbeard()
+  const markerId = `bb-arrow-${useId().replace(/:/g, '')}`
   const [agents, setAgents] = useState<Resource[]>([])
   const [tasks, setTasks] = useState<Resource[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,13 +54,13 @@ export function CrewViewer({ crewName, namespace }: CrewViewerProps) {
       try {
         const ns = namespace ?? 'default'
         const nsParam = `namespace=${encodeURIComponent(ns)}`
-        const crew = await apiFetch<Resource>(config, `/api/v1/crews/${crewName}?${nsParam}`)
+        const crew = await apiFetch<Resource>(config, `/api/v1/crews/${encodeURIComponent(crewName)}?${nsParam}`)
         const agentNames = ((crew.spec.agents as string[] | undefined) ?? []).map(parseRef)
         const taskNames = ((crew.spec.tasks as string[] | undefined) ?? []).map(parseRef)
 
         const [agentResults, taskResults] = await Promise.all([
-          Promise.all(agentNames.map((n) => apiFetch<Resource>(config, `/api/v1/agents/${n}?${nsParam}`))),
-          Promise.all(taskNames.map((n) => apiFetch<Resource>(config, `/api/v1/tasks/${n}?${nsParam}`))),
+          Promise.all(agentNames.map((n) => apiFetch<Resource>(config, `/api/v1/agents/${encodeURIComponent(n)}?${nsParam}`))),
+          Promise.all(taskNames.map((n) => apiFetch<Resource>(config, `/api/v1/tasks/${encodeURIComponent(n)}?${nsParam}`))),
         ])
 
         if (!active) return
@@ -165,13 +166,13 @@ export function CrewViewer({ crewName, namespace }: CrewViewerProps) {
                 y2={y2}
                 stroke="#94a3b8"
                 strokeWidth={1.5}
-                markerEnd="url(#arrowhead)"
+                markerEnd={`url(#${markerId})`}
               />
             )
           })}
           <defs>
             <marker
-              id="arrowhead"
+              id={markerId}
               markerWidth="8"
               markerHeight="6"
               refX="8"
@@ -186,7 +187,7 @@ export function CrewViewer({ crewName, namespace }: CrewViewerProps) {
         {/* Agent nodes */}
         {agents.map((agent, i) => (
           <div
-            key={agent.id}
+            key={agent.id ?? agent.metadata.name}
             style={{
               ...nodeStyle,
               ...nodeStyleForKind('agent'),
@@ -208,7 +209,7 @@ export function CrewViewer({ crewName, namespace }: CrewViewerProps) {
         {/* Task nodes */}
         {tasks.map((task, i) => (
           <div
-            key={task.id}
+            key={task.id ?? task.metadata.name}
             style={{
               ...nodeStyle,
               ...nodeStyleForKind('task'),

@@ -55,8 +55,7 @@ cd cli
 uv sync
 
 # Apply the research-crew example (path relative to repo root)
-cd ..
-blackbeard apply -f examples/research-crew/
+uv run blackbeard apply -f ../examples/research-crew/
 
 # Verify resources were created (via API)
 curl -H "X-API-Key: $BLACKBEARD_API_KEY" http://localhost:8000/api/v1/agents
@@ -67,8 +66,8 @@ curl -H "X-API-Key: $BLACKBEARD_API_KEY" http://localhost:8000/api/v1/crews
 Validate YAML files without applying:
 
 ```bash
-blackbeard validate -f examples/research-crew/
-blackbeard apply -f examples/research-crew/ --dry-run
+uv run blackbeard validate -f ../examples/research-crew/
+uv run blackbeard apply -f ../examples/research-crew/ --dry-run
 ```
 
 ---

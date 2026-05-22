@@ -9,15 +9,25 @@ from __future__ import annotations
 import contextvars
 import json
 import logging
+import re
 import sys
 from datetime import UTC, datetime
+from urllib.parse import urlparse, urlunparse
+
+__all__ = [
+    "configure_logging",
+    "request_id_var",
+    "safe_log_url",
+    "scrub_pii",
+    "user_id_var",
+]
 
 request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
 user_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("user_id", default="")
 
 
 class _RequestIdFilter(logging.Filter):
-    """Injects request_id from contextvars into every log record."""
+    """Injects request_id and user_id from contextvars into every log record."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.request_id = request_id_var.get("-")
@@ -75,11 +85,16 @@ _SENSITIVE_KEYS = frozenset(
         "database_url",
         "dsn",
         "connection_string",
+        "valkey_url",
+        "redis_url",
         "jwt_secret",
         "passphrase",
         "email",
         "user_email",
         "actor_email",
+        "display_name",
+        "user_name",
+        "username",
         "phone",
         "phone_number",
         "ssn",
@@ -88,12 +103,48 @@ _SENSITIVE_KEYS = frozenset(
         "card_number",
         "date_of_birth",
         "bank_account",
+        "litellm_key",
+        "virtual_key",
+        "signing_secret",
+        "webhook_secret",
     }
 )
 
 _SENSITIVE_SUFFIXES = tuple(f"_{s}" for s in _SENSITIVE_KEYS)
 
 _SCALAR_TYPES = (str, int, float, bool, type(None))
+
+_EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+
+
+def scrub_pii(text: str) -> str:
+    """Replace email-like patterns in exception messages to prevent PII leakage."""
+    return _EMAIL_RE.sub("[EMAIL]", text)
+
+
+def safe_log_url(url: str) -> str:
+    """Strip query/fragment from URL to prevent credential leakage in logs.
+
+    Webhook URLs may carry API keys or tokens in query parameters
+    (e.g. ``?key=secret``). This preserves scheme/host/path for debugging
+    while redacting the parts that could leak credentials.
+    """
+    parsed = urlparse(url)
+    if not parsed.query and not parsed.fragment:
+        return url
+    return urlunparse(
+        parsed._replace(
+            query="[REDACTED]" if parsed.query else "",
+            fragment="",
+        )
+    )
+
+
+class _PiiScrubFormatter(logging.Formatter):
+    """Text formatter that scrubs PII patterns from the final output."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return scrub_pii(super().format(record))
 
 
 class _JsonFormatter(logging.Formatter):
@@ -104,7 +155,7 @@ class _JsonFormatter(logging.Formatter):
             "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": scrub_pii(record.getMessage()),
             "service": "blackbeard",
             "request_id": getattr(record, "request_id", "-"),
             "user_id": getattr(record, "user_id", "") or None,
@@ -114,14 +165,16 @@ class _JsonFormatter(logging.Formatter):
         if record.levelno >= logging.WARNING:
             log_entry["source"] = f"{record.pathname}:{record.lineno}:{record.funcName}"
         if record.exc_info and record.exc_info[1]:
-            log_entry["exception"] = self.formatException(record.exc_info)
+            log_entry["exception"] = scrub_pii(self.formatException(record.exc_info))
             log_entry["error.type"] = type(record.exc_info[1]).__name__
-            log_entry["error.message"] = str(record.exc_info[1])[:500]
+            log_entry["error.message"] = scrub_pii(str(record.exc_info[1])[:500])
         for key, val in record.__dict__.items():
             if key not in _LOG_RECORD_BUILTIN and key not in log_entry:
                 key_lower = key.lower()
                 if key_lower in _SENSITIVE_KEYS or key_lower.endswith(_SENSITIVE_SUFFIXES):
                     log_entry[key] = "[REDACTED]"
+                elif key_lower == "error_message" and isinstance(val, str):
+                    log_entry[key] = scrub_pii(val)
                 else:
                     log_entry[key] = val
         try:
@@ -159,7 +212,7 @@ def configure_logging(debug: bool = False, log_level: str = "") -> None:
 
     if debug:
         handler.setFormatter(
-            logging.Formatter(
+            _PiiScrubFormatter(
                 fmt="%(asctime)s %(levelname)-8s [%(request_id)s] %(name)s — %(message)s",
                 datefmt="%Y-%m-%dT%H:%M:%S",
             )

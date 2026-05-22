@@ -21,6 +21,7 @@ from rich.table import Table
 from blackbeard_cli.helpers import (
     STATUS_COLORS,
     TERMINAL_STATUSES,
+    HelpCommand,
     console,
     extract_detail,
     handle_http_error,
@@ -112,14 +113,18 @@ def validate_resources(
     context_settings={"help_option_names": ["-h", "--help"]},
     epilog="""\b
 Common workflows:
+  blackbeard login                            # authenticate (stores JWT)
   blackbeard health                           # liveness check (no auth)
   blackbeard health --ready                   # full readiness check
   blackbeard validate -f crew.yaml            # check resources offline
   blackbeard apply -f crew.yaml               # create/update resources
   blackbeard list Agent                       # list all agents
   blackbeard get Crew research-crew           # inspect a resource
+  blackbeard export --all -o backup/          # export all resources
   blackbeard kickoff research-crew --wait     # run a crew and wait
   blackbeard status <execution-id> -w         # watch execution progress
+  blackbeard executions --status running      # list running executions
+  blackbeard events <execution-id> -f         # follow execution events
   blackbeard delete Agent my-agent            # remove a resource
 """,
 )
@@ -179,6 +184,9 @@ def cli(
     ctx.obj["json"] = output_json
 
 
+cli.command_class = HelpCommand
+
+
 @cli.command(
     epilog="""\b
 Examples:
@@ -211,7 +219,7 @@ def health(ctx: click.Context, ready: bool, output_json: bool) -> None:
 
     try:
         data = response.json()
-    except (ValueError, KeyError):
+    except ValueError:
         body_preview = response.text[:200] if response.text else "(empty body)"
         console.print(
             f"[red bold]Error:[/] Server returned non-JSON response"
@@ -368,6 +376,7 @@ Examples:
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @click.option(
     "--json",
+    "-j",
     "output_json",
     is_flag=True,
     default=False,
@@ -760,6 +769,7 @@ Examples:
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @click.option(
     "--json",
+    "-j",
     "output_json",
     is_flag=True,
     default=False,
@@ -815,7 +825,7 @@ Examples:
   blackbeard kickoff research-crew --input topic="AI agents"
   blackbeard kickoff research-crew --input topic="AI agents" --input depth=3
   blackbeard kickoff research-crew --wait
-  blackbeard kickoff research-crew -w -i 5
+  blackbeard kickoff research-crew -w --interval 5
   blackbeard -s http://prod:8000 -n prod kickoff research-crew --json
 """
 )

@@ -89,6 +89,27 @@ _BLOCKED_ENV_PREFIXES = (
     "DISCORD_",
     "NPM_",
     "JWT_",
+    "OIDC_",
+    "OTEL_",
+    "SESSION_",
+    "SENTRY_",
+    "CORS_",
+    "FORWARDED_",
+    "GRPC_",
+    "CONTAINER_",
+    "FIRECRACKER_",
+    "MUNINNDB_",
+    "CELERY_",
+    "FLOWER_",
+    "KAFKA_",
+    "RABBITMQ_",
+    "AMQP_",
+    "ELASTIC_",
+    "MONGO_",
+    "DATADOG_",
+    "DD_",
+    "NEWRELIC_",
+    "SPLUNK_",
 )
 
 _BLOCKED_ENV_EXACT = frozenset(
@@ -112,6 +133,14 @@ _BLOCKED_ENV_EXACT = frozenset(
         "GPG_AGENT_INFO",
         "KUBECONFIG",
         "WANDB_API_KEY",
+        "OTEL_ENDPOINT",
+        "CORS_ORIGINS",
+        "FORWARDED_ALLOW_IPS",
+        "WEB_CONCURRENCY",
+        "LITELLM_DATABASE_URL",
+        "ENCRYPTION_KEY",
+        "SIGNING_KEY",
+        "MASTER_KEY",
     }
 )
 
@@ -130,6 +159,7 @@ _INTERNAL_HOSTNAMES = frozenset(
 )
 
 _INTERNAL_DOMAIN_SUFFIXES = (
+    ".internal",
     ".local",
     ".svc",
     ".svc.cluster.local",
@@ -177,7 +207,7 @@ def is_internal_host(hostname: str) -> bool:
 def _validate_llm_connection_extra(spec: dict[str, Any], errors: list[ValidationError]) -> None:
     """Block SSRF via base_url and env var exfiltration via api_key_env."""
     api_key_env = spec.get("api_key_env")
-    if isinstance(api_key_env, str) and _is_blocked_env_name(api_key_env):
+    if isinstance(api_key_env, str) and is_blocked_env_name(api_key_env):
         errors.append(
             ValidationError(
                 "spec.api_key_env",
@@ -194,7 +224,7 @@ def _validate_llm_connection_extra(spec: dict[str, Any], errors: list[Validation
 _SAFE_PATH_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/ -]*$")
 
 
-def _is_blocked_env_name(name: str) -> bool:
+def is_blocked_env_name(name: str) -> bool:
     """Check if an environment variable name is on the blocklist."""
     upper = name.upper()
     return upper.startswith(_BLOCKED_ENV_PREFIXES) or upper in _BLOCKED_ENV_EXACT
@@ -286,6 +316,16 @@ def _get_dns_executor() -> concurrent.futures.ThreadPoolExecutor:
         return _DNS_EXECUTOR
 
 
+def shutdown_dns_executor() -> None:
+    """Shut down the shared DNS resolution thread pool."""
+    global _DNS_EXECUTOR
+    with _DNS_EXECUTOR_LOCK:
+        executor = _DNS_EXECUTOR
+        _DNS_EXECUTOR = None
+    if executor is not None:
+        executor.shutdown(wait=False)
+
+
 def _dns_cache_get(hostname: str) -> tuple[bool, list[str] | str | None]:
     """Return (hit, value) from DNS cache. value is list of IPs, error string, or None."""
     with _dns_cache_lock:
@@ -333,7 +373,16 @@ def _check_dns_resolution(hostname: str, field_name: str, errors: list[Validatio
                         )
                         return
                 except ValueError:
-                    pass
+                    logger.debug(
+                        "Cached DNS address %r for %s not parseable as IP",
+                        addr_str,
+                        hostname,
+                        extra={
+                            "event": "dns_cache_parse_error",
+                            "hostname": hostname,
+                            "addr": addr_str,
+                        },
+                    )
         return
 
     def _resolve() -> list[tuple[Any, ...]]:
@@ -359,7 +408,16 @@ def _check_dns_resolution(hostname: str, field_name: str, errors: list[Validatio
                     )
                     return
             except ValueError:
-                pass
+                logger.debug(
+                    "Resolved DNS address %r for %s not parseable as IP",
+                    addr_str,
+                    hostname,
+                    extra={
+                        "event": "dns_resolve_parse_error",
+                        "hostname": hostname,
+                        "addr": addr_str,
+                    },
+                )
         _dns_cache_put(hostname, resolved_ips)
     except concurrent.futures.TimeoutError:
         msg = "URL hostname DNS resolution timed out. Verify the hostname is correct."
@@ -467,7 +525,6 @@ def _validate_tool_extra(spec: dict[str, Any], errors: list[ValidationError]) ->
                 )
             )
 
-    # Validate args for shell injection
     args = spec.get("args", [])
     if isinstance(args, list):
         for i, arg in enumerate(args):
@@ -502,7 +559,7 @@ def _validate_tool_extra(spec: dict[str, Any], errors: list[ValidationError]) ->
     env = spec.get("env")
     if isinstance(env, dict):
         for key, value in env.items():
-            if isinstance(key, str) and _is_blocked_env_name(key):
+            if isinstance(key, str) and is_blocked_env_name(key):
                 errors.append(
                     ValidationError(
                         f"spec.env.{key}",
@@ -558,7 +615,6 @@ def _validate_function_path(
     func_path = spec.get("function_path")
     if not func_path or not isinstance(func_path, str):
         return
-    # Check for blocked top-level modules
     top_module = func_path.split(".")[0].split(":")[0]
     if top_module in BLOCKED_CALLABLE_MODULES:
         errors.append(
@@ -636,7 +692,7 @@ def _has_blocked_env_expansion(val: str) -> bool:
 
 def _is_blocked_env_reference(val: str) -> bool:
     """Check if a config value references a blocked environment variable."""
-    return _is_blocked_env_name(val) or _has_blocked_env_expansion(val)
+    return is_blocked_env_name(val) or _has_blocked_env_expansion(val)
 
 
 def _validate_crew_config_block(

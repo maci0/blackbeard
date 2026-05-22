@@ -40,7 +40,9 @@ from blackbeard.models.execution import TaskStatus
 from blackbeard.models.execution_schemas import (
     ExecutionResponse,
     KickoffRequest,
-    _exceeds_depth,
+)
+from blackbeard.models.execution_schemas import (
+    exceeds_depth as _exceeds_depth,
 )
 from blackbeard.models.resource import Resource
 from blackbeard.models.resource_schemas import ResourceMetadata, ResourceResponse
@@ -242,6 +244,21 @@ def test_exceeds_depth_bool():
     """Boolean root value should never exceed depth."""
     assert _exceeds_depth(True) is False
     assert _exceeds_depth(False) is False
+
+
+def test_exceeds_depth_exactly_at_limit():
+    """Nesting just under the limit returns False; at the limit returns True."""
+    under_limit = {"a": {"b": "leaf"}}  # 2 levels of containers
+    assert _exceeds_depth(under_limit, limit=3) is False
+    at_limit = {"a": {"b": {"c": "leaf"}}}  # 3 levels → triggers at limit=3
+    assert _exceeds_depth(at_limit, limit=3) is True
+
+
+def test_exceeds_depth_mixed_dicts_and_lists():
+    """Mixed dict/list nesting should count toward depth."""
+    obj = {"a": [{"b": [{"c": "deep"}]}]}  # 5 levels: dict, list, dict, list, dict
+    assert _exceeds_depth(obj, limit=3) is True
+    assert _exceeds_depth(obj, limit=10) is False
 
 
 # ---------------------------------------------------------------------------
@@ -541,6 +558,14 @@ def test_extract_refs_max_depth_protection():
 
     refs = extract_refs(spec)
     assert len(refs) == 0
+
+
+def test_extract_refs_within_depth_limit():
+    """extract_refs should find refs within _MAX_REF_WALK_DEPTH."""
+    spec = {"agent": "ref:agents/shallow"}
+    refs = extract_refs(spec)
+    assert len(refs) == 1
+    assert refs[0].name == "shallow"
 
 
 # ---------------------------------------------------------------------------

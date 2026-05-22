@@ -9,6 +9,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+__all__ = [
+    "audit_from_request",
+    "log_audit",
+]
+
 if TYPE_CHECKING:
     from fastapi import Request
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,6 +72,7 @@ async def log_audit(
             "actor_id": actor_id,
             "resource_type": resource_type,
             "resource_id": resource_id,
+            "ip_address": ip_address,
             "request_id": entry.request_id,
         },
     )
@@ -83,6 +89,5 @@ def audit_from_request(request: Request, user: User | None) -> dict:
         "actor_type": "user" if user else "api_key",
         "actor_id": str(user.id) if user else "api_key",
         "actor_email": user.email if user else None,
-        "request_id": request_id_var.get("-"),
         "ip_address": request.client.host if request.client else None,
     }

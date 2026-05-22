@@ -29,6 +29,7 @@ function InlineAlert({ message }: { message: string | null }) {
   return (
     <div
       role="alert"
+      aria-live="assertive"
       className="mb-4 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
     >
       <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -402,6 +403,7 @@ export default function ResourceDetail() {
                   onClick={() => void handleSave()}
                   disabled={saving}
                   aria-busy={saving}
+                  title={`Save (${modKey}+S)`}
                   className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? (

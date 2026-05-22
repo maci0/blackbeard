@@ -54,7 +54,7 @@ export function ExecutionStatus({ executionId }: ExecutionStatusProps) {
       try {
         const data = await apiFetch<Execution>(
           config,
-          `/api/v1/executions/${executionId}`,
+          `/api/v1/executions/${encodeURIComponent(executionId)}`,
         )
         if (!active) return
         setExecution(data)

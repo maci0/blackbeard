@@ -13,6 +13,22 @@ from pydantic import BaseModel, Field, model_validator
 if TYPE_CHECKING:
     from blackbeard.models.execution import Execution
 
+__all__ = [
+    "SAFE_FILENAME",
+    "ExecutionEventItem",
+    "ExecutionEventsResponse",
+    "ExecutionListResponse",
+    "ExecutionResponse",
+    "ExecutionTaskResponse",
+    "HITLResponseRequest",
+    "HITLResponseResult",
+    "KickoffRequest",
+    "TestRequest",
+    "TrainRequest",
+    "exceeds_depth",
+    "redact_sensitive_values",
+    "validate_inputs",
+]
 
 _SAFE_INPUT_KEY = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
@@ -21,62 +37,69 @@ _SAFE_INPUT_KEY = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 _SENSITIVE_INPUT_KEYS = re.compile(
     r"(password|secret|token|credential|api.?key|auth|private.?key|access.?key"
     r"|ssn|social.?security|credit.?card|card.?number|bank.?account|routing.?number"
-    r"|date.?of.?birth|dob|passport|driver.?license|national.?id)",
+    r"|date.?of.?birth|dob|passport|driver.?license|national.?id"
+    r"|e.?mail|phone|first.?name|last.?name|full.?name|display.?name|user.?name"
+    r"|username|address|zip.?code|postal.?code)",
     re.IGNORECASE,
 )
 _REDACTED = "[REDACTED]"
 
 
-def _redact_sensitive_inputs(inputs: dict[str, Any]) -> dict[str, Any]:
+def redact_sensitive_values(inputs: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of inputs with sensitive-looking values redacted (recursively).
 
     Returns the original dict unchanged when no keys match and no nested
     structures need walking — avoids a copy on the common-case flat dict.
     """
-    if not any(
-        _SENSITIVE_INPUT_KEYS.search(k) or isinstance(v, (dict, list)) for k, v in inputs.items()
-    ):
+    needs_copy = False
+    for k, v in inputs.items():
+        if _SENSITIVE_INPUT_KEYS.search(k) or isinstance(v, (dict, list)):
+            needs_copy = True
+            break
+    if not needs_copy:
         return inputs
     redacted: dict[str, Any] = {}
     for k, v in inputs.items():
         if _SENSITIVE_INPUT_KEYS.search(k):
             redacted[k] = _REDACTED
         elif isinstance(v, dict):
-            redacted[k] = _redact_sensitive_inputs(v)
+            redacted[k] = redact_sensitive_values(v)
         elif isinstance(v, list):
             redacted[k] = [
-                _redact_sensitive_inputs(item) if isinstance(item, dict) else item for item in v
+                redact_sensitive_values(item) if isinstance(item, dict) else item for item in v
             ]
         else:
             redacted[k] = v
     return redacted
 
 
-def _exceeds_depth(obj: object, limit: int = 10, current: int = 0) -> bool:
+def exceeds_depth(obj: object, limit: int = 10, current: int = 0) -> bool:
     if current >= limit:
         return True
     if isinstance(obj, dict):
-        return any(_exceeds_depth(v, limit, current + 1) for v in obj.values())
+        return any(exceeds_depth(v, limit, current + 1) for v in obj.values())
     if isinstance(obj, list):
-        return any(_exceeds_depth(v, limit, current + 1) for v in obj)
+        return any(exceeds_depth(v, limit, current + 1) for v in obj)
     return False
 
 
-def _validate_inputs(inputs: dict[str, Any]) -> None:
+_MAX_INPUT_ENTRIES = 100
+_MAX_INPUT_KEY_LEN = 256
+_MAX_INPUT_VAL_LEN = 50_000
+
+
+def validate_inputs(inputs: dict[str, Any]) -> None:
     """Shared input validation for kickoff, train, and test requests."""
-    max_entries = 100
-    max_key_len = 256
-    max_val_len = 50_000
-    if len(inputs) > max_entries:
-        raise ValueError(f"Too many input entries ({len(inputs)}), maximum is {max_entries}")
+    if len(inputs) > _MAX_INPUT_ENTRIES:
+        raise ValueError(f"Too many input entries ({len(inputs)}), maximum is {_MAX_INPUT_ENTRIES}")
     for k, v in inputs.items():
-        if not isinstance(k, str) or len(k) > max_key_len:
-            raise ValueError(f"Input key must be a string of at most {max_key_len} chars")
+        if not isinstance(k, str) or len(k) > _MAX_INPUT_KEY_LEN:
+            raise ValueError(f"Input key must be a string of at most {_MAX_INPUT_KEY_LEN} chars")
         if not _SAFE_INPUT_KEY.match(k):
             raise ValueError(f"Input key '{k}' is invalid: must match [a-zA-Z_][a-zA-Z0-9_]*")
-        if isinstance(v, str) and len(v) > max_val_len:
-            raise ValueError(f"Input value for '{k}' exceeds {max_val_len} chars")
-    if _exceeds_depth(inputs):
+        if isinstance(v, str) and len(v) > _MAX_INPUT_VAL_LEN:
+            raise ValueError(f"Input value for '{k}' exceeds {_MAX_INPUT_VAL_LEN} chars")
+    if exceeds_depth(inputs):
         raise ValueError("Input nesting exceeds maximum depth of 10 levels")
 
 
@@ -90,11 +113,11 @@ class KickoffRequest(BaseModel):
 
     @model_validator(mode="after")
     def _validate_input_sizes(self) -> KickoffRequest:
-        _validate_inputs(self.inputs)
+        validate_inputs(self.inputs)
         return self
 
 
-_SAFE_FILENAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+SAFE_FILENAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
 
 
 class TrainRequest(BaseModel):
@@ -118,8 +141,8 @@ class TrainRequest(BaseModel):
 
     @model_validator(mode="after")
     def _validate_train_request(self) -> TrainRequest:
-        _validate_inputs(self.inputs)
-        if not _SAFE_FILENAME.match(self.filename):
+        validate_inputs(self.inputs)
+        if not SAFE_FILENAME.match(self.filename):
             raise ValueError(
                 f"filename '{self.filename}' is invalid: "
                 "must be a plain filename starting with alphanumeric, "
@@ -148,7 +171,7 @@ class TestRequest(BaseModel):
 
     @model_validator(mode="after")
     def _validate_test_request(self) -> TestRequest:
-        _validate_inputs(self.inputs)
+        validate_inputs(self.inputs)
         return self
 
 
@@ -252,8 +275,12 @@ class ExecutionResponse(BaseModel):
             status=execution.status.value,
             n_iterations=execution.n_iterations,
             training_file=execution.training_file,
-            inputs=_redact_sensitive_inputs(raw_inputs) if raw_inputs else {},
-            outputs=execution.__dict__.get("outputs"),
+            inputs=redact_sensitive_values(raw_inputs) if raw_inputs else {},
+            outputs=(
+                redact_sensitive_values(raw_outputs)
+                if (raw_outputs := execution.__dict__.get("outputs"))
+                else None
+            ),
             error=execution.error,
             total_tokens=execution.total_tokens,
             prompt_tokens=execution.prompt_tokens,

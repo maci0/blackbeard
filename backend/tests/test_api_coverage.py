@@ -49,14 +49,18 @@ async def test_webhook_create_and_list(client: AsyncClient, db_session: AsyncSes
     assert "Location" in resp.headers
 
     # List
+    webhook_id = data["id"]
     list_resp = await client.get("/api/v1/webhooks", headers=API_KEY_HEADER)
     assert list_resp.status_code == 200
-    items = list_resp.json()
+    list_data = list_resp.json()
+    assert "items" in list_data
+    items = list_data["items"]
     assert isinstance(items, list)
-    assert len(items) >= 1
-    # Secret should NOT be in list response
-    urls = [w["url"] for w in items]
-    assert "http://example.com/hook" in urls
+    listed_ids = [w["id"] for w in items]
+    assert webhook_id in listed_ids, "Created webhook must appear in list"
+    listed_hook = next(w for w in items if w["id"] == webhook_id)
+    assert listed_hook["url"] == "http://example.com/hook"
+    assert "secret" not in listed_hook, "Secret must not be exposed in list response"
 
 
 async def test_webhook_create_with_custom_secret(client: AsyncClient):
@@ -104,7 +108,7 @@ async def test_webhook_delete(client: AsyncClient, db_session: AsyncSession):
 
     # Verify gone from list
     list_resp = await client.get("/api/v1/webhooks", headers=API_KEY_HEADER)
-    ids = [w["id"] for w in list_resp.json()]
+    ids = [w["id"] for w in list_resp.json()["items"]]
     assert webhook_id not in ids
 
 
@@ -465,12 +469,17 @@ async def test_webhook_create_rejects_ssrf(client: AsyncClient):
     assert resp.status_code == 422
 
 
-async def test_webhook_list_empty(client: AsyncClient):
-    """GET /webhooks with no webhooks returns empty list."""
+async def test_webhook_list_returns_list(client: AsyncClient):
+    """GET /webhooks returns a paginated list of webhook objects."""
     resp = await client.get("/api/v1/webhooks", headers=API_KEY_HEADER)
     assert resp.status_code == 200
-    # May or may not be empty depending on test ordering, but should be a list
-    assert isinstance(resp.json(), list)
+    data = resp.json()
+    assert "items" in data
+    assert "total" in data
+    assert "has_more" in data
+    for item in data["items"]:
+        assert "id" in item
+        assert "url" in item
 
 
 # ---------------------------------------------------------------------------

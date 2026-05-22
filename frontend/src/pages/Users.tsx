@@ -9,14 +9,14 @@ import {
   UserMinus,
 } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { api, ApiError } from '@/api/client'
+import { api } from '@/api/client'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { cn } from '@/lib/utils'
+import { cn, getErrorMessage } from '@/lib/utils'
 import { formatDate } from '@/lib/formatters'
 import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
@@ -122,7 +122,7 @@ function InviteDialog({
       onOpenChange(false)
       onInvited()
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to invite user'
+      const message = getErrorMessage(err, 'Failed to invite user')
       setError(message)
       toasts.error(message)
     } finally {
@@ -266,7 +266,7 @@ function UserDetailPanel({
       setDeactivateOpen(false)
       onUpdated()
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to deactivate user'
+      const message = getErrorMessage(err, 'Failed to deactivate user')
       toasts.error(message)
     } finally {
       setDeactivating(false)
@@ -378,6 +378,7 @@ export default function Users() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null)
   const detailPanelRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useDocumentTitle('Users')
 
@@ -397,7 +398,7 @@ export default function Users() {
       const result = await api.get<{ items: UserRecord[]; total: number }>('/api/v1/users')
       setUsers(result.items)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to load users')
+      setError(getErrorMessage(err, 'Failed to load users'))
     } finally {
       setLoading(false)
     }
@@ -475,6 +476,7 @@ export default function Users() {
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
               />
               <input
+                ref={searchRef}
                 id="users-search"
                 type="search"
                 placeholder="Search by name or email…"
@@ -490,7 +492,10 @@ export default function Users() {
                   {filtered.length} of {users.length} users
                 </span>
                 <button
-                  onClick={() => setSearch('')}
+                  onClick={() => {
+                    setSearch('')
+                    searchRef.current?.focus()
+                  }}
                   aria-label="Clear search"
                   className="inline-flex min-h-[44px] items-center gap-1 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -568,7 +573,7 @@ export default function Users() {
                         {user.display_name || (
                           <>
                             <span aria-hidden="true" className="text-muted-foreground/40">
-                              --
+                              —
                             </span>
                             <span className="sr-only">No display name</span>
                           </>

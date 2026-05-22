@@ -72,19 +72,22 @@ async def test_marketplace_import_empty_url_returns_422(client: AsyncClient):
 
 async def test_marketplace_import_path_traversal_returns_422(client: AsyncClient):
     """Import with path traversal in body.path should return 422."""
-    response = await client.post(
-        "/api/v1/marketplace/import",
-        json={
-            "url": "https://github.com/user/repo.git",
-            "path": "../../etc/passwd",
-        },
-        headers=API_KEY_HEADER,
-    )
-    # The endpoint clones first, then checks path traversal.
-    # Since the clone would fail (not a real git repo), we mock it.
-    # But the path traversal check happens after clone.
-    # For the API validation we just need to verify 422 is returned.
-    assert response.status_code in (408, 422)
+    from unittest.mock import AsyncMock, patch
+
+    async def _fake_clone(url: str, target: Path) -> None:
+        target.mkdir(parents=True, exist_ok=True)
+
+    with patch("blackbeard.api.marketplace._clone_repo", new=AsyncMock(side_effect=_fake_clone)):
+        response = await client.post(
+            "/api/v1/marketplace/import",
+            json={
+                "url": "https://github.com/user/repo.git",
+                "path": "../../etc/passwd",
+            },
+            headers=API_KEY_HEADER,
+        )
+    assert response.status_code == 422
+    assert "traversal" in response.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 """Tests covering remaining gaps after rounds 1-2 (228 tests added).
 
 Targeted areas:
-  - _redact_sensitive_inputs: security-critical input redaction in execution responses
+  - redact_sensitive_values: security-critical input redaction in execution responses
   - logging_config: _JsonFormatter, _RequestIdFilter, configure_logging, sensitive key redaction
   - http_client: close_client, close_all_clients shutdown paths
   - generate_litellm_config: skipping connections with no model
@@ -25,105 +25,106 @@ import pytest
 from blackbeard.kinds import ResourceKind
 
 # ---------------------------------------------------------------------------
-# _redact_sensitive_inputs (security-critical — prevents secret leakage)
+# redact_sensitive_values (security-critical — prevents secret leakage)
 # ---------------------------------------------------------------------------
-from blackbeard.models.execution_schemas import _redact_sensitive_inputs
+from blackbeard.models.execution_schemas import redact_sensitive_values
 from blackbeard.resources.exceptions import ValidationError as ResValidationError
 from tests.conftest import _make_execution, make_resource
 
 
-def test_redact_sensitive_inputs_password():
+def test_redact_sensitive_values_password():
     """Input keys containing 'password' should be redacted."""
     inputs = {"password": "s3cr3t", "topic": "AI"}
-    result = _redact_sensitive_inputs(inputs)
+    result = redact_sensitive_values(inputs)
     assert result["password"] == "[REDACTED]"
     assert "s3cr3t" not in str(result), "Original secret must not appear anywhere in output"
     assert result["topic"] == "AI"
 
 
-def test_redact_sensitive_inputs_api_key():
+def test_redact_sensitive_values_api_key():
     """Input keys containing 'api_key' should be redacted."""
     inputs = {"api_key": "sk-1234", "name": "test"}
-    result = _redact_sensitive_inputs(inputs)
+    result = redact_sensitive_values(inputs)
     assert result["api_key"] == "[REDACTED]"
     assert "sk-1234" not in str(result), "Original secret must not appear anywhere in output"
     assert result["name"] == "test"
 
 
-def test_redact_sensitive_inputs_token():
+def test_redact_sensitive_values_token():
     """Input keys containing 'token' should be redacted."""
     inputs = {"auth_token": "bearer-xyz", "count": "5"}
-    result = _redact_sensitive_inputs(inputs)
+    result = redact_sensitive_values(inputs)
     assert result["auth_token"] == "[REDACTED]"
     assert "bearer-xyz" not in str(result), "Original secret must not appear anywhere in output"
     assert result["count"] == "5"
 
 
-def test_redact_sensitive_inputs_secret():
+def test_redact_sensitive_values_secret():
     """Input keys containing 'secret' should be redacted."""
     inputs = {"client_secret": "abcd", "mode": "fast"}
-    result = _redact_sensitive_inputs(inputs)
+    result = redact_sensitive_values(inputs)
     assert result["client_secret"] == "[REDACTED]"
 
 
-def test_redact_sensitive_inputs_credential():
+def test_redact_sensitive_values_credential():
     """Input keys containing 'credential' should be redacted."""
     inputs = {"credential": "admin:pass"}
-    result = _redact_sensitive_inputs(inputs)
+    result = redact_sensitive_values(inputs)
     assert result["credential"] == "[REDACTED]"
 
 
-def test_redact_sensitive_inputs_case_insensitive():
+def test_redact_sensitive_values_case_insensitive():
     """Redaction should be case-insensitive."""
     inputs = {"PASSWORD": "x", "Api_Key": "y", "TOKEN": "z"}
-    result = _redact_sensitive_inputs(inputs)
+    result = redact_sensitive_values(inputs)
     assert result["PASSWORD"] == "[REDACTED]"
     assert result["Api_Key"] == "[REDACTED]"
     assert result["TOKEN"] == "[REDACTED]"
 
 
-def test_redact_sensitive_inputs_no_sensitive_keys():
+def test_redact_sensitive_values_no_sensitive_keys():
     """Non-sensitive flat dict should pass through unchanged."""
     inputs = {"topic": "AI", "depth": "deep", "count": "3"}
-    result = _redact_sensitive_inputs(inputs)
+    result = redact_sensitive_values(inputs)
     assert result == inputs
 
 
-def test_redact_sensitive_inputs_empty():
+def test_redact_sensitive_values_empty():
     """Empty inputs should return empty dict."""
-    assert _redact_sensitive_inputs({}) == {}
+    assert redact_sensitive_values({}) == {}
 
 
-def test_redact_sensitive_inputs_private_key():
+def test_redact_sensitive_values_private_key():
     """Keys containing 'private_key' should be redacted."""
     inputs = {"private_key": "-----BEGIN RSA KEY-----"}
-    result = _redact_sensitive_inputs(inputs)
+    result = redact_sensitive_values(inputs)
     assert result["private_key"] == "[REDACTED]"
 
 
-def test_redact_sensitive_inputs_nested_dict():
+def test_redact_sensitive_values_nested_dict():
     """Sensitive keys inside nested dicts should be redacted recursively."""
     inputs = {"config": {"api_key": "sk-nested", "host": "example.com"}}
-    result = _redact_sensitive_inputs(inputs)
+    result = redact_sensitive_values(inputs)
     assert result["config"]["api_key"] == "[REDACTED]"
     assert result["config"]["host"] == "example.com"
     assert "sk-nested" not in str(result), "Nested secret must not appear anywhere in output"
+    assert inputs["config"]["api_key"] == "sk-nested", "Original dict must not be mutated"
 
 
-def test_redact_sensitive_inputs_list_of_dicts():
+def test_redact_sensitive_values_list_of_dicts():
     """Sensitive keys inside dicts within lists should be redacted."""
     inputs = {"accounts": [{"token": "tok-1", "name": "a"}, {"password": "pw", "name": "b"}]}
-    result = _redact_sensitive_inputs(inputs)
+    result = redact_sensitive_values(inputs)
     assert result["accounts"][0]["token"] == "[REDACTED]"
     assert result["accounts"][0]["name"] == "a"
     assert result["accounts"][1]["password"] == "[REDACTED]"
     assert result["accounts"][1]["name"] == "b"
 
 
-def test_redact_sensitive_inputs_list_of_scalars_unchanged():
+def test_redact_sensitive_values_list_of_scalars_unchanged():
     """Lists of non-dict values should pass through unchanged."""
     inputs = {"tags": ["prod", "v2", 42]}
-    result = _redact_sensitive_inputs(inputs)
+    result = redact_sensitive_values(inputs)
     assert result["tags"] == ["prod", "v2", 42]
 
 
@@ -360,11 +361,15 @@ async def test_close_all_clients_handles_errors():
         _clients["_test_err_async"] = mock_async
         _sync_clients["_test_err_sync"] = mock_sync
 
-    # Should not raise even though both close() calls fail
-    await close_all_clients()
+    try:
+        await close_all_clients()
 
-    assert "_test_err_async" not in _clients
-    assert "_test_err_sync" not in _sync_clients
+        assert "_test_err_async" not in _clients
+        assert "_test_err_sync" not in _sync_clients
+    finally:
+        with _lock:
+            _clients.pop("_test_err_async", None)
+            _sync_clients.pop("_test_err_sync", None)
 
 
 # ---------------------------------------------------------------------------
@@ -887,7 +892,8 @@ def test_get_request_id_no_client_id():
     mock_request = MagicMock()
     mock_request.headers = {}
     result = get_request_id(mock_request)
-    uuid.UUID(result)  # Should parse as valid UUID
+    parsed = uuid.UUID(result)
+    assert str(parsed) == result, "Generated ID must be a canonical UUID string"
 
 
 def test_get_request_id_too_long():

@@ -633,12 +633,11 @@ class TestFirecrackerExports:
             select_microvm_backend,
         )
 
-        # Just verify they imported successfully
-        assert FirecrackerSandbox is not None
-        assert FirecrackerResult is not None
-        assert FirecrackerError is not None
-        assert FirecrackerConfigError is not None
-        assert FirecrackerTimeoutError is not None
-        assert FirecrackerRuntimeError is not None
-        assert is_firecracker_available is not None
-        assert select_microvm_backend is not None
+        assert callable(FirecrackerSandbox)
+        assert callable(is_firecracker_available)
+        assert callable(select_microvm_backend)
+        assert issubclass(FirecrackerResult, object)
+        assert issubclass(FirecrackerError, Exception)
+        assert issubclass(FirecrackerConfigError, FirecrackerError)
+        assert issubclass(FirecrackerTimeoutError, FirecrackerError)
+        assert issubclass(FirecrackerRuntimeError, FirecrackerError)

@@ -65,26 +65,33 @@ spec:
                 secretKeyRef:
                   name: {{ include "blackbeard.secretsName" . }}
                   key: valkey-password
+          startupProbe:
+            exec:
+              command:
+                - "sh"
+                - "-c"
+                - "REDISCLI_AUTH=$VALKEY_PASSWORD valkey-cli ping | grep -q PONG"
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 12
           readinessProbe:
             exec:
               command:
                 - "sh"
                 - "-c"
                 - "REDISCLI_AUTH=$VALKEY_PASSWORD valkey-cli ping | grep -q PONG"
-            initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 5
-            failureThreshold: 10
+            failureThreshold: 3
           livenessProbe:
             exec:
               command:
                 - "sh"
                 - "-c"
                 - "REDISCLI_AUTH=$VALKEY_PASSWORD valkey-cli ping | grep -q PONG"
-            initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 10
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.valkey.resources | nindent 12 }}
           volumeMounts:

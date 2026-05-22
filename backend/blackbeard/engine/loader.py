@@ -14,6 +14,8 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
+import jsonschema
+
 __all__ = [
     "LoaderError",
     "ResourceLoader",
@@ -25,11 +27,14 @@ from blackbeard.config import settings
 from blackbeard.engine.policy import AgentPolicy, resolve_policy
 from blackbeard.kinds import ResourceKind
 from blackbeard.litellm import apply_model_params, apply_vertex_params
+from blackbeard.models.execution_schemas import SAFE_FILENAME as _SAFE_FILENAME
 from blackbeard.resources import (
     ALLOWED_CALLABLE_MODULE_PREFIXES,
     ALLOWED_TOOL_MODULE_PREFIXES,
     BLOCKED_CALLABLE_MODULES,
     BLOCKED_TOOL_SUBMODULES,
+    check_url_ssrf,
+    is_blocked_env_name,
     parse_ref,
 )
 
@@ -38,9 +43,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_SAFE_FILENAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+_PROCESS_MAP: dict[str, Process] = {
+    "sequential": Process.sequential,
+    "hierarchical": Process.hierarchical,
+}
+
 _PATH_TRAVERSAL_INDICATORS = ("..", "~", "\\", "\x00")
-_SENSITIVE_PATH_PREFIXES = ("/etc/", "/proc/", "/sys/", "/dev/", "/var/run/")
 
 _SAFE_BUILTIN_NAME = re.compile(r"^[A-Z][a-zA-Z0-9]+$")
 
@@ -53,7 +61,7 @@ _BLOCKED_BUILTIN_NAMES = frozenset(
 
 
 def _self_api_url() -> str:
-    """Resolve at call time so the module can be imported without reading settings."""
+    """Return localhost API URL. Resolved at call time to avoid reading settings at import."""
     return f"http://localhost:{settings.port}"
 
 
@@ -63,8 +71,6 @@ def _check_path_safety(path: str, context: str) -> None:
         raise LoaderError(f"{context}: path traversal characters not allowed")
     if path.startswith(("/", "\\")):
         raise LoaderError(f"{context}: absolute paths are not allowed")
-    if path.startswith(_SENSITIVE_PATH_PREFIXES):
-        raise LoaderError(f"{context}: access to '{path}' is not allowed")
 
 
 _MAX_CONFIG_VALUE_LEN = 10_000
@@ -157,7 +163,7 @@ class ResourceLoader:
         return resource
 
     def build_llm(self, ref_or_name: str) -> LLM:
-        """Build a CrewAI LLM from an LLMConnection resource ref."""
+        """Build a CrewAI LLM from an LLMConnection ref string."""
         if ref_or_name in self._llm_cache:
             return self._llm_cache[ref_or_name]
 
@@ -242,12 +248,14 @@ class ResourceLoader:
 
             module_path, class_name = entry
             cache_key = f"{module_path}.{class_name}"
-            with _ks_class_cache_lock:
-                cls = _ks_class_cache.get(cache_key)
-                if cls is None:
-                    module = importlib.import_module(module_path)
-                    cls = getattr(module, class_name)
-                    _ks_class_cache[cache_key] = cls
+            cls = _ks_class_cache.get(cache_key)
+            if cls is None:
+                with _ks_class_cache_lock:
+                    cls = _ks_class_cache.get(cache_key)
+                    if cls is None:
+                        module = importlib.import_module(module_path)
+                        cls = getattr(module, class_name)
+                        _ks_class_cache[cache_key] = cls
 
             kwargs: dict[str, Any] = (
                 {"content": content} if ks_type == "string" else {"file_paths": file_paths}
@@ -551,27 +559,32 @@ class ResourceLoader:
         dynamic imports from task guardrails or output_pydantic fields.
         """
         if "." not in dotted_path:
+            logger.warning(
+                "Invalid callable path (no module separator): '%s' — skipping",
+                dotted_path,
+                extra={"event": "callable_import_invalid_path", "dotted_path": dotted_path},
+            )
             return None
         top_module = dotted_path.split(".")[0]
         if top_module in BLOCKED_CALLABLE_MODULES:
+            msg = f"Blocked import from dangerous module: {dotted_path}"
             logger.warning(
-                "Blocked import from dangerous module: %s",
-                dotted_path,
+                msg,
                 extra={"event": "callable_import_blocked", "dotted_path": dotted_path},
             )
-            return None
+            raise LoaderError(msg)
         if not dotted_path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
+            msg = f"Blocked import from unapproved module: {dotted_path}"
             logger.warning(
-                "Blocked import from unapproved module: %s",
-                dotted_path,
+                msg,
                 extra={"event": "callable_import_blocked", "dotted_path": dotted_path},
             )
-            return None
+            raise LoaderError(msg)
         module_path, attr_name = dotted_path.rsplit(".", 1)
         try:
             module = importlib.import_module(module_path)
             return getattr(module, attr_name)
-        except Exception:
+        except (ImportError, AttributeError):
             logger.error(
                 "Failed to import callable: %s — guardrail/output_pydantic will be skipped",
                 dotted_path,
@@ -588,8 +601,6 @@ class ResourceLoader:
         and validates it against ``schema``.  Returns the output unchanged on
         success; raises ``ValueError`` on validation failure.
         """
-        import jsonschema
-
         validator = jsonschema.Draft7Validator(schema)
 
         def _schema_guardrail(output: str) -> str:
@@ -601,9 +612,7 @@ class ResourceLoader:
                 ) from exc
             errors = list(validator.iter_errors(parsed))
             if errors:
-                raise ValueError(
-                    f"Schema guardrail '{guardrail_name}': {errors[0].message}"
-                )
+                raise ValueError(f"Schema guardrail '{guardrail_name}': {errors[0].message}")
             return output
 
         return _schema_guardrail
@@ -780,10 +789,18 @@ class ResourceLoader:
         from blackbeard.engine.memory.muninn import MuninnMemoryBackend
 
         url = memory_spec.get("muninndb_url", settings.muninndb_url)
+        if url != settings.muninndb_url:
+            ssrf_error = check_url_ssrf(url)
+            if ssrf_error:
+                raise LoaderError(f"muninndb_url blocked: {ssrf_error}")
         vault = memory_spec.get("muninndb_vault", namespace)
         token: str | None = None
         token_env = memory_spec.get("muninndb_token_env")
         if token_env:
+            if is_blocked_env_name(token_env):
+                raise LoaderError(
+                    f"muninndb_token_env '{token_env}' references a blocked environment variable"
+                )
             token = os.environ.get(token_env)
 
         try:
@@ -843,11 +860,7 @@ class ResourceLoader:
         tasks = [self.build_task(ref) for ref in task_refs]
 
         process_str = spec.get("process", "sequential")
-        process_map = {
-            "sequential": Process.sequential,
-            "hierarchical": Process.hierarchical,
-        }
-        process = process_map.get(process_str, Process.sequential)
+        process = _PROCESS_MAP.get(process_str, Process.sequential)
 
         crew_kwargs: dict[str, Any] = {
             "agents": agents,

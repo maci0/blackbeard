@@ -41,7 +41,7 @@ spec:
                   matchLabels:
                     {{- include "blackbeard.selectorLabels" (dict "context" . "component" "api") | nindent 20 }}
                 topologyKey: kubernetes.io/hostname
-      terminationGracePeriodSeconds: 30
+      terminationGracePeriodSeconds: 60
       containers:
         - name: api
           image: {{ include "blackbeard.apiImage" . }}
@@ -111,10 +111,19 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: home
+              mountPath: /home/appuser
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 100Mi
+        - name: home
+          emptyDir:
+            sizeLimit: 200Mi

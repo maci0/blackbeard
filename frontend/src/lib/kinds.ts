@@ -16,6 +16,7 @@ export const KIND_TO_PLURAL: Record<string, string> = {
   Role: 'roles',
   RoleBinding: 'role-bindings',
   Automation: 'automations',
+  Namespace: 'namespaces',
 }
 
 export const PLURAL_TO_KIND: Record<string, string> = Object.fromEntries(

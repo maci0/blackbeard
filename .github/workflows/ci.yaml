@@ -59,6 +59,7 @@ jobs:
       - name: Audit dependencies
         id: pip-audit
         run: uv run pip-audit --strict --desc
+        timeout-minutes: 3
         continue-on-error: true
 
       - name: Warn on dependency vulnerabilities

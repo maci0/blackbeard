@@ -100,13 +100,16 @@ describe('fuzz: yamlToCanvas', () => {
     )
   })
 
-  it('null or valid structure on random input', () => {
+  it('parsed nodes always have id and type', () => {
     fc.assert(
       fc.property(fc.string({ maxLength: 2000 }), (yaml) => {
         const result = yamlToCanvas(yaml)
-        if (result !== null) {
-          expect(Array.isArray(result.nodes)).toBe(true)
-          expect(Array.isArray(result.edges)).toBe(true)
+        if (result !== null && result.nodes.length > 0) {
+          for (const node of result.nodes) {
+            expect(node.id).toBeDefined()
+            expect(typeof node.id).toBe('string')
+            expect(node.type).toBeDefined()
+          }
         }
       }),
       { numRuns: NUM_RUNS },

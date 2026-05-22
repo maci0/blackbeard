@@ -1,6 +1,7 @@
 """Execution engine: manages crew execution lifecycle.
 
-Handles kickoff, status tracking, background execution, and result storage.
+Handles kickoff, train, test, flow execution, cancellation, status tracking,
+background execution, and result storage.
 """
 
 from __future__ import annotations
@@ -33,13 +34,12 @@ __all__ = [
 
 from crewai.crews.crew_output import CrewOutput
 from sqlalchemy import func, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import defer, load_only, selectinload
 
 from blackbeard.config import settings
-from blackbeard.engine.budget import derive_budget_limits as _derive_budget_limits
+from blackbeard.engine.budget import derive_budget_and_pii as _derive_budget_and_pii
 from blackbeard.engine.budget import extract_policy_specs as _extract_policy_specs
-from blackbeard.engine.budget import get_pii_config as _get_pii_config
 from blackbeard.engine.execution_listener import BlackbeardExecutionListener
 from blackbeard.engine.flow_runner import call_hook
 from blackbeard.engine.flow_runner import run_flow_steps as _run_flow_steps
@@ -57,7 +57,7 @@ from blackbeard.models import (
     TaskStatus,
     async_session,
 )
-from blackbeard.models.database import CONNECT_ARGS
+from blackbeard.models.database import CONNECT_ARGS, instrument_engine
 from blackbeard.resources import parse_ref
 
 if TYPE_CHECKING:
@@ -92,21 +92,25 @@ _MAX_ERROR_LENGTH = 500
 
 
 def _sanitize_error(error_msg: str) -> str:
-    """Return a user-safe error string, redacting internal details."""
+    """Return a user-safe error string, redacting internal details and PII."""
+    from blackbeard.logging_config import scrub_pii
+
     if error_msg.startswith(_SAFE_ERROR_PREFIXES):
-        if len(error_msg) > _MAX_ERROR_LENGTH:
-            return error_msg[:_MAX_ERROR_LENGTH] + "..."
-        return error_msg
+        sanitized = scrub_pii(error_msg)
+        if len(sanitized) > _MAX_ERROR_LENGTH:
+            return sanitized[:_MAX_ERROR_LENGTH] + "..."
+        return sanitized
     return "Execution failed — check server logs for details"
 
 
 _executor: ThreadPoolExecutor | None = None
 _executor_lock = threading.Lock()
 
-# Shared database engine for background executor threads.
+# Shared database engine and session factory for background executor threads.
 # Each thread still creates its own event loop, but they all share one
 # connection pool instead of each thread creating a separate engine.
 _bg_engine: AsyncEngine | None = None
+_bg_session_factory: async_sessionmaker[AsyncSession] | None = None
 _bg_engine_lock = threading.Lock()
 
 
@@ -154,53 +158,73 @@ def get_pool_status() -> dict[str, object]:
 
 def _get_bg_engine() -> AsyncEngine:
     """Return the shared background engine, creating it on first use (thread-safe)."""
-    global _bg_engine
+    global _bg_engine, _bg_session_factory
     if _bg_engine is None:
         with _bg_engine_lock:
             if _bg_engine is None:
-                from sqlalchemy.ext.asyncio import create_async_engine
+                from sqlalchemy.ext.asyncio import (
+                    AsyncSession as _AsyncSession,
+                )
+                from sqlalchemy.ext.asyncio import (
+                    async_sessionmaker,
+                    create_async_engine,
+                )
 
-                _bg_engine = create_async_engine(
+                bg_pool_size = max(5, settings.max_concurrent_executions + 2)
+                bg_max_overflow = bg_pool_size * 2
+                engine = create_async_engine(
                     settings.database_url.get_secret_value(),
                     echo=False,
-                    pool_size=5,
-                    max_overflow=10,
+                    pool_size=bg_pool_size,
+                    max_overflow=bg_max_overflow,
                     pool_pre_ping=True,
                     pool_timeout=30,
                     pool_recycle=3600,
                     connect_args=CONNECT_ARGS,
                 )
+                _bg_session_factory = async_sessionmaker(
+                    engine, class_=_AsyncSession, expire_on_commit=False
+                )
+                instrument_engine(engine.sync_engine, label="bg-exec")
+                # Publish _bg_engine last: the outer check reads this
+                # variable without the lock, so _bg_session_factory must
+                # already be visible when another thread sees _bg_engine
+                # as non-None.
+                _bg_engine = engine
                 logger.info(
-                    "Shared background DB engine created: pool_size=5 max_overflow=10",
+                    "Shared background DB engine created: pool_size=%d max_overflow=%d",
+                    bg_pool_size,
+                    bg_max_overflow,
                     extra={
                         "event": "bg_engine_created",
-                        "pool_size": 5,
-                        "max_overflow": 10,
+                        "pool_size": bg_pool_size,
+                        "max_overflow": bg_max_overflow,
                     },
                 )
     return _bg_engine
 
 
 def shutdown_executor(wait: bool = False) -> None:
-    """Shutdown the thread pool executor and dispose all background DB engines."""
-    global _executor, _bg_engine
+    """Shut down the thread pool executor and dispose all background DB engines."""
+    global _executor, _bg_engine, _bg_session_factory
     with _executor_lock:
         if _executor is not None:
             _executor.shutdown(wait=wait, cancel_futures=True)
             _executor = None
     logger.info("Execution thread pool shut down", extra={"event": "executor_shutdown"})
 
-    # Dispose the shared background engine used by executor threads.
     with _bg_engine_lock:
         bg = _bg_engine
         _bg_engine = None
+        _bg_session_factory = None
     if bg is not None:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             loop = None
         if loop and loop.is_running():
-            loop.create_task(bg.dispose())
+            task = loop.create_task(bg.dispose())
+            task.add_done_callback(_log_task_exception)
         else:
             _loop = asyncio.new_event_loop()
             try:
@@ -223,7 +247,7 @@ class ExecutionNotFoundError(ExecutionError):
     """Raised when the crew or execution cannot be found."""
 
 
-def _log_task_exception(task: asyncio.Task) -> None:  # type: ignore[type-arg]
+def _log_task_exception(task: asyncio.Task[None]) -> None:
     """Log exceptions from fire-and-forget asyncio tasks that would otherwise be silent."""
     if task.cancelled():
         return
@@ -444,14 +468,14 @@ async def _submit_execution(
         training_file or "training_data.pkl",
     )
 
-    def _on_thread_error(fut: asyncio.Future) -> None:  # type: ignore[type-arg]
+    def _on_thread_error(fut: asyncio.Future[None]) -> None:
         exc = fut.exception()
         if exc is not None:
             logger.error(
                 "Execution %s thread failed: %s",
                 execution_id,
                 exc,
-                exc_info=True,
+                exc_info=exc,
                 extra={
                     "event": "execution_thread_failed",
                     "execution_id": str(execution_id),
@@ -560,15 +584,24 @@ async def _mark_failed_async(execution_id: UUID, error: str) -> None:
             )
             return
         if execution.status in (ExecutionStatus.QUEUED, ExecutionStatus.RUNNING):
+            now = datetime.now(UTC)
             execution.status = ExecutionStatus.FAILED
             execution.error = error
-            execution.completed_at = datetime.now(UTC)
+            execution.completed_at = now
+            await _fail_pending_tasks(
+                session, execution_id, "Execution failed before task started", now
+            )
             await session.commit()
         else:
-            logger.debug(
+            logger.warning(
                 "Execution %s already in terminal state %s, skipping failure update",
                 execution_id,
                 execution.status.value,
+                extra={
+                    "event": "execution_already_terminal",
+                    "execution_id": str(execution_id),
+                    "terminal_status": execution.status.value,
+                },
             )
 
 
@@ -583,6 +616,7 @@ def _snapshot_resource(resource: Resource) -> dict[str, Any]:
 
 
 _MAX_SNAPSHOT_DEPTH = 20
+_MAX_SNAPSHOT_RESOURCES = 200
 
 
 def _snapshot_crew_resources(
@@ -601,6 +635,14 @@ def _snapshot_crew_resources(
     def _collect(key: str, depth: int = 0) -> None:
         if key in needed:
             return
+        if len(needed) >= _MAX_SNAPSHOT_RESOURCES:
+            logger.warning(
+                "Snapshot resource limit reached (%d) at key '%s'",
+                _MAX_SNAPSHOT_RESOURCES,
+                key,
+                extra={"event": "snapshot_breadth_limit", "key": key, "count": len(needed)},
+            )
+            return
         if depth > _MAX_SNAPSHOT_DEPTH:
             logger.warning(
                 "Snapshot ref depth limit reached at key '%s' (depth=%d)",
@@ -611,6 +653,12 @@ def _snapshot_crew_resources(
             return
         resource = resources.get(key)
         if resource is None:
+            logger.warning(
+                "Snapshot: referenced resource '%s' not found in namespace — "
+                "execution may fail when loader tries to resolve this ref",
+                key,
+                extra={"event": "snapshot_ref_missing", "key": key, "depth": depth},
+            )
             return
         needed[key] = _snapshot_resource(resource)
         spec = resource.spec or {}
@@ -701,38 +749,23 @@ def _run_crew_sync(
         )
         raise
     finally:
-        # Shared engine is NOT disposed here -- shutdown_executor handles it.
+        # Engine disposal deferred to shutdown_executor (shared across threads).
         loop.close()
 
 
 def _thread_session_factory() -> async_sessionmaker[AsyncSession]:
-    """Create a session factory backed by the shared background engine.
+    """Return the shared session factory backed by the shared background engine.
 
-    All executor threads share one connection pool (``_get_bg_engine()``)
-    instead of each thread creating its own engine, which avoids N pools
-    growing linearly with concurrent executions.
+    All executor threads share one connection pool and one session factory
+    instead of each thread creating its own, which avoids redundant object
+    allocation on every execution.
 
     The shared engine must NOT be disposed per-thread -- ``shutdown_executor``
     handles cleanup at application shutdown.
     """
-    from sqlalchemy.ext.asyncio import (
-        AsyncSession as _AsyncSession,
-    )
-    from sqlalchemy.ext.asyncio import (
-        async_sessionmaker,
-    )
-
-    engine = _get_bg_engine()
-    factory = async_sessionmaker(engine, class_=_AsyncSession, expire_on_commit=False)
-    logger.debug(
-        "Thread session factory created: thread=%s (shared engine)",
-        threading.current_thread().name,
-        extra={
-            "event": "thread_session_factory_created",
-            "thread_name": threading.current_thread().name,
-        },
-    )
-    return factory
+    _get_bg_engine()
+    assert _bg_session_factory is not None
+    return _bg_session_factory
 
 
 def _resolve_eval_llm(
@@ -778,10 +811,15 @@ def _resolve_eval_llm(
                 llm = loader.build_llm(llm_ref)
                 return llm.model
             except Exception:
-                logger.debug(
+                logger.warning(
                     "Failed to resolve agent LLM '%s' for eval — trying next agent",
                     llm_ref,
                     exc_info=True,
+                    extra={
+                        "event": "eval_llm_resolve_failed",
+                        "llm_ref": llm_ref,
+                        "crew_name": crew_name,
+                    },
                 )
                 continue
 
@@ -870,7 +908,7 @@ async def _run_crew_async(
             # --- Budget enforcement via LiteLLM virtual keys ---
             virtual_api_key: str | None = None
             policy_specs = _extract_policy_specs(resource_snapshot)
-            max_budget, max_tokens = _derive_budget_limits(
+            max_budget, max_tokens, listener_pii_config = _derive_budget_and_pii(
                 resource_snapshot, crew_name, policy_specs
             )
             has_budget = max_budget is not None or max_tokens is not None
@@ -899,13 +937,12 @@ async def _run_crew_async(
                     virtual_api_key = key_info["key"]
                     virtual_key = virtual_api_key  # for cleanup in finally
 
-                    # Persist the key reference on the execution row
                     execution = await _get_execution_for_update(session, execution_id)
                     if execution:
                         execution.litellm_key = virtual_api_key
                         await session.commit()
                 except VirtualKeyError:
-                    logger.warning(
+                    logger.error(
                         "Failed to create virtual key for execution %s — "
                         "proceeding without budget enforcement",
                         execution_id,
@@ -914,13 +951,14 @@ async def _run_crew_async(
                             "event": "virtual_key_creation_failed",
                             "execution_id": str(execution_id),
                             "crew_name": crew_name,
+                            "max_budget": max_budget,
+                            "max_tokens": max_tokens,
                         },
                     )
                     virtual_api_key = None
 
             loader = ResourceLoader(mock_resources, api_key=virtual_api_key, policies=policy_specs)
 
-            listener_pii_config = _get_pii_config(resource_snapshot, crew_name)
             listener = BlackbeardExecutionListener(
                 execution_id=execution_id,
                 db_url=settings.database_url.get_secret_value(),
@@ -1001,7 +1039,6 @@ async def _run_crew_async(
                     "result_type": type(result).__name__ if result is not None else "None",
                 }
             elif execution_type == ExecutionType.TEST:
-                # crew.test() prints metrics to stdout; result is None here.
                 if isinstance(result, dict):
                     execution.outputs = {
                         "execution_type": "test",
@@ -1069,7 +1106,20 @@ async def _run_crew_async(
 
         except Exception as e:
             if listener is not None:
-                listener.flush()
+                try:
+                    listener.flush()
+                except Exception as flush_exc:
+                    logger.warning(
+                        "Listener flush failed during error handling for execution %s: %s",
+                        execution_id,
+                        flush_exc,
+                        exc_info=True,
+                        extra={
+                            "event": "listener_flush_error_on_failure",
+                            "execution_id": str(execution_id),
+                            "error_type": type(flush_exc).__name__,
+                        },
+                    )
             duration_s = (
                 (datetime.now(UTC) - execution.started_at).total_seconds()
                 if execution is not None and execution.started_at
@@ -1099,9 +1149,11 @@ async def _run_crew_async(
             try:
                 execution = await _get_execution_for_update(session, execution_id)
                 if execution and execution.status != ExecutionStatus.CANCELLED:
+                    now = datetime.now(UTC)
                     execution.status = ExecutionStatus.FAILED
                     execution.error = _sanitize_error(str(e))
-                    execution.completed_at = datetime.now(UTC)
+                    execution.completed_at = now
+                    await _fail_pending_tasks(session, execution_id, "Execution failed", now)
                     await session.commit()
                     logger.info(
                         "Execution %s marked as failed in DB",
@@ -1113,27 +1165,41 @@ async def _run_crew_async(
                     )
             except Exception as db_err:
                 logger.error(
-                    "Failed to mark execution %s as failed in DB: %s",
+                    "Failed to mark execution %s as failed in DB: %s (original error: %s)",
                     execution_id,
                     db_err,
+                    e,
                     exc_info=True,
                     extra={
                         "event": "execution_mark_failed_db_error",
                         "execution_id": str(execution_id),
                         "error_type": type(db_err).__name__,
+                        "original_error_type": type(e).__name__,
+                        "original_error_message": str(e)[:500],
                     },
                 )
-                raise
+                raise db_err from e
         finally:
             # --- Virtual key cleanup ---
+            # virtual_key is only set when key creation succeeded,
+            # which guarantees key_mgr was also created in the same block.
             if virtual_key is not None:
-                from blackbeard.litellm.key_manager import VirtualKeyManager
-
-                key_mgr = VirtualKeyManager(
-                    proxy_url=settings.litellm_proxy_url,
-                    master_key=settings.litellm_master_key.get_secret_value(),
-                )
-                deleted = await key_mgr.delete_key(virtual_key)
+                try:
+                    deleted = await key_mgr.delete_key(virtual_key)
+                except Exception as key_exc:
+                    deleted = False
+                    logger.warning(
+                        "Virtual key deletion raised for execution %s: %s",
+                        execution_id,
+                        key_exc,
+                        exc_info=True,
+                        extra={
+                            "event": "virtual_key_delete_exception",
+                            "execution_id": str(execution_id),
+                            "crew_name": crew_name,
+                            "error_type": type(key_exc).__name__,
+                        },
+                    )
                 if not deleted:
                     logger.warning(
                         "Virtual key cleanup failed for execution %s",
@@ -1149,12 +1215,37 @@ async def _run_crew_async(
                     if exec_row is not None:
                         exec_row.litellm_key = None
                         await session.commit()
-                except Exception:
-                    logger.debug(
+                except SQLAlchemyError:
+                    logger.warning(
                         "Could not clear litellm_key column for execution %s",
                         execution_id,
                         exc_info=True,
+                        extra={
+                            "event": "litellm_key_column_clear_failed",
+                            "execution_id": str(execution_id),
+                        },
                     )
+
+
+async def _fail_pending_tasks(
+    session: AsyncSession,
+    execution_id: UUID,
+    task_error: str,
+    now: datetime,
+) -> None:
+    """Mark all pending/running tasks as failed for a given execution."""
+    await session.execute(
+        update(ExecutionTask)
+        .where(
+            ExecutionTask.execution_id == execution_id,
+            ExecutionTask.status.in_([TaskStatus.PENDING, TaskStatus.RUNNING]),
+        )
+        .values(
+            status=TaskStatus.FAILED,
+            error=task_error,
+            completed_at=now,
+        )
+    )
 
 
 async def _get_execution_for_update(session: AsyncSession, execution_id: UUID) -> Execution | None:
@@ -1240,7 +1331,7 @@ async def list_executions(
         total = offset + len(items)
     else:
         count_query = select(func.count(Execution.id)).where(*filters)
-        total = (await session.execute(count_query)).scalar() or 0
+        total = (await session.execute(count_query)).scalar_one()
 
     return items, total
 
@@ -1305,6 +1396,7 @@ async def record_hitl_response(
         except IntegrityError:
             if attempt == max_attempts - 1:
                 raise
+            await asyncio.sleep(0.05 * (2**attempt))
             logger.info(
                 "HITL response sequence collision for execution %s (attempt %d/%d), retrying",
                 execution_id,
@@ -1398,10 +1490,13 @@ async def cleanup_orphaned_keys() -> int:
     )
     async with async_session() as session:
         stale = await session.execute(
-            select(Execution).where(
+            select(Execution)
+            .options(load_only(Execution.id, Execution.litellm_key))
+            .where(
                 Execution.status.in_([ExecutionStatus.QUEUED, ExecutionStatus.RUNNING]),
                 Execution.litellm_key.isnot(None),
             )
+            .limit(1000)
         )
         stale_list = list(stale.scalars())
 
@@ -1426,21 +1521,25 @@ async def cleanup_orphaned_keys() -> int:
                     "execution_id": str(execution.id),
                 },
             )
-        except Exception:
+        except Exception as del_exc:
             logger.warning(
-                "Error deleting orphaned virtual key for execution %s",
+                "Error deleting orphaned virtual key for execution %s: %s",
                 execution.id,
+                del_exc,
                 exc_info=True,
                 extra={
                     "event": "orphaned_key_delete_error",
                     "execution_id": str(execution.id),
+                    "error_type": type(del_exc).__name__,
                 },
             )
         return False
 
     if stale_list:
-        results = await asyncio.gather(*(_delete_one(e) for e in stale_list))
-        keys_deleted = sum(1 for r in results if r)
+        results = await asyncio.gather(
+            *(_delete_one(e) for e in stale_list), return_exceptions=True
+        )
+        keys_deleted = sum(1 for r in results if r is True)
 
     if keys_deleted > 0:
         logger.info(
@@ -1489,6 +1588,7 @@ async def recover_stale_executions() -> int:
                 status=ExecutionStatus.FAILED,
                 error="Execution interrupted by server restart",
                 completed_at=now,
+                litellm_key=None,
             )
             .returning(Execution.id)
         )

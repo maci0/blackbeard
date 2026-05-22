@@ -373,7 +373,7 @@ async def test_auth_interceptor_accepts_valid_jwt(auth_interceptor):
     from blackbeard.auth.jwt import create_access_token
 
     token = create_access_token(
-        user_id=str(uuid.uuid4()), email="test@example.com"
+        user_id=str(uuid.uuid4())
     )
 
     handler_call_details = MagicMock()

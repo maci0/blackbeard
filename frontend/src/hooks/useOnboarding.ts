@@ -1,14 +1,13 @@
 import { useState, useCallback } from 'react'
-
-const STORAGE_KEY = 'blackbeard_onboarding_completed'
+import { STORAGE_KEYS } from '@/lib/utils'
 
 export function useOnboarding() {
   const [show, setShow] = useState(() => {
-    return !localStorage.getItem(STORAGE_KEY)
+    return !localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED)
   })
 
   const dismiss = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, 'true')
+    localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true')
     setShow(false)
   }, [])
 

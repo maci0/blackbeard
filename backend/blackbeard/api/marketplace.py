@@ -9,6 +9,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -17,12 +18,17 @@ from pydantic import BaseModel, Field
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.models.resource_schemas import ResourceCreate
-from blackbeard.resources import ResourceService, ResourceValidationError
+from blackbeard.resources import (
+    ResourceService,
+    ResourceValidationError,
+    check_url_ssrf,
+    is_blocked_env_name,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from blackbeard.models.user import User
+    from blackbeard.models import User
 
 from blackbeard.models import get_session
 
@@ -30,31 +36,15 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/marketplace", tags=["marketplace"])
 
-# Path to the bundled examples directory, resolved relative to this file.
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _EXAMPLES_DIR = _REPO_ROOT / "examples"
 
-# Limit the size of cloned repositories to prevent abuse.
 _MAX_CLONE_TIMEOUT_S = 60
 _MAX_YAML_FILES = 200
-_MAX_YAML_SIZE_BYTES = 256 * 1024  # 256 KB per file
+_MAX_YAML_SIZE_BYTES = 256 * 1024
 
 # Only allow HTTPS URLs (no file://, ssh://, etc.)
 _ALLOWED_URL_SCHEMES = ("https://",)
-
-_SECRET_ENV_KEYS = frozenset(
-    {
-        "DATABASE_URL",
-        "BLACKBEARD_API_KEY",
-        "JWT_SECRET",
-        "LITELLM_MASTER_KEY",
-        "VALKEY_URL",
-        "VALKEY_PASSWORD",
-        "OIDC_CLIENT_SECRET",
-        "LANGFUSE_SECRET_KEY",
-        "POSTGRES_PASSWORD",
-    }
-)
 
 
 class ImportRequest(BaseModel):
@@ -89,14 +79,16 @@ def _find_yaml_files(directory: Path) -> list[Path]:
     where a malicious repo could link to files outside the clone directory.
     """
     resolved_root = directory.resolve()
+    yaml_suffixes = {".yaml", ".yml"}
     files: list[Path] = []
-    for ext in ("*.yaml", "*.yml"):
-        for f in directory.rglob(ext):
-            if f.is_symlink():
-                continue
-            if not f.resolve().is_relative_to(resolved_root):
-                continue
-            files.append(f)
+    for f in directory.rglob("*"):
+        if f.suffix not in yaml_suffixes:
+            continue
+        if f.is_symlink():
+            continue
+        if not f.resolve().is_relative_to(resolved_root):
+            continue
+        files.append(f)
     files.sort()
     return files[:_MAX_YAML_FILES]
 
@@ -143,7 +135,7 @@ async def _clone_repo(url: str, target: Path) -> None:
     - ``--recurse-submodules=no``: do not clone submodules (could point
       to internal repos or file:// URLs)
     """
-    env = {k: v for k, v in os.environ.items() if k not in _SECRET_ENV_KEYS}
+    env = {k: v for k, v in os.environ.items() if not is_blocked_env_name(k)}
     env.update(
         {
             "GIT_TERMINAL_PROMPT": "0",
@@ -151,6 +143,8 @@ async def _clone_repo(url: str, target: Path) -> None:
             "GIT_SSH_COMMAND": "",
             "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_CONFIG_GLOBAL": "",
+            "HOME": str(target),
+            "XDG_CONFIG_HOME": str(target),
         }
     )
     proc = await asyncio.create_subprocess_exec(
@@ -178,7 +172,7 @@ async def _clone_repo(url: str, target: Path) -> None:
         proc.kill()
         await proc.wait()
         raise HTTPException(
-            status_code=408,
+            status_code=504,
             detail=f"Git clone timed out after {_MAX_CLONE_TIMEOUT_S}s",
         ) from None
     if proc.returncode != 0:
@@ -204,8 +198,8 @@ async def _clone_repo(url: str, target: Path) -> None:
     "/import",
     response_model=ImportResponse,
     responses={
-        408: {"description": "Git clone timed out"},
         422: {"description": "Invalid URL or YAML parse errors"},
+        504: {"description": "Git clone timed out"},
     },
 )
 async def import_from_url(
@@ -237,27 +231,24 @@ async def import_from_url(
                 status_code=422,
                 detail="Only HTTPS git URLs are allowed",
             )
-        from urllib.parse import urlparse as _urlparse
-
-        _parsed = _urlparse(url)
+        _parsed = urlparse(url)
         if _parsed.username or _parsed.password:
             raise HTTPException(
                 status_code=422,
                 detail="Git URL must not contain embedded credentials",
             )
 
-        # SECURITY: Full SSRF validation including DNS resolution to catch
-        # DNS rebinding attacks (e.g. public domain resolving to 10.x/169.254.x).
-        from blackbeard.resources import check_url_ssrf
-
         ssrf_error = check_url_ssrf(url)
         if ssrf_error:
             raise HTTPException(status_code=422, detail=ssrf_error)
 
-        # Clone to temp dir
         tmpdir = Path(tempfile.mkdtemp(prefix="bb-marketplace-"))
         try:
             await _clone_repo(url, tmpdir)
+
+            git_dir = tmpdir / ".git"
+            if git_dir.is_dir():
+                shutil.rmtree(git_dir, ignore_errors=True)
 
             # SECURITY: Check total clone size to prevent abuse via
             # large repositories.  This runs after clone because git
@@ -272,9 +263,6 @@ async def import_from_url(
                     f"limit: {_MAX_CLONE_SIZE_BYTES // (1024 * 1024)}MB)",
                 )
 
-            git_dir = tmpdir / ".git"
-            if git_dir.is_dir():
-                shutil.rmtree(git_dir, ignore_errors=True)
             search_dir = tmpdir / body.path if body.path else tmpdir
             # Prevent path traversal: ensure resolved search_dir stays inside tmpdir
             if not search_dir.resolve().is_relative_to(tmpdir.resolve()):
@@ -298,9 +286,21 @@ async def import_from_url(
     for raw in raw_resources:
         try:
             data = ResourceCreate.model_validate(raw)
-        except Exception:
+        except Exception as exc:
             kind_str = raw.get("kind", "Unknown")
             name_str = raw.get("metadata", {}).get("name", "unknown")
+            logger.debug(
+                "Marketplace resource validation failed: %s/%s: %s",
+                kind_str,
+                name_str,
+                exc,
+                extra={
+                    "event": "marketplace_resource_validation_failed",
+                    "resource_kind": kind_str,
+                    "resource_name": name_str,
+                    "error_type": type(exc).__name__,
+                },
+            )
             error_details.append(
                 f"Validation error for {kind_str}/{name_str}: invalid resource structure"
             )

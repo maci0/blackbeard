@@ -10,7 +10,7 @@ pip install -e .
 cd sdks/python && uv sync
 ```
 
-**Requirements:** Python 3.12+, httpx, pyyaml
+**Requirements:** Python 3.10+, httpx, pyyaml
 
 ## Usage
 
@@ -31,7 +31,7 @@ client.login("user@example.com", "password123")
 
 ### Resource CRUD
 
-All 11 resource kinds are supported: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding.
+All 13 resource kinds are supported: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Namespace.
 
 ```python
 # List agents
@@ -144,5 +144,5 @@ with BlackbeardClient(base_url="http://localhost:8000", api_key="key") as client
 |------|---------|
 | Auth | `login`, `register`, `refresh`, `whoami` |
 | Resources | `list`, `get`, `create`, `update`, `delete`, `apply`, `export_all` |
-| Executions | `kickoff`, `train`, `test`, `run_flow`, `cancel`, `wait`, `get_execution`, `list_executions`, `get_execution_events`, `get_execution_spend` |
+| Executions | `kickoff`, `train`, `test`, `run_flow`, `cancel`, `retry`, `wait`, `respond`, `get_execution`, `list_executions`, `get_execution_events`, `get_execution_spend` |
 | Health | `health`, `readiness` |

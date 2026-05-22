@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { STORAGE_KEYS } from '@/lib/utils'
 import { TourOverlay } from './TourOverlay'
 import { TourTooltip } from './TourTooltip'
 
@@ -103,7 +104,7 @@ export default function GuidedTour({ active, onComplete }: GuidedTourProps) {
   /* ── Navigation handlers ── */
 
   const handleComplete = () => {
-    localStorage.setItem('blackbeard_tour_completed', 'true')
+    localStorage.setItem(STORAGE_KEYS.TOUR_COMPLETED, 'true')
     onComplete()
   }
 

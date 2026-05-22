@@ -15,7 +15,7 @@ import httpx
 import yaml
 
 from blackbeard.config import settings
-from blackbeard.http_client import get_client
+from blackbeard.http_client import get_litellm_client
 from blackbeard.kinds import API_VERSION, ResourceKind
 from blackbeard.logging_config import request_id_var
 from blackbeard.resources.validator import validate_resource
@@ -92,8 +92,7 @@ class NoLLMConnectionError(CopilotError):
 
 def _get_copilot_client() -> httpx.AsyncClient:
     """Return a shared httpx client for copilot LiteLLM requests."""
-    key = settings.litellm_master_key.get_secret_value()
-    return get_client("litellm-copilot", timeout=120.0, headers={"Authorization": f"Bearer {key}"})
+    return get_litellm_client("litellm-copilot", timeout=120.0)
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -155,7 +154,6 @@ async def _resolve_model_name(
     provider: str = str(spec.get("provider", ""))
     model: str = str(spec.get("model", ""))
 
-    # Build the LiteLLM model identifier: provider/model for non-openai providers
     if provider and provider.lower() not in ("openai", ""):
         return f"{provider}/{model}"
     return model
@@ -174,7 +172,14 @@ def _parse_yaml_response(raw: str) -> list[dict[str, Any]]:
             if isinstance(doc, dict) and "kind" in doc:
                 docs.append(doc)
     except yaml.YAMLError as e:
-        raise CopilotError(f"Failed to parse LLM response as YAML: {e}") from e
+        logger.warning(
+            "Copilot YAML parse error: %s",
+            e,
+            extra={"event": "copilot_yaml_parse_error", "error_type": type(e).__name__},
+        )
+        raise CopilotError(
+            "Failed to parse the generated YAML. Try rephrasing your prompt."
+        ) from e
 
     if not docs:
         raise CopilotError(
@@ -355,6 +360,20 @@ async def generate_resources(
     try:
         data = resp.json()
     except ValueError:
+        logger.error(
+            "Copilot: unparseable LiteLLM response: model=%s status=%d content_type=%s",
+            model_name,
+            resp.status_code,
+            resp.headers.get("content-type", "unknown"),
+            exc_info=True,
+            extra={
+                "event": "copilot_litellm_unparseable",
+                "model": model_name,
+                "http_status": resp.status_code,
+                "latency_ms": latency_ms,
+                "content_type": resp.headers.get("content-type", "unknown"),
+            },
+        )
         raise CopilotError("Model proxy returned an unparseable response.") from None
 
     # Extract content from the chat completion response

@@ -12,6 +12,9 @@ coverage/
 *.spec.tsx
 __tests__/
 e2e/
+playwright.config.ts
+playwright-report/
+test-results/
 .eslintcache
 *.md
 .DS_Store

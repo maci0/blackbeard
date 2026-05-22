@@ -529,10 +529,13 @@ function StudioInner() {
       applyStatus('running', `Starting ${modeLabel}…`)
       try {
         let parsedInputs: Record<string, unknown> = {}
-        try {
-          parsedInputs = JSON.parse(params.inputs) as Record<string, unknown>
-        } catch {
-          // keep empty inputs
+        if (params.inputs.trim()) {
+          try {
+            parsedInputs = JSON.parse(params.inputs) as Record<string, unknown>
+          } catch {
+            applyStatus('error', 'Invalid JSON in run inputs')
+            return
+          }
         }
 
         const slug = toResourceName(crewName)

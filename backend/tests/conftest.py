@@ -10,6 +10,7 @@ a live PostgreSQL instance.
 # Enable debug mode so the default API key is accepted during tests.
 # Must be set before blackbeard.config is imported.
 # ---------------------------------------------------------------------------
+import json as _json_mod
 import os as _os
 
 _os.environ.setdefault("DEBUG", "true")
@@ -117,6 +118,13 @@ async def db_session():
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA foreign_keys = ON")
         cursor.close()
+        dbapi_conn.create_function(
+            "jsonb_typeof",
+            1,
+            lambda v: type(_json_mod.loads(v)).__name__.replace("list", "array").replace("dict", "object")
+            if isinstance(v, str)
+            else None,
+        )
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -194,6 +202,8 @@ def _make_execution(
     n_iterations: int | None = None,
     training_file: str | None = None,
     tasks: list | None = None,
+    initiated_by: str | None = None,
+    principal_chain: dict | None = None,
 ):
     """Build a detached Execution ORM object for unit tests (no DB needed)."""
     import uuid as _uuid
@@ -218,6 +228,8 @@ def _make_execution(
     e.cost_usd = _Decimal(cost_usd)
     e.n_iterations = n_iterations
     e.training_file = training_file
+    e.initiated_by = _uuid.UUID(initiated_by) if initiated_by else None
+    e.principal_chain = principal_chain
     e.created_at = _datetime.now(_UTC)
     e.started_at = None
     e.completed_at = None

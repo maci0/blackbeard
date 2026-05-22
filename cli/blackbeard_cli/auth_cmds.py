@@ -6,6 +6,7 @@ import time
 
 import click
 import httpx
+from rich.markup import escape
 from rich.table import Table
 
 from blackbeard_cli.credentials import (
@@ -15,6 +16,7 @@ from blackbeard_cli.credentials import (
     save_credentials,
 )
 from blackbeard_cli.helpers import (
+    HelpCommand,
     console,
     extract_detail,
     handle_request_error,
@@ -26,15 +28,29 @@ from blackbeard_cli.helpers import (
 
 
 @click.command(
+    cls=HelpCommand,
     epilog="""\b
 Examples:
   blackbeard login
   blackbeard login -e user@example.com
   blackbeard -s http://prod:8000 login
-"""
+""",
 )
-@click.option("--email", "-e", prompt=True, help="Account email address")
-@click.option("--password", "-p", prompt=True, hide_input=True, help="Account password")
+@click.option(
+    "--email",
+    "-e",
+    prompt=True,
+    metavar="EMAIL",
+    help="Account email address",
+)
+@click.option(
+    "--password",
+    "-p",
+    prompt=True,
+    hide_input=True,
+    metavar="PASS",
+    help="Account password",
+)
 @json_opt
 @click.pass_context
 def login(ctx: click.Context, email: str, password: str, output_json: bool = False) -> None:
@@ -53,7 +69,7 @@ def login(ctx: click.Context, email: str, password: str, output_json: bool = Fal
 
     if resp.status_code != 200:
         detail = extract_detail(resp)
-        console.print(f"[red bold]Error:[/] Login failed: {detail}")
+        console.print(f"[red bold]Error:[/] Login failed: {escape(detail)}")
         raise SystemExit(1)
 
     data = resp.json()
@@ -71,16 +87,18 @@ def login(ctx: click.Context, email: str, password: str, output_json: bool = Fal
 
     user = data.get("user", {})
     out.print(
-        f"[green]Logged in[/] as [bold]{user.get('display_name', email)}[/] ({email}) on {server}"
+        f"[green]Logged in[/] as [bold]{escape(user.get('display_name', email))}[/]"
+        f" ({escape(email)}) on {escape(server)}"
     )
 
 
 @click.command(
+    cls=HelpCommand,
     epilog="""\b
 Examples:
   blackbeard logout
   blackbeard logout --json
-"""
+""",
 )
 @json_opt
 @click.pass_context
@@ -100,11 +118,12 @@ def logout(ctx: click.Context, output_json: bool = False) -> None:
 
 
 @click.command(
+    cls=HelpCommand,
     epilog="""\b
 Examples:
   blackbeard whoami
   blackbeard whoami --json
-"""
+""",
 )
 @json_opt
 @click.pass_context
@@ -122,7 +141,7 @@ def whoami(ctx: click.Context, output_json: bool = False) -> None:
 
     if resp.status_code != 200:
         detail = extract_detail(resp)
-        console.print(f"[red bold]Error:[/] {detail}")
+        console.print(f"[red bold]Error:[/] {escape(detail)}")
         raise SystemExit(1)
 
     data = resp.json()
@@ -149,17 +168,37 @@ def whoami(ctx: click.Context, output_json: bool = False) -> None:
 
 
 @click.command(
+    cls=HelpCommand,
     epilog="""\b
 Examples:
   blackbeard register
   blackbeard register -e user@example.com -d "Jane Doe"
-"""
+""",
 )
-@click.option("--email", "-e", prompt=True, help="Account email address")
 @click.option(
-    "--password", "-p", prompt=True, hide_input=True, confirmation_prompt=True, help="Password"
+    "--email",
+    "-e",
+    prompt=True,
+    metavar="EMAIL",
+    help="Account email address",
 )
-@click.option("--name", "-d", "display_name", prompt="Display name", help="Display name")
+@click.option(
+    "--password",
+    "-p",
+    prompt=True,
+    hide_input=True,
+    confirmation_prompt=True,
+    metavar="PASS",
+    help="Password",
+)
+@click.option(
+    "--name",
+    "-d",
+    "display_name",
+    prompt="Display name",
+    metavar="NAME",
+    help="Display name",
+)
 @json_opt
 @click.pass_context
 def register(
@@ -188,7 +227,7 @@ def register(
 
     if resp.status_code not in (200, 201):
         detail = extract_detail(resp)
-        console.print(f"[red bold]Error:[/] Registration failed: {detail}")
+        console.print(f"[red bold]Error:[/] Registration failed: {escape(detail)}")
         raise SystemExit(1)
 
     data = resp.json()
@@ -204,4 +243,7 @@ def register(
         print_json(data)
         return
 
-    out.print(f"[green]Account created[/] and logged in as [bold]{display_name}[/] ({email})")
+    out.print(
+        f"[green]Account created[/] and logged in as"
+        f" [bold]{escape(display_name)}[/] ({escape(email)})"
+    )

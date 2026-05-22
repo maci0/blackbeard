@@ -102,6 +102,8 @@ describe('canvasToYaml', () => {
     const yaml = canvasToYaml(nodes)
 
     expect(yaml).toContain('role: Sparse')
+    expect(yaml).toContain('kind: Agent')
+    expect(yaml).toContain('apiVersion: blackbeard/v1')
     expect(yaml).not.toContain('goal:')
     expect(yaml).not.toContain('backstory:')
     expect(yaml).not.toContain('llm:')

@@ -373,7 +373,10 @@ def test_build_muninndb_backend_method():
     """_build_muninndb_backend should construct a MuninnMemoryBackend with correct params."""
     loader = ResourceLoader({})
 
-    with patch("blackbeard.engine.memory.muninn.HAS_MUNINN", True):
+    with (
+        patch("blackbeard.engine.memory.muninn.HAS_MUNINN", True),
+        patch("blackbeard.engine.loader.check_url_ssrf", return_value=None),
+    ):
         backend = loader._build_muninndb_backend(
             {
                 "provider": "muninndb",

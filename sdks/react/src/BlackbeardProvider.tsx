@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useMemo } from 'react'
 import type { BlackbeardConfig } from './types'
 
 const BlackbeardContext = createContext<BlackbeardConfig | null>(null)
@@ -19,9 +19,10 @@ export interface BlackbeardProviderProps extends BlackbeardConfig {
  * </BlackbeardProvider>
  * ```
  */
-export function BlackbeardProvider({ baseUrl, apiKey, token, children }: BlackbeardProviderProps) {
+export function BlackbeardProvider({ baseUrl, apiKey, token, timeout, children }: BlackbeardProviderProps) {
+  const value = useMemo(() => ({ baseUrl, apiKey, token, timeout }), [baseUrl, apiKey, token, timeout])
   return (
-    <BlackbeardContext.Provider value={{ baseUrl, apiKey, token }}>
+    <BlackbeardContext.Provider value={value}>
       {children}
     </BlackbeardContext.Provider>
   )

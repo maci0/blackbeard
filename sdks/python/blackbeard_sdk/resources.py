@@ -8,6 +8,8 @@ from urllib.parse import quote
 import httpx
 import yaml
 
+from blackbeard_sdk.errors import raise_for_status
+
 # Canonical kind-to-plural mapping matching backend/blackbeard/kinds.py
 KIND_TO_PLURAL: dict[str, str] = {
     "Agent": "agents",
@@ -22,6 +24,7 @@ KIND_TO_PLURAL: dict[str, str] = {
     "Role": "roles",
     "RoleBinding": "role-bindings",
     "Automation": "automations",
+    "Namespace": "namespaces",
 }
 
 
@@ -75,7 +78,7 @@ class ResourceMixin:
         if label_selector:
             params["label_selector"] = label_selector
         resp = self._http.get(f"/api/v1/{plural}", params=params)
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()["items"]
 
     def get(self, kind: str, name: str, namespace: str = "default") -> dict[str, Any]:
@@ -94,7 +97,7 @@ class ResourceMixin:
             f"/api/v1/{plural}/{quote(name, safe='')}",
             params={"namespace": namespace},
         )
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()
 
     def create(self, resource: dict[str, Any]) -> dict[str, Any]:
@@ -114,7 +117,7 @@ class ResourceMixin:
             raise ValueError("Resource dict must contain a 'kind' key")
         plural = _kind_plural(kind)
         resp = self._http.post(f"/api/v1/{plural}", json=resource)
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()
 
     def update(
@@ -142,7 +145,7 @@ class ResourceMixin:
             params={"namespace": namespace},
             json=resource,
         )
-        resp.raise_for_status()
+        raise_for_status(resp)
         return resp.json()
 
     def delete(self, kind: str, name: str, namespace: str = "default") -> None:
@@ -158,7 +161,7 @@ class ResourceMixin:
             f"/api/v1/{plural}/{quote(name, safe='')}",
             params={"namespace": namespace},
         )
-        resp.raise_for_status()
+        raise_for_status(resp)
 
     def apply(self, resources: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Create or update multiple resources (sequential upsert).

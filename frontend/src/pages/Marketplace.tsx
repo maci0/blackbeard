@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react'
 import { useDocumentTitle } from '@/hooks'
 import { Store, ExternalLink, Download, Tag, Lock } from 'lucide-react'
-import { api, ApiError } from '@/api/client'
+import { api } from '@/api/client'
 import { useToastStore } from '@/stores/toastStore'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
-import { cn } from '@/lib/utils'
+import { cn, getErrorMessage } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -197,7 +197,7 @@ function RepoCard({
           ) : importing ? (
             <>
               <Spinner size="sm" label="Importing" />
-              Importing...
+              Importing…
             </>
           ) : (
             <>
@@ -258,8 +258,7 @@ export default function Marketplace() {
           setUrl('')
         }
       } catch (err) {
-        const message =
-          err instanceof ApiError ? err.message : 'Import failed. Check the URL and try again.'
+        const message = getErrorMessage(err, 'Import failed. Check the URL and try again.')
         error(message)
       } finally {
         if (isBuiltIn) {
@@ -316,6 +315,7 @@ export default function Marketplace() {
               e.preventDefault()
               handleUrlImport()
             }}
+            noValidate
             className="flex flex-col gap-3 sm:flex-row"
           >
             <div className="relative flex-1">
@@ -346,7 +346,7 @@ export default function Marketplace() {
               {importing ? (
                 <>
                   <Spinner size="sm" label="Importing from URL" />
-                  Importing...
+                  Importing…
                 </>
               ) : (
                 <>

@@ -16,10 +16,11 @@ describe('formatDate', () => {
 
   it('formats a valid date string', () => {
     const result = formatDate('2024-06-15T10:30:00Z')
-    expect(result).toMatch(/2024/)
-    expect(result).toMatch(/15/)
-    expect(result).toMatch(/:/)
+    expect(result).toMatch(/\b2024\b/)
+    expect(result).toMatch(/\b15\b/)
+    expect(result).toMatch(/\d{1,2}:\d{2}/)
     expect(result.length).toBeGreaterThan(8)
+    expect(result).not.toBe('—')
   })
 
   it('includes year for dates in a different year', () => {

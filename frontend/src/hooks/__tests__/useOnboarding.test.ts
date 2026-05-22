@@ -1,9 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useOnboarding } from '../useOnboarding'
 
 describe('useOnboarding', () => {
   beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
     localStorage.clear()
   })
 

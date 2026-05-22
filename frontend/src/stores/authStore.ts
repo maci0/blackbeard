@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api, ApiError } from '@/api/client'
+import { getErrorMessage } from '@/lib/utils'
 
 export interface User {
   id: string
@@ -70,7 +71,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       )
       applyAuthResult(result, set)
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Login failed'
+      const message = getErrorMessage(err, 'Login failed')
       set({ error: message, loading: false })
       throw err
     }
@@ -85,7 +86,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       )
       applyAuthResult(result, set)
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Registration failed'
+      const message = getErrorMessage(err, 'Registration failed')
       set({ error: message, loading: false })
       throw err
     }

@@ -7,11 +7,13 @@ from typing import Any
 
 import click
 import httpx
+from rich.markup import escape
 from rich.table import Table
 
 from blackbeard_cli.helpers import (
     STATUS_COLORS,
     TERMINAL_STATUSES,
+    HelpCommand,
     console,
     handle_http_error,
     handle_request_error,
@@ -25,6 +27,7 @@ from blackbeard_cli.helpers import (
 
 @click.command(
     "executions",
+    cls=HelpCommand,
     epilog="""\b
 Examples:
   blackbeard executions
@@ -34,12 +37,15 @@ Examples:
   blackbeard executions --json
 """,
 )
-@click.option("--crew", "-c", default=None, help="Filter by crew name")
+@click.option("--crew", "-c", default=None, metavar="NAME", help="Filter by crew name")
 @click.option(
     "--status",
     "status_filter",
     default=None,
-    type=click.Choice(["queued", "running", "completed", "failed", "cancelled"]),
+    type=click.Choice(
+        ["queued", "running", "completed", "failed", "cancelled"],
+        case_sensitive=False,
+    ),
     help="Filter by status",
 )
 @click.option(
@@ -87,11 +93,19 @@ def executions_list(
 
     items = data.get("items", [])
     if not items:
-        out.print("[dim]No executions found.[/]")
+        msg = "No executions found"
+        filters = []
+        if crew:
+            filters.append(f"crew={crew}")
+        if status_filter:
+            filters.append(f"status={status_filter}")
+        if filters:
+            msg += f" matching {', '.join(filters)}"
+        out.print(f"[dim]{msg}.[/]")
         return
 
     table = Table(title="Executions")
-    table.add_column("ID", style="dim", width=12)
+    table.add_column("ID", style="dim", no_wrap=True)
     table.add_column("Crew", style="bold")
     table.add_column("Status")
     table.add_column("Created")
@@ -99,7 +113,7 @@ def executions_list(
     table.add_column("Cost", justify="right")
 
     for ex in items:
-        ex_id = str(ex.get("id", "—"))[:12]
+        ex_id = str(ex.get("id", "—"))
         status_val = ex.get("status", "—")
         color = STATUS_COLORS.get(status_val, "dim")
         tokens = ex.get("total_tokens")
@@ -120,12 +134,13 @@ def executions_list(
     out.print(table)
     total = data.get("total", len(items))
     if total > len(items):
-        out.print(f"[dim]Showing {len(items)} of {total} (increase --limit)[/]")
+        out.print(f"[dim]Showing {len(items)} of {total} (increase --limit to see more)[/]")
     else:
         out.print(f"[dim]{len(items)} execution(s)[/]")
 
 
 @click.command(
+    cls=HelpCommand,
     epilog="""\b
 Examples:
   blackbeard events abc-123
@@ -177,6 +192,7 @@ def events(
     url = f"{server}/api/v1/executions/{execution_id}/events"
     after = -1
     event_count = 0
+    terminal_status = ""
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
@@ -210,8 +226,6 @@ def events(
                         out.print(f"[dim]{ts}[/]  [{color}]{etype}[/]  {summary}")
 
                 if not follow:
-                    if not is_json and event_count:
-                        out.print(f"[dim]{event_count} event(s)[/]")
                     break
 
                 has_more = data.get("has_more", False)
@@ -220,19 +234,25 @@ def events(
                         f"{server}/api/v1/executions/{execution_id}", headers=headers
                     )
                     if exec_resp.status_code == 200:
-                        status = exec_resp.json().get("status", "")
-                        if status in TERMINAL_STATUSES:
+                        terminal_status = exec_resp.json().get("status", "")
+                        if terminal_status in TERMINAL_STATUSES:
                             if not is_json:
-                                color = STATUS_COLORS.get(status, "dim")
-                                out.print(f"\n[{color} bold]Execution {status}[/]")
+                                color = STATUS_COLORS.get(terminal_status, "dim")
+                                out.print(f"\n[{color} bold]Execution {terminal_status}[/]")
                             break
 
                     time.sleep(interval)
 
     except KeyboardInterrupt:
         if not is_json:
-            console.print("\n[dim]Stopped following.[/]")
+            console.print(f"\n[dim]Stopped following ({event_count} event(s)).[/]")
         raise SystemExit(130) from None
+
+    if not is_json and event_count:
+        out.print(f"[dim]{event_count} event(s)[/]")
+
+    if terminal_status in ("failed", "cancelled"):
+        raise SystemExit(1)
 
 
 def _event_color(event_type: str) -> str:
@@ -248,19 +268,23 @@ def _event_color(event_type: str) -> str:
 def _event_summary(event_type: str, data: dict[str, Any]) -> str:
     parts = []
     if "task_name" in data:
-        parts.append(f"task={data['task_name']}")
+        parts.append(f"task={escape(str(data['task_name']))}")
     if "agent_name" in data:
-        parts.append(f"agent={data['agent_name']}")
+        parts.append(f"agent={escape(str(data['agent_name']))}")
     if "tool_name" in data:
-        parts.append(f"tool={data['tool_name']}")
+        parts.append(f"tool={escape(str(data['tool_name']))}")
     if "status" in data:
-        parts.append(f"status={data['status']}")
+        parts.append(f"status={escape(str(data['status']))}")
     if "crew_name" in data:
-        parts.append(f"crew={data['crew_name']}")
+        parts.append(f"crew={escape(str(data['crew_name']))}")
+    if "message" in data:
+        msg = str(data["message"])[:120]
+        parts.append(f"msg={escape(msg)}")
     return " ".join(parts) if parts else ""
 
 
 @click.command(
+    cls=HelpCommand,
     epilog="""\b
 Examples:
   blackbeard cancel abc-123
@@ -272,6 +296,7 @@ Examples:
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @click.option(
     "--json",
+    "-j",
     "output_json",
     is_flag=True,
     default=False,
@@ -312,4 +337,4 @@ def cancel(ctx: click.Context, execution_id: str, yes: bool, output_json: bool =
         print_json(data)
         return
 
-    out.print(f"[green]Cancelled[/] execution [bold]{execution_id}[/]")
+    out.print(f"[green]Cancelled[/] execution [bold]{escape(execution_id)}[/]")

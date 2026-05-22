@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Blackbeard
 
-Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation) with a visual graph editor, async execution engine, RBAC, and LiteLLM proxy for model routing (with built-in spend/token/latency tracking).
+Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Namespace) with a visual graph editor, async execution engine, RBAC, and LiteLLM proxy for model routing (with built-in spend/token/latency tracking).
 
 ## Commands
 
@@ -64,15 +64,15 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Auth & RBAC**: Built-in email/password with JWT (access 15min + refresh 7d). User/Group models in `models/user.py`. Role and RoleBinding as resource kinds. Predefined roles seeded by `deploy/seed.sh`. Auth middleware accepts both `X-API-Key` and `Authorization: Bearer <jwt>`. Agent execution tracks principal chain: User → Crew → Agent (ServiceAccount via `spec.serviceAccount`, defaults to `sa-<name>`).
 
-**Middleware stack** (outermost → innermost): CORS (`CORSMiddleware` via `add_middleware`) → security headers → API key auth (hmac.compare_digest or JWT Bearer) + request ID → body size limiter (10MB). The three `app.middleware("http")` middlewares are registered LIFO in `main.py`. Auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), and health checks are public (no auth required).
+**Middleware stack** (outermost → innermost): CORS (`CORSMiddleware` via `add_middleware`) → security headers → API key auth (hmac.compare_digest or JWT Bearer) + request ID → body size limiter (10MB). The three `app.middleware("http")` middlewares are registered LIFO in `main.py`. Auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), health checks, and automation webhook paths (`/automations/{name}/webhook`) are public (no auth required — automation webhooks use their own HMAC validation inside the route handler).
 
-**CLI** (`cli/` — separate package `blackbeard-cli`): Standalone binary with no server deps (click, httpx, rich, pyyaml, jsonschema only). 23 top-level commands (including 4 groups with subcommands) across 6 modules. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
+**CLI** (`cli/` — separate package `blackbeard-cli`): Standalone package with no server deps (click, httpx, rich, pyyaml, jsonschema only). 28 commands (including 4 groups with subcommands) across 6 modules. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
 
 **HITL (Human-in-the-Loop)**: Tasks with `human_input: true` pause execution. Frontend polls for `hitl_request` events and submits responses via `POST /executions/{id}/respond`. Response recorded as `hitl_response` event.
 
 **OpenTelemetry**: Optional trace export via `OTEL_ENDPOINT` env var. When unset, tracing is disabled with no overhead.
 
-**External services**: PostgreSQL (resources + executions + users), Valkey (cache), LiteLLM proxy (model routing to Vertex AI / OpenAI, with per-execution virtual keys for budget enforcement + spend tracking).
+**External services**: PostgreSQL (resources + executions + users), Valkey (real-time collaboration pub/sub for multi-replica WebSocket fan-out + health checks), LiteLLM proxy (model routing to Vertex AI / OpenAI, with per-execution virtual keys for budget enforcement + spend tracking).
 
 ### Frontend (React + React Flow)
 
@@ -102,7 +102,7 @@ DB schema is managed in `backend/entrypoint.sh`: first creates PostgreSQL enum t
 
 ## Conventions
 
-- **Python**: ruff lint + format, mypy strict, `from __future__ import annotations` in all modules, type annotations on all functions. Rules: `E F I N W UP B SIM ANN RUF PT C4 PIE T20 TCH`. Tests exempt from `ANN` and `E402`; API and auth files exempt from `TCH` and `B008` (FastAPI needs types at runtime); API and executor files exempt from `PT` (functions named `test_*` are not pytest tests).
+- **Python**: ruff lint + format, mypy strict, `from __future__ import annotations` in all modules, type annotations on all functions. Rules: `E F I N W UP B SIM ANN RUF PT C4 PIE T20 TCH`. Tests exempt from `ANN E402 PT011 B017 TC002 E501 SIM117`; API and auth files exempt from `TCH` and `B008` (FastAPI needs types at runtime); API and executor files exempt from `PT` (functions named `test_*` are not pytest tests).
 - **TypeScript**: ESLint `recommendedTypeChecked` + Prettier. Strict mode, `noUncheckedIndexedAccess`. Use `void` for fire-and-forget promises in React (e.g., `onClick={() => void handleClick()}`).
 - **Imports**: Use `@/` path alias in frontend. Backend uses relative imports within packages.
 - **Resource names**: lowercase alphanumeric + hyphens (`^[a-z0-9][a-z0-9\-]*$`).

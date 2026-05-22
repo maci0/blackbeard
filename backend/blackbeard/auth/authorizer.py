@@ -16,7 +16,7 @@ from blackbeard.models import Resource
 
 logger = logging.getLogger(__name__)
 
-# OrderedDict gives O(1) FIFO eviction vs heapq's O(n log k) scan.
+# OrderedDict gives O(1) FIFO eviction via move_to_end + popitem.
 _cache: collections.OrderedDict[str, tuple[bool, float]] = collections.OrderedDict()
 _cache_lock = threading.Lock()
 _CACHE_TTL_S = 30.0
@@ -192,7 +192,7 @@ class Authorizer:
     ) -> list[dict[str, Any]]:
         """Find all RoleBinding specs where the subject matches."""
         result = await self._session.execute(
-            select(Resource.spec).where(Resource.kind == ResourceKind.ROLE_BINDING)
+            select(Resource.spec).where(Resource.kind == ResourceKind.ROLE_BINDING).limit(1000)
         )
         rows = result.scalars().all()
         matching: list[dict[str, Any]] = []

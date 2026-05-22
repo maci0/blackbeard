@@ -17,3 +17,7 @@ async def test_health_response_has_no_extra_fields(client):
     assert response.status_code == 200
     data = response.json()
     assert set(data.keys()) == {"status", "service", "version", "uptime_s"}
+    assert data["status"] == "ok"
+    assert data["service"] == "blackbeard"
+    assert isinstance(data["uptime_s"], (int, float))
+    assert data["uptime_s"] >= 0

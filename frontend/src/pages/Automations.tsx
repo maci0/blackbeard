@@ -14,14 +14,14 @@ import {
   Check,
 } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { api, ApiError } from '@/api/client'
+import { api } from '@/api/client'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { cn } from '@/lib/utils'
+import { cn, getErrorMessage } from '@/lib/utils'
 import { formatDate } from '@/lib/formatters'
 import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
@@ -119,18 +119,22 @@ function EnabledToggle({
           e.stopPropagation()
         }
       }}
-      className={cn(
-        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
-        enabled ? 'bg-primary' : 'bg-muted-foreground/30',
-      )}
+      className="inline-flex min-h-[44px] min-w-[44px] shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
     >
       <span
         aria-hidden="true"
         className={cn(
-          'pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
-          enabled ? 'translate-x-[18px]' : 'translate-x-0.5',
+          'inline-flex h-5 w-9 items-center rounded-full transition-colors',
+          enabled ? 'bg-primary' : 'bg-muted-foreground/30',
         )}
-      />
+      >
+        <span
+          className={cn(
+            'pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
+            enabled ? 'translate-x-[18px]' : 'translate-x-0.5',
+          )}
+        />
+      </span>
     </button>
   )
 }
@@ -235,7 +239,7 @@ function CreateAutomationDialog({
       onOpenChange(false)
       onCreated()
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to create automation'
+      const message = getErrorMessage(err, 'Failed to create automation')
       setError(message)
       toasts.error(message)
     } finally {
@@ -274,178 +278,187 @@ function CreateAutomationDialog({
             </div>
           )}
 
-          <form onSubmit={(e) => void handleSubmit(e)} className="mt-4 space-y-4">
-            {/* Name */}
-            <div>
-              <label htmlFor="automation-name" className="mb-1.5 block text-sm font-medium">
-                Name <span className="text-destructive">*</span>
-              </label>
-              <input
-                id="automation-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                autoFocus
-                autoComplete="off"
-                spellCheck={false}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder="e.g. nightly-research"
-              />
-            </div>
-
-            {/* Target */}
-            <div className="grid grid-cols-2 gap-3">
+          <form onSubmit={(e) => void handleSubmit(e)} className="mt-4">
+            <fieldset disabled={submitting} className="space-y-4">
+              {/* Name */}
               <div>
-                <label
-                  htmlFor="automation-target-kind"
-                  className="mb-1.5 block text-sm font-medium"
-                >
-                  Target kind <span className="text-destructive">*</span>
-                </label>
-                <select
-                  id="automation-target-kind"
-                  value={targetKind}
-                  onChange={(e) => setTargetKind(e.target.value)}
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="Crew">Crew</option>
-                  <option value="Flow">Flow</option>
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor="automation-target-name"
-                  className="mb-1.5 block text-sm font-medium"
-                >
-                  Target name <span className="text-destructive">*</span>
+                <label htmlFor="automation-name" className="mb-1.5 block text-sm font-medium">
+                  Name <span className="text-destructive">*</span>
                 </label>
                 <input
-                  id="automation-target-name"
+                  id="automation-name"
                   type="text"
-                  value={targetName}
-                  onChange={(e) => setTargetName(e.target.value)}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   required
+                  autoFocus
                   autoComplete="off"
                   spellCheck={false}
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  placeholder="e.g. research-crew"
+                  placeholder="e.g. nightly-research"
                 />
               </div>
-            </div>
 
-            {/* Trigger type */}
-            <div>
-              <label htmlFor="automation-trigger" className="mb-1.5 block text-sm font-medium">
-                Trigger type <span className="text-destructive">*</span>
-              </label>
-              <select
-                id="automation-trigger"
-                value={triggerType}
-                onChange={(e) => setTriggerType(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="cron">Cron (scheduled)</option>
-                <option value="webhook">Webhook</option>
-                <option value="api">API</option>
-              </select>
-            </div>
+              {/* Target */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor="automation-target-kind"
+                    className="mb-1.5 block text-sm font-medium"
+                  >
+                    Target kind <span className="text-destructive">*</span>
+                  </label>
+                  <select
+                    id="automation-target-kind"
+                    value={targetKind}
+                    onChange={(e) => setTargetKind(e.target.value)}
+                    className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="Crew">Crew</option>
+                    <option value="Flow">Flow</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="automation-target-name"
+                    className="mb-1.5 block text-sm font-medium"
+                  >
+                    Target name <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    id="automation-target-name"
+                    type="text"
+                    value={targetName}
+                    onChange={(e) => setTargetName(e.target.value)}
+                    required
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder="e.g. research-crew"
+                  />
+                </div>
+              </div>
 
-            {/* Cron schedule */}
-            {triggerType === 'cron' && (
+              {/* Trigger type */}
               <div>
-                <label htmlFor="automation-schedule" className="mb-1.5 block text-sm font-medium">
-                  Cron expression <span className="text-destructive">*</span>
+                <label htmlFor="automation-trigger" className="mb-1.5 block text-sm font-medium">
+                  Trigger type <span className="text-destructive">*</span>
                 </label>
-                <input
-                  id="automation-schedule"
-                  type="text"
-                  value={schedule}
-                  onChange={(e) => setSchedule(e.target.value)}
+                <select
+                  id="automation-trigger"
+                  value={triggerType}
+                  onChange={(e) => setTriggerType(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="cron">Cron (scheduled)</option>
+                  <option value="webhook">Webhook</option>
+                  <option value="api">API</option>
+                </select>
+              </div>
+
+              {/* Cron schedule */}
+              {triggerType === 'cron' && (
+                <div>
+                  <label htmlFor="automation-schedule" className="mb-1.5 block text-sm font-medium">
+                    Cron expression <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    id="automation-schedule"
+                    type="text"
+                    value={schedule}
+                    onChange={(e) => setSchedule(e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-describedby={
+                      cronPreview && cronPreview !== schedule
+                        ? 'automation-schedule-preview'
+                        : undefined
+                    }
+                    className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder="0 9 * * 1-5"
+                  />
+                  {cronPreview && cronPreview !== schedule && (
+                    <p
+                      id="automation-schedule-preview"
+                      className="mt-1.5 text-xs text-muted-foreground"
+                      aria-live="polite"
+                    >
+                      Runs: {cronPreview}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Webhook info */}
+              {triggerType === 'webhook' && (
+                <div className="rounded-md border bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground">
+                  <p>
+                    A webhook URL and secret will be generated after creation. Use them to trigger
+                    this automation from external services.
+                  </p>
+                </div>
+              )}
+
+              {/* API info */}
+              {triggerType === 'api' && (
+                <div className="rounded-md border bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground">
+                  <p>
+                    Trigger this automation via the API using{' '}
+                    <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+                      POST /api/v1/automations/&#123;name&#125;/trigger
+                    </code>
+                  </p>
+                </div>
+              )}
+
+              {/* Inputs */}
+              <div>
+                <label htmlFor="automation-inputs" className="mb-1.5 block text-sm font-medium">
+                  Default inputs (JSON)
+                </label>
+                <textarea
+                  id="automation-inputs"
+                  value={inputs}
+                  onChange={(e) => setInputs(e.target.value)}
+                  rows={3}
                   autoComplete="off"
                   spellCheck={false}
                   className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  placeholder="0 9 * * 1-5"
+                  placeholder='{"topic": "AI safety"}'
                 />
-                {cronPreview && cronPreview !== schedule && (
-                  <p className="mt-1.5 text-xs text-muted-foreground" aria-live="polite">
-                    Runs: {cronPreview}
-                  </p>
-                )}
               </div>
-            )}
 
-            {/* Webhook info */}
-            {triggerType === 'webhook' && (
-              <div className="rounded-md border bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground">
-                <p>
-                  A webhook URL and secret will be generated after creation. Use them to trigger
-                  this automation from external services.
-                </p>
+              {/* Enabled */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Enabled</span>
+                <EnabledToggle
+                  enabled={enabled}
+                  onChange={setEnabled}
+                  label="Enable automation on creation"
+                />
               </div>
-            )}
 
-            {/* API info */}
-            {triggerType === 'api' && (
-              <div className="rounded-md border bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground">
-                <p>
-                  Trigger this automation via the API using{' '}
-                  <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
-                    POST /api/v1/automations/&#123;name&#125;/trigger
-                  </code>
-                </p>
-              </div>
-            )}
-
-            {/* Inputs */}
-            <div>
-              <label htmlFor="automation-inputs" className="mb-1.5 block text-sm font-medium">
-                Default inputs (JSON)
-              </label>
-              <textarea
-                id="automation-inputs"
-                value={inputs}
-                onChange={(e) => setInputs(e.target.value)}
-                rows={3}
-                autoComplete="off"
-                spellCheck={false}
-                className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder='{"topic": "AI safety"}'
-              />
-            </div>
-
-            {/* Enabled */}
-            <div className="flex items-center justify-between">
-              <label htmlFor="automation-enabled" className="text-sm font-medium">
-                Enabled
-              </label>
-              <EnabledToggle
-                enabled={enabled}
-                onChange={setEnabled}
-                label="Enable automation on creation"
-              />
-            </div>
-
-            {/* Actions */}
-            <div className="flex justify-end gap-3 pt-2">
-              <Dialog.Close asChild>
+              {/* Actions */}
+              <div className="flex justify-end gap-3 pt-2">
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Cancel
+                  </button>
+                </Dialog.Close>
                 <button
-                  type="button"
-                  className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  type="submit"
+                  disabled={submitting}
+                  aria-busy={submitting}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Cancel
+                  {submitting && <Spinner size="sm" className="text-current" />}
+                  Create Automation
                 </button>
-              </Dialog.Close>
-              <button
-                type="submit"
-                disabled={submitting}
-                aria-busy={submitting}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {submitting && <Spinner size="sm" className="text-current" />}
-                Create Automation
-              </button>
-            </div>
+              </div>
+            </fieldset>
           </form>
 
           <Dialog.Close asChild>
@@ -475,7 +488,7 @@ function WebhookDetails({ url, secret }: { url?: string; secret?: string }) {
     try {
       await navigator.clipboard.writeText(text)
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setTimeout(() => setCopied(false), 3000)
     } catch {
       // clipboard API not available
     }
@@ -485,9 +498,15 @@ function WebhookDetails({ url, secret }: { url?: string; secret?: string }) {
 
   return (
     <div className="mt-2 space-y-1.5">
+      <span className="sr-only" role="status" aria-live="polite">
+        {copiedUrl ? 'Webhook URL copied' : copiedSecret ? 'Webhook secret copied' : ''}
+      </span>
       {url && (
         <div className="flex items-center gap-2">
-          <code className="flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-xs">
+          <code
+            className="flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-xs"
+            title={url}
+          >
             {url}
           </code>
           <button
@@ -495,8 +514,8 @@ function WebhookDetails({ url, secret }: { url?: string; secret?: string }) {
               e.stopPropagation()
               void copyToClipboard(url, setCopiedUrl)
             }}
-            aria-label="Copy webhook URL"
-            className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={copiedUrl ? 'Webhook URL copied' : 'Copy webhook URL'}
+            className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {copiedUrl ? (
               <Check className="h-3.5 w-3.5 text-green-600" />
@@ -508,7 +527,10 @@ function WebhookDetails({ url, secret }: { url?: string; secret?: string }) {
       )}
       {secret && (
         <div className="flex items-center gap-2">
-          <code className="flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-xs">
+          <code
+            className="flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-xs"
+            title={secret}
+          >
             {secret}
           </code>
           <button
@@ -516,8 +538,8 @@ function WebhookDetails({ url, secret }: { url?: string; secret?: string }) {
               e.stopPropagation()
               void copyToClipboard(secret, setCopiedSecret)
             }}
-            aria-label="Copy webhook secret"
-            className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={copiedSecret ? 'Webhook secret copied' : 'Copy webhook secret'}
+            className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {copiedSecret ? (
               <Check className="h-3.5 w-3.5 text-green-600" />
@@ -576,7 +598,7 @@ export default function Automations() {
         })),
       )
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to load automations')
+      setError(getErrorMessage(err, 'Failed to load automations'))
     } finally {
       setLoading(false)
     }
@@ -595,7 +617,7 @@ export default function Automations() {
       setDeleteTarget(null)
       void fetchAutomations()
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to delete automation'
+      const message = getErrorMessage(err, 'Failed to delete automation')
       toasts.error(message)
     } finally {
       setDeleting(false)
@@ -606,9 +628,9 @@ export default function Automations() {
     setTriggeringName(name)
     try {
       await api.post(`/api/v1/automations/${name}/trigger`, {})
-      toasts.info('Automation triggered — check Executions for results')
+      toasts.info(`Automation "${name}" started — view results in Executions`)
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to trigger automation'
+      const message = getErrorMessage(err, 'Failed to trigger automation')
       toasts.error(message)
     } finally {
       setTriggeringName(null)
@@ -632,7 +654,7 @@ export default function Automations() {
       )
       void fetchAutomations()
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to update automation status'
+      const message = getErrorMessage(err, 'Failed to update automation status')
       toasts.error(message)
     } finally {
       setTogglingName(null)
@@ -710,7 +732,7 @@ export default function Automations() {
                 ref={searchRef}
                 id="automations-search"
                 type="search"
-                placeholder="Search automations..."
+                placeholder="Search automations…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 autoComplete="off"
@@ -778,10 +800,7 @@ export default function Automations() {
                     return (
                       <tr
                         key={automation.id}
-                        tabIndex={0}
-                        role="row"
-                        aria-label={`Automation: ${automation.name}, target: ${automation.spec.target_name ?? 'none'}, trigger: ${automation.spec.trigger_type ?? 'none'}`}
-                        className="group transition-colors duration-150 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                        className="group transition-colors duration-150 hover:bg-muted/50"
                       >
                         {/* Name */}
                         <td className="px-4 py-3 font-medium">{automation.name}</td>
@@ -853,7 +872,7 @@ export default function Automations() {
                               aria-label={`Trigger automation ${automation.name} now`}
                               aria-busy={isTriggering || undefined}
                               title="Trigger now"
-                              className="flex h-[36px] w-[36px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                              className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {isTriggering ? (
                                 <Spinner size="sm" label="Triggering" />
@@ -868,7 +887,7 @@ export default function Automations() {
                               }}
                               aria-label={`Delete automation ${automation.name}`}
                               title="Delete"
-                              className="flex h-[36px] w-[36px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>

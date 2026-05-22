@@ -37,8 +37,11 @@ async def test_list_with_label_selector(client: AsyncClient):
     )
     assert resp.status_code == 200
     data = resp.json()
-    # SQLite may not support JSONB contains correctly, but the endpoint should not crash
     assert isinstance(data["items"], list)
+    # SQLite JSON support varies; if filtering works, verify only matching items returned
+    if data["total"] > 0:
+        for item in data["items"]:
+            assert item["metadata"].get("labels", {}).get("env") == "prod"
 
 
 async def test_list_with_invalid_label_selector(client: AsyncClient):

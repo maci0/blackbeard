@@ -108,7 +108,7 @@ async def test_flow_step_hooks_invalid_additional_prop(client):
 
 def test_call_hook_success():
     """call_hook calls the resolved function."""
-    from blackbeard.engine.executor import call_hook
+    from blackbeard.engine.flow_runner import call_hook
     from blackbeard.engine.loader import ResourceLoader
 
     mock_fn = MagicMock()
@@ -123,7 +123,7 @@ def test_call_hook_success():
 
 def test_call_hook_import_fails_does_not_crash():
     """call_hook logs warning when import fails but does not raise."""
-    from blackbeard.engine.executor import call_hook
+    from blackbeard.engine.flow_runner import call_hook
     from blackbeard.engine.loader import ResourceLoader
 
     loader = MagicMock(spec=ResourceLoader)
@@ -136,7 +136,7 @@ def test_call_hook_import_fails_does_not_crash():
 
 def test_call_hook_exception_does_not_crash():
     """call_hook logs warning when hook raises but does not propagate."""
-    from blackbeard.engine.executor import call_hook
+    from blackbeard.engine.flow_runner import call_hook
     from blackbeard.engine.loader import ResourceLoader
 
     mock_fn = MagicMock(side_effect=RuntimeError("hook broke"))
@@ -154,7 +154,7 @@ def test_call_hook_exception_does_not_crash():
 def test_flow_step_hooks_called():
     """Flow step before/after hooks are called during _run_flow_steps."""
 
-    from blackbeard.engine.executor import _run_flow_steps
+    from blackbeard.engine.flow_runner import run_flow_steps as _run_flow_steps
 
     mock_crew = MagicMock()
     mock_crew.kickoff.return_value = MagicMock(raw="result")
@@ -204,9 +204,12 @@ def test_flow_step_hooks_called():
         MagicMock(),
     )
 
-    # Both before and after hooks should have been called
-    assert mock_loader.import_callable.call_count >= 2
-    assert hook_fn.call_count >= 2
+    # Both before and after hooks should have been imported and called
+    assert mock_loader.import_callable.call_count == 2
+    import_calls = [c.args[0] for c in mock_loader.import_callable.call_args_list]
+    assert import_calls[0] == "blackbeard.flows.pre", "before hook should be imported first"
+    assert import_calls[1] == "blackbeard.flows.post", "after hook should be imported second"
+    assert hook_fn.call_count == 2
 
 
 # ── Crew hooks wiring test ───────────────────────────────────────────

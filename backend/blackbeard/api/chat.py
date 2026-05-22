@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.config import settings
-from blackbeard.http_client import get_client
+from blackbeard.http_client import get_client, get_litellm_client
 from blackbeard.logging_config import request_id_var
 from blackbeard.models import User
 
@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 
 _RETRY_HEADERS = {"Retry-After": "30"}
+
+_MODEL_NAME_PATTERN = r"^[a-zA-Z0-9._:/@-]+$"
 
 
 class TokenUsage(BaseModel):
@@ -37,8 +39,7 @@ class TokenUsage(BaseModel):
 
 def _get_litellm_client() -> httpx.AsyncClient:
     """Return a shared httpx client for LiteLLM requests."""
-    key = settings.litellm_master_key.get_secret_value()
-    return get_client("litellm-chat", timeout=120.0, headers={"Authorization": f"Bearer {key}"})
+    return get_litellm_client("litellm-chat", timeout=120.0)
 
 
 def _extract_content(data: dict[str, Any]) -> tuple[str, TokenUsage]:
@@ -64,7 +65,12 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    model: str = Field(description="Model name from LiteLLM config", min_length=1, max_length=256)
+    model: str = Field(
+        description="Model name from LiteLLM config",
+        min_length=1,
+        max_length=256,
+        pattern=_MODEL_NAME_PATTERN,
+    )
     messages: list[ChatMessage] = Field(min_length=1, max_length=256)
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     max_tokens: int | None = Field(default=None, ge=1, le=128_000)
@@ -144,7 +150,6 @@ async def chat(
                 "model": body.model,
                 "http_status": resp.status_code,
                 "latency_ms": latency_ms,
-                "response_body_preview": error_body,
             },
         )
         if resp.status_code == 429:
@@ -174,7 +179,7 @@ async def chat(
                 "model": body.model,
                 "http_status": resp.status_code,
                 "latency_ms": latency_ms,
-                "response_body_preview": resp.text[:200] if resp.text else "",
+                "content_type": resp.headers.get("content-type", "unknown"),
             },
         )
         raise HTTPException(
@@ -221,11 +226,17 @@ class ModelTestResult(BaseModel):
     "/models/test",
     response_model=ModelTestResult,
     responses={
-        502: {"description": "LiteLLM proxy unreachable or model error"},
+        422: {"description": "Invalid model name"},
     },
 )
 async def test_model(
-    model: str = Body(..., embed=True, min_length=1, max_length=256),
+    model: str = Body(
+        ...,
+        embed=True,
+        min_length=1,
+        max_length=256,
+        pattern=_MODEL_NAME_PATTERN,
+    ),
     _user: User | None = Depends(get_current_user),
 ) -> ModelTestResult:
     """Test connectivity and API key validity for a specific model.
@@ -259,7 +270,6 @@ async def test_model(
                     "event": "model_test_failed",
                     "model": model,
                     "http_status": resp.status_code,
-                    "response_body_preview": error_body,
                 },
             )
             return ModelTestResult(
@@ -269,7 +279,15 @@ async def test_model(
                 error=f"Model request failed with status {resp.status_code}.",
             )
 
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError:
+            return ModelTestResult(
+                model=model,
+                status="error",
+                latency_ms=latency_ms,
+                error="Model proxy returned an unparseable response.",
+            )
         content, tokens = _extract_content(data)
 
         # Try to get model info (context length, parameter size) from Ollama.
@@ -292,8 +310,13 @@ async def test_model(
                         ctx_len = int(v)
                         break
                 param_size = info.get("details", {}).get("parameter_size")
-        except Exception:
-            logger.debug("Could not fetch Ollama model info for %s", model, exc_info=True)
+        except (httpx.HTTPError, ValueError, KeyError):
+            logger.warning(
+                "Could not fetch Ollama model info for %s",
+                model,
+                exc_info=True,
+                extra={"event": "ollama_model_info_failed", "model": model},
+            )
 
         logger.info(
             "Model test ok: model=%s tokens=%d latency_ms=%d",
@@ -418,7 +441,7 @@ async def list_available_models(
                 extra={
                     "event": "models_litellm_unparseable",
                     "http_status": resp.status_code,
-                    "response_body_preview": resp.text[:200] if resp.text else "",
+                    "content_type": resp.headers.get("content-type", "unknown"),
                 },
             )
             raise HTTPException(

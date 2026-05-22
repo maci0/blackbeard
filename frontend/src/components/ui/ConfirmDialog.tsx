@@ -53,6 +53,7 @@ export function ConfirmDialog({
           <div className="mt-6 flex justify-end gap-3">
             <Dialog.Close asChild>
               <button
+                type="button"
                 autoFocus
                 className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
@@ -60,6 +61,7 @@ export function ConfirmDialog({
               </button>
             </Dialog.Close>
             <button
+              type="button"
               onClick={() => void handleConfirm()}
               disabled={busy}
               aria-busy={busy}
@@ -71,6 +73,7 @@ export function ConfirmDialog({
           </div>
           <Dialog.Close asChild>
             <button
+              type="button"
               className="absolute right-3 top-3 flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Close"
               title="Close"
