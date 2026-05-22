@@ -63,11 +63,25 @@ $COMPOSE down --remove-orphans 2>/dev/null || true
 echo "Building images..."
 $COMPOSE build
 
+# Determine admin password — fixed in DEBUG mode, random otherwise
+DEBUG_MODE=$(grep -s '^DEBUG=' .env | cut -d= -f2 || echo "false")
+if [ "$DEBUG_MODE" = "true" ]; then
+  export BLACKBEARD_ADMIN_PASSWORD="${BLACKBEARD_ADMIN_PASSWORD:-blackbeard}"
+fi
+
 echo ""
 echo "Starting Blackbeard..."
-echo "  API:      http://localhost:8000"
 echo "  UI:       http://localhost:3000"
+echo "  API:      http://localhost:8000"
 echo "  LiteLLM:  http://localhost:4000"
+if [ "$DEBUG_MODE" = "true" ]; then
+  echo ""
+  echo "  Default login:"
+  echo "    Email:    admin@blackbeard.sh"
+  echo "    Password: ${BLACKBEARD_ADMIN_PASSWORD}"
+  echo ""
+  echo "  (Set BLACKBEARD_ADMIN_PASSWORD to change. Run deploy/seed.sh after startup.)"
+fi
 echo ""
 
 exec $COMPOSE up "$@"
