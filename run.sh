@@ -64,7 +64,7 @@ echo "Building images..."
 $COMPOSE build
 
 # Admin password — defaults to "blackbeard" for dev convenience
-export BLACKBEARD_ADMIN_PASSWORD="${BLACKBEARD_ADMIN_PASSWORD:-blackbeard}"
+export BLACKBEARD_ADMIN_PASSWORD="${BLACKBEARD_ADMIN_PASSWORD:-Blackbeard1}"
 DEBUG_MODE=$(grep -s '^DEBUG=' .env | cut -d= -f2 || echo "false")
 
 echo ""
