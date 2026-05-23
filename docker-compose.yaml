@@ -30,6 +30,7 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /app/credentials.json
     volumes:
       - ${GOOGLE_APPLICATION_CREDENTIALS:-deploy/docker/empty-credentials.json}:/app/credentials.json:ro
+      - ./examples:/app/examples:ro
     depends_on:
       postgres:
         condition: service_healthy

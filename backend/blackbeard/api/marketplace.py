@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/marketplace", tags=["marketplace"])
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-_EXAMPLES_DIR = _REPO_ROOT / "examples"
+_APP_DIR = Path(__file__).resolve().parent.parent.parent
+_EXAMPLES_DIR = _APP_DIR / "examples"
 
 _MAX_CLONE_TIMEOUT_S = 60
 _MAX_YAML_FILES = 200
