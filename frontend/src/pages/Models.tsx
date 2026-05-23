@@ -479,7 +479,7 @@ export default function Models() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const [testingModel, setTestingModel] = useState<string | null>(null)
+  const [testingModels, setTestingModels] = useState<Set<string>>(new Set())
   const deleteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -491,7 +491,7 @@ export default function Models() {
   const handleTestModel = async (resource: Resource) => {
     const name = resource.metadata.name
     const spec = resource.spec as { provider?: string; model?: string }
-    setTestingModel(name)
+    setTestingModels((prev) => new Set(prev).add(name))
     useToastStore.getState().info(`Checking connection to ${name}…`)
     try {
       const resp = await api.post<{ success: boolean; latency_ms?: number; error?: string }>(
@@ -510,7 +510,11 @@ export default function Models() {
         .getState()
         .error(`Connection to ${name} failed: ${getErrorMessage(err, 'check provider settings')}`)
     } finally {
-      setTestingModel(null)
+      setTestingModels((prev) => {
+        const next = new Set(prev)
+        next.delete(name)
+        return next
+      })
     }
   }
 
@@ -649,7 +653,7 @@ export default function Models() {
                 resource={resource}
                 onDelete={() => setDeleteTarget(resource.metadata.name)}
                 onTest={() => void handleTestModel(resource)}
-                testing={testingModel === resource.metadata.name}
+                testing={testingModels.has(resource.metadata.name)}
               />
             ))}
           </div>
