@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_yaml_dumper: Any = getattr(yaml, "CSafeDumper", yaml.SafeDumper)
+
 
 def generate_litellm_config(llm_connections: list[Resource]) -> str:
     """Generate a LiteLLM config.yaml from LLMConnection resources.
@@ -93,4 +95,4 @@ def generate_litellm_config(llm_connections: list[Resource]) -> str:
             "model_names": [m["model_name"] for m in model_list],
         },
     )
-    return yaml.safe_dump(config, default_flow_style=False, sort_keys=False)
+    return yaml.dump(config, Dumper=_yaml_dumper, default_flow_style=False, sort_keys=False)

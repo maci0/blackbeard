@@ -53,9 +53,9 @@ Starting Blackbeard...
 
 ## Step 2: Open the UI
 
-Navigate to **http://localhost:3000** in your browser. You will see the Studio page -- this is the visual graph editor where you design and manage crews.
+Navigate to **http://localhost:3000** in your browser. You will see the Dashboard page -- this shows execution metrics, resource counts, and recent activity. The platform is running but has no resources yet, so the dashboard will be empty.
 
-The platform is running but has no resources yet. You will add some in the next step.
+Use the sidebar to navigate to the **Studio** page (the visual graph editor) or any other page. You can also press `Cmd+K` (macOS) or `Ctrl+K` to open the command palette for quick navigation.
 
 ---
 
@@ -246,7 +246,7 @@ The Marketplace lets you import pre-built crews from git repositories or the bun
 ### From the UI
 
 1. Navigate to **http://localhost:3000/marketplace**
-2. Click **Import Built-in** to load the bundled Research Crew Starter
+2. Click **Import Built-in** to load all bundled example crews (research, code-review, content-pipeline, data-analysis, seo-writer, simple-crew, support-triage, and shared tools)
 3. Or paste an HTTPS git URL to import resources from any public repository
 
 ### From the API

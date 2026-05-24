@@ -265,7 +265,7 @@ Examples:
 """,
 )
 @click.argument("name")
-@click.option("--description", default="", metavar="TEXT", help="Group description")
+@click.option("--description", "-d", default="", metavar="TEXT", help="Group description")
 @json_opt
 @click.pass_context
 def group_create(

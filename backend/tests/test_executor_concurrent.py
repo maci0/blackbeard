@@ -90,9 +90,7 @@ def test_shutdown_executor_when_none():
         executor_mod._executor = None
 
         # Should NOT raise
-        with patch(
-            "blackbeard.engine.execution_listener.dispose_sync_engine"
-        ):
+        with patch("blackbeard.engine.execution_listener.dispose_sync_engine"):
             shutdown_executor()
 
         assert executor_mod._executor is None
@@ -108,15 +106,11 @@ def test_shutdown_executor_idempotent():
         # Force creation
         _get_executor()
 
-        with patch(
-            "blackbeard.engine.execution_listener.dispose_sync_engine"
-        ):
+        with patch("blackbeard.engine.execution_listener.dispose_sync_engine"):
             shutdown_executor()
         assert executor_mod._executor is None
 
-        with patch(
-            "blackbeard.engine.execution_listener.dispose_sync_engine"
-        ):
+        with patch("blackbeard.engine.execution_listener.dispose_sync_engine"):
             shutdown_executor()
         assert executor_mod._executor is None
     finally:

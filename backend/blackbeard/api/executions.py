@@ -25,7 +25,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from blackbeard import sse as sse_state
 from blackbeard.audit import audit_from_request, log_audit
-from blackbeard.auth.dependencies import get_current_user
+from blackbeard.auth.dependencies import get_current_user, require_permission
 from blackbeard.config import settings
 from blackbeard.engine import ExecutionError, ExecutionNotFoundError
 from blackbeard.engine import executor as _executor_mod
@@ -126,7 +126,7 @@ async def kickoff_crew(
         description="Namespace containing the crew",
     ),
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User | None = Depends(require_permission("run", "Crew")),
 ) -> ExecutionResponse:
     """Kick off a crew execution. Returns immediately with status=queued."""
     try:
@@ -195,7 +195,7 @@ async def train_crew_endpoint(
         description="Namespace containing the crew",
     ),
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User | None = Depends(require_permission("run", "Crew")),
 ) -> ExecutionResponse:
     """Start a crew training run. Returns immediately with status=queued."""
     try:
@@ -269,7 +269,7 @@ async def test_crew_endpoint(
         description="Namespace containing the crew",
     ),
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User | None = Depends(require_permission("run", "Crew")),
 ) -> ExecutionResponse:
     """Start a crew test run. Returns immediately with status=queued."""
     try:
@@ -342,7 +342,7 @@ async def run_flow_endpoint(
         description="Namespace containing the flow",
     ),
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User | None = Depends(require_permission("run", "Flow")),
 ) -> ExecutionResponse:
     """Run a flow. Returns immediately with status=queued."""
     try:

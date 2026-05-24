@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import select
 
 from blackbeard import __version__
 from blackbeard.api.audit import router as audit_router
@@ -45,7 +46,8 @@ from blackbeard.engine import recover_stale_executions, shutdown_executor
 from blackbeard.engine.execution_listener import shutdown_otel, shutdown_webhook_executor
 from blackbeard.http_client import close_all_clients
 from blackbeard.logging_config import configure_logging
-from blackbeard.models.database import engine
+from blackbeard.models import Resource
+from blackbeard.models.database import async_session, engine
 
 configure_logging(debug=settings.debug, log_level=settings.log_level)
 logger = logging.getLogger(__name__)
@@ -90,6 +92,7 @@ def _validate_startup_config() -> None:
             'Generate a strong key with: python -c "import secrets; '
             'print(secrets.token_urlsafe(32))"'
         )
+
     def _check_secret(
         value: str,
         env_var: str,
@@ -214,6 +217,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         )
     # Store on app.state so resource CRUD can trigger reload on Automation changes.
     app.state.scheduler = scheduler
+
+    # Sync LLMConnection resources to LiteLLM proxy
+    try:
+        from blackbeard.litellm import model_sync
+
+        async with async_session() as sync_session:
+            from blackbeard.kinds import ResourceKind
+
+            result = await sync_session.execute(
+                select(Resource.name, Resource.spec).where(
+                    Resource.kind == ResourceKind.LLM_CONNECTION
+                )
+            )
+            connections = [{"name": r.name, "spec": r.spec} for r in result.all()]
+        synced = await model_sync.sync_all(connections)
+        logger.info(
+            "LiteLLM model sync: %d models pushed",
+            synced,
+            extra={"event": "litellm_startup_sync", "synced_count": synced},
+        )
+    except Exception:
+        logger.warning(
+            "LiteLLM model sync failed on startup — models from static config only",
+            exc_info=True,
+            extra={"event": "litellm_startup_sync_failed"},
+        )
 
     # Start gRPC server alongside FastAPI
     grpc_server = None

@@ -8,7 +8,11 @@ Provide a browser-based drag-and-drop canvas where users compose agents, tasks, 
 
 **Implemented:** Canvas with Agent/Task/Tool nodes, edges for context and tool assignment, property panel with spec fields, YAML editor with bidirectional sync (Monaco), save to API, Run/Train/Test mode selector, FlowStep nodes, CrewGroup compound nodes (bounding box), ELK.js auto-layout, undo/redo (30 snapshots), execution view with status badges. AI Copilot (prompt-to-crew via LiteLLM, Sparkles button + dialog, `api/copilot.py` + `engine/copilot.py`). Live collaboration (WebSocket rooms, participant count, node/edge sync, auto-reconnect). Cursor presence (colored cursors + names for collaborating users).
 
-**Deferred to post-MVP:** Export ZIP/PNG/SVG/React, drag reparenting.
+**Implemented additionally:** Command palette (Cmd+K) for global search across resources. Resource clone/duplicate. YAML file import on Resources page. Resource creation dialog on Resources page. Execution retry button. HITL response panel (frontend polls for `hitl_request` events, submits responses via API). Studio state persists to `localStorage`. Execution filtering (status, crew, type) with sortable columns.
+
+**Partial:** Training tab — Run/Train/Test modes available in RunDialog; dedicated training panel with feedback workflow (section 7.1) deferred. Execution View — Streaming implemented (SSE + WebSocket + polling fallback); canvas-integrated execution view with Gantt timeline deferred.
+
+**Deferred to post-MVP:** Export ZIP/PNG/SVG/React (YAML export only implemented), drag reparenting.
 
 ---
 
@@ -269,25 +273,8 @@ Copilot always generates YAML that passes validation. User can accept/reject eac
 
 ## 12. Canvas Persistence
 
-- Each Crew or Flow resource has an associated **canvas layout** stored server-side as a JSON blob (node positions, zoom level, viewport offset).
-- Canvas layout is stored in a `canvas_layouts` table with the following schema:
-
-**Database schema:**
-```sql
-canvas_layouts
-  id              UUID PK DEFAULT gen_random_uuid()
-  resource_kind   VARCHAR(32) NOT NULL
-  resource_name   VARCHAR(255) NOT NULL
-  namespace       VARCHAR(255) NOT NULL DEFAULT 'default'
-  layout          JSONB NOT NULL         -- React Flow node positions, viewport, zoom
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-
-  UNIQUE(resource_kind, resource_name, namespace)
-
-Indexes:
-  idx_canvas_layout_lookup ON canvas_layouts(resource_kind, resource_name, namespace)
-```
-- Layout is saved automatically on every canvas change (debounced, 500ms) and on explicit "Save".
+- Each Crew or Flow resource has an associated **canvas layout** stored **frontend-only** in the Zustand store and persisted to `localStorage` (no server-side `canvas_layouts` database table exists). Layout data includes React Flow node positions, viewport offset, and zoom level.
+- Layout is saved automatically to `localStorage` on every canvas change (debounced) and on explicit "Save" (which persists resource specs to the API but keeps layout data local).
 - A canvas displays **one Crew or Flow** at a time. Multi-crew canvases are deferred to post-MVP.
 - If no layout exists (e.g., resource created via CLI), the canvas auto-layouts using ELK.js on first open.
 - **Concurrent editing**: Live collaboration is implemented via WebSocket rooms with Valkey pub/sub. Multiple users can edit the same canvas simultaneously with node/edge sync, cursor presence, and auto-reconnect. Canvas layout conflicts use last-write-wins -- the canvas layout is non-critical data, and losing a layout just triggers auto-layout on next open.

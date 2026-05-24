@@ -1,10 +1,22 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import * as TabsPrimitive from '@radix-ui/react-tabs'
-import { Trash2, Pencil, Save, X, AlertTriangle, Play, Info } from 'lucide-react'
+import {
+  Trash2,
+  Pencil,
+  Save,
+  X,
+  AlertTriangle,
+  Play,
+  Info,
+  Copy,
+  Download,
+  ClipboardCopy,
+} from 'lucide-react'
 import { modKey } from '@/lib/platform'
 
 import { CodeBlock } from '@/components/ui/CodeBlock'
+import { CopyButton } from '@/components/ui/CopyButton'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { useResourceStore } from '@/stores/resourceStore'
 import type { Resource } from '@/lib/types'
@@ -15,6 +27,7 @@ import { resourceToYaml, parseYaml } from '@/lib/yaml'
 import { formatDate } from '@/lib/formatters'
 import { KindBadge } from '@/components/ui/KindBadge'
 import { PLURAL_TO_KIND } from '@/lib/kinds'
+import { extractRefs } from '@/lib/refs'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { RunDialog, type RunParams } from '@/components/studio/RunDialog'
 import { Spinner } from '@/components/ui/Spinner'
@@ -137,6 +150,32 @@ function SpecDisplay({ spec }: { spec: Record<string, unknown> }) {
         </div>
       ))}
     </dl>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* References section                                                  */
+/* ------------------------------------------------------------------ */
+
+function ReferencesSection({ spec }: { spec: Record<string, unknown> }) {
+  const refs = useMemo(() => extractRefs(spec), [spec])
+  if (refs.length === 0) return null
+  return (
+    <section className="mt-6" aria-label="Resource references">
+      <h2 className="mb-3 text-sm font-semibold text-muted-foreground">References</h2>
+      <div className="flex flex-wrap gap-2">
+        {refs.map((ref) => (
+          <Link
+            key={`${ref.kindPlural}/${ref.name}`}
+            to={`/resources/${ref.kindPlural}/${ref.name}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <KindBadge kind={ref.kind} />
+            <span className="font-medium">{ref.name}</span>
+          </Link>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -274,6 +313,46 @@ export default function ResourceDetail() {
     }
   }
 
+  const handleClone = async () => {
+    if (!resource) return
+    const cloneName = `${resource.metadata.name}-copy`
+    try {
+      await api.post(`/api/v1/${kindPlural}`, {
+        apiVersion: resource.apiVersion,
+        kind: resource.kind,
+        metadata: { name: cloneName, namespace: resource.metadata.namespace },
+        spec: resource.spec,
+      })
+      toasts.success(`Cloned as "${cloneName}"`)
+      void navigate(`/resources/${kindPlural}/${cloneName}`)
+    } catch (err) {
+      toasts.error(getErrorMessage(err, 'Failed to clone resource'))
+    }
+  }
+
+  const handleDownloadYaml = () => {
+    if (!resource) return
+    const yaml = resourceToYaml(resource)
+    const blob = new Blob([yaml], { type: 'application/x-yaml' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${resource.metadata.name}.yaml`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const [yamlCopied, setYamlCopied] = useState(false)
+  const handleCopyYaml = () => {
+    if (!resource) return
+    const yaml = resourceToYaml(resource)
+    void navigator.clipboard.writeText(yaml).then(() => {
+      setYamlCopied(true)
+      toasts.success('YAML copied to clipboard')
+      setTimeout(() => setYamlCopied(false), 2000)
+    })
+  }
+
   const handleRun = async (params: RunParams) => {
     setRunError(null)
     setRunLoading(true)
@@ -385,6 +464,7 @@ export default function ResourceDetail() {
           <div className="flex flex-wrap items-center gap-3">
             <KindBadge kind={resource.kind} />
             <h1 className="text-2xl font-semibold tracking-tight">{resource.metadata.name}</h1>
+            <CopyButton text={resource.metadata.name} label="Copy resource name" />
             <span className="rounded-full border px-2 py-0.5 text-sm text-muted-foreground">
               v{resource.version}
             </span>
@@ -428,6 +508,34 @@ export default function ResourceDetail() {
                     Run
                   </button>
                 )}
+                <button
+                  onClick={handleDownloadYaml}
+                  title="Download as YAML"
+                  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  YAML
+                </button>
+                <button
+                  onClick={handleCopyYaml}
+                  title="Copy YAML to clipboard"
+                  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {yamlCopied ? (
+                    <ClipboardCopy className="h-3.5 w-3.5 text-emerald-500" />
+                  ) : (
+                    <ClipboardCopy className="h-3.5 w-3.5" />
+                  )}
+                  Copy YAML
+                </button>
+                <button
+                  onClick={() => void handleClone()}
+                  title="Duplicate this resource"
+                  className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Clone
+                </button>
                 <button
                   onClick={handleEdit}
                   className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -582,6 +690,8 @@ export default function ResourceDetail() {
             )}
           </TabsPrimitive.Content>
         </TabsPrimitive.Root>
+
+        <ReferencesSection spec={resource.spec} />
       </div>
 
       {/* Delete dialog */}

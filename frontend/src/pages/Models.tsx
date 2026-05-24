@@ -16,6 +16,7 @@ import {
   Hash,
   Settings,
   Zap,
+  ExternalLink,
 } from 'lucide-react'
 import { api } from '@/api/client'
 import { useResourceStore } from '@/stores/resourceStore'
@@ -88,6 +89,7 @@ function ModelCard({
   const spec = resource.spec as {
     provider?: string
     model?: string
+    base_url?: string
     parameters?: { temperature?: number; max_tokens?: number }
     vertex?: { project?: string; location?: string }
   }
@@ -177,6 +179,18 @@ function ModelCard({
           </div>
         )}
 
+        {spec.base_url && (
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <ExternalLink className="h-3 w-3" />
+              Base URL
+            </span>
+            <span className="max-w-[160px] truncate font-mono text-xs" title={spec.base_url}>
+              {spec.base_url}
+            </span>
+          </div>
+        )}
+
         {spec.parameters && (
           <div className="space-y-1.5 border-t pt-1">
             {spec.parameters.temperature !== undefined && (
@@ -226,6 +240,8 @@ interface AddModelForm {
   name: string
   provider: string
   model: string
+  base_url: string
+  api_key_env: string
   temperature: string
   max_tokens: string
 }
@@ -234,6 +250,8 @@ const INITIAL_FORM: AddModelForm = {
   name: '',
   provider: 'openai',
   model: '',
+  base_url: '',
+  api_key_env: '',
   temperature: '0.7',
   max_tokens: '4096',
 }
@@ -377,6 +395,43 @@ function AddModelDialog({
               </div>
 
               <div>
+                <label htmlFor="model-base-url" className="mb-1.5 block text-xs font-medium">
+                  API Base URL
+                </label>
+                <input
+                  id="model-base-url"
+                  type="url"
+                  value={form.base_url}
+                  onChange={set('base_url')}
+                  placeholder="http://host.docker.internal:11434 (for Ollama)"
+                  autoComplete="off"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Leave empty to use the LiteLLM proxy default
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="model-api-key-env" className="mb-1.5 block text-xs font-medium">
+                  API Key Env Var
+                </label>
+                <input
+                  id="model-api-key-env"
+                  type="text"
+                  value={form.api_key_env}
+                  onChange={set('api_key_env')}
+                  placeholder="OPENAI_API_KEY"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Name of the environment variable containing the API key
+                </p>
+              </div>
+
+              <div>
                 <label htmlFor="model-temperature" className="mb-1.5 block text-xs font-medium">
                   Temperature
                 </label>
@@ -494,12 +549,20 @@ export default function Models() {
     setTestingModels((prev) => new Set(prev).add(name))
     useToastStore.getState().info(`Checking connection to ${name}…`)
     try {
-      const resp = await api.post<{ success: boolean; latency_ms?: number; error?: string }>(
-        `/api/v1/models/test`,
-        { provider: spec.provider, model: spec.model },
-      )
+      const resp = await api.post<{
+        success: boolean
+        latency_ms?: number
+        error?: string
+        tokens?: { completion?: number; completion_time_ms?: number | null }
+      }>(`/api/v1/models/test`, { model: spec.model })
       if (resp.success) {
-        useToastStore.getState().success(`Connected to ${name} (${resp.latency_ms ?? 0} ms)`)
+        let msg = `Connected to ${name} (${resp.latency_ms ?? 0} ms)`
+        const t = resp.tokens
+        if (t?.completion && resp.latency_ms && resp.latency_ms > 0) {
+          const tps = (t.completion / (resp.latency_ms / 1000)).toFixed(1)
+          msg += ` · ${tps} tok/s`
+        }
+        useToastStore.getState().success(msg)
       } else {
         useToastStore
           .getState()
@@ -528,18 +591,21 @@ export default function Models() {
     setSubmitting(true)
     setSubmitError(null)
     try {
+      const spec: Record<string, unknown> = {
+        provider: form.provider,
+        model: form.model,
+        parameters: {
+          temperature: parseFloat(form.temperature),
+          max_tokens: parseInt(form.max_tokens, 10),
+        },
+      }
+      if (form.base_url.trim()) spec.base_url = form.base_url.trim()
+      if (form.api_key_env.trim()) spec.api_key_env = form.api_key_env.trim()
       await createResource({
         apiVersion: API_VERSION,
         kind: 'LLMConnection',
         metadata: { name: form.name, namespace: 'default' },
-        spec: {
-          provider: form.provider,
-          model: form.model,
-          parameters: {
-            temperature: parseFloat(form.temperature),
-            max_tokens: parseInt(form.max_tokens, 10),
-          },
-        },
+        spec,
       })
       setAddOpen(false)
       toasts.success(`Connection "${form.name}" created`)

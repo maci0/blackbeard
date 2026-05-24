@@ -85,18 +85,14 @@ class ContainerSandbox:
         """
         if preference != "auto":
             if shutil.which(preference) is None:
-                raise ContainerRuntimeError(
-                    f"Container runtime '{preference}' not found on PATH"
-                )
+                raise ContainerRuntimeError(f"Container runtime '{preference}' not found on PATH")
             return preference
         # Auto-detect: prefer podman (rootless by default)
         if shutil.which("podman"):
             return "podman"
         if shutil.which("docker"):
             return "docker"
-        raise ContainerRuntimeError(
-            "No container runtime found (install docker or podman)"
-        )
+        raise ContainerRuntimeError("No container runtime found (install docker or podman)")
 
     # Env var keys: only allow alphanumerics and underscores, starting
     # with a letter or underscore.  Prevents injection of flags via
@@ -138,9 +134,7 @@ class ContainerSandbox:
         # A malicious image like ``--privileged`` would be interpreted as
         # a Docker flag rather than an image reference.
         if not self._IMAGE_RE.match(image):
-            raise ContainerRuntimeError(
-                f"Invalid container image name: {image!r}"
-            )
+            raise ContainerRuntimeError(f"Invalid container image name: {image!r}")
 
         cmd: list[str] = [
             self._runtime,
@@ -268,23 +262,17 @@ class ContainerSandbox:
                 f"Container runtime '{self._runtime}' not found: {exc}"
             ) from exc
         except OSError as exc:
-            raise ContainerRuntimeError(
-                f"Failed to start container: {exc}"
-            ) from exc
+            raise ContainerRuntimeError(f"Failed to start container: {exc}") from exc
 
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(
-                    input_data.encode() if input_data is not None else None
-                ),
+                proc.communicate(input_data.encode() if input_data is not None else None),
                 timeout=timeout,
             )
         except TimeoutError as exc:
             proc.kill()
             await proc.wait()
-            raise ContainerTimeoutError(
-                f"Container timed out after {timeout}s"
-            ) from exc
+            raise ContainerTimeoutError(f"Container timed out after {timeout}s") from exc
 
         result = ContainerResult(
             exit_code=proc.returncode or 0,

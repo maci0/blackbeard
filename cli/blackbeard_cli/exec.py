@@ -277,6 +277,9 @@ def _event_summary(event_type: str, data: dict[str, Any]) -> str:
         parts.append(f"status={escape(str(data['status']))}")
     if "crew_name" in data:
         parts.append(f"crew={escape(str(data['crew_name']))}")
+    if "error" in data:
+        err = str(data["error"])[:120]
+        parts.append(f"error={escape(err)}")
     if "message" in data:
         msg = str(data["message"])[:120]
         parts.append(f"msg={escape(msg)}")

@@ -64,12 +64,11 @@ async def test_cors_disallows_unauthorized_origin(client):
 
 async def test_docs_no_auth(client):
     """OpenAPI docs should not require auth."""
-    response = await client.get("/docs")
-    assert response.status_code in (200, 307), (
+    response = await client.get("/docs", follow_redirects=True)
+    assert response.status_code == 200, (
         f"OpenAPI docs returned unexpected status {response.status_code}"
     )
-    if response.status_code == 200:
-        assert len(response.content) > 0, "Docs response should have content"
+    assert len(response.content) > 0, "Docs response should have content"
 
 
 async def test_error_no_secret_leak(client):
@@ -97,8 +96,9 @@ async def test_401_response_does_not_leak_key(client):
 
 async def test_redoc_no_auth(client):
     """ReDoc docs should not require auth."""
-    response = await client.get("/redoc")
-    assert response.status_code in (200, 307)
+    response = await client.get("/redoc", follow_redirects=True)
+    assert response.status_code == 200
+    assert len(response.content) > 0, "ReDoc response should have content"
 
 
 async def test_openapi_json_no_auth(client):

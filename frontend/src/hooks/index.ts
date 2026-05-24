@@ -1,6 +1,8 @@
 export { useCollaboration } from './useCollaboration'
 export { useDarkMode } from './useDarkMode'
+export { useHealthCheck } from './useHealthCheck'
 export type { ThemePreference } from './useDarkMode'
 export { useDocumentTitle } from './useDocumentTitle'
+export { useNotifications } from './useNotifications'
 export { useOnboarding } from './useOnboarding'
 export { usePolling } from './usePolling'

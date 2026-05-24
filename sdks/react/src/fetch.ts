@@ -33,10 +33,7 @@ export async function apiFetch<T>(
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     })
   } catch (err) {
-    if (err instanceof DOMException && err.name === 'TimeoutError') {
-      throw new BlackbeardApiError(0, `Request timed out after ${timeout}ms`)
-    }
-    if (err instanceof DOMException && err.name === 'AbortError') {
+    if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
       throw new BlackbeardApiError(0, `Request timed out after ${timeout}ms`)
     }
     throw new BlackbeardApiError(

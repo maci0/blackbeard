@@ -203,27 +203,27 @@ def test_websocket_rejects_invalid_api_key() -> None:
 
     with TestClient(_ws_app) as tc:
         with pytest.raises(WebSocketDisconnect) as exc_info:
-            with tc.websocket_connect(
-                "/api/v1/ws/collab/test-crew?api_key=wrong-key"
-            ):
+            with tc.websocket_connect("/api/v1/ws/collab/test-crew?api_key=wrong-key"):
                 pass
         assert exc_info.value.code == 4401
 
 
 def test_websocket_accepts_valid_api_key() -> None:
     """WebSocket connection with valid API key should be accepted."""
-    with TestClient(_ws_app) as tc, tc.websocket_connect(
-        f"/api/v1/ws/collab/test-crew{_auth_qs()}"
-    ) as ws:
+    with (
+        TestClient(_ws_app) as tc,
+        tc.websocket_connect(f"/api/v1/ws/collab/test-crew{_auth_qs()}") as ws,
+    ):
         msg = ws.receive_json()
         assert msg["type"] == "room_state"
 
 
 def test_websocket_accepts_valid_jwt() -> None:
     """WebSocket connection with valid JWT should be accepted."""
-    with TestClient(_ws_app) as tc, tc.websocket_connect(
-        f"/api/v1/ws/collab/test-crew{_jwt_qs()}"
-    ) as ws:
+    with (
+        TestClient(_ws_app) as tc,
+        tc.websocket_connect(f"/api/v1/ws/collab/test-crew{_jwt_qs()}") as ws,
+    ):
         msg = ws.receive_json()
         assert msg["type"] == "room_state"
 
@@ -236,9 +236,10 @@ def test_websocket_accepts_valid_jwt() -> None:
 
 def test_websocket_connect_and_room_state() -> None:
     """Client connects and receives room_state with participant count."""
-    with TestClient(_ws_app) as tc, tc.websocket_connect(
-        f"/api/v1/ws/collab/test-crew{_auth_qs()}"
-    ) as ws:
+    with (
+        TestClient(_ws_app) as tc,
+        tc.websocket_connect(f"/api/v1/ws/collab/test-crew{_auth_qs()}") as ws,
+    ):
         msg = ws.receive_json()
         assert msg["type"] == "room_state"
         assert msg["data"]["participants"] == 1
@@ -246,14 +247,13 @@ def test_websocket_connect_and_room_state() -> None:
 
 def test_two_clients_broadcast() -> None:
     """Two clients in same room: messages from one are received by the other."""
-    with TestClient(_ws_app) as tc, tc.websocket_connect(
-        f"/api/v1/ws/collab/crew-x{_auth_qs()}"
-    ) as ws1:
+    with (
+        TestClient(_ws_app) as tc,
+        tc.websocket_connect(f"/api/v1/ws/collab/crew-x{_auth_qs()}") as ws1,
+    ):
         ws1.receive_json()  # room_state for ws1
 
-        with tc.websocket_connect(
-            f"/api/v1/ws/collab/crew-x{_auth_qs()}"
-        ) as ws2:
+        with tc.websocket_connect(f"/api/v1/ws/collab/crew-x{_auth_qs()}") as ws2:
             ws2_room = ws2.receive_json()  # room_state for ws2
             assert ws2_room["data"]["participants"] == 2
 
@@ -263,9 +263,7 @@ def test_two_clients_broadcast() -> None:
             assert joined_msg["data"]["count"] == 2
 
             # ws1 sends a node_move — ws2 should receive it
-            ws1.send_json(
-                {"type": "node_move", "data": {"id": "n1", "x": 100, "y": 200}}
-            )
+            ws1.send_json({"type": "node_move", "data": {"id": "n1", "x": 100, "y": 200}})
             received = ws2.receive_json()
             assert received["type"] == "node_move"
             assert received["data"]["id"] == "n1"
@@ -273,26 +271,21 @@ def test_two_clients_broadcast() -> None:
 
 def test_invalid_message_type_ignored() -> None:
     """Messages with invalid types are silently ignored (not broadcast)."""
-    with TestClient(_ws_app) as tc, tc.websocket_connect(
-        f"/api/v1/ws/collab/crew-y{_auth_qs()}"
-    ) as ws1:
+    with (
+        TestClient(_ws_app) as tc,
+        tc.websocket_connect(f"/api/v1/ws/collab/crew-y{_auth_qs()}") as ws1,
+    ):
         ws1.receive_json()  # room_state
 
-        with tc.websocket_connect(
-            f"/api/v1/ws/collab/crew-y{_auth_qs()}"
-        ) as ws2:
+        with tc.websocket_connect(f"/api/v1/ws/collab/crew-y{_auth_qs()}") as ws2:
             ws2.receive_json()  # room_state
             ws1.receive_json()  # participant_joined
 
             # Send invalid type
-            ws1.send_json(
-                {"type": "malicious_action", "data": {"hack": True}}
-            )
+            ws1.send_json({"type": "malicious_action", "data": {"hack": True}})
 
             # Send valid type to verify the connection still works
-            ws1.send_json(
-                {"type": "node_add", "data": {"id": "n2"}}
-            )
+            ws1.send_json({"type": "node_add", "data": {"id": "n2"}})
             received = ws2.receive_json()
             # Should only get the valid message, not the invalid one
             assert received["type"] == "node_add"
@@ -302,21 +295,15 @@ def test_different_crews_are_isolated() -> None:
     """Messages in one crew room are not received in another crew room."""
     with (
         TestClient(_ws_app) as tc,
-        tc.websocket_connect(
-            f"/api/v1/ws/collab/crew-alpha{_auth_qs()}"
-        ) as ws_alpha,
+        tc.websocket_connect(f"/api/v1/ws/collab/crew-alpha{_auth_qs()}") as ws_alpha,
     ):
         ws_alpha.receive_json()  # room_state
 
-        with tc.websocket_connect(
-            f"/api/v1/ws/collab/crew-beta{_auth_qs()}"
-        ) as ws_beta:
+        with tc.websocket_connect(f"/api/v1/ws/collab/crew-beta{_auth_qs()}") as ws_beta:
             ws_beta.receive_json()  # room_state
 
             # Send message in crew-alpha
-            ws_alpha.send_json(
-                {"type": "node_add", "data": {"id": "alpha-node"}}
-            )
+            ws_alpha.send_json({"type": "node_add", "data": {"id": "alpha-node"}})
 
             # Verify that each room has exactly 1 participant, proving isolation.
             stats = get_room_stats()
@@ -326,14 +313,13 @@ def test_different_crews_are_isolated() -> None:
 
 def test_disconnect_updates_participant_count() -> None:
     """When a client disconnects, remaining clients get participant_left."""
-    with TestClient(_ws_app) as tc, tc.websocket_connect(
-        f"/api/v1/ws/collab/crew-dc{_auth_qs()}"
-    ) as ws1:
+    with (
+        TestClient(_ws_app) as tc,
+        tc.websocket_connect(f"/api/v1/ws/collab/crew-dc{_auth_qs()}") as ws1,
+    ):
         ws1.receive_json()  # room_state
 
-        with tc.websocket_connect(
-            f"/api/v1/ws/collab/crew-dc{_auth_qs()}"
-        ) as ws2:
+        with tc.websocket_connect(f"/api/v1/ws/collab/crew-dc{_auth_qs()}") as ws2:
             ws2.receive_json()  # room_state
             ws1.receive_json()  # participant_joined
 
@@ -347,9 +333,7 @@ def test_room_cleanup_on_last_disconnect() -> None:
     """Room is removed from _rooms when the last participant disconnects."""
     with (
         TestClient(_ws_app) as tc,
-        tc.websocket_connect(
-            f"/api/v1/ws/collab/crew-cleanup{_auth_qs()}"
-        ) as ws,
+        tc.websocket_connect(f"/api/v1/ws/collab/crew-cleanup{_auth_qs()}") as ws,
     ):
         ws.receive_json()  # room_state
         assert "crew-cleanup" in _rooms
@@ -362,15 +346,11 @@ def test_all_message_types_broadcast() -> None:
     """All valid message types are properly broadcast."""
     with (
         TestClient(_ws_app) as tc,
-        tc.websocket_connect(
-            f"/api/v1/ws/collab/crew-types{_auth_qs()}"
-        ) as ws1,
+        tc.websocket_connect(f"/api/v1/ws/collab/crew-types{_auth_qs()}") as ws1,
     ):
         ws1.receive_json()  # room_state
 
-        with tc.websocket_connect(
-            f"/api/v1/ws/collab/crew-types{_auth_qs()}"
-        ) as ws2:
+        with tc.websocket_connect(f"/api/v1/ws/collab/crew-types{_auth_qs()}") as ws2:
             ws2.receive_json()  # room_state
             ws1.receive_json()  # participant_joined
 

@@ -35,6 +35,7 @@ def _clear_webhook_cache():
     yield
     invalidate_webhook_cache()
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -113,9 +114,7 @@ def test_webhook_hmac_signature_correct():
         },
         default=str,
     )
-    expected_sig = hmac.new(
-        b"my-secret", expected_payload.encode(), hashlib.sha256
-    ).hexdigest()
+    expected_sig = hmac.new(b"my-secret", expected_payload.encode(), hashlib.sha256).hexdigest()
 
     assert headers["X-Webhook-Signature"] == expected_sig
     assert headers["X-Blackbeard-Event"] == "execution_completed"

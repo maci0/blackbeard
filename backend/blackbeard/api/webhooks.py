@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from blackbeard.audit import audit_from_request, log_audit
-from blackbeard.auth.dependencies import get_current_user
+from blackbeard.auth.dependencies import require_permission
 from blackbeard.config import settings
 from blackbeard.engine.execution_listener import invalidate_webhook_cache
 from blackbeard.logging_config import safe_log_url
@@ -102,7 +102,7 @@ async def create_webhook(
     response: Response,
     body: WebhookCreateRequest = Body(...),
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User = Depends(require_permission("create", "Webhook")),
 ) -> WebhookCreateResponse:
     """Register a new webhook for execution event delivery."""
     parsed = urlparse(body.url)
@@ -178,7 +178,7 @@ async def list_webhooks(
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     session: AsyncSession = Depends(get_session),
-    _user: User | None = Depends(get_current_user),
+    _user: User = Depends(require_permission("list", "Webhook")),
 ) -> WebhookListResponse:
     """List all registered webhooks (secrets are not returned)."""
     result = await session.execute(
@@ -224,7 +224,7 @@ async def delete_webhook(
     request: Request,
     webhook_id: UUID = Path(..., description="Webhook UUID"),
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User = Depends(require_permission("delete", "Webhook")),
 ) -> None:
     """Remove a registered webhook."""
     result = await session.execute(

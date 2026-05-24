@@ -1,5 +1,21 @@
-import { useState, type ChangeEvent, type KeyboardEvent } from 'react'
-import { Play, AlertCircle, X, Loader2, GraduationCap, FlaskConical } from 'lucide-react'
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from 'react'
+import {
+  Play,
+  AlertCircle,
+  X,
+  Loader2,
+  GraduationCap,
+  FlaskConical,
+  Save,
+  Trash2,
+} from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { modKey } from '@/lib/platform'
 
@@ -54,6 +70,42 @@ const BUTTON_COLORS: Record<RunMode, string> = {
 }
 
 /* ------------------------------------------------------------------ */
+/* Presets                                                             */
+/* ------------------------------------------------------------------ */
+
+interface RunPreset {
+  name: string
+  inputs: string
+  crewName: string
+}
+
+const PRESETS_KEY = 'blackbeard_run_presets'
+const MAX_PRESETS = 10
+
+function loadPresets(): RunPreset[] {
+  try {
+    const raw = localStorage.getItem(PRESETS_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (p): p is RunPreset =>
+        typeof p === 'object' &&
+        p !== null &&
+        typeof (p as RunPreset).name === 'string' &&
+        typeof (p as RunPreset).inputs === 'string' &&
+        typeof (p as RunPreset).crewName === 'string',
+    )
+  } catch {
+    return []
+  }
+}
+
+function savePresets(presets: RunPreset[]): void {
+  localStorage.setItem(PRESETS_KEY, JSON.stringify(presets))
+}
+
+/* ------------------------------------------------------------------ */
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -75,9 +127,51 @@ export function RunDialog({
   const [error, setError] = useState('')
   const [iterations, setIterations] = useState(3)
   const [filename, setFilename] = useState('training_data.pkl')
+  const [presets, setPresets] = useState<RunPreset[]>(loadPresets)
+  const [selectedPreset, setSelectedPreset] = useState('')
 
   const config = MODE_CONFIG[mode]
   const Icon = config.icon
+  const validateTimer = useRef<ReturnType<typeof setTimeout>>(null)
+
+  useEffect(() => {
+    return () => {
+      if (validateTimer.current) clearTimeout(validateTimer.current)
+    }
+  }, [])
+
+  const crewPresets = presets.filter((p) => p.crewName === crewName)
+
+  const handleSelectPreset = useCallback(
+    (name: string) => {
+      setSelectedPreset(name)
+      const preset = presets.find((p) => p.name === name && p.crewName === crewName)
+      if (preset) setInputs(preset.inputs)
+    },
+    [presets, crewName],
+  )
+
+  const handleSavePreset = useCallback(() => {
+    const name = window.prompt('Preset name:')
+    if (!name?.trim()) return
+    const trimmed = name.trim()
+    let next = presets.filter((p) => !(p.name === trimmed && p.crewName === crewName))
+    next.unshift({ name: trimmed, inputs, crewName })
+    if (next.length > MAX_PRESETS) next = next.slice(0, MAX_PRESETS)
+    setPresets(next)
+    savePresets(next)
+    setSelectedPreset(trimmed)
+  }, [presets, inputs, crewName])
+
+  const handleDeletePreset = useCallback(
+    (name: string) => {
+      const next = presets.filter((p) => !(p.name === name && p.crewName === crewName))
+      setPresets(next)
+      savePresets(next)
+      if (selectedPreset === name) setSelectedPreset('')
+    },
+    [presets, crewName, selectedPreset],
+  )
 
   function handleRun() {
     try {
@@ -224,12 +318,52 @@ export function RunDialog({
 
             {/* Inputs */}
             <div>
-              <label
-                htmlFor="run-dialog-inputs"
-                className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
-              >
-                Crew Inputs (JSON)
-              </label>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label
+                  htmlFor="run-dialog-inputs"
+                  className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+                >
+                  Crew Inputs (JSON)
+                </label>
+                <button
+                  type="button"
+                  onClick={handleSavePreset}
+                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Save current inputs as preset"
+                >
+                  <Save className="h-3 w-3" />
+                  Save preset
+                </button>
+              </div>
+              {crewPresets.length > 0 && (
+                <div className="mb-1.5 flex items-center gap-1.5">
+                  <select
+                    value={selectedPreset}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                      handleSelectPreset(e.target.value)
+                    }
+                    className="min-w-0 flex-1 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label="Select a saved preset"
+                  >
+                    <option value="">Select a preset...</option>
+                    {crewPresets.map((p) => (
+                      <option key={p.name} value={p.name}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedPreset && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePreset(selectedPreset)}
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Delete preset "${selectedPreset}"`}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              )}
               <textarea
                 id="run-dialog-inputs"
                 autoFocus
@@ -240,16 +374,19 @@ export function RunDialog({
                 onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
                   const val = e.target.value
                   setInputs(val)
-                  if (val.trim()) {
-                    try {
-                      JSON.parse(val)
+                  if (validateTimer.current) clearTimeout(validateTimer.current)
+                  validateTimer.current = setTimeout(() => {
+                    if (val.trim()) {
+                      try {
+                        JSON.parse(val)
+                        setError('')
+                      } catch {
+                        setError('Invalid JSON — check for missing quotes, commas, or brackets')
+                      }
+                    } else {
                       setError('')
-                    } catch {
-                      setError('Invalid JSON — check for missing quotes, commas, or brackets')
                     }
-                  } else {
-                    setError('')
-                  }
+                  }, 300)
                 }}
                 onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
                   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {

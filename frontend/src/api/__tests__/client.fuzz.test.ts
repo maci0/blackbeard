@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
 import { ApiError } from '../client'
+import { getErrorMessage } from '@/lib/utils'
 
-const NUM_RUNS = 200
+const NUM_RUNS = 500
 
 describe('fuzz: ApiError', () => {
   it('constructor never throws with any inputs', () => {
@@ -76,6 +77,84 @@ describe('fuzz: ApiError', () => {
         expect(err instanceof ApiError).toBe(true)
         expect(err instanceof Error).toBe(true)
         expect(err.stack).toBeDefined()
+      }),
+      { numRuns: NUM_RUNS },
+    )
+  })
+})
+
+describe('fuzz: getErrorMessage', () => {
+  it('always returns a string for Error instances', () => {
+    fc.assert(
+      fc.property(fc.string(), fc.string(), (msg, fallback) => {
+        const result = getErrorMessage(new Error(msg), fallback)
+        expect(typeof result).toBe('string')
+        expect(result).toBe(msg)
+      }),
+      { numRuns: NUM_RUNS },
+    )
+  })
+
+  it('returns fallback for non-Error inputs', () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(
+          fc.string(),
+          fc.integer(),
+          fc.constant(null),
+          fc.constant(undefined),
+          fc.constant(0),
+          fc.constant(false),
+          fc.object(),
+          fc.array(fc.anything()),
+        ),
+        fc.string(),
+        (err, fallback) => {
+          const result = getErrorMessage(err, fallback)
+          expect(typeof result).toBe('string')
+          expect(result).toBe(fallback)
+        },
+      ),
+      { numRuns: NUM_RUNS },
+    )
+  })
+
+  it('never throws on any input type', () => {
+    fc.assert(
+      fc.property(fc.anything(), fc.string(), (err, fallback) => {
+        expect(() => getErrorMessage(err, fallback)).not.toThrow()
+        const result = getErrorMessage(err, fallback)
+        expect(typeof result).toBe('string')
+      }),
+      { numRuns: NUM_RUNS },
+    )
+  })
+
+  it('returns the Error message for ApiError instances', () => {
+    fc.assert(
+      fc.property(
+        fc.string(),
+        fc.integer({ min: 100, max: 599 }),
+        fc.string(),
+        (msg, status, fallback) => {
+          const err = new ApiError(msg, status, null)
+          const result = getErrorMessage(err, fallback)
+          expect(result).toBe(msg)
+        },
+      ),
+      { numRuns: NUM_RUNS },
+    )
+  })
+
+  it('result is always the fallback string or the Error message', () => {
+    fc.assert(
+      fc.property(fc.anything(), fc.string(), (err, fallback) => {
+        const result = getErrorMessage(err, fallback)
+        if (err instanceof Error) {
+          expect(result).toBe(err.message)
+        } else {
+          expect(result).toBe(fallback)
+        }
       }),
       { numRuns: NUM_RUNS },
     )

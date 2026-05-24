@@ -10,7 +10,11 @@ Define the canonical data model for every first-class resource in Blackbeard. Al
 
 **Implemented additionally:** Namespace as a first-class resource kind (13th kind) with description, labels, default_agent_policy, and resource_quota (max_resources, max_executions_per_hour). Default namespace seeded automatically.
 
-**Deferred to post-MVP:** Nested namespaces (hierarchical namespace tree with inheritance — e.g., `org/team/project`), EnvironmentVariable, ServiceAccount (as a standalone resource kind), SSOConfig, APIKey. See below for nested namespace design.
+**Implementation note — Canvas layouts:** No `canvas_layouts` database table exists. Canvas state (node positions, viewport, zoom) persists in the browser only (Zustand store + localStorage). If no saved layout exists when opening a resource, ELK.js auto-layout runs on first open.
+
+**Implementation note — LiteLLM dynamic sync:** LLMConnection CRUD operations now push configuration changes to the LiteLLM Proxy API in real time. Creating, updating, or deleting an LLMConnection resource triggers a corresponding model add/update/delete call to the co-deployed LiteLLM Proxy, keeping routing config in sync without requiring a proxy restart.
+
+**Deferred to post-MVP:** Nested namespaces (hierarchical namespace tree with inheritance — e.g., `org/team/project`), EnvironmentVariable, ServiceAccount (as a standalone resource kind — note: Agent `spec.serviceAccount` field is implemented and defaults to `sa-<agent-name>` for principal chain tracking; the standalone ServiceAccount resource kind with its own CRUD is deferred), SSOConfig, APIKey. See below for nested namespace design.
 
 #### Nested Namespaces (Post-MVP)
 

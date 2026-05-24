@@ -79,9 +79,7 @@ def instrument_engine(sync_engine: Any, *, label: str = "main") -> None:
             )
 
     @event.listens_for(sync_engine, "checkout")
-    def _on_checkout(
-        _dbapi_conn: Any, connection_rec: Any, _connection_proxy: Any
-    ) -> None:
+    def _on_checkout(_dbapi_conn: Any, connection_rec: Any, _connection_proxy: Any) -> None:
         connection_rec.info["_bb_checkout_time"] = time.monotonic()
         pool = cast("Any", sync_engine.pool)
         checked_out = pool.checkedout()

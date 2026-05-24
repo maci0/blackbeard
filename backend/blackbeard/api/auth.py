@@ -1,10 +1,11 @@
-"""Authentication API endpoints: register, login, refresh, profile."""
+"""Authentication API endpoints: register, login, refresh, profile, API key management."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 import re
+import secrets
 from datetime import UTC, datetime
 
 import jwt as pyjwt
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from blackbeard.audit import log_audit
-from blackbeard.auth.dependencies import require_user
+from blackbeard.auth.dependencies import require_jwt_user, require_user
 from blackbeard.auth.jwt import create_access_token, create_refresh_token, decode_token
 from blackbeard.auth.passwords import hash_password, verify_password
 from blackbeard.models import User, get_session
@@ -366,3 +367,107 @@ async def me(
 ) -> UserResponse:
     """Get the currently authenticated user's profile."""
     return user_response(user)
+
+
+# ---------------------------------------------------------------------------
+# API Key management
+# ---------------------------------------------------------------------------
+
+
+class ApiKeyResponse(BaseModel):
+    """Response containing a generated or rotated API key."""
+
+    api_key: str
+
+
+@router.post(
+    "/api-key",
+    response_model=ApiKeyResponse,
+    responses={401: {"description": "JWT Bearer token required"}},
+)
+async def generate_api_key(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(require_jwt_user),
+) -> ApiKeyResponse:
+    """Generate or rotate the current user's API key.
+
+    Requires JWT Bearer authentication (API key auth is not accepted).
+    Returns a new API key with ``bb-`` prefix.  Any previously issued
+    key for this user is replaced.
+    """
+    ip = request.client.host if request.client else None
+    had_previous = user.api_key is not None
+    new_key = f"bb-{secrets.token_urlsafe(32)}"
+    user.api_key = new_key
+    action = "api_key_rotated" if had_previous else "api_key_generated"
+    await log_audit(
+        session,
+        action=action,
+        actor_type="user",
+        actor_id=str(user.id),
+        actor_email=user.email,
+        resource_type="User",
+        resource_id=str(user.id),
+        ip_address=ip,
+    )
+    await session.commit()
+
+    logger.info(
+        "API key %s for user_id=%s from %s",
+        "rotated" if had_previous else "generated",
+        user.id,
+        ip or "unknown",
+        extra={
+            "event": action,
+            "user_id": str(user.id),
+            "client_ip": ip or "unknown",
+        },
+    )
+
+    return ApiKeyResponse(api_key=new_key)
+
+
+@router.delete(
+    "/api-key",
+    status_code=204,
+    responses={
+        204: {"description": "API key revoked (or no key existed — idempotent)"},
+        401: {"description": "JWT Bearer token required"},
+    },
+)
+async def revoke_api_key(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(require_jwt_user),
+) -> None:
+    """Revoke the current user's API key.
+
+    Requires JWT Bearer authentication (API key auth is not accepted).
+    Idempotent: returns 204 even if the user has no active key.
+    """
+    ip = request.client.host if request.client else None
+    user.api_key = None
+
+    await log_audit(
+        session,
+        action="api_key_revoked",
+        actor_type="user",
+        actor_id=str(user.id),
+        actor_email=user.email,
+        resource_type="User",
+        resource_id=str(user.id),
+        ip_address=ip,
+    )
+    await session.commit()
+
+    logger.info(
+        "API key revoked for user_id=%s from %s",
+        user.id,
+        ip or "unknown",
+        extra={
+            "event": "api_key_revoked",
+            "user_id": str(user.id),
+            "client_ip": ip or "unknown",
+        },
+    )

@@ -53,18 +53,14 @@ def _flow_payload(name: str = "test-flow") -> dict:
 
 async def _create_crew(client: AsyncClient, name: str = "test-crew") -> None:
     """Create a crew resource in the test database."""
-    resp = await client.post(
-        "/api/v1/crews", json=_crew_payload(name), headers=API_KEY_HEADER
-    )
+    resp = await client.post("/api/v1/crews", json=_crew_payload(name), headers=API_KEY_HEADER)
     assert resp.status_code == 201, f"Crew setup failed: {resp.status_code} {resp.text}"
 
 
 async def _create_flow(client: AsyncClient, name: str = "test-flow") -> None:
     """Create a flow resource in the test database (plus its referenced crew)."""
     await _create_crew(client, "test-crew")
-    resp = await client.post(
-        "/api/v1/flows", json=_flow_payload(name), headers=API_KEY_HEADER
-    )
+    resp = await client.post("/api/v1/flows", json=_flow_payload(name), headers=API_KEY_HEADER)
     assert resp.status_code == 201, f"Flow setup failed: {resp.status_code} {resp.text}"
 
 
@@ -419,9 +415,7 @@ async def test_list_executions_filter_by_crew_name(client: AsyncClient):
         new_callable=AsyncMock,
         side_effect=_capture_list,
     ):
-        resp = await client.get(
-            "/api/v1/executions?crew_name=my-crew", headers=API_KEY_HEADER
-        )
+        resp = await client.get("/api/v1/executions?crew_name=my-crew", headers=API_KEY_HEADER)
     assert resp.status_code == 200
     assert captured_kwargs.get("crew_name") == "my-crew"
 
@@ -439,9 +433,7 @@ async def test_list_executions_filter_by_status(client: AsyncClient):
         new_callable=AsyncMock,
         side_effect=_capture_list,
     ):
-        resp = await client.get(
-            "/api/v1/executions?status=running", headers=API_KEY_HEADER
-        )
+        resp = await client.get("/api/v1/executions?status=running", headers=API_KEY_HEADER)
     assert resp.status_code == 200
     assert captured_kwargs.get("status") is not None
     assert captured_kwargs["status"].value == "running"
@@ -461,9 +453,7 @@ async def test_get_execution_not_found(client: AsyncClient):
         new_callable=AsyncMock,
         return_value=None,
     ):
-        resp = await client.get(
-            f"/api/v1/executions/{fake_id}", headers=API_KEY_HEADER
-        )
+        resp = await client.get(f"/api/v1/executions/{fake_id}", headers=API_KEY_HEADER)
     assert resp.status_code == 404
     assert "not found" in resp.json()["detail"].lower()
 
@@ -478,9 +468,7 @@ async def test_get_execution_success(client: AsyncClient):
         new_callable=AsyncMock,
         return_value=mock_exec,
     ):
-        resp = await client.get(
-            f"/api/v1/executions/{exec_id}", headers=API_KEY_HEADER
-        )
+        resp = await client.get(f"/api/v1/executions/{exec_id}", headers=API_KEY_HEADER)
     assert resp.status_code == 200
     data = resp.json()
     assert data["id"] == exec_id
@@ -502,9 +490,7 @@ async def test_list_execution_events_not_found(client: AsyncClient):
         new_callable=AsyncMock,
         return_value=None,
     ):
-        resp = await client.get(
-            f"/api/v1/executions/{fake_id}/events", headers=API_KEY_HEADER
-        )
+        resp = await client.get(f"/api/v1/executions/{fake_id}/events", headers=API_KEY_HEADER)
     assert resp.status_code == 404
     assert "detail" in resp.json()
 
@@ -527,9 +513,7 @@ async def test_list_execution_events_empty(client: AsyncClient):
             return_value=[],
         ),
     ):
-        resp = await client.get(
-            f"/api/v1/executions/{fake_id}/events", headers=API_KEY_HEADER
-        )
+        resp = await client.get(f"/api/v1/executions/{fake_id}/events", headers=API_KEY_HEADER)
     assert resp.status_code == 200
     data = resp.json()
     assert data["events"] == []
@@ -562,9 +546,7 @@ async def test_list_execution_events_with_events(client: AsyncClient):
             return_value=[mock_event],
         ),
     ):
-        resp = await client.get(
-            f"/api/v1/executions/{fake_id}/events", headers=API_KEY_HEADER
-        )
+        resp = await client.get(f"/api/v1/executions/{fake_id}/events", headers=API_KEY_HEADER)
     assert resp.status_code == 200
     data = resp.json()
     assert len(data["events"]) == 1
@@ -587,9 +569,7 @@ async def test_cancel_execution_success(client: AsyncClient):
         new_callable=AsyncMock,
         return_value=mock_exec,
     ):
-        resp = await client.patch(
-            f"/api/v1/executions/{exec_id}/cancel", headers=API_KEY_HEADER
-        )
+        resp = await client.patch(f"/api/v1/executions/{exec_id}/cancel", headers=API_KEY_HEADER)
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "cancelled"
@@ -606,9 +586,7 @@ async def test_cancel_execution_not_found(client: AsyncClient):
         new_callable=AsyncMock,
         side_effect=ExecutionNotFoundError(f"Execution '{fake_id}' not found"),
     ):
-        resp = await client.patch(
-            f"/api/v1/executions/{fake_id}/cancel", headers=API_KEY_HEADER
-        )
+        resp = await client.patch(f"/api/v1/executions/{fake_id}/cancel", headers=API_KEY_HEADER)
     assert resp.status_code == 404
     assert "not found" in resp.json()["detail"].lower()
 
@@ -624,9 +602,7 @@ async def test_cancel_execution_already_terminal(client: AsyncClient):
         new_callable=AsyncMock,
         side_effect=ExecutionError("Cannot cancel execution in terminal status 'completed'"),
     ):
-        resp = await client.patch(
-            f"/api/v1/executions/{fake_id}/cancel", headers=API_KEY_HEADER
-        )
+        resp = await client.patch(f"/api/v1/executions/{fake_id}/cancel", headers=API_KEY_HEADER)
     assert resp.status_code == 409
     assert resp.json()["detail"], "Conflict response must include non-empty detail"
 
@@ -640,9 +616,7 @@ async def test_cancel_execution_returns_none(client: AsyncClient):
         new_callable=AsyncMock,
         return_value=None,
     ):
-        resp = await client.patch(
-            f"/api/v1/executions/{fake_id}/cancel", headers=API_KEY_HEADER
-        )
+        resp = await client.patch(f"/api/v1/executions/{fake_id}/cancel", headers=API_KEY_HEADER)
     assert resp.status_code == 404
     assert "detail" in resp.json()
 
@@ -731,11 +705,9 @@ async def test_execution_spend_not_found(client: AsyncClient):
         new_callable=AsyncMock,
         return_value=None,
     ):
-        resp = await client.get(
-            f"/api/v1/executions/{fake_id}/spend", headers=API_KEY_HEADER
-        )
+        resp = await client.get(f"/api/v1/executions/{fake_id}/spend", headers=API_KEY_HEADER)
     assert resp.status_code == 404
-    assert "detail" in resp.json()
+    assert "not found" in resp.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------
@@ -749,21 +721,22 @@ async def test_stream_execution_not_found(client: AsyncClient):
 
     # The stream endpoint uses async_session() directly, not the injected session.
     # We must patch _executor_mod.get_execution_status at the module level.
-    with patch(
-        "blackbeard.api.executions._executor_mod.get_execution_status",
-        new_callable=AsyncMock,
-        return_value=None,
-    ), patch(
-        "blackbeard.api.executions.async_session",
-    ) as mock_session_ctx:
+    with (
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution_status",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "blackbeard.api.executions.async_session",
+        ) as mock_session_ctx,
+    ):
         # Make the async context manager return a session that delegates to our mock
         mock_session = AsyncMock()
         mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
-        resp = await client.get(
-            f"/api/v1/executions/{fake_id}/stream", headers=API_KEY_HEADER
-        )
+        resp = await client.get(f"/api/v1/executions/{fake_id}/stream", headers=API_KEY_HEADER)
     assert resp.status_code == 404
 
 

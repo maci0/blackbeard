@@ -162,6 +162,8 @@ async def oidc_callback(
     )
     await session.commit()
 
+    request.session.clear()
+
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))
 

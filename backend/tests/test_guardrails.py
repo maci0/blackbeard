@@ -210,9 +210,7 @@ def test_build_guardrails_free_text():
     """Free-text string (no dots, no ref) should pass through as-is."""
     loader = ResourceLoader({})
 
-    guardrails = loader._build_guardrails(
-        ["Ensure the response is factual and well-structured"]
-    )
+    guardrails = loader._build_guardrails(["Ensure the response is factual and well-structured"])
 
     assert len(guardrails) == 1
     assert guardrails[0] == "Ensure the response is factual and well-structured"
@@ -231,10 +229,12 @@ def test_build_guardrails_mixed_types():
     )
     loader = ResourceLoader(_resource_map(guardrail_res))
 
-    guardrails = loader._build_guardrails([
-        "ref:guardrails/schema-guard",
-        "Be accurate and concise",
-    ])
+    guardrails = loader._build_guardrails(
+        [
+            "ref:guardrails/schema-guard",
+            "Be accurate and concise",
+        ]
+    )
 
     assert len(guardrails) == 2
     assert callable(guardrails[0])  # schema guardrail

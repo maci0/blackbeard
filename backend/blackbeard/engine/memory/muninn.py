@@ -50,8 +50,7 @@ class MuninnMemoryBackend:
         """
         if not HAS_MUNINN:
             raise ImportError(
-                "muninn-python package is not installed. "
-                "Install it with: uv add muninn-python"
+                "muninn-python package is not installed. Install it with: uv add muninn-python"
             )
         self._url = url
         self._agent_name = agent_name

@@ -14,19 +14,27 @@ def _make_listener_stub() -> BlackbeardExecutionListener:
     return listener
 
 
+def _next_seq(listener: BlackbeardExecutionListener) -> int:
+    """Replicate inline seq increment used in the listener."""
+    with listener._lock:
+        seq = listener._seq
+        listener._seq += 1
+    return seq
+
+
 class TestExecutionListenerSequencing:
     """Test thread-safe sequence number generation."""
 
-    def test_next_seq_increments(self):
-        """_next_seq should return monotonically increasing values."""
+    def test_seq_increments(self):
+        """_seq should return monotonically increasing values."""
         listener = _make_listener_stub()
 
-        assert listener._next_seq() == 0
-        assert listener._next_seq() == 1
-        assert listener._next_seq() == 2
+        assert _next_seq(listener) == 0
+        assert _next_seq(listener) == 1
+        assert _next_seq(listener) == 2
 
-    def test_next_seq_thread_safe(self):
-        """_next_seq under concurrent access should produce unique values."""
+    def test_seq_thread_safe(self):
+        """_seq under concurrent access should produce unique values."""
         listener = _make_listener_stub()
 
         results: list[int] = []
@@ -34,7 +42,7 @@ class TestExecutionListenerSequencing:
 
         def worker():
             for _ in range(100):
-                seq = listener._next_seq()
+                seq = _next_seq(listener)
                 with lock:
                     results.append(seq)
 
@@ -44,7 +52,6 @@ class TestExecutionListenerSequencing:
         for t in threads:
             t.join()
 
-        # All 400 values should be unique and cover exactly 0..399
         assert len(results) == 400
         assert set(results) == set(range(400))
 
@@ -52,15 +59,12 @@ class TestExecutionListenerSequencing:
         """_task_order should start at 0 and be independent of _seq."""
         listener = _make_listener_stub()
 
-        # Advance _seq
-        listener._next_seq()
-        listener._next_seq()
+        _next_seq(listener)
+        _next_seq(listener)
 
-        # _task_order should still be at initial value
         with listener._lock:
             assert listener._task_order == 0
 
-        # Simulate task completion: _task_order increments in on_task_completed
         with listener._lock:
             order = listener._task_order
             listener._task_order += 1

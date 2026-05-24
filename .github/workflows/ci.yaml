@@ -53,6 +53,9 @@ jobs:
       - name: Type check
         run: uv run mypy blackbeard/ --ignore-missing-imports
 
+      - name: Security scan (bandit)
+        run: uv run bandit -r blackbeard/ -c pyproject.toml
+
       - name: Test
         run: uv run pytest --cov=blackbeard --cov-report=term-missing --cov-fail-under=60
 

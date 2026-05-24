@@ -6,7 +6,9 @@ Provide configurable safety mechanisms that validate, filter, and redact agent o
 
 ### 1.1 MVP Scope
 
-**Implemented:** Task-level guardrails wired through CrewAI's built-in guardrail system, supporting three types: function-based (Python callable), LLM-based (string description evaluated by the agent's LLM), and schema-based (JSON Schema output validation). The `Guardrail` resource kind is fully working with CRUD and reference resolution. PII redaction via full Microsoft Presidio integration (`pii.py`) with configurable backends (default regex, presidio-nlp with spaCy, litellm for local LLM-based detection via GLiNER/HydroX). PII guardrail type (redact/reject/warn actions). AgentPolicy pii config (per-policy enable, entity selection, output + event redaction). PII never reaches the database.
+**Implemented:** Task-level guardrails wired through CrewAI's built-in guardrail system, supporting three types: function-based (Python callable), LLM-based (string description evaluated by the agent's LLM), and schema-based (JSON Schema output validation). The `Guardrail` resource kind is fully working with CRUD and reference resolution. PII redaction via full Microsoft Presidio integration (`pii.py`) with configurable backends (default regex, presidio-nlp with spaCy, litellm for LLM-based detection). PII guardrail type (redact/reject/warn actions). AgentPolicy pii config (per-policy enable, entity selection, output + event redaction). PII never reaches the database.
+
+**LLM-based PII recognizer note:** The `litellm` backend registers an `LLMPIIRecognizer` as a custom Presidio recognizer. All LLM calls for PII detection route through the LiteLLM proxy (not direct to Ollama or any provider). The recognizer sends text to a configurable model (default: `ollama/gliner-pii`) via `POST {litellm_proxy_url}/v1/chat/completions` with the master key. Responses are validated (entity type allowlist, bounds checking, score clamping) before being converted to `RecognizerResult` objects. On any LLM failure, the recognizer raises to prevent unredacted PII from being stored.
 
 **Deferred to post-MVP:** Hallucination detection, namespace-level and crew-level guardrails, composite guardrail chains.
 
@@ -213,6 +215,7 @@ PII redaction is powered by **Microsoft Presidio** (MIT license, 8k+ GitHub star
 - Integration with execution event log: redact PII from event data before storage
 - GUI for managing PII rules (entity toggles, custom recognizer builder)
 - Per-namespace PII policies
+- **LLM-based recognizer** (`LLMPIIRecognizer`): Custom Presidio `EntityRecognizer` that sends text to an LLM (e.g., GLiNER/HydroX) via the LiteLLM proxy for higher-accuracy PII detection. All LLM calls for PII recognition route through the LiteLLM proxy -- never directly to a provider. Configurable via the `backend: litellm` setting in PII config.
 
 Ensures compliance with GDPR, HIPAA, PCI-DSS.
 

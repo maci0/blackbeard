@@ -8,6 +8,7 @@ mismatch.
 
 from __future__ import annotations
 
+import pytest
 from httpx import AsyncClient
 
 from tests.conftest import API_KEY_HEADER, _agent_payload
@@ -17,6 +18,7 @@ from tests.conftest import API_KEY_HEADER, _agent_payload
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.xfail(reason="SQLite lacks JSON filtering; passes on PostgreSQL", strict=False)
 async def test_list_with_label_selector(client: AsyncClient):
     """GET /agents?label_selector=env=prod filters by label."""
     # Create agent with labels
@@ -32,32 +34,25 @@ async def test_list_with_label_selector(client: AsyncClient):
     assert resp2.status_code == 201
 
     # Filter by label
-    resp = await client.get(
-        "/api/v1/agents?label_selector=env%3Dprod", headers=API_KEY_HEADER
-    )
+    resp = await client.get("/api/v1/agents?label_selector=env%3Dprod", headers=API_KEY_HEADER)
     assert resp.status_code == 200
     data = resp.json()
     assert isinstance(data["items"], list)
-    # SQLite JSON support varies; if filtering works, verify only matching items returned
-    if data["total"] > 0:
-        for item in data["items"]:
-            assert item["metadata"].get("labels", {}).get("env") == "prod"
+    assert data["total"] >= 1, "Label filter must return at least the labeled agent"
+    for item in data["items"]:
+        assert item["metadata"].get("labels", {}).get("env") == "prod"
 
 
 async def test_list_with_invalid_label_selector(client: AsyncClient):
     """GET /agents?label_selector=badformat returns 400."""
-    resp = await client.get(
-        "/api/v1/agents?label_selector=no-equals-sign", headers=API_KEY_HEADER
-    )
+    resp = await client.get("/api/v1/agents?label_selector=no-equals-sign", headers=API_KEY_HEADER)
     assert resp.status_code == 400
     assert "label" in resp.json()["detail"].lower()
 
 
 async def test_list_with_empty_label_key(client: AsyncClient):
     """GET /agents?label_selector==value returns 400 (empty key)."""
-    resp = await client.get(
-        "/api/v1/agents?label_selector=%3Dvalue", headers=API_KEY_HEADER
-    )
+    resp = await client.get("/api/v1/agents?label_selector=%3Dvalue", headers=API_KEY_HEADER)
     assert resp.status_code == 400
 
 

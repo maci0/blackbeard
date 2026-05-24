@@ -8,7 +8,10 @@ Provide a shared, versioned library of reusable agents, tasks, tools, crews, flo
 
 **Implemented:** Git-based asset management via `blackbeard export --all -o repo/` and `blackbeard apply -f repo/`. Marketplace import from git repositories (clone and apply). Versioning via git commits. Sharing via git push/pull.
 
-**Deferred to post-MVP:** No MinIO, no custom registry (`repository_assets` table), no publishing UI, no `blackbeard repo publish/install` commands, no approval workflows, no semver resolution. The full repository system described in this PRD remains post-MVP.
+**Deferred to post-MVP:** No MinIO, no custom registry (`repository_assets` table), no publishing UI, no `blackbeard repo publish/install` commands, no approval workflows, no semver resolution, no asset overrides on use (`overrides`/`extend` syntax), no asset forking (`blackbeard repo fork`). The full repository system described in this PRD remains post-MVP.
+
+**Implemented (beyond initial MVP):**
+- Marketplace: Full `/marketplace` page with 6 built-in example crews, git URL import, and one-click import of bundled starters. Backend validates and upserts imported resources.
 
 ## 2. Asset Types
 
@@ -126,7 +129,9 @@ blackbeard repo publish tools/sentiment-analyzer/ \
 5. **Review** (optional): If org requires approval, submit for admin review.
 6. **Publish**: Store in repository, update index.
 
-### 4.2 Approval Workflow
+### 4.2 Approval Workflow *(Deferred to post-MVP)*
+
+> **Status:** Approval workflows are deferred to post-MVP. No review/approval gate exists for asset publication.
 
 Configurable per-org:
 
@@ -174,7 +179,9 @@ blackbeard repo install tools/sentiment-analyzer@0.3.0
 blackbeard repo install templates/research-crew-template --as my-research-crew
 ```
 
-### 5.3 Override on Use
+### 5.3 Override on Use *(Deferred to post-MVP)*
+
+> **Status:** Asset overrides on use are deferred to post-MVP. No `overrides` or `extend` syntax is implemented.
 
 Repository assets can be overridden at the point of use:
 
@@ -207,7 +214,9 @@ overrides:
       - ref: tools/custom-energy-db    # appended to repository asset's tools list
 ```
 
-### 5.4 Fork
+### 5.4 Fork *(Deferred to post-MVP)*
+
+> **Status:** Asset forking is deferred to post-MVP. No `blackbeard repo fork` command exists.
 
 Fork creates a mutable copy of a repository asset in the user's project:
 
@@ -277,6 +286,6 @@ Post-v1 will add `blackbeard repo install crews/research-crew@1.0.0 --resolve-de
 3. Published assets are discoverable via UI search and browsable by category.
 4. `ref: repo:agents/name@version` resolves correctly at load time.
 5. Version pinning (`@1.2.0`) and range (`@1.x`) work correctly.
-6. Overrides at point of use work (change goal, add tools, etc.).
-7. Approval workflow blocks publication until admin approves (when configured).
+6. *(Deferred)* Overrides at point of use work (change goal, add tools, etc.).
+7. *(Deferred)* Approval workflow blocks publication until admin approves (when configured).
 8. Breaking change detection warns when a new major version has active dependents.

@@ -12,7 +12,7 @@ Provide comprehensive visibility into every crew, flow, and agent execution thro
 
 ### 1.1 MVP Scope
 
-**Implemented:** Execution event log (`execution_events` table) with SSE and WebSocket streaming to the frontend, REST endpoint for historical event replay, LiteLLM dashboard at `:4000/ui` for LLM-level request inspection, token and cost tracking per execution, audit log API for RBAC and resource mutation events (all mutations logged), optional OpenTelemetry export configuration.
+**Implemented:** Execution event log (`execution_events` table) with SSE and WebSocket streaming to the frontend, REST endpoint for historical event replay, LiteLLM dashboard at `:4000/ui` for LLM-level request inspection, token and cost tracking per execution, audit log API for RBAC and resource mutation events (all mutations logged), audit logs UI (`/audit-logs` page with filterable table, auto-refresh at 10s intervals, pagination), tokens-per-second metrics in Chat and ExecutionDetail (see PRD 06, section 6.4), sidebar health check indicator (colored dot polling `/api/v1/health` every 30s -- green/amber/red for connected/degraded/disconnected), optional OpenTelemetry export configuration.
 
 **Deferred to post-MVP:** Custom trace backend integration, execution timeline (Gantt) view, advanced dashboards (policy denials, sandbox usage, budget utilization charts).
 
@@ -27,11 +27,15 @@ Provide comprehensive visibility into every crew, flow, and agent execution thro
 ### What Blackbeard provides (Crew-level)
 
 - `execution_events` table: append-only log of all crew/task/agent/tool events
-- SSE endpoint for real-time event streaming to the frontend
+- SSE endpoint for real-time event streaming to the frontend (with fallback polling on disconnect)
 - REST endpoint for historical event replay and filtering
 - Execution summary with token usage, cost, duration, task progress
+- Tokens-per-second metrics (pp/tg split) in Chat and ExecutionDetail spend display
 - Sandbox-tier tracking on tool calls
 - Policy denial recording with full context
+- Audit logs UI: `/audit-logs` page with filterable table (action, resource type, actor search), auto-refresh every 10s, pagination
+- Sidebar health check indicator: colored dot (green/amber/red) polling `/api/v1/health` every 30s via `useHealthCheck` hook
+- Browser notifications for completed/failed executions + sidebar bell badge with unread count
 - Blackbeard-specific dashboards (policy denials, sandbox usage, budget utilization)
 
 ## 2. Observability Model

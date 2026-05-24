@@ -68,6 +68,14 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **CLI** (`cli/` — separate package `blackbeard-cli`): Standalone package with no server deps (click, httpx, rich, pyyaml, jsonschema only). 28 commands (including 4 groups with subcommands) across 6 modules. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
 
+**Dynamic LiteLLM sync**: When `LLMConnection` resources are created/updated/deleted, the API regenerates LiteLLM config and pushes it via `POST /config/update` — no container restart needed.
+
+**RBAC enforcement**: API endpoints use a `require_permission()` FastAPI dependency that checks the authenticated user's roles and role bindings before allowing access. Permissions are checked as `(resource_kind, verb)` pairs.
+
+**API key management**: `POST /api/v1/auth/api-key` generates a personal API key; `DELETE /api/v1/auth/api-key` revokes it.
+
+**Bulk resource export**: `GET /api/v1/resources/export` returns all resources as multi-document YAML (each resource separated by `---`).
+
 **HITL (Human-in-the-Loop)**: Tasks with `human_input: true` pause execution. Frontend polls for `hitl_request` events and submits responses via `POST /executions/{id}/respond`. Response recorded as `hitl_response` event.
 
 **OpenTelemetry**: Optional trace export via `OTEL_ENDPOINT` env var. When unset, tracing is disabled with no overhead.
@@ -80,7 +88,23 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Resource CRUD**: `resourceStore` handles all resource kinds through the generic `/api/v1/{kind_plural}` endpoints. Updates use optimistic locking via `version` field.
 
-**Marketplace**: `/marketplace` page for importing resources from git repos. Backend clones repos, validates YAML, upserts resources. Built-in "Research Crew Starter" available.
+**Dashboard**: Default landing page (`/`) with execution metrics, resource counts, and recent activity.
+
+**Chat**: `/chat` playground for interactive LLM conversations via configured LLMConnections.
+
+**Audit Logs**: `/audit-logs` page for viewing all mutation history (resource creates/updates/deletes, execution events, user management).
+
+**Webhooks**: `/webhooks` page for managing webhook subscriptions — register, view, and delete webhook endpoints.
+
+**Command palette**: `Cmd+K` / `Ctrl+K` opens a fuzzy-search command palette for quick navigation to any page, resource, or action.
+
+**Notifications**: Toast notification system for async feedback (execution started, resource saved, errors).
+
+**YAML import**: File-based YAML import in the UI for bulk resource creation.
+
+**Health indicator**: Sidebar displays a live health status indicator for the backend API connection.
+
+**Marketplace**: `/marketplace` page for importing resources from git repos. Backend clones repos, validates YAML, upserts resources. 7 built-in example crews plus a shared tools collection available.
 
 **API client**: `src/api/client.ts` — typed fetch wrapper, proxied through Vite dev server (`:3000/api → :8000`). Auto-generated OpenAPI types in `src/api/schema.d.ts` (`bun run generate:api`).
 
@@ -94,7 +118,7 @@ DB schema is managed in `backend/entrypoint.sh`: first creates PostgreSQL enum t
 
 **SDKs**: Python (`sdks/python/`), TypeScript (`sdks/typescript/`), and React (`sdks/react/`) — thin wrappers over httpx/fetch. Cover auth, resources, executions, train/test/flow. React SDK provides `BlackbeardProvider`, `CrewViewer`, `CrewRunner`, and `ExecutionStatus` components.
 
-**CI**: GitHub Actions — 9 jobs: backend (ruff check + ruff format + mypy + pytest + pip-audit) → CLI (lint + validate) → Python SDK (pytest) → TypeScript SDK (tsc) → React SDK (tsc) → Helm lint → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (docker-api after backend, docker-ui after frontend, cached).
+**CI**: GitHub Actions — 9 jobs: backend (ruff check + ruff format + mypy + pytest + pip-audit + bandit security scan) → CLI (lint + validate) → Python SDK (pytest) → TypeScript SDK (tsc) → React SDK (tsc) → Helm lint → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (docker-api after backend, docker-ui after frontend, cached). Includes Hypothesis property-based testing (backend) and fast-check fuzzing (frontend) for schema validation edge cases.
 
 **Webhooks**: Register webhook URLs via `POST /api/v1/webhooks`. Execution events delivered with HMAC-SHA256 signature. Fire-and-forget delivery.
 

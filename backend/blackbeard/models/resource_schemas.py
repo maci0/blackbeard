@@ -107,7 +107,7 @@ class ResourceResponse(BaseModel):
             spec = dict(spec)
             trigger = spec.get("trigger")
             if isinstance(trigger, dict) and "webhook_secret" in trigger:
-                trigger = {**trigger, "webhook_secret": "**REDACTED**"}
+                trigger = {**trigger, "webhook_secret": "**REDACTED**"}  # nosec B105 -- redaction-placeholder
                 spec["trigger"] = trigger
         return cls.model_construct(
             id=resource.id,

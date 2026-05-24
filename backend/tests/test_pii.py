@@ -295,9 +295,7 @@ class TestLLMPIIRecognizer:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "not valid json"}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": "not valid json"}}]}
 
         mock_client = MagicMock()
         mock_client.post.return_value = mock_response

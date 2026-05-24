@@ -8,7 +8,12 @@ Define the public API surface, webhook streaming protocol, plugin SDK, and exten
 
 **Implemented:** REST CRUD for all 12 resource kinds (including Automation), execution lifecycle endpoints (kickoff, train, test, flow run, status, cancel, stream, events), auth endpoints (register, login, refresh, whoami), health check endpoints, audit log API, marketplace import, webhook configuration (register/deliver with HMAC signing), HITL respond endpoint (`POST /executions/{id}/respond`), automation trigger endpoints (cron, webhook, API), gRPC API on :50051 with auth interceptor (ListResources, GetResource, CreateResource, DeleteResource, Kickoff, GetExecution, StreamEvents, Health). OpenAPI schema at `/api/v1/docs`. SDKs: Python (`sdks/python/`) + TypeScript (`sdks/typescript/`). React component export via `@blackbeard/react` SDK (`sdks/react/`). CLI: standalone package, 25+ commands.
 
-**Deferred to post-MVP:** Plugin SDK, AsyncAPI spec for webhook events.
+**Deferred to post-MVP:** Plugin SDK, AsyncAPI spec for webhook events (no `/api/v1/asyncapi.json` endpoint exists).
+
+**Implemented (beyond initial MVP):**
+- Bulk resource export: `GET /api/v1/resources/export` returns multi-document YAML of all resources.
+- API key management: `POST /api/v1/auth/api-key` (generate) and `DELETE /api/v1/auth/api-key` (revoke) endpoints.
+- SDKs: Python (`sdks/python/`), TypeScript (`sdks/typescript/`), and React (`sdks/react/`) SDKs are all shipped and functional.
 
 ## 2. REST API
 
@@ -559,8 +564,7 @@ The widget provides:
 
 - **OpenAPI 3.1** spec auto-generated from the API routes and resource schemas.
 - Available at `/api/v1/openapi.json` and `/api/v1/docs` (Swagger UI).
-- **AsyncAPI** spec for webhook streaming events.
-- Available at `/api/v1/asyncapi.json`.
+- **AsyncAPI** spec for webhook streaming events -- *(Deferred to post-MVP; no `/api/v1/asyncapi.json` endpoint exists)*.
 
 ## 9. SDKs
 

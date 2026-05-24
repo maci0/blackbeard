@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from typing import Any
 
+import yaml
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.audit import audit_from_request, log_audit
-from blackbeard.auth.dependencies import get_current_user
-from blackbeard.kinds import NAME_PATTERN, PLURAL_TO_KIND, ResourceKind
+from blackbeard.auth.dependencies import check_resource_permission, get_current_user
+from blackbeard.kinds import API_VERSION, NAME_PATTERN, PLURAL_TO_KIND, ResourceKind
+from blackbeard.litellm import model_sync
 from blackbeard.models import User, get_session
 from blackbeard.models.resource_schemas import (
     ResourceCreate,
@@ -25,6 +29,58 @@ from blackbeard.resources import (
 )
 
 logger = logging.getLogger(__name__)
+
+_yaml_dumper: Any = getattr(yaml, "CSafeDumper", yaml.SafeDumper)
+
+_background_tasks: set[asyncio.Task[None]] = set()
+
+
+def _log_bg_task_exception(task: asyncio.Task[None]) -> None:
+    _background_tasks.discard(task)
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.error(
+            "Background task %s failed: %s",
+            task.get_name(),
+            exc,
+            exc_info=exc,
+            extra={
+                "event": "background_task_failed",
+                "task_name": task.get_name(),
+                "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
+            },
+        )
+
+
+def _fire_and_forget(coro: Any) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_log_bg_task_exception)
+
+
+_LLM_KIND = "LLMConnection"
+
+
+async def _sync_llm_to_litellm(kind: str, name: str, spec: dict[str, Any] | None) -> None:
+    """Push LLMConnection changes to LiteLLM proxy. Fire-and-forget."""
+    if kind != _LLM_KIND:
+        return
+    try:
+        if spec is not None:
+            await model_sync.add_model(name, spec)
+        else:
+            await model_sync.delete_model(name)
+    except Exception:
+        logger.warning(
+            "LiteLLM sync failed for %s (non-fatal)",
+            name,
+            exc_info=True,
+            extra={"event": "litellm_sync_failed", "model_name": name},
+        )
+
 
 router = APIRouter(tags=["resources"])
 
@@ -66,6 +122,60 @@ def _resolve_kind(kind_plural: str) -> str:
     return kind
 
 
+def _resource_to_document(resource: Any) -> dict[str, Any]:
+    """Convert a Resource ORM object to a YAML-serializable document."""
+    return {
+        "apiVersion": API_VERSION,
+        "kind": resource.kind.value,
+        "metadata": {
+            "name": resource.name,
+            "namespace": resource.namespace,
+        },
+        "spec": resource.spec,
+    }
+
+
+@router.get(
+    "/resources/export",
+    responses={
+        200: {
+            "description": "All resources as a multi-document YAML stream",
+            "content": {"application/x-yaml": {}},
+        },
+    },
+)
+async def export_resources(
+    namespace: str | None = Query(
+        default=None,
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Filter by namespace (omit for all namespaces)",
+    ),
+    session: AsyncSession = Depends(get_session),
+    _user: User | None = Depends(get_current_user),
+) -> Response:
+    """Export all resources as a multi-document YAML stream.
+
+    Returns resources separated by ``---`` document markers, suitable for
+    piping into ``blackbeard apply -f -`` or storing as a backup file.
+    """
+    service = ResourceService(session)
+    items, _total = await service.list_resources(
+        namespace=namespace,
+        limit=10_000,
+        offset=0,
+    )
+
+    content = yaml.dump_all(
+        (_resource_to_document(r) for r in items),
+        Dumper=_yaml_dumper,
+        default_flow_style=False,
+        allow_unicode=True,
+        sort_keys=False,
+    )
+    return Response(content=content, media_type="application/x-yaml")
+
+
 @router.get(
     "/{kind_plural}",
     response_model=ResourceListResponse,
@@ -90,7 +200,7 @@ async def list_resources(
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     session: AsyncSession = Depends(get_session),
-    _user: User | None = Depends(get_current_user),
+    _user: User | None = Depends(check_resource_permission),
 ) -> ResourceListResponse:
     """List resources of a given kind."""
     kind = _resolve_kind(kind_plural)
@@ -149,7 +259,7 @@ async def create_resource(
     response: Response,
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User | None = Depends(check_resource_permission),
 ) -> ResourceResponse:
     """Create (or upsert) a resource of a given kind."""
     url_kind = _resolve_kind(kind_plural)
@@ -193,7 +303,8 @@ async def create_resource(
         response.headers["Location"] = f"/api/v1/{kind_plural}/{data.metadata.name}?namespace={ns}"
     else:
         response.status_code = 200
-    await _maybe_reload_scheduler(request, url_kind)
+    _fire_and_forget(_maybe_reload_scheduler(request, url_kind))
+    _fire_and_forget(_sync_llm_to_litellm(url_kind, data.metadata.name, data.spec))
     return ResourceResponse.from_db(resource)
 
 
@@ -217,7 +328,7 @@ async def get_resource(
         description="Resource namespace",
     ),
     session: AsyncSession = Depends(get_session),
-    _user: User | None = Depends(get_current_user),
+    _user: User | None = Depends(check_resource_permission),
 ) -> ResourceResponse:
     """Get a single resource by kind and name."""
     kind = _resolve_kind(kind_plural)
@@ -255,7 +366,7 @@ async def update_resource(
         description="Resource namespace",
     ),
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User | None = Depends(check_resource_permission),
 ) -> ResourceResponse:
     """Update a resource by kind and name (optimistic locking via version)."""
     kind = _resolve_kind(kind_plural)
@@ -323,7 +434,8 @@ async def update_resource(
             status_code=422,
             detail=[e.to_dict() for e in exc.errors],
         ) from exc
-    await _maybe_reload_scheduler(request, kind)
+    _fire_and_forget(_maybe_reload_scheduler(request, kind))
+    _fire_and_forget(_sync_llm_to_litellm(kind, name, resource.spec))
     return ResourceResponse.from_db(resource)
 
 
@@ -348,7 +460,7 @@ async def delete_resource(
         description="Resource namespace",
     ),
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User | None = Depends(check_resource_permission),
 ) -> None:
     """Delete a resource by kind and name. Idempotent."""
     kind = _resolve_kind(kind_plural)
@@ -377,4 +489,5 @@ async def delete_resource(
             },
         )
     else:
-        await _maybe_reload_scheduler(request, kind)
+        _fire_and_forget(_maybe_reload_scheduler(request, kind))
+        _fire_and_forget(_sync_llm_to_litellm(kind, name, None))

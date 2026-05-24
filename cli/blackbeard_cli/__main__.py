@@ -135,16 +135,18 @@ Common workflows:
     default="http://localhost:8000",
     envvar="BLACKBEARD_SERVER",
     show_default=True,
+    show_envvar=True,
     metavar="URL",
-    help="Blackbeard API server URL (env: BLACKBEARD_SERVER)",
+    help="Blackbeard API server URL",
 )
 @click.option(
     "--api-key",
     "-k",
     envvar="BLACKBEARD_API_KEY",
     required=False,
+    show_envvar=True,
     metavar="KEY",
-    help="API key (env: BLACKBEARD_API_KEY)",
+    help="API key",
 )
 @click.option(
     "--namespace",
@@ -152,8 +154,9 @@ Common workflows:
     default="default",
     envvar="BLACKBEARD_NAMESPACE",
     show_default=True,
+    show_envvar=True,
     metavar="NAME",
-    help="Resource namespace (env: BLACKBEARD_NAMESPACE)",
+    help="Resource namespace",
 )
 @click.option(
     "--timeout",
@@ -162,8 +165,9 @@ Common workflows:
     show_default=True,
     type=click.IntRange(1, 300),
     envvar="BLACKBEARD_TIMEOUT",
+    show_envvar=True,
     metavar="SECONDS",
-    help="HTTP request timeout in seconds (env: BLACKBEARD_TIMEOUT)",
+    help="HTTP request timeout in seconds",
 )
 @json_opt
 @click.pass_context

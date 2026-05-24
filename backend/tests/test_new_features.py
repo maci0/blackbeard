@@ -406,13 +406,19 @@ class TestOtelConfig:
 class TestOtelListener:
     """Test OpenTelemetry integration in execution listener."""
 
-    def test_has_otel_flag_when_not_installed(self):
-        """HAS_OTEL should be True since opentelemetry is not a dependency."""
-        # In test environment, HAS_OTEL depends on whether otel is installed.
-        # We just verify the flag exists and is a bool.
+    def test_has_otel_flag_is_consistent_with_imports(self):
+        """HAS_OTEL flag must match whether opentelemetry is actually importable."""
         from blackbeard.engine.execution_listener import HAS_OTEL
 
-        assert isinstance(HAS_OTEL, bool)
+        try:
+            import opentelemetry  # noqa: F401
+            otel_available = True
+        except ImportError:
+            otel_available = False
+
+        assert otel_available == HAS_OTEL, (
+            f"HAS_OTEL={HAS_OTEL} but opentelemetry importable={otel_available}"
+        )
 
     def test_get_otel_tracer_returns_none_without_config(self):
         """_get_otel_tracer should return None when otel_endpoint is not set."""

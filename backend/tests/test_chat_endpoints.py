@@ -23,9 +23,7 @@ async def test_chat_success(client: AsyncClient):
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
-        "choices": [
-            {"message": {"content": "Hello, I am an AI assistant."}}
-        ],
+        "choices": [{"message": {"content": "Hello, I am an AI assistant."}}],
         "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
     }
 
@@ -102,7 +100,7 @@ async def test_chat_litellm_500_error(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 502
-    assert "detail" in resp.json()
+    assert resp.json()["detail"], "502 must include non-empty detail message"
 
 
 async def test_chat_litellm_429_rate_limit(client: AsyncClient):
@@ -126,7 +124,7 @@ async def test_chat_litellm_429_rate_limit(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 429
-    assert "detail" in resp.json()
+    assert resp.json()["detail"], "429 must include non-empty detail message"
 
 
 async def test_chat_connection_error(client: AsyncClient):
@@ -144,7 +142,7 @@ async def test_chat_connection_error(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 502
-    assert "detail" in resp.json()
+    assert resp.json()["detail"], "502 must include non-empty detail message"
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +169,9 @@ async def test_list_models_success(client: AsyncClient):
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 2
-    assert data[0]["name"] == "gpt-4o"
+    model_names = [m["name"] for m in data]
+    assert "gpt-4o" in model_names
+    assert "claude-3-opus" in model_names
 
 
 async def test_list_models_litellm_error(client: AsyncClient):
@@ -186,7 +186,7 @@ async def test_list_models_litellm_error(client: AsyncClient):
     with patch("blackbeard.api.chat._get_litellm_client", return_value=mock_client):
         resp = await client.get("/api/v1/models/available", headers=API_KEY_HEADER)
     assert resp.status_code == 502
-    assert "detail" in resp.json()
+    assert resp.json()["detail"], "502 must include non-empty detail message"
 
 
 async def test_list_models_connection_error(client: AsyncClient):
@@ -197,7 +197,7 @@ async def test_list_models_connection_error(client: AsyncClient):
     with patch("blackbeard.api.chat._get_litellm_client", return_value=mock_client):
         resp = await client.get("/api/v1/models/available", headers=API_KEY_HEADER)
     assert resp.status_code == 502
-    assert "detail" in resp.json()
+    assert resp.json()["detail"], "502 must include non-empty detail message"
 
 
 # ---------------------------------------------------------------------------
@@ -210,9 +210,7 @@ async def test_model_test_success(client: AsyncClient):
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
-        "choices": [
-            {"message": {"content": "Hi!"}}
-        ],
+        "choices": [{"message": {"content": "Hi!"}}],
         "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
     }
 

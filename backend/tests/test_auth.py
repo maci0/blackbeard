@@ -460,9 +460,7 @@ async def test_list_group_members_empty(client: AsyncClient):
     """Listing members of a group with no members returns empty list."""
     data = await _register_user(client)
     headers = _bearer(data["access_token"])
-    group_resp = await client.post(
-        "/api/v1/groups", json={"name": "empty-group"}, headers=headers
-    )
+    group_resp = await client.post("/api/v1/groups", json={"name": "empty-group"}, headers=headers)
     assert group_resp.status_code == 201
     group_id = group_resp.json()["id"]
 
@@ -479,9 +477,7 @@ async def test_add_and_list_group_member(client: AsyncClient):
     headers = _bearer(data["access_token"])
     user_id = data["user"]["id"]
 
-    group_resp = await client.post(
-        "/api/v1/groups", json={"name": "dev-team"}, headers=headers
-    )
+    group_resp = await client.post("/api/v1/groups", json={"name": "dev-team"}, headers=headers)
     assert group_resp.status_code == 201
     group_id = group_resp.json()["id"]
 
@@ -497,9 +493,7 @@ async def test_add_and_list_group_member(client: AsyncClient):
     assert add_body["status"] == "added"
 
     # List members
-    list_resp = await client.get(
-        f"/api/v1/groups/{group_id}/members", headers=headers
-    )
+    list_resp = await client.get(f"/api/v1/groups/{group_id}/members", headers=headers)
     assert list_resp.status_code == 200
     body = list_resp.json()
     assert body["total"] == 1
@@ -512,9 +506,7 @@ async def test_add_group_member_duplicate_returns_409(client: AsyncClient):
     headers = _bearer(data["access_token"])
     user_id = data["user"]["id"]
 
-    group_resp = await client.post(
-        "/api/v1/groups", json={"name": "dup-test"}, headers=headers
-    )
+    group_resp = await client.post("/api/v1/groups", json={"name": "dup-test"}, headers=headers)
     assert group_resp.status_code == 201
     group_id = group_resp.json()["id"]
 
@@ -574,9 +566,7 @@ async def test_remove_group_member(client: AsyncClient):
     headers = _bearer(data["access_token"])
     user_id = data["user"]["id"]
 
-    group_resp = await client.post(
-        "/api/v1/groups", json={"name": "remove-test"}, headers=headers
-    )
+    group_resp = await client.post("/api/v1/groups", json={"name": "remove-test"}, headers=headers)
     assert group_resp.status_code == 201
     group_id = group_resp.json()["id"]
 
@@ -596,9 +586,7 @@ async def test_remove_group_member(client: AsyncClient):
     assert del_resp.status_code == 204
 
     # Verify member is gone
-    list_resp = await client.get(
-        f"/api/v1/groups/{group_id}/members", headers=headers
-    )
+    list_resp = await client.get(f"/api/v1/groups/{group_id}/members", headers=headers)
     assert list_resp.status_code == 200
     assert list_resp.json()["total"] == 0
 
@@ -627,9 +615,7 @@ async def test_list_group_members_nonexistent_group(client: AsyncClient):
     headers = _bearer(data["access_token"])
     fake_group_id = str(uuid.uuid4())
 
-    resp = await client.get(
-        f"/api/v1/groups/{fake_group_id}/members", headers=headers
-    )
+    resp = await client.get(f"/api/v1/groups/{fake_group_id}/members", headers=headers)
     assert resp.status_code == 404
 
 

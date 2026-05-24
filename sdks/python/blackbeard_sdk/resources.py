@@ -183,7 +183,10 @@ class ResourceMixin:
         """Export all resources in a namespace as a YAML string.
 
         Fetches every known resource kind and serializes them into a
-        multi-document YAML string suitable for re-import via apply().
+        multi-document YAML string.  To re-import, parse with
+        ``yaml.safe_load_all()`` and pass the resulting list to ``apply()``.
+
+        Note: fetches at most 1000 resources per kind.
 
         Args:
             namespace: Namespace to export.

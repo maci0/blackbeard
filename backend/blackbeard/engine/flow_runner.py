@@ -124,8 +124,7 @@ def run_flow_steps(
 
             crew = loader.build_crew(crew_ref.split("/")[-1] if "/" in crew_ref else crew_ref)
             failed_deps = [
-                k for k, v in step_outputs.items()
-                if isinstance(v, str) and v.startswith("error:")
+                k for k, v in step_outputs.items() if isinstance(v, str) and v.startswith("error:")
             ]
             if failed_deps:
                 logger.warning(

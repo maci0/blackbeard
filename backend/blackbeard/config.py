@@ -38,9 +38,6 @@ class Settings(BaseSettings):
     litellm_proxy_url: str = "http://localhost:4000"
     litellm_master_key: SecretStr = SecretStr("sk-litellm-master-key")
 
-    # Optional — used for model info enrichment in /models/test
-    ollama_url: str = "http://host.docker.internal:11434"
-
     google_cloud_project: str = ""
     cloud_ml_region: str = "us-east5"
     google_application_credentials: str = ""
@@ -48,6 +45,8 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr = SecretStr("change-jwt-secret-in-production!")
     jwt_access_token_expire_minutes: int = Field(default=15, ge=1)
     jwt_refresh_token_expire_days: int = Field(default=7, ge=1)
+
+    enforce_rbac: bool = False
 
     otel_endpoint: str | None = None
 
@@ -91,7 +90,7 @@ class Settings(BaseSettings):
     auth_fail_max_per_ip: int = Field(default=20, ge=1)
     auth_fail_max_tracked_ips: int = Field(default=200, ge=1)
 
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # nosec B104 -- intentional-for-containerized-deployment
     port: int = Field(default=8000, ge=1, le=65535)
     grpc_port: int = Field(default=50051, ge=1, le=65535)
     web_concurrency: int = Field(default=1, ge=1)
@@ -151,13 +150,11 @@ class Settings(BaseSettings):
             )
         return v
 
-    @field_validator("otel_endpoint", "ollama_url", "muninndb_url", "litellm_proxy_url")
+    @field_validator("otel_endpoint", "muninndb_url", "litellm_proxy_url")
     @classmethod
     def _validate_http_url(cls, v: str | None) -> str | None:
         if v is not None and not v.startswith(("http://", "https://")):
-            raise ValueError(
-                f"URL must start with http:// or https:// (got {v!r})"
-            )
+            raise ValueError(f"URL must start with http:// or https:// (got {v!r})")
         return v
 
     @field_validator("cors_origins")
@@ -167,9 +164,7 @@ class Settings(BaseSettings):
             if origin == "*":
                 continue
             if not origin.startswith(("http://", "https://")):
-                raise ValueError(
-                    f"CORS origin {origin!r} must start with http:// or https://"
-                )
+                raise ValueError(f"CORS origin {origin!r} must start with http:// or https://")
             if origin.endswith("/"):
                 raise ValueError(
                     f"CORS origin {origin!r} must not end with a trailing slash "
@@ -181,9 +176,7 @@ class Settings(BaseSettings):
     @classmethod
     def _validate_oidc_redirect_uri(cls, v: str | None) -> str | None:
         if v is not None and not v.startswith(("http://", "https://")):
-            raise ValueError(
-                f"OIDC_REDIRECT_URI must start with http:// or https:// (got {v!r})"
-            )
+            raise ValueError(f"OIDC_REDIRECT_URI must start with http:// or https:// (got {v!r})")
         return v
 
     model_config = SettingsConfigDict(env_prefix="", case_sensitive=False)

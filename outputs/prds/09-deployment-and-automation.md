@@ -8,7 +8,11 @@ Manage the full lifecycle of deployed crews and flows: build, deploy, version, r
 
 **Implemented:** Docker Compose deployment + Helm chart for Kubernetes. Automation resource kind with cron, webhook, and API triggers. Background cron scheduler runs in FastAPI lifespan. Webhook trigger endpoint validates HMAC secrets. Crews and Flows can be automated with configurable inputs and max concurrency. Webhooks with register/deliver and HMAC signing. Workflow hooks (before/after on crews and flow steps).
 
-**Deferred to post-MVP:** Deployment lifecycle (build/deploy/version/rollback), versioning strategies, blue-green/canary deployments, A2A protocol endpoints, Automations Dashboard UI, replica scaling.
+**Deferred to post-MVP:** Deployment lifecycle (build/deploy/version/rollback), versioning strategies (no versioning system exists), blue-green/canary deployments, A2A protocol endpoints (no `.well-known/agent-card.json` exists), replica scaling.
+
+**Implemented (beyond initial MVP):**
+- Automation UI: Full Automations page (`/automations`) with create, edit, delete, and trigger functionality.
+- Webhooks management UI: Dedicated `/webhooks` page for registering, viewing, and deleting webhook subscriptions.
 
 ## 2. Automation Resource
 
@@ -232,7 +236,9 @@ triggers:
 | **HubSpot** | CRM record created/updated |
 | **Salesforce** | Object trigger via Salesforce Flows |
 
-## 6. Agent-to-Agent (A2A) Protocol
+## 6. Agent-to-Agent (A2A) Protocol *(Deferred to post-MVP)*
+
+> **Status:** No `.well-known/agent-card.json` or A2A endpoints exist in the current implementation. The full A2A protocol described below is deferred to post-MVP.
 
 Deployed automations can expose A2A endpoints for inter-agent communication:
 
@@ -258,7 +264,9 @@ External A2A callers authenticate using one of:
 
 The principal chain for an A2A-initiated execution: `External ServiceAccount/User → Automation → Crew → Agent`. RBAC and AgentPolicy enforcement apply identically to human-initiated executions.
 
-## 7. Versioning & Rollback
+## 7. Versioning & Rollback *(Deferred to post-MVP)*
+
+> **Status:** No versioning system exists in the current implementation. The full versioning and rollback workflow described below is deferred to post-MVP.
 
 - Every deployment creates a new **version** with a sequential number.
 - Versions are immutable snapshots of the resource graph + dependencies.
@@ -304,7 +312,7 @@ spec:
 
 See PRD 11, section 7 for the React component export specification. Shipped as `@blackbeard/react` SDK in `sdks/react/`.
 
-## 10. Automations Dashboard (UI)
+## 10. Automations Dashboard (UI) -- ✅ Implemented
 
 - **Table view**: All automations with status (Online / Failed / Deploying), source, URL, last execution.
 - **Filters**: By status, source method, trigger type.
@@ -319,7 +327,7 @@ See PRD 11, section 7 for the React component export specification. Shipped as `
 4. Scheduled triggers fire at the correct cron time.
 5. Webhook triggers accept external POST requests and kick off executions.
 6. Custom triggers work: a webhook with filter logic correctly decides whether to kick off execution.
-7. A2A agent cards are auto-generated and discoverable.
-8. Rollback to a previous version is instantaneous and the old version runs correctly.
+7. *(Deferred)* A2A agent cards are auto-generated and discoverable.
+8. *(Deferred)* Rollback to a previous version is instantaneous and the old version runs correctly.
 9. Webhook streaming delivers events to configured endpoints with retry on failure.
 10. React component export produces a working embeddable component.

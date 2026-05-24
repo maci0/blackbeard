@@ -257,6 +257,7 @@ class TestContainerSandboxDetection:
 
     def test_detect_docker_fallback(self):
         """Falls back to docker when podman is not available."""
+
         def _which(cmd):
             return "/usr/bin/docker" if cmd == "docker" else None
 
@@ -489,6 +490,7 @@ class TestMicroVMSandboxDetection:
 
     def test_detect_docker_fallback(self):
         """Falls back to docker when podman is not available."""
+
         def _which(cmd):
             if cmd == "docker":
                 return "/usr/bin/docker"

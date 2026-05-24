@@ -7,20 +7,26 @@ import { useDocumentTitle, useOnboarding } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
 import { ToastContainer } from '@/components/ui/Toast'
 import { useAuthStore } from '@/stores/authStore'
+import { api } from '@/api/client'
 
+const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Studio = lazy(() => import('@/pages/Studio'))
 const Resources = lazy(() => import('@/pages/Resources'))
 const ResourceDetail = lazy(() => import('@/pages/ResourceDetail'))
 const Executions = lazy(() => import('@/pages/Executions'))
 const ExecutionDetail = lazy(() => import('@/pages/ExecutionDetail'))
 const Models = lazy(() => import('@/pages/Models'))
+const Chat = lazy(() => import('@/pages/Chat'))
 const Tools = lazy(() => import('@/pages/Tools'))
+const KnowledgeSources = lazy(() => import('@/pages/KnowledgeSources'))
 const Login = lazy(() => import('@/pages/Login'))
 const Register = lazy(() => import('@/pages/Register'))
 const Users = lazy(() => import('@/pages/Users'))
 const Roles = lazy(() => import('@/pages/Roles'))
 const Marketplace = lazy(() => import('@/pages/Marketplace'))
 const Automations = lazy(() => import('@/pages/Automations'))
+const Webhooks = lazy(() => import('@/pages/Webhooks'))
+const AuditLogs = lazy(() => import('@/pages/AuditLogs'))
 const Settings = lazy(() => import('@/pages/Settings'))
 
 const PUBLIC_PATHS = new Set(['/login', '/register'])
@@ -73,9 +79,14 @@ function App() {
   const fetchMe = useAuthStore((s) => s.fetchMe)
   const { showOnboarding, dismissOnboarding } = useOnboarding()
 
+  const setSessionExpired = useAuthStore((s) => s.setSessionExpired)
+
   useEffect(() => {
     hydrate()
-  }, [hydrate])
+    api.onUnauthorized(() => {
+      setSessionExpired(true)
+    })
+  }, [hydrate, setSessionExpired])
 
   useEffect(() => {
     if (token) {
@@ -102,18 +113,23 @@ function App() {
 
               {/* Authenticated routes (with Layout) */}
               <Route path="/" element={<Layout />}>
-                <Route index element={<Navigate to="/studio" replace />} />
+                <Route index element={<Navigate to="/dashboard" replace />} />
+                <Route path="dashboard" element={<Dashboard />} />
                 <Route path="studio" element={<Studio />} />
                 <Route path="resources" element={<Resources />} />
                 <Route path="resources/:kindPlural/:name" element={<ResourceDetail />} />
                 <Route path="executions" element={<Executions />} />
                 <Route path="executions/:id" element={<ExecutionDetail />} />
                 <Route path="models" element={<Models />} />
+                <Route path="chat" element={<Chat />} />
                 <Route path="tools" element={<Tools />} />
+                <Route path="knowledge" element={<KnowledgeSources />} />
                 <Route path="users" element={<Users />} />
                 <Route path="roles" element={<Roles />} />
                 <Route path="marketplace" element={<Marketplace />} />
                 <Route path="automations" element={<Automations />} />
+                <Route path="webhooks" element={<Webhooks />} />
+                <Route path="audit-logs" element={<AuditLogs />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="*" element={<NotFound />} />
               </Route>

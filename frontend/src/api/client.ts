@@ -23,6 +23,7 @@ interface RequestOptions {
 class ApiClient {
   private apiKey: string = ''
   private token: string = ''
+  private unauthorizedHandler: (() => void) | null = null
 
   setApiKey(key: string) {
     this.apiKey = key
@@ -38,6 +39,10 @@ class ApiClient {
 
   getToken(): string {
     return this.token
+  }
+
+  onUnauthorized(handler: () => void) {
+    this.unauthorizedHandler = handler
   }
 
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -100,6 +105,13 @@ class ApiClient {
         `[API] ${method} ${path} → ${response.status} (rid=${serverRequestId}):`,
         message,
       )
+      if (
+        response.status === 401 &&
+        this.unauthorizedHandler &&
+        !path.startsWith('/api/v1/auth/')
+      ) {
+        this.unauthorizedHandler()
+      }
       throw new ApiError(message, response.status, detail, serverRequestId)
     }
 

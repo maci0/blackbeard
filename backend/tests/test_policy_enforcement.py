@@ -42,9 +42,7 @@ def _basic_agent_spec(**overrides: object) -> dict:
 @patch("blackbeard.engine.loader.importlib")
 @patch("blackbeard.engine.loader.LLM")
 @patch("blackbeard.engine.loader.Agent")
-def test_policy_allowlist_keeps_only_allowed_tools(
-    mock_agent_cls, mock_llm_cls, mock_importlib
-):
+def test_policy_allowlist_keeps_only_allowed_tools(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Agent with allowlist policy should only keep tools in the allow list."""
     # Set up two tools
     search_cls = MagicMock(name="SearchToolCls")
@@ -90,9 +88,7 @@ def test_policy_allowlist_keeps_only_allowed_tools(
         },
     }
 
-    loader = ResourceLoader(
-        _resource_map(search_res, writer_res, agent_res), policies=policies
-    )
+    loader = ResourceLoader(_resource_map(search_res, writer_res, agent_res), policies=policies)
     loader.build_agent("ref:agents/researcher")
 
     _, kwargs = mock_agent_cls.call_args
@@ -109,9 +105,7 @@ def test_policy_allowlist_keeps_only_allowed_tools(
 @patch("blackbeard.engine.loader.importlib")
 @patch("blackbeard.engine.loader.LLM")
 @patch("blackbeard.engine.loader.Agent")
-def test_policy_denylist_removes_denied_tools(
-    mock_agent_cls, mock_llm_cls, mock_importlib
-):
+def test_policy_denylist_removes_denied_tools(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Agent with denylist policy should have denied tools removed."""
     search_cls = MagicMock(name="SearchToolCls")
     search_instance = _make_tool_with_name("SearchTool")
@@ -156,9 +150,7 @@ def test_policy_denylist_removes_denied_tools(
         },
     }
 
-    loader = ResourceLoader(
-        _resource_map(search_res, writer_res, agent_res), policies=policies
-    )
+    loader = ResourceLoader(_resource_map(search_res, writer_res, agent_res), policies=policies)
     loader.build_agent("ref:agents/researcher")
 
     _, kwargs = mock_agent_cls.call_args
@@ -210,9 +202,7 @@ def test_policy_allowlist_removes_all_tools_when_none_match(
         },
     }
 
-    loader = ResourceLoader(
-        _resource_map(writer_res, agent_res), policies=policies
-    )
+    loader = ResourceLoader(_resource_map(writer_res, agent_res), policies=policies)
     loader.build_agent("ref:agents/researcher")
 
     _, kwargs = mock_agent_cls.call_args
@@ -227,9 +217,7 @@ def test_policy_allowlist_removes_all_tools_when_none_match(
 @patch("blackbeard.engine.loader.importlib")
 @patch("blackbeard.engine.loader.LLM")
 @patch("blackbeard.engine.loader.Agent")
-def test_no_policy_preserves_all_tools(
-    mock_agent_cls, mock_llm_cls, mock_importlib
-):
+def test_no_policy_preserves_all_tools(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Agent without a policy ref should keep all tools unchanged."""
     search_cls = MagicMock(name="SearchToolCls")
     search_instance = _make_tool_with_name("SearchTool")
@@ -260,9 +248,7 @@ def test_no_policy_preserves_all_tools(
         },
     }
 
-    loader = ResourceLoader(
-        _resource_map(search_res, agent_res), policies=policies
-    )
+    loader = ResourceLoader(_resource_map(search_res, agent_res), policies=policies)
     loader.build_agent("ref:agents/researcher")
 
     _, kwargs = mock_agent_cls.call_args
@@ -278,9 +264,7 @@ def test_no_policy_preserves_all_tools(
 @patch("blackbeard.engine.loader.importlib")
 @patch("blackbeard.engine.loader.LLM")
 @patch("blackbeard.engine.loader.Agent")
-def test_empty_policies_dict_preserves_all_tools(
-    mock_agent_cls, mock_llm_cls, mock_importlib
-):
+def test_empty_policies_dict_preserves_all_tools(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Agent with empty policies dict should keep all tools unchanged."""
     search_cls = MagicMock(name="SearchToolCls")
     search_instance = _make_tool_with_name("SearchTool")
@@ -321,9 +305,7 @@ def test_empty_policies_dict_preserves_all_tools(
 @patch("blackbeard.engine.loader.importlib")
 @patch("blackbeard.engine.loader.LLM")
 @patch("blackbeard.engine.loader.Agent")
-def test_policy_mode_all_preserves_all_tools(
-    mock_agent_cls, mock_llm_cls, mock_importlib
-):
+def test_policy_mode_all_preserves_all_tools(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Agent with policy mode='all' should keep all tools."""
     search_cls = MagicMock(name="SearchToolCls")
     search_instance = _make_tool_with_name("SearchTool")
@@ -354,9 +336,7 @@ def test_policy_mode_all_preserves_all_tools(
         "open-policy": {"tools": {"mode": "all"}},
     }
 
-    loader = ResourceLoader(
-        _resource_map(search_res, agent_res), policies=policies
-    )
+    loader = ResourceLoader(_resource_map(search_res, agent_res), policies=policies)
     loader.build_agent("ref:agents/researcher")
 
     _, kwargs = mock_agent_cls.call_args
@@ -386,9 +366,7 @@ def test_policy_delegation_false_overrides_spec(mock_agent_cls, mock_llm_cls):
         "no-delegate": {"delegation": {"allowed": False}},
     }
 
-    loader = ResourceLoader(
-        _resource_map(agent_res), policies=policies
-    )
+    loader = ResourceLoader(_resource_map(agent_res), policies=policies)
     loader.build_agent("ref:agents/delegator")
 
     _, kwargs = mock_agent_cls.call_args
@@ -412,9 +390,7 @@ def test_policy_delegation_true_preserves_spec(mock_agent_cls, mock_llm_cls):
         "yes-delegate": {"delegation": {"allowed": True}},
     }
 
-    loader = ResourceLoader(
-        _resource_map(agent_res), policies=policies
-    )
+    loader = ResourceLoader(_resource_map(agent_res), policies=policies)
     loader.build_agent("ref:agents/delegator")
 
     _, kwargs = mock_agent_cls.call_args
@@ -438,9 +414,7 @@ def test_policy_budget_only_preserves_delegation_spec(mock_agent_cls, mock_llm_c
         "budget-only": {"budget": {"max_usd": 1.0}},
     }
 
-    loader = ResourceLoader(
-        _resource_map(agent_res), policies=policies
-    )
+    loader = ResourceLoader(_resource_map(agent_res), policies=policies)
     loader.build_agent("ref:agents/delegator")
 
     _, kwargs = mock_agent_cls.call_args
@@ -464,9 +438,7 @@ def test_policy_delegation_false_on_non_delegating_agent(mock_agent_cls, mock_ll
         "no-delegate": {"delegation": {"allowed": False}},
     }
 
-    loader = ResourceLoader(
-        _resource_map(agent_res), policies=policies
-    )
+    loader = ResourceLoader(_resource_map(agent_res), policies=policies)
     loader.build_agent("ref:agents/non-delegator")
 
     _, kwargs = mock_agent_cls.call_args
@@ -481,9 +453,7 @@ def test_policy_delegation_false_on_non_delegating_agent(mock_agent_cls, mock_ll
 @patch("blackbeard.engine.loader.importlib")
 @patch("blackbeard.engine.loader.LLM")
 @patch("blackbeard.engine.loader.Agent")
-def test_crew_default_policy_applies_tool_filter(
-    mock_agent_cls, mock_llm_cls, mock_importlib
-):
+def test_crew_default_policy_applies_tool_filter(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Agent without own policy but crew has default_agent_policy should be filtered."""
     # The ResourceLoader's build_agent resolves policy via resolve_policy(),
     # which checks agent.spec.policy first, then crew.spec.default_agent_policy.
@@ -524,9 +494,7 @@ def test_crew_default_policy_applies_tool_filter(
         },
     }
 
-    loader = ResourceLoader(
-        _resource_map(search_res, agent_res), policies=policies
-    )
+    loader = ResourceLoader(_resource_map(search_res, agent_res), policies=policies)
     loader.build_agent("ref:agents/researcher")
 
     _, kwargs = mock_agent_cls.call_args
@@ -541,9 +509,7 @@ def test_crew_default_policy_applies_tool_filter(
 
 def test_filter_tools_by_policy_allowlist():
     """_filter_tools_by_policy with allowlist keeps only matching tools."""
-    policy = AgentPolicy(
-        {"tools": {"mode": "allowlist", "allow": ["web-search"]}}
-    )
+    policy = AgentPolicy({"tools": {"mode": "allowlist", "allow": ["web-search"]}})
     tools = [_make_tool_with_name("web-search"), _make_tool_with_name("file-writer")]
 
     loader = ResourceLoader({})
@@ -555,9 +521,7 @@ def test_filter_tools_by_policy_allowlist():
 
 def test_filter_tools_by_policy_denylist():
     """_filter_tools_by_policy with denylist removes matching tools."""
-    policy = AgentPolicy(
-        {"tools": {"mode": "denylist", "deny": ["file-writer"]}}
-    )
+    policy = AgentPolicy({"tools": {"mode": "denylist", "deny": ["file-writer"]}})
     tools = [_make_tool_with_name("web-search"), _make_tool_with_name("file-writer")]
 
     loader = ResourceLoader({})
@@ -580,9 +544,7 @@ def test_filter_tools_by_policy_mode_all():
 
 def test_filter_tools_by_policy_empty_allowlist():
     """_filter_tools_by_policy with empty allowlist removes all tools."""
-    policy = AgentPolicy(
-        {"tools": {"mode": "allowlist", "allow": []}}
-    )
+    policy = AgentPolicy({"tools": {"mode": "allowlist", "allow": []}})
     tools = [_make_tool_with_name("web-search")]
 
     loader = ResourceLoader({})
@@ -593,9 +555,7 @@ def test_filter_tools_by_policy_empty_allowlist():
 
 def test_filter_tools_by_policy_empty_denylist():
     """_filter_tools_by_policy with empty denylist keeps all tools."""
-    policy = AgentPolicy(
-        {"tools": {"mode": "denylist", "deny": []}}
-    )
+    policy = AgentPolicy({"tools": {"mode": "denylist", "deny": []}})
     tools = [_make_tool_with_name("web-search")]
 
     loader = ResourceLoader({})
@@ -632,9 +592,7 @@ def test_agent_policy_delegation_not_present():
 
 
 def test_agent_policy_delegation_targets():
-    policy = AgentPolicy(
-        {"delegation": {"allowed": True, "targets": ["agent-a", "agent-b"]}}
-    )
+    policy = AgentPolicy({"delegation": {"allowed": True, "targets": ["agent-a", "agent-b"]}})
     assert policy.delegation_targets == ["agent-a", "agent-b"]
 
 
@@ -658,9 +616,7 @@ def test_agent_policy_delegation_targets_empty():
 @patch("blackbeard.engine.loader.importlib")
 @patch("blackbeard.engine.loader.LLM")
 @patch("blackbeard.engine.loader.Agent")
-def test_combined_policy_tool_filter_and_delegation(
-    mock_agent_cls, mock_llm_cls, mock_importlib
-):
+def test_combined_policy_tool_filter_and_delegation(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Policy with both tool filter and delegation constraints should apply both."""
     search_cls = MagicMock(name="SearchToolCls")
     search_instance = _make_tool_with_name("SearchTool")
@@ -707,9 +663,7 @@ def test_combined_policy_tool_filter_and_delegation(
         },
     }
 
-    loader = ResourceLoader(
-        _resource_map(search_res, writer_res, agent_res), policies=policies
-    )
+    loader = ResourceLoader(_resource_map(search_res, writer_res, agent_res), policies=policies)
     loader.build_agent("ref:agents/researcher")
 
     _, kwargs = mock_agent_cls.call_args

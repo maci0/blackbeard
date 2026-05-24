@@ -91,17 +91,13 @@ class GVisorSandbox:
         """
         if preference != "auto":
             if shutil.which(preference) is None:
-                raise GVisorRuntimeError(
-                    f"Container runtime '{preference}' not found on PATH"
-                )
+                raise GVisorRuntimeError(f"Container runtime '{preference}' not found on PATH")
             return preference
         if shutil.which("podman"):
             return "podman"
         if shutil.which("docker"):
             return "docker"
-        raise GVisorRuntimeError(
-            "No container runtime found for gVisor (install docker or podman)"
-        )
+        raise GVisorRuntimeError("No container runtime found for gVisor (install docker or podman)")
 
     @staticmethod
     def _verify_gvisor() -> None:
@@ -146,9 +142,7 @@ class GVisorSandbox:
         """
         # SECURITY: Validate the image name to prevent argument injection.
         if not self._IMAGE_RE.match(image):
-            raise GVisorRuntimeError(
-                f"Invalid container image name: {image!r}"
-            )
+            raise GVisorRuntimeError(f"Invalid container image name: {image!r}")
 
         cmd: list[str] = [
             self._runtime,
@@ -257,23 +251,17 @@ class GVisorSandbox:
                 f"Container runtime '{self._runtime}' not found: {exc}"
             ) from exc
         except OSError as exc:
-            raise GVisorRuntimeError(
-                f"Failed to start gVisor container: {exc}"
-            ) from exc
+            raise GVisorRuntimeError(f"Failed to start gVisor container: {exc}") from exc
 
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(
-                    input_data.encode() if input_data is not None else None
-                ),
+                proc.communicate(input_data.encode() if input_data is not None else None),
                 timeout=timeout,
             )
         except TimeoutError as exc:
             proc.kill()
             await proc.wait()
-            raise GVisorTimeoutError(
-                f"gVisor container timed out after {timeout}s"
-            ) from exc
+            raise GVisorTimeoutError(f"gVisor container timed out after {timeout}s") from exc
 
         result = GVisorResult(
             exit_code=proc.returncode or 0,

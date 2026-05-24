@@ -177,7 +177,7 @@ async def test_audit_logs_total_count_path(client: AsyncClient, db_session: Asyn
     body = resp.json()
     assert body["limit"] == 1
     assert len(body["items"]) == 1
-    assert body["total"] > 1
+    assert body["total"] >= 5, f"Created 5 resources, expected >=5 audit entries, got {body['total']}"
     assert body["has_more"] is True
 
 

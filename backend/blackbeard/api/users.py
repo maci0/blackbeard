@@ -9,13 +9,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from blackbeard.audit import audit_from_request, log_audit
-from blackbeard.auth.dependencies import require_user
+from blackbeard.auth.dependencies import require_permission
 from blackbeard.models import AuditLog, Group, GroupMember, User, get_session
 from blackbeard.models.user_schemas import UserResponse, user_response
 
@@ -158,7 +158,7 @@ def _require_self_only(current_user: User, user_id: uuid.UUID, action: str) -> N
 async def list_users(
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
-    _current_user: User = Depends(require_user),
+    _current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> UserListResponse:
     """List users with pagination (requires authentication)."""
@@ -192,7 +192,7 @@ async def list_users(
 )
 async def get_user(
     user_id: uuid.UUID,
-    _current_user: User = Depends(require_user),
+    _current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> UserResponse:
     """Get a user by ID."""
@@ -220,7 +220,7 @@ async def update_user(
     user_id: uuid.UUID,
     data: UserUpdateRequest,
     request: Request,
-    current_user: User = Depends(require_user),
+    current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> UserResponse:
     """Update a user (self-only — users can only modify their own profile)."""
@@ -269,7 +269,7 @@ async def update_user(
 async def deactivate_user(
     user_id: uuid.UUID,
     request: Request,
-    current_user: User = Depends(require_user),
+    current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Deactivate a user (self-only soft delete)."""
@@ -282,11 +282,14 @@ async def deactivate_user(
 
     original_email = user.email
     user.is_active = False
-    user.password_hash = "!deactivated"
+    user.password_hash = "!deactivated"  # nosec B105 -- sentinel-value-not-a-real-password
     user.api_key = None
     anonymized_email = f"deleted-{user.id}@deactivated.local"
     user.email = anonymized_email
     user.display_name = "Deleted User"
+    user.last_login_at = None
+    # Remove group memberships (data minimization — sever organizational associations).
+    await session.execute(delete(GroupMember).where(GroupMember.user_id == user.id))
     # Scrub PII from historical audit log entries (GDPR right to erasure).
     # Match by UUID (normal entries) and by original email (legacy failed-login entries
     # that used email as actor_id before the fix to use UUID).
@@ -319,7 +322,7 @@ async def deactivate_user(
 async def list_groups(
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
-    _current_user: User = Depends(require_user),
+    _current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> GroupListResponse:
     """List groups with pagination."""
@@ -350,7 +353,7 @@ async def create_group(
     data: GroupCreateRequest,
     request: Request,
     response: Response,
-    current_user: User = Depends(require_user),
+    current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> GroupResponse:
     """Create a new group."""
@@ -402,7 +405,7 @@ async def create_group(
 )
 async def get_group(
     group_id: uuid.UUID,
-    _current_user: User = Depends(require_user),
+    _current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> GroupResponse:
     """Get a group by ID."""
@@ -422,7 +425,7 @@ async def update_group(
     group_id: uuid.UUID,
     data: GroupUpdateRequest,
     request: Request,
-    current_user: User = Depends(require_user),
+    current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> GroupResponse:
     """Update a group."""
@@ -466,7 +469,7 @@ async def update_group(
 async def delete_group(
     group_id: uuid.UUID,
     request: Request,
-    current_user: User = Depends(require_user),
+    current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Delete a group. Idempotent."""
@@ -524,7 +527,7 @@ async def list_group_members(
     group_id: uuid.UUID,
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
-    _current_user: User = Depends(require_user),
+    _current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> GroupMemberListResponse:
     """List members of a group."""
@@ -571,7 +574,7 @@ async def add_group_member(
     data: GroupMemberAddRequest,
     request: Request,
     response: Response,
-    current_user: User = Depends(require_user),
+    current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> GroupMemberAddResponse:
     """Add a user to a group."""
@@ -639,7 +642,7 @@ async def remove_group_member(
     group_id: uuid.UUID,
     user_id: uuid.UUID,
     request: Request,
-    current_user: User = Depends(require_user),
+    current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Remove a user from a group."""

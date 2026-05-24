@@ -121,9 +121,11 @@ async def db_session():
         dbapi_conn.create_function(
             "jsonb_typeof",
             1,
-            lambda v: type(_json_mod.loads(v)).__name__.replace("list", "array").replace("dict", "object")
-            if isinstance(v, str)
-            else None,
+            lambda v: (
+                type(_json_mod.loads(v)).__name__.replace("list", "array").replace("dict", "object")
+                if isinstance(v, str)
+                else None
+            ),
         )
 
     async with engine.begin() as conn:

@@ -195,6 +195,8 @@ Role                     RoleBinding                 Subject
 
 Both `Role` and `RoleBinding` are first-class resources -- managed through the same CRUD API as agents and tasks. The seed script (`deploy/seed.sh`) creates predefined roles: owner, admin, developer, operator, viewer, policy-admin, and agent-scoped roles.
 
+**RBAC enforcement:** API endpoints use a `require_permission()` FastAPI dependency that checks the authenticated user's roles and role bindings before allowing access. Permissions are checked as `(resource_kind, verb)` pairs (e.g., `("Agent", "create")`). If the user lacks the required permission, the API returns `403 Forbidden`.
+
 **Principal chain:** During crew execution, Blackbeard tracks the identity chain: `User -> Crew -> Agent (ServiceAccount)`. Each agent defaults to a service account named `sa-<agent-name>`.
 
 ### Middleware Stack
@@ -213,6 +215,8 @@ The API server manages LiteLLM's configuration and uses it as a proxy for all LL
 - **`litellm/config_gen.py`** -- Generates LiteLLM router config from `LLMConnection` resources
 - **`litellm/key_manager.py`** -- Creates and deletes per-execution virtual keys for budget enforcement
 - **`litellm/helpers.py`** -- Utility functions for model name resolution
+
+**Dynamic model sync:** When `LLMConnection` resources are created, updated, or deleted, the API server regenerates the LiteLLM configuration and pushes it via `POST /config/update`. This means model changes take effect without restarting the LiteLLM container.
 
 LiteLLM's own data (spend tracking, virtual keys) is stored in a separate `litellm` database within the same PostgreSQL instance.
 
@@ -239,21 +243,27 @@ A gRPC server (`blackbeard/grpc/server.py`) starts alongside FastAPI during the 
 ### Page Structure
 
 ```
-/                     → Studio (default)
+/                     → Dashboard (default) — execution metrics, resource counts, recent activity
 /studio               → Visual crew editor
 /resources            → Generic resource list (all kinds)
 /resources/:kindPlural/:name → Resource detail view
 /executions           → Execution list
 /executions/:id       → Execution detail with task breakdown
 /models               → LLM model management + connectivity test
+/chat                 → Chat playground for interactive LLM conversations
 /tools                → Tool management
 /roles                → RBAC role management
 /users                → User management
+/audit-logs           → Audit log viewer (all mutation history)
 /automations          → Automation management (cron, webhook, API triggers)
+/webhooks             → Webhook subscription management
 /login                → Login form
 /register             → Registration form
 /marketplace          → Import crews from git
+/settings             → Platform configuration
 ```
+
+**Command palette:** Press `Cmd+K` (macOS) or `Ctrl+K` (Windows/Linux) to open the command palette for quick navigation to any page, resource, or action.
 
 ### State Management
 
@@ -454,6 +464,31 @@ DELETE /api/v1/webhooks/{id}    → Remove a webhook
 
 ---
 
+## API Key Management
+
+Users can generate and revoke personal API keys through the API:
+
+```
+POST   /api/v1/auth/api-key          → Generate a new API key
+DELETE /api/v1/auth/api-key          → Revoke the current API key
+```
+
+Generated API keys can be used in the `X-API-Key` header as an alternative to JWT authentication.
+
+---
+
+## Bulk Resource Export
+
+All resources can be exported as a single multi-document YAML file:
+
+```
+GET    /api/v1/resources/export      → Returns all resources as multi-document YAML
+```
+
+Each resource is separated by `---` in the output. This is useful for backup, version control, or migrating resources between Blackbeard instances. The CLI `blackbeard export --all` command wraps this endpoint.
+
+---
+
 ## Audit Logging
 
 All mutation operations are logged to the `audit_logs` table. Each entry records the action, resource type, resource ID, the user who performed the action, and a timestamp.
@@ -484,6 +519,7 @@ POST /api/v1/flows/{name}/run   → Run a flow
 | `function` | Invokes a Python function (module:function format, allowlisted) |
 | `router` | Routes to different steps based on output |
 | `condition` | Conditional step execution based on a simple expression |
+| `transform` | Runs a WASM module via `WasmSandbox` to transform step data |
 
 ---
 
@@ -510,7 +546,7 @@ The Studio visual editor uses [ELK.js](https://github.com/kieler/elkjs) for auto
 
 The Marketplace (`/marketplace` page) allows importing resources from external git repositories or the bundled example library.
 
-**Built-in examples:** A "Research Crew Starter" is bundled with the platform and can be imported without any external connectivity.
+**Built-in examples:** Seven example crews (research, code-review, content-pipeline, data-analysis, seo-writer, simple-crew, support-triage) plus a shared tools collection are bundled with the platform and can be imported without any external connectivity.
 
 **Git import:** The backend clones repositories (shallow, HTTPS only), finds all YAML files, validates them against resource schemas, and upserts them via the standard ResourceService. Safety limits apply: 60-second clone timeout, max 200 YAML files, max 256KB per file, symlinks are skipped, and path traversal is prevented.
 
@@ -531,7 +567,7 @@ The CLI (`cli/` directory) is a standalone Python package named `blackbeard-cli`
 | `exec.py` | executions (list), events, cancel |
 | `export_cmd.py` | export (YAML dump) |
 | `rbac.py` | role, rolebinding management |
-| `users.py` | user, group management (create, list, delete) |
+| `users.py` | user (list, invite), group (list, create, delete) |
 
 **Auth resolution order:** `--api-key` flag > `BLACKBEARD_API_KEY` env var > stored JWT in `~/.config/blackbeard/`.
 
@@ -578,3 +614,23 @@ The backend supports exporting traces to an OpenTelemetry collector. Set the `OT
 ### Structured Logging
 
 All backend log entries are structured with `extra` dicts containing event names and contextual fields (execution IDs, crew names, error types). This makes logs machine-parseable for aggregation in tools like Loki, Elasticsearch, or CloudWatch.
+
+---
+
+## CI Pipeline
+
+GitHub Actions runs 9 jobs on every push:
+
+1. **Backend** -- ruff check + ruff format + mypy + pytest + pip-audit + bandit (security scanning)
+2. **CLI** -- ruff lint + offline validation
+3. **Python SDK** -- pytest with mock transport
+4. **TypeScript SDK** -- tsc type-check
+5. **React SDK** -- tsc type-check
+6. **Helm** -- helm lint
+7. **Frontend** -- prettier + eslint + tsc + vitest + production build
+8. **Docker API image** -- build (after backend passes)
+9. **Docker UI image** -- build (after frontend passes)
+
+**Security scanning:** Bandit runs as part of the backend CI job, checking for common Python security issues (SQL injection, hardcoded secrets, unsafe deserialization, etc.).
+
+**Property-based testing:** Hypothesis (backend) and fast-check (frontend) are used for property-based testing of schema validation, YAML parsing, and input coercion. These catch edge cases that hand-written tests miss.

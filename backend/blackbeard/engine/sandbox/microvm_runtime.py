@@ -101,9 +101,7 @@ class MicroVMSandbox:
         """
         if preference != "auto":
             if shutil.which(preference) is None:
-                raise MicroVMRuntimeError(
-                    f"Container runtime '{preference}' not found on PATH"
-                )
+                raise MicroVMRuntimeError(f"Container runtime '{preference}' not found on PATH")
             return preference
         if shutil.which("podman"):
             return "podman"
@@ -241,23 +239,17 @@ class MicroVMSandbox:
                 f"Container runtime '{self._runtime}' not found: {exc}"
             ) from exc
         except OSError as exc:
-            raise MicroVMRuntimeError(
-                f"Failed to start MicroVM container: {exc}"
-            ) from exc
+            raise MicroVMRuntimeError(f"Failed to start MicroVM container: {exc}") from exc
 
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(
-                    input_data.encode() if input_data is not None else None
-                ),
+                proc.communicate(input_data.encode() if input_data is not None else None),
                 timeout=timeout,
             )
         except TimeoutError as exc:
             proc.kill()
             await proc.wait()
-            raise MicroVMTimeoutError(
-                f"MicroVM timed out after {timeout}s"
-            ) from exc
+            raise MicroVMTimeoutError(f"MicroVM timed out after {timeout}s") from exc
 
         result = MicroVMResult(
             exit_code=proc.returncode or 0,

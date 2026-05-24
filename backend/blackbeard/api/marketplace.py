@@ -34,6 +34,8 @@ from blackbeard.models import get_session
 
 logger = logging.getLogger(__name__)
 
+_yaml_loader: Any = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
 router = APIRouter(prefix="/marketplace", tags=["marketplace"])
 
 _APP_DIR = Path(__file__).resolve().parent.parent.parent
@@ -104,7 +106,7 @@ def _parse_yaml_resources(yaml_files: list[Path]) -> tuple[list[dict[str, Any]],
         try:
             content = filepath.read_text(encoding="utf-8")
             # Support multi-document YAML files
-            for doc in yaml.safe_load_all(content):
+            for doc in yaml.load_all(content, Loader=_yaml_loader):
                 if not isinstance(doc, dict):
                     continue
                 if "kind" not in doc or "metadata" not in doc:

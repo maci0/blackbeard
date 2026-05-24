@@ -95,6 +95,8 @@ def handle_http_error(response: httpx.Response) -> NoReturn:
         console.print("[dim]Hint: Verify the resource name and namespace (-n)[/]")
     elif response.status_code == 409:
         console.print("[dim]Hint: Resource version conflict — re-fetch and retry[/]")
+    elif response.status_code == 413:
+        console.print("[dim]Hint: Payload too large — reduce file size (server limit: 10MB)[/]")
     elif response.status_code == 422:
         console.print("[dim]Hint: Check your input against the expected schema[/]")
     elif response.status_code == 429:

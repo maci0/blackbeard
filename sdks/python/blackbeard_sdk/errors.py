@@ -42,10 +42,11 @@ def raise_for_status(resp: httpx.Response) -> None:
         return
     try:
         body = resp.json()
+        fallback = resp.reason_phrase or f"HTTP {resp.status_code}"
         detail = (
-            body.get("detail", resp.reason_phrase)
+            body.get("detail", fallback)
             if isinstance(body, dict)
-            else resp.reason_phrase
+            else fallback
         )
     except Exception:
         body = None

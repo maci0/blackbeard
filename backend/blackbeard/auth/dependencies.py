@@ -1,8 +1,10 @@
-"""FastAPI dependencies for authentication."""
+"""FastAPI dependencies for authentication and authorization."""
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 import jwt as pyjwt
 from fastapi import Depends, HTTPException, Request
@@ -10,10 +12,21 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
+from blackbeard.auth.authorizer import Authorizer
 from blackbeard.auth.jwt import decode_token
+from blackbeard.config import settings
+from blackbeard.kinds import PLURAL_TO_KIND
 from blackbeard.models import User, get_session
 
 logger = logging.getLogger(__name__)
+
+_METHOD_TO_VERB: dict[str, str] = {
+    "GET": "get",
+    "POST": "create",
+    "PUT": "update",
+    "PATCH": "update",
+    "DELETE": "delete",
+}
 
 
 def _bearer_401(detail: str) -> HTTPException:
@@ -118,4 +131,146 @@ async def require_user(
             extra={"event": "auth_required_no_credentials"},
         )
         raise _bearer_401("Authentication required. Provide a Bearer token or user API key.")
+    return user
+
+
+async def require_jwt_user(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> User:
+    """Require authentication via JWT Bearer token only.
+
+    Rejects API key authentication — used for sensitive operations like
+    API key management where authenticating with the credential being
+    managed would be a security risk.
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        logger.warning(
+            "JWT-only endpoint called without Bearer token",
+            extra={"event": "jwt_only_missing_bearer"},
+        )
+        raise _bearer_401("JWT Bearer token required. API key authentication is not accepted.")
+
+    token = auth_header[7:]
+    try:
+        payload = decode_token(token)
+    except pyjwt.ExpiredSignatureError:
+        raise _bearer_401("Token has expired") from None
+    except pyjwt.InvalidTokenError:
+        raise _bearer_401("Invalid token") from None
+
+    if payload.get("type") != "access":
+        raise _bearer_401("Invalid token type")
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise _bearer_401("Invalid token payload")
+
+    result = await session.execute(
+        select(User).where(User.id == user_id).options(defer(User.password_hash))
+    )
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        raise _bearer_401("User not found or inactive")
+    return user
+
+
+def require_permission(
+    verb: str,
+    resource_kind: str,
+    *,
+    require_identity: bool = False,
+) -> Callable[..., Coroutine[Any, Any, User | None]]:
+    """FastAPI dependency factory for RBAC enforcement.
+
+    Returns a dependency that checks whether the authenticated user has
+    the given *verb* on *resource_kind* via Role/RoleBinding resources.
+    When ``settings.enforce_rbac`` is ``False`` (the default for dev),
+    the check is skipped and any authenticated (or system-key) caller
+    is permitted.  When ``True``, a user identity is required.
+
+    If *require_identity* is ``True`` a user identity is always required
+    regardless of the ``enforce_rbac`` setting (useful for endpoints such
+    as user management that reference ``user.id``).
+    """
+
+    if require_identity:
+
+        async def _check_strict(
+            user: User = Depends(require_user),
+            session: AsyncSession = Depends(get_session),
+        ) -> User:
+            if not settings.enforce_rbac:
+                return user
+            authz = Authorizer(session)
+            allowed = await authz.check("User", user.email, verb, resource_kind)
+            if not allowed:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Not authorized to {verb} {resource_kind}",
+                )
+            return user
+
+        return _check_strict
+
+    async def _check(
+        user: User | None = Depends(get_current_user),
+        session: AsyncSession = Depends(get_session),
+    ) -> User | None:
+        if not settings.enforce_rbac:
+            return user
+        # RBAC is on — user identity is mandatory.
+        if user is None:
+            raise _bearer_401("Authentication required. Provide a Bearer token or user API key.")
+        authz = Authorizer(session)
+        allowed = await authz.check("User", user.email, verb, resource_kind)
+        if not allowed:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Not authorized to {verb} {resource_kind}",
+            )
+        return user
+
+    return _check
+
+
+async def check_resource_permission(
+    kind_plural: str,
+    request: Request,
+    user: User | None = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> User | None:
+    """RBAC dependency for the generic resource CRUD router.
+
+    Derives the verb from the HTTP method and the resource kind from
+    the ``kind_plural`` path parameter. When ``settings.enforce_rbac``
+    is ``False``, any authenticated (or system-key) caller is permitted.
+    When ``True``, a user identity is required for the authorization check.
+    """
+    if not settings.enforce_rbac:
+        return user
+
+    # RBAC is on — user identity is mandatory.
+    if user is None:
+        raise _bearer_401("Authentication required. Provide a Bearer token or user API key.")
+
+    verb = _METHOD_TO_VERB.get(request.method, "get")
+
+    # GET on the collection endpoint (no name segment) is a "list" operation.
+    path_parts = request.url.path.rstrip("/").split("/")
+    if request.method == "GET" and path_parts[-1] == kind_plural:
+        verb = "list"
+
+    kind = PLURAL_TO_KIND.get(kind_plural)
+    if kind is None:
+        # Unknown kind — let the route handler return 404.
+        return user
+
+    authz = Authorizer(session)
+    if not await authz.check("User", user.email, verb, kind):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Not authorized to {verb} {kind}",
+        )
     return user

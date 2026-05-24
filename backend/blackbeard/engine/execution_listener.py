@@ -144,6 +144,11 @@ def _log_webhook_future_exception(future: Any) -> None:
     try:
         exc = future.exception()
     except Exception:
+        logger.debug(
+            "Could not retrieve webhook future exception (likely cancelled)",
+            exc_info=True,
+            extra={"event": "webhook_future_exception_retrieval_failed"},
+        )
         return
     if exc is not None:
         logger.error(

@@ -278,6 +278,7 @@ function UserDetailPanel({
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">{user.display_name || user.email}</h2>
         <button
+          type="button"
           onClick={onClose}
           aria-label="Close user details"
           title="Close user details"
@@ -343,6 +344,7 @@ function UserDetailPanel({
       {user.is_active && (
         <div className="mt-4 border-t pt-4">
           <button
+            type="button"
             onClick={() => setDeactivateOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -430,6 +432,7 @@ export default function Users() {
             actions={
               <>
                 <button
+                  type="button"
                   onClick={() => void fetchUsers()}
                   aria-label="Refresh users"
                   className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -443,6 +446,7 @@ export default function Users() {
                   Refresh
                 </button>
                 <button
+                  type="button"
                   onClick={() => setInviteOpen(true)}
                   className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -492,6 +496,7 @@ export default function Users() {
                   {filtered.length} of {users.length} users
                 </span>
                 <button
+                  type="button"
                   onClick={() => {
                     setSearch('')
                     searchRef.current?.focus()

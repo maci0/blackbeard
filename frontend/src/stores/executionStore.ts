@@ -6,45 +6,57 @@ import type { Execution, ExecutionEvent } from '@/lib/types'
 const MAX_EVENTS = 2000
 const EVENTS_FETCH_LIMIT = 200
 
+interface PaginationParams {
+  limit?: number
+  offset?: number
+}
+
 interface ExecutionState {
   executions: Execution[]
+  executionsTotal: number
   currentExecution: Execution | null
   events: ExecutionEvent[]
   spendData: Record<string, unknown> | null
   loading: boolean
   error: string | null
 
-  fetchExecutions: (crewName?: string) => Promise<void>
+  fetchExecutions: (crewName?: string, pagination?: PaginationParams) => Promise<void>
   fetchExecution: (id: string) => Promise<void>
   kickoff: (crewName: string, inputs: Record<string, unknown>) => Promise<Execution>
   cancelExecution: (id: string) => Promise<void>
   pollExecution: (id: string) => Promise<void>
-  pollExecutions: (crewName?: string) => Promise<void>
+  pollExecutions: (crewName?: string, pagination?: PaginationParams) => Promise<void>
   addEvents: (newEvents: ExecutionEvent[]) => void
   clearEvents: () => void
   fetchEvents: (id: string, after?: number) => Promise<void>
   fetchSpend: (id: string) => Promise<void>
 }
 
-function executionsPath(crewName?: string): string {
-  return crewName
-    ? `/api/v1/executions?crew_name=${encodeURIComponent(crewName)}`
-    : '/api/v1/executions'
+function executionsPath(crewName?: string, pagination?: PaginationParams): string {
+  const params = new URLSearchParams()
+  if (crewName) params.set('crew_name', crewName)
+  if (pagination?.limit != null) params.set('limit', String(pagination.limit))
+  if (pagination?.offset != null) params.set('offset', String(pagination.offset))
+  const qs = params.toString()
+  return qs ? `/api/v1/executions?${qs}` : '/api/v1/executions'
 }
 
 export const useExecutionStore = create<ExecutionState>((set, get) => ({
   executions: [],
+  executionsTotal: 0,
   currentExecution: null,
   events: [],
   spendData: null,
   loading: false,
   error: null,
 
-  fetchExecutions: async (crewName?: string) => {
+  fetchExecutions: async (crewName?: string, pagination?: PaginationParams) => {
     set({ loading: true, error: null })
     try {
-      const result = await api.get<{ items: Execution[]; total: number }>(executionsPath(crewName))
-      set({ executions: result.items, loading: false })
+      const result = await api.get<{ items: Execution[]; total: number }>(
+        executionsPath(crewName, pagination),
+      )
+      set({ executions: result.items, executionsTotal: result.total, loading: false })
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to fetch executions')
       set({ error: message, loading: false })
@@ -118,12 +130,14 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     }
   },
 
-  pollExecutions: async (crewName?: string) => {
+  pollExecutions: async (crewName?: string, pagination?: PaginationParams) => {
     try {
-      const result = await api.get<{ items: Execution[]; total: number }>(executionsPath(crewName))
+      const result = await api.get<{ items: Execution[]; total: number }>(
+        executionsPath(crewName, pagination),
+      )
       set((state) => {
         const prev = state.executions
-        if (prev.length === 0) return { executions: result.items }
+        if (prev.length === 0) return { executions: result.items, executionsTotal: result.total }
         const prevById = new Map(prev.map((e) => [e.id, e]))
         let changed = prev.length !== result.items.length
         const merged = result.items.map((item) => {
@@ -138,7 +152,9 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           changed = true
           return item
         })
-        return changed ? { executions: merged } : state
+        return changed
+          ? { executions: merged, executionsTotal: result.total }
+          : { ...state, executionsTotal: result.total }
       })
     } catch (err) {
       console.warn('[poll] executions fetch failed:', getErrorMessage(err, 'unknown error'))

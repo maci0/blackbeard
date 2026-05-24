@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState, useMemo, useRef, memo } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   XCircle,
   AlertTriangle,
@@ -10,6 +10,9 @@ import {
   Activity,
   Terminal,
   BarChart3,
+  RotateCcw,
+  MessageCircle,
+  Send,
 } from 'lucide-react'
 import { useDocumentTitle, usePolling } from '@/hooks'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -25,6 +28,7 @@ import { CodeBlock } from '@/components/ui/CodeBlock'
 import { getDuration, formatDate, formatCost } from '@/lib/formatters'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { api } from '@/api/client'
+import { CopyButton } from '@/components/ui/CopyButton'
 
 /* ------------------------------------------------------------------ */
 /* Summary card                                                        */
@@ -154,6 +158,8 @@ const EVENT_COLORS: Record<string, string> = {
   tool_finished: 'text-emerald-400',
   llm_started: 'text-violet-400',
   llm_completed: 'text-violet-400',
+  hitl_request: 'text-yellow-400',
+  hitl_response: 'text-yellow-400',
 }
 
 const eventTimeFmt = new Intl.DateTimeFormat(undefined, {
@@ -190,6 +196,10 @@ function formatEventMessage(event: ExecutionEvent): string {
       return `LLM call started (${str(d.model)})${d.agent_role ? ` for ${str(d.agent_role)}` : ''}`
     case 'llm_completed':
       return `LLM call completed (${str(d.model)})`
+    case 'hitl_request':
+      return `⏸ Human input requested: "${str(d.prompt, 'Awaiting response…')}"`
+    case 'hitl_response':
+      return `✓ Human responded (${str(d.response_length, '?')} chars)`
     default:
       return `${event.event_type}: ${JSON.stringify(d)}`
   }
@@ -265,6 +275,8 @@ interface SpendCall {
   completion_tokens: number
   spend: number
   startTime: string
+  endTime?: string
+  api_call_start_time?: string
 }
 
 function SpendSection({ data }: { data: Record<string, unknown> }) {
@@ -317,6 +329,9 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
                 Cost
               </th>
               <th scope="col" className="px-4 py-2 text-right font-medium text-muted-foreground">
+                tok/s
+              </th>
+              <th scope="col" className="px-4 py-2 text-right font-medium text-muted-foreground">
                 Time
               </th>
             </tr>
@@ -332,6 +347,19 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
                   {(call.completion_tokens ?? 0).toLocaleString()}
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">{formatCost(call.spend)}</td>
+                <td className="px-4 py-2 text-right text-xs tabular-nums">
+                  {(() => {
+                    const start = call.startTime || call['api_call_start_time']
+                    const end = call.endTime
+                    if (start && end) {
+                      const ms = new Date(end).getTime() - new Date(start).getTime()
+                      if (ms > 0 && (call.completion_tokens ?? 0) > 0) {
+                        return `${((call.completion_tokens ?? 0) / (ms / 1000)).toFixed(1)}`
+                      }
+                    }
+                    return '—'
+                  })()}
+                </td>
                 <td className="px-4 py-2 text-right text-xs text-muted-foreground">
                   {call.startTime ? formatEventTime(call.startTime) : '--'}
                 </td>
@@ -348,6 +376,96 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
           <CodeBlock code={JSON.stringify(data, null, 2)} language="json" />
         </div>
       </details>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* HITL response panel                                                 */
+/* ------------------------------------------------------------------ */
+
+function HITLPanel({
+  executionId,
+  events,
+  onResponded,
+}: {
+  executionId: string
+  events: ExecutionEvent[]
+  onResponded: () => void
+}) {
+  const [response, setResponse] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const pendingRequest = useMemo(() => {
+    const requests = events.filter((e) => e.event_type === 'hitl_request')
+    const responses = events.filter((e) => e.event_type === 'hitl_response')
+    if (requests.length > responses.length) {
+      return requests[requests.length - 1]
+    }
+    return null
+  }, [events])
+
+  if (!pendingRequest) return null
+
+  const prompt =
+    typeof pendingRequest.data.prompt === 'string'
+      ? pendingRequest.data.prompt
+      : 'The crew is waiting for your input.'
+
+  const handleSubmit = async () => {
+    if (!response.trim()) return
+    setSubmitting(true)
+    try {
+      await api.post(`/api/v1/executions/${executionId}/respond`, {
+        response: response.trim(),
+      })
+      setResponse('')
+      onResponded()
+    } catch {
+      // Error handled by toast in parent
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div
+      role="alert"
+      className="mb-6 rounded-lg border-2 border-yellow-400/50 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-950/20"
+    >
+      <div className="mb-3 flex items-start gap-2">
+        <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-600 dark:text-yellow-400" />
+        <div>
+          <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+            Human Input Required
+          </p>
+          <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">{prompt}</p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <textarea
+          value={response}
+          onChange={(e) => setResponse(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              e.preventDefault()
+              void handleSubmit()
+            }
+          }}
+          placeholder="Type your response…"
+          rows={2}
+          className="flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          disabled={submitting}
+        />
+        <button
+          onClick={() => void handleSubmit()}
+          disabled={!response.trim() || submitting}
+          className="flex shrink-0 items-center gap-1.5 self-end rounded-md bg-yellow-600 px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {submitting ? <Spinner size="sm" /> : <Send className="h-3.5 w-3.5" />}
+          Respond
+        </button>
+      </div>
     </div>
   )
 }
@@ -387,10 +505,24 @@ export default function ExecutionDetail() {
       fetchSpend: s.fetchSpend,
     })),
   )
+  const navigate = useNavigate()
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [sseDisconnected, setSseDisconnected] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+
+  const handleRetry = useCallback(async () => {
+    setRetrying(true)
+    try {
+      const result = await api.post<{ id: string }>(`/api/v1/executions/${id}/retry`, {})
+      void navigate(`/executions/${result.id}`)
+    } catch (err) {
+      setCancelError(getErrorMessage(err, 'Failed to retry execution'))
+    } finally {
+      setRetrying(false)
+    }
+  }, [id, navigate])
 
   const load = useCallback(async () => {
     await fetchExecution(id)
@@ -609,9 +741,23 @@ export default function ExecutionDetail() {
                 </Link>
               </h1>
             </div>
-            <p className="font-mono text-xs text-muted-foreground">{execution.id}</p>
+            <div className="flex items-center gap-1">
+              <p className="font-mono text-xs text-muted-foreground">{execution.id}</p>
+              <CopyButton text={execution.id} label="Copy execution ID" />
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {isTerminal && (
+              <button
+                onClick={() => void handleRetry()}
+                disabled={retrying}
+                aria-busy={retrying || undefined}
+                className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {retrying ? <Spinner size="sm" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                Retry
+              </button>
+            )}
             {isActive && (
               <button
                 onClick={() => setShowCancelConfirm(true)}
@@ -691,6 +837,11 @@ export default function ExecutionDetail() {
             ariaLabel="Dismiss cancel error"
             className="mb-6"
           />
+        )}
+
+        {/* HITL */}
+        {isActive && (
+          <HITLPanel executionId={id} events={events} onResponded={() => void fetchEvents(id)} />
         )}
 
         {/* Tasks */}

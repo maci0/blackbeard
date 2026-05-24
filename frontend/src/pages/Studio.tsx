@@ -146,7 +146,6 @@ function buildCrewGroupNode(crewName: string, childNodes: Node[]): Node {
 
 function StudioInner() {
   const navigate = useNavigate()
-  const [crewName, setCrewName] = useState('my-crew')
   const [runDialogOpen, setRunDialogOpen] = useState(false)
   const [status, setStatus] = useState<RunStatus>('idle')
   const [statusMessage, setStatusMessage] = useState('')
@@ -159,6 +158,36 @@ function StudioInner() {
   const [copilotOpen, setCopilotOpen] = useState(false)
   const [collabEnabled, setCollabEnabled] = useState(false)
 
+  const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const {
+    crewName,
+    setCrewName,
+    selectedNodeId,
+    setNodes,
+    setEdges,
+    markClean,
+    dirty,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+  } = useStudioStore(
+    useShallow((s) => ({
+      crewName: s.crewName,
+      setCrewName: s.setCrewName,
+      selectedNodeId: s.selectedNodeId,
+      setNodes: s.setNodes,
+      setEdges: s.setEdges,
+      markClean: s.markClean,
+      dirty: s.dirty,
+      canUndo: s.canUndo,
+      canRedo: s.canRedo,
+      undo: s.undo,
+      redo: s.redo,
+    })),
+  )
+
   const {
     participants: collabParticipants,
     connected: collabConnected,
@@ -166,25 +195,6 @@ function StudioInner() {
     broadcastCursor,
     remoteCursors,
   } = useCollaboration(crewName, collabEnabled)
-
-  const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // NOTE: nodes is NOT subscribed here — handleSave reads it via getState() at
-  // call time, avoiding re-renders on every drag frame.
-  const { selectedNodeId, setNodes, setEdges, markClean, dirty, canUndo, canRedo, undo, redo } =
-    useStudioStore(
-      useShallow((s) => ({
-        selectedNodeId: s.selectedNodeId,
-        setNodes: s.setNodes,
-        setEdges: s.setEdges,
-        markClean: s.markClean,
-        dirty: s.dirty,
-        canUndo: s.canUndo,
-        canRedo: s.canRedo,
-        undo: s.undo,
-        redo: s.redo,
-      })),
-    )
 
   useDocumentTitle('Studio')
 
@@ -392,7 +402,7 @@ function StudioInner() {
         applyStatus('error', getErrorMessage(err, 'Load failed'))
       }
     },
-    [applyStatus, markClean, setEdges, setNodes],
+    [applyStatus, markClean, setCrewName, setEdges, setNodes],
   )
 
   /* ── Guard: if dirty, show confirm dialog; otherwise load immediately ── */
@@ -661,7 +671,7 @@ function StudioInner() {
     setCrewName('research-crew')
     markClean()
     applyStatus('success', 'Example crew loaded')
-  }, [applyStatus, markClean, setEdges, setNodes])
+  }, [applyStatus, markClean, setCrewName, setEdges, setNodes])
 
   const handleAutoLayout = useCallback(async () => {
     const { nodes, edges } = useStudioStore.getState()
@@ -754,7 +764,7 @@ function StudioInner() {
 
       applyStatus('success', `Copilot generated ${resources.length} resources`)
     },
-    [applyStatus, crewName, setEdges, setNodes],
+    [applyStatus, crewName, setCrewName, setEdges, setNodes],
   )
 
   return (

@@ -37,6 +37,7 @@ dependencies = [
 [tool.uv]
 constraint-dependencies = [
     "pillow>=12.2.0",  # CVE-2026-40192, CVE-2026-42308..42311 (transitive via crewai)
+    "starlette>=1.0.1",  # PYSEC-2026-161 host header injection (transitive via fastapi)
 ]
 
 [project.optional-dependencies]
@@ -51,6 +52,7 @@ dev = [
     "pip-audit>=2.9,<3",
     "hypothesis>=6.100,<7",
     "grpcio-tools>=1.70,<2",
+    "bandit[toml]>=1.8,<2",
 ]
 muninn = [
     "muninn-python>=0.1,<1",
@@ -91,6 +93,10 @@ ignore = [
 
 [tool.ruff.lint.flake8-type-checking]
 runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101"]  # assert is fine in non-test code for this project
 
 [tool.mypy]
 python_version = "3.13"

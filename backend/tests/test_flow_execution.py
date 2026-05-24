@@ -129,9 +129,7 @@ def test_flow_step_outputs_chain():
     mock_loader.build_crew.side_effect = build_crew_side_effect
     mock_listener = MagicMock()
 
-    _run_flow_steps(
-        mock_loader, resource_snapshot, "chain-flow", {"query": "test"}, mock_listener
-    )
+    _run_flow_steps(mock_loader, resource_snapshot, "chain-flow", {"query": "test"}, mock_listener)
 
     # Verify the second step received the first step's output in inputs
     process_call_inputs = mock_processor.kickoff.call_args[1]["inputs"]
@@ -166,9 +164,7 @@ def test_flow_function_step():
     mock_module.transform_data = mock_fn
 
     with patch("importlib.import_module", return_value=mock_module):
-        _run_flow_steps(
-            mock_loader, resource_snapshot, "fn-flow", {"data": "raw"}, mock_listener
-        )
+        _run_flow_steps(mock_loader, resource_snapshot, "fn-flow", {"data": "raw"}, mock_listener)
 
     mock_fn.assert_called_once()
     call_args = mock_fn.call_args[0][0]
@@ -201,9 +197,7 @@ def test_flow_missing_crew_ref_skips_step():
     mock_loader.build_crew.return_value = mock_crew
     mock_listener = MagicMock()
 
-    result = _run_flow_steps(
-        mock_loader, resource_snapshot, "skip-flow", {}, mock_listener
-    )
+    result = _run_flow_steps(mock_loader, resource_snapshot, "skip-flow", {}, mock_listener)
 
     # Only one crew should have been built (the broken step was skipped)
     assert mock_loader.build_crew.call_count == 1
@@ -218,9 +212,7 @@ def test_flow_not_found_raises_loader_error():
     mock_listener = MagicMock()
 
     with pytest.raises(LoaderError, match="not found"):
-        _run_flow_steps(
-            mock_loader, resource_snapshot, "missing-flow", {}, mock_listener
-        )
+        _run_flow_steps(mock_loader, resource_snapshot, "missing-flow", {}, mock_listener)
 
 
 def test_flow_non_crew_output_stringified():
@@ -244,9 +236,7 @@ def test_flow_non_crew_output_stringified():
     mock_loader.build_crew.return_value = mock_crew
     mock_listener = MagicMock()
 
-    result = _run_flow_steps(
-        mock_loader, resource_snapshot, "str-flow", {}, mock_listener
-    )
+    result = _run_flow_steps(mock_loader, resource_snapshot, "str-flow", {}, mock_listener)
 
     assert result == "plain string result"
 
@@ -271,9 +261,7 @@ def test_flow_router_step_continues():
     mock_listener = MagicMock()
 
     # Should not raise
-    result = _run_flow_steps(
-        mock_loader, resource_snapshot, "router-flow", {}, mock_listener
-    )
+    result = _run_flow_steps(mock_loader, resource_snapshot, "router-flow", {}, mock_listener)
 
     # No crews should be built
     mock_loader.build_crew.assert_not_called()
@@ -281,7 +269,7 @@ def test_flow_router_step_continues():
 
 
 def test_flow_function_step_blocked_module():
-    """Function step referencing a blocked module should log error string."""
+    """Function step referencing a blocked module should be rejected."""
     resource_snapshot = {
         "Flow/blocked-flow": {
             "kind": "Flow",
@@ -302,16 +290,16 @@ def test_flow_function_step_blocked_module():
     mock_loader = MagicMock()
     mock_listener = MagicMock()
 
-    result = _run_flow_steps(
-        mock_loader, resource_snapshot, "blocked-flow", {}, mock_listener
-    )
+    with patch("importlib.import_module") as mock_import:
+        result = _run_flow_steps(mock_loader, resource_snapshot, "blocked-flow", {}, mock_listener)
 
-    # Should not crash; result is None since no crew steps ran
+    # Blocked module must never be imported
+    mock_import.assert_not_called()
     assert result is None
 
 
 def test_flow_function_step_not_in_allowlist():
-    """Function step with path not in allowlist should produce error output."""
+    """Function step with path not in allowlist must not be imported."""
     resource_snapshot = {
         "Flow/noallow-flow": {
             "kind": "Flow",
@@ -332,14 +320,15 @@ def test_flow_function_step_not_in_allowlist():
     mock_loader = MagicMock()
     mock_listener = MagicMock()
 
-    result = _run_flow_steps(
-        mock_loader, resource_snapshot, "noallow-flow", {}, mock_listener
-    )
+    with patch("importlib.import_module") as mock_import:
+        result = _run_flow_steps(mock_loader, resource_snapshot, "noallow-flow", {}, mock_listener)
+
+    mock_import.assert_not_called()
     assert result is None
 
 
 def test_flow_empty_steps():
-    """Flow with empty steps list should return None without error."""
+    """Flow with empty steps list should return None and build no crews."""
     resource_snapshot = {
         "Flow/empty-flow": {
             "kind": "Flow",
@@ -354,7 +343,6 @@ def test_flow_empty_steps():
     mock_loader = MagicMock()
     mock_listener = MagicMock()
 
-    result = _run_flow_steps(
-        mock_loader, resource_snapshot, "empty-flow", {}, mock_listener
-    )
+    result = _run_flow_steps(mock_loader, resource_snapshot, "empty-flow", {}, mock_listener)
     assert result is None
+    mock_loader.build_crew.assert_not_called()

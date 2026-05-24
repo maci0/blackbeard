@@ -6,7 +6,7 @@ The Execution Engine is the runtime that loads YAML resource definitions, resolv
 
 ### 1.1 MVP Scope
 
-**Implemented:** Sequential and hierarchical crew execution. Flow execution with all step types: crew, function, router (Python function dispatch), condition (safe expression eval), and transform (WASM data massaging). Train and test via CrewAI native. Budget enforcement via LiteLLM virtual keys. Guardrails (function, LLM, schema, PII). AgentPolicy enforcement (tool allowlist/denylist, delegation, sandbox tier, PII redaction). Workflow hooks (before/after on crews and flow steps). HITL respond (`POST /executions/{id}/respond`). SSE + WebSocket streaming. Webhooks (register/deliver with HMAC signing). Automation triggers (cron, webhook, API). gRPC API on :50051 with auth interceptor. AI Copilot (prompt-to-crew via LiteLLM). Live collaboration (WebSocket rooms + Valkey pub/sub). Memory backends: lancedb, chromadb, qdrant, MuninnDB (cognitive memory with temporal priority + Hebbian learning). Full sandbox hierarchy: none < wasm < docker/podman (ContainerSandbox) < gVisor (GVisorSandbox) < MicroVM (full Firecracker + libkrun). Schema guardrails (JSON Schema output validation). WASM transforms (transform step type in flows). OpenTelemetry optional trace export.
+**Implemented:** Sequential and hierarchical crew execution. Flow execution with all step types: crew, function, router (Python function dispatch), condition (safe expression eval), and transform (WASM data massaging). Train and test via CrewAI native. Budget enforcement via LiteLLM virtual keys. Guardrails (function, LLM, schema, PII). AgentPolicy enforcement (tool allowlist/denylist, delegation, sandbox tier, PII redaction). Workflow hooks (before/after on crews and flow steps). HITL: backend `POST /executions/{id}/respond` endpoint + frontend HITL response panel in ExecutionDetail (polls for `hitl_request` events, displays prompt, submits response). Execution retry: `POST /executions/{id}/retry` endpoint creates a new execution from the original's configuration + frontend retry button on terminal executions. SSE + WebSocket streaming with fallback polling (frontend detects SSE disconnection after 3 failed reconnects, switches to REST polling at 3s/5s intervals, shows reconnection state). Browser notifications via Notification API for completed/failed executions + sidebar bell badge with unread count (`useNotifications` hook + `notificationStore`). Webhooks (register/deliver with HMAC signing). Automation triggers (cron, webhook, API). gRPC API on :50051 with auth interceptor. AI Copilot (prompt-to-crew via LiteLLM). Live collaboration (WebSocket rooms + Valkey pub/sub). Memory backends: lancedb, chromadb, qdrant, MuninnDB (cognitive memory with temporal priority + Hebbian learning). Full sandbox hierarchy: none < wasm < docker/podman (ContainerSandbox) < gVisor (GVisorSandbox) < MicroVM (full Firecracker + libkrun). Schema guardrails (JSON Schema output validation). WASM transforms (transform step type in flows). OpenTelemetry optional trace export.
 
 **Deferred to post-MVP:** Temporal workflow backend, dynamic task creation in hierarchical mode, warm container/VM pools.
 
@@ -662,13 +662,16 @@ Memory is opt-in per agent/crew (`memory: true`).
 
 ## 10. Human-in-the-Loop
 
+**Status: Implemented (backend + frontend).**
+
 When a task has `human_input: true` or a flow step has `human_feedback`:
 
 1. Execution state transitions to `waiting_for_human`.
-2. An event `execution.human_input_required` is emitted.
+2. An event `execution.human_input_required` is emitted (stored as `hitl_request` in `execution_events`).
 3. The execution pauses and checkpoints.
-4. A human submits feedback via API, UI, or email reply link.
-5. Execution resumes with the human's input injected into context.
+4. A human submits feedback via `POST /api/v1/executions/{id}/respond` (API) or the frontend HITL response panel in ExecutionDetail (which polls for `hitl_request` events and presents a text input for the response).
+5. The response is recorded as a `hitl_response` event so the execution listener can pick it up.
+6. Execution resumes with the human's input injected into context.
 
 ---
 

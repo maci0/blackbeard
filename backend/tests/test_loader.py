@@ -1291,9 +1291,7 @@ def test_build_crew_hierarchical_with_manager_agent(
             "manager_agent": "ref:agents/manager",
         },
     )
-    loader = ResourceLoader(
-        _resource_map(agent_res, manager_res, task_res, crew_res)
-    )
+    loader = ResourceLoader(_resource_map(agent_res, manager_res, task_res, crew_res))
     loader.build_crew("hier-mgr-crew")
 
     _, kwargs = mock_crew_cls.call_args

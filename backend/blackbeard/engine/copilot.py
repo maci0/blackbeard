@@ -22,6 +22,8 @@ from blackbeard.resources.validator import validate_resource
 
 logger = logging.getLogger(__name__)
 
+_yaml_loader: Any = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
 SYSTEM_PROMPT = f"""\
 You are Blackbeard Copilot. Generate CrewAI agent/task/crew definitions as YAML.
 
@@ -168,7 +170,7 @@ def _parse_yaml_response(raw: str) -> list[dict[str, Any]]:
 
     docs: list[dict[str, Any]] = []
     try:
-        for doc in yaml.safe_load_all(cleaned):
+        for doc in yaml.load_all(cleaned, Loader=_yaml_loader):
             if isinstance(doc, dict) and "kind" in doc:
                 docs.append(doc)
     except yaml.YAMLError as e:
@@ -177,9 +179,7 @@ def _parse_yaml_response(raw: str) -> list[dict[str, Any]]:
             e,
             extra={"event": "copilot_yaml_parse_error", "error_type": type(e).__name__},
         )
-        raise CopilotError(
-            "Failed to parse the generated YAML. Try rephrasing your prompt."
-        ) from e
+        raise CopilotError("Failed to parse the generated YAML. Try rephrasing your prompt.") from e
 
     if not docs:
         raise CopilotError(

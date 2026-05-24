@@ -39,11 +39,17 @@ spec:
             - name: http
               containerPort: 3000
               protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 12
           readinessProbe:
             httpGet:
               path: /
               port: http
-            initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
@@ -51,7 +57,6 @@ spec:
             httpGet:
               path: /
               port: http
-            initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
@@ -66,6 +71,8 @@ spec:
               mountPath: /tmp
             - name: nginx-cache
               mountPath: /var/cache/nginx
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
             - name: nginx-run
               mountPath: /var/run
       volumes:
@@ -75,6 +82,9 @@ spec:
         - name: nginx-cache
           emptyDir:
             sizeLimit: 50Mi
+        - name: nginx-conf
+          emptyDir:
+            sizeLimit: 1Mi
         - name: nginx-run
           emptyDir:
             sizeLimit: 1Mi

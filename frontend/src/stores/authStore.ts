@@ -16,6 +16,7 @@ interface AuthState {
   refreshToken: string | null
   loading: boolean
   error: string | null
+  sessionExpired: boolean
 
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, displayName: string) => Promise<void>
@@ -23,6 +24,7 @@ interface AuthState {
   refresh: () => Promise<void>
   fetchMe: () => Promise<void>
   hydrate: () => void
+  setSessionExpired: (v: boolean) => void
 }
 
 export const TOKEN_KEY = 'blackbeard_token'
@@ -49,6 +51,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   refreshToken: null,
   loading: false,
   error: null,
+  sessionExpired: false,
 
   hydrate: () => {
     const stored = localStorage.getItem(TOKEN_KEY)
@@ -96,7 +99,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(REFRESH_KEY)
     api.setToken('')
-    set({ user: null, token: null, refreshToken: null, error: null })
+    set({ user: null, token: null, refreshToken: null, error: null, sessionExpired: false })
+  },
+
+  setSessionExpired: (v: boolean) => {
+    set({ sessionExpired: v })
   },
 
   refresh: async () => {
@@ -141,9 +148,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             return
           }
         } catch {
-          console.debug('[auth] token refresh failed, logging out')
+          console.debug('[auth] token refresh failed, showing session expired dialog')
         }
-        get().logout()
+        set({ sessionExpired: true })
       }
       set({ loading: false, error: null })
     }

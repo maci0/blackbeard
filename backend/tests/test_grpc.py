@@ -278,9 +278,7 @@ def test_proto_file_exists():
     """Proto file is present in the repo."""
     import os
 
-    proto_path = os.path.join(
-        os.path.dirname(__file__), "..", "proto", "blackbeard.proto"
-    )
+    proto_path = os.path.join(os.path.dirname(__file__), "..", "proto", "blackbeard.proto")
     assert os.path.exists(proto_path)
 
 
@@ -309,9 +307,7 @@ async def test_auth_interceptor_allows_health(auth_interceptor):
     handler_call_details.invocation_metadata = []
 
     continuation = AsyncMock(return_value="handler")
-    result = await auth_interceptor.intercept_service(
-        continuation, handler_call_details
-    )
+    result = await auth_interceptor.intercept_service(continuation, handler_call_details)
     continuation.assert_called_once_with(handler_call_details)
     assert result == "handler"
 
@@ -325,9 +321,7 @@ async def test_auth_interceptor_rejects_no_credentials(auth_interceptor):
     handler_call_details.invocation_metadata = []
 
     continuation = AsyncMock()
-    result = await auth_interceptor.intercept_service(
-        continuation, handler_call_details
-    )
+    result = await auth_interceptor.intercept_service(continuation, handler_call_details)
     continuation.assert_not_called()
     assert isinstance(result, _AbortingHandler)
 
@@ -343,9 +337,7 @@ async def test_auth_interceptor_accepts_valid_api_key(auth_interceptor):
     ]
 
     continuation = AsyncMock(return_value="handler")
-    result = await auth_interceptor.intercept_service(
-        continuation, handler_call_details
-    )
+    result = await auth_interceptor.intercept_service(continuation, handler_call_details)
     continuation.assert_called_once()
     assert result == "handler"
 
@@ -361,9 +353,7 @@ async def test_auth_interceptor_rejects_invalid_api_key(auth_interceptor):
     ]
 
     continuation = AsyncMock()
-    result = await auth_interceptor.intercept_service(
-        continuation, handler_call_details
-    )
+    result = await auth_interceptor.intercept_service(continuation, handler_call_details)
     continuation.assert_not_called()
     assert isinstance(result, _AbortingHandler)
 
@@ -372,9 +362,7 @@ async def test_auth_interceptor_accepts_valid_jwt(auth_interceptor):
     """Valid JWT Bearer token in metadata should be accepted."""
     from blackbeard.auth.jwt import create_access_token
 
-    token = create_access_token(
-        user_id=str(uuid.uuid4())
-    )
+    token = create_access_token(user_id=str(uuid.uuid4()))
 
     handler_call_details = MagicMock()
     handler_call_details.method = "/blackbeard.BlackbeardService/CreateResource"
@@ -383,9 +371,7 @@ async def test_auth_interceptor_accepts_valid_jwt(auth_interceptor):
     ]
 
     continuation = AsyncMock(return_value="handler")
-    result = await auth_interceptor.intercept_service(
-        continuation, handler_call_details
-    )
+    result = await auth_interceptor.intercept_service(continuation, handler_call_details)
     continuation.assert_called_once()
     assert result == "handler"
 
@@ -401,9 +387,7 @@ async def test_auth_interceptor_rejects_invalid_jwt(auth_interceptor):
     ]
 
     continuation = AsyncMock()
-    result = await auth_interceptor.intercept_service(
-        continuation, handler_call_details
-    )
+    result = await auth_interceptor.intercept_service(continuation, handler_call_details)
     continuation.assert_not_called()
     assert isinstance(result, _AbortingHandler)
 
@@ -422,9 +406,7 @@ async def test_auth_interceptor_rejects_refresh_token(auth_interceptor):
     ]
 
     continuation = AsyncMock()
-    result = await auth_interceptor.intercept_service(
-        continuation, handler_call_details
-    )
+    result = await auth_interceptor.intercept_service(continuation, handler_call_details)
     continuation.assert_not_called()
     assert isinstance(result, _AbortingHandler)
 
@@ -456,9 +438,7 @@ async def test_auth_interceptor_rejects_expired_jwt(auth_interceptor):
     ]
 
     continuation = AsyncMock()
-    result = await auth_interceptor.intercept_service(
-        continuation, handler_call_details
-    )
+    result = await auth_interceptor.intercept_service(continuation, handler_call_details)
     continuation.assert_not_called()
     assert isinstance(result, _AbortingHandler)
 

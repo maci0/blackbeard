@@ -322,9 +322,7 @@ async def test_register_creates_audit_entry(client: AsyncClient, db_session: Asy
     """Registration creates a user_registered audit entry."""
     await _register_user(client)
 
-    result = await db_session.execute(
-        select(AuditLog).where(AuditLog.action == "user_registered")
-    )
+    result = await db_session.execute(select(AuditLog).where(AuditLog.action == "user_registered"))
     entry = result.scalar_one()
     assert entry.actor_type == "user"
     assert entry.resource_type == "User"
@@ -336,9 +334,7 @@ async def test_login_creates_audit_entry(client: AsyncClient, db_session: AsyncS
     await _register_user(client)
     await client.post("/api/v1/auth/login", json=_login_payload())
 
-    result = await db_session.execute(
-        select(AuditLog).where(AuditLog.action == "user_login")
-    )
+    result = await db_session.execute(select(AuditLog).where(AuditLog.action == "user_login"))
     entry = result.scalar_one()
     assert entry.actor_type == "user"
     assert entry.actor_email == "audit@example.com"
@@ -352,9 +348,7 @@ async def test_login_failure_creates_audit_entry(client: AsyncClient, db_session
         json=_login_payload(password="wrongpassword1"),
     )
 
-    result = await db_session.execute(
-        select(AuditLog).where(AuditLog.action == "login_failed")
-    )
+    result = await db_session.execute(select(AuditLog).where(AuditLog.action == "login_failed"))
     entry = result.scalar_one()
     assert entry.actor_type == "user"
     assert entry.detail is not None
@@ -366,9 +360,7 @@ async def test_login_failure_creates_audit_entry(client: AsyncClient, db_session
 # ---------------------------------------------------------------------------
 
 
-async def test_create_resource_creates_audit_entry(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_create_resource_creates_audit_entry(client: AsyncClient, db_session: AsyncSession):
     """Creating a resource creates a resource_created audit entry."""
     resp = await client.post(
         "/api/v1/agents",
@@ -377,17 +369,13 @@ async def test_create_resource_creates_audit_entry(
     )
     assert resp.status_code == 201
 
-    result = await db_session.execute(
-        select(AuditLog).where(AuditLog.action == "resource_created")
-    )
+    result = await db_session.execute(select(AuditLog).where(AuditLog.action == "resource_created"))
     entry = result.scalar_one()
     assert entry.resource_type == "Agent"
     assert entry.resource_id == "audit-agent"
 
 
-async def test_update_resource_creates_audit_entry(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_update_resource_creates_audit_entry(client: AsyncClient, db_session: AsyncSession):
     """Updating a resource creates a resource_updated audit entry."""
     await client.post(
         "/api/v1/agents",
@@ -409,17 +397,13 @@ async def test_update_resource_creates_audit_entry(
     )
     assert resp.status_code == 200
 
-    result = await db_session.execute(
-        select(AuditLog).where(AuditLog.action == "resource_updated")
-    )
+    result = await db_session.execute(select(AuditLog).where(AuditLog.action == "resource_updated"))
     entries = list(result.scalars().all())
     assert len(entries) >= 1
     assert any(e.resource_id == "audit-agent" for e in entries)
 
 
-async def test_delete_resource_creates_audit_entry(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_delete_resource_creates_audit_entry(client: AsyncClient, db_session: AsyncSession):
     """Deleting a resource creates a resource_deleted audit entry."""
     await client.post(
         "/api/v1/agents",
@@ -432,9 +416,7 @@ async def test_delete_resource_creates_audit_entry(
     )
     assert resp.status_code == 204
 
-    result = await db_session.execute(
-        select(AuditLog).where(AuditLog.action == "resource_deleted")
-    )
+    result = await db_session.execute(select(AuditLog).where(AuditLog.action == "resource_deleted"))
     entry = result.scalar_one()
     assert entry.resource_type == "Agent"
     assert entry.resource_id == "audit-agent"
@@ -445,9 +427,7 @@ async def test_delete_resource_creates_audit_entry(
 # ---------------------------------------------------------------------------
 
 
-async def test_deactivate_user_creates_audit_entry(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_deactivate_user_creates_audit_entry(client: AsyncClient, db_session: AsyncSession):
     """Deactivating a user creates a user_deactivated audit entry."""
     data = await _register_user(client)
     user_id = data["user"]["id"]
@@ -459,9 +439,7 @@ async def test_deactivate_user_creates_audit_entry(
     )
     assert resp.status_code == 204
 
-    result = await db_session.execute(
-        select(AuditLog).where(AuditLog.action == "user_deactivated")
-    )
+    result = await db_session.execute(select(AuditLog).where(AuditLog.action == "user_deactivated"))
     entry = result.scalar_one()
     assert entry.resource_type == "User"
     assert entry.resource_id == user_id
@@ -472,9 +450,7 @@ async def test_deactivate_user_creates_audit_entry(
 # ---------------------------------------------------------------------------
 
 
-async def test_create_group_creates_audit_entry(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_create_group_creates_audit_entry(client: AsyncClient, db_session: AsyncSession):
     """Creating a group creates a group_created audit entry."""
     data = await _register_user(client)
     token = data["access_token"]
@@ -486,17 +462,13 @@ async def test_create_group_creates_audit_entry(
     )
     assert resp.status_code == 201
 
-    result = await db_session.execute(
-        select(AuditLog).where(AuditLog.action == "group_created")
-    )
+    result = await db_session.execute(select(AuditLog).where(AuditLog.action == "group_created"))
     entry = result.scalar_one()
     assert entry.resource_type == "Group"
     assert entry.resource_id == "audit-test-group"
 
 
-async def test_delete_group_creates_audit_entry(
-    client: AsyncClient, db_session: AsyncSession
-):
+async def test_delete_group_creates_audit_entry(client: AsyncClient, db_session: AsyncSession):
     """Deleting a group creates a group_deleted audit entry."""
     data = await _register_user(client)
     token = data["access_token"]
@@ -515,9 +487,7 @@ async def test_delete_group_creates_audit_entry(
     )
     assert resp.status_code == 204
 
-    result = await db_session.execute(
-        select(AuditLog).where(AuditLog.action == "group_deleted")
-    )
+    result = await db_session.execute(select(AuditLog).where(AuditLog.action == "group_deleted"))
     entry = result.scalar_one()
     assert entry.resource_type == "Group"
     assert entry.resource_id == "to-delete-group"

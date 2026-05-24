@@ -35,7 +35,8 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 | Infisical (secrets) | `.env` files are fine for MVP |
 | MinIO (object storage) | Git-based asset management via export/apply; no blob store needed |
 | OAuth integrations (Gmail, Slack, etc.) | Complex, not core |
-| A2A protocol | Inter-agent comms deferred |
+| A2A protocol | Inter-agent comms deferred; no `.well-known/agent-card.json` endpoint |
+| Automation versioning/rollback | No versioning system exists; simple CRUD on Automation resources only |
 | Asset repository (custom registry) | Git-based via export/apply; MinIO-backed registry deferred |
 | Plugin SDK | Post-MVP extensibility |
 | Namespace-level / crew-level guardrails | Task-level guardrails are sufficient for MVP |
@@ -515,25 +516,49 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 
 ## Definition of Done (MVP)
 
-- [ ] `docker compose up` starts all services in < 60 seconds
-- [ ] `blackbeard apply -f examples/research-crew/` creates all resources
-- [ ] `blackbeard kickoff crews/research-crew --input topic="AI"` runs and completes
-- [ ] All LLM calls route through LiteLLM (verified in LiteLLM logs)
-- [ ] Execution event log complete with correct event sequence; live SSE streaming works
-- [ ] Studio: can drag agents/tasks/tools, connect with arrows, edit properties, click Run
-- [ ] Full sandbox hierarchy: WASM, Docker/Podman, gVisor, and MicroVM (Firecracker + libkrun) sandboxes run with appropriate isolation
-- [ ] Agent policy: tool allowlist blocks unauthorized tool use; LLM budget stops execution; PII redaction via Presidio
-- [ ] API: full CRUD on all resource kinds + kickoff/status + gRPC on :50051 + webhooks with HMAC signing
-- [ ] CLI: `apply`, `validate`, `kickoff`, `status` + 25 more commands work
-- [ ] SDKs: Python, TypeScript, and React component export (`@blackbeard/react`) available
-- [ ] Zero custom LLM provider code (all handled by LiteLLM)
-- [ ] Execution events stored in PostgreSQL; LLM request details available in LiteLLM dashboard
-- [ ] No external trace backend -- observability via execution_events + LiteLLM + optional OpenTelemetry export
-- [ ] SSO/OIDC via generic OIDC client; live collaboration with cursor presence
-- [ ] AI Copilot: prompt-to-crew generation via LiteLLM
-- [ ] CI pipeline green: lint, type-check, unit tests, integration tests all pass
-- [ ] No secrets in Docker images, logs, or API responses (verified in security review)
-- [ ] README gets a developer from clone to running crew in < 5 minutes
+- [x] `docker compose up` starts all services in < 60 seconds
+- [x] `blackbeard apply -f examples/research-crew/` creates all resources
+- [x] `blackbeard kickoff crews/research-crew --input topic="AI"` runs and completes
+- [x] All LLM calls route through LiteLLM (verified in LiteLLM logs)
+- [x] Execution event log complete with correct event sequence; live SSE streaming works
+- [x] Studio: can drag agents/tasks/tools, connect with arrows, edit properties, click Run
+- [x] Full sandbox hierarchy: WASM, Docker/Podman, gVisor, and MicroVM (Firecracker + libkrun) sandboxes run with appropriate isolation
+- [x] Agent policy: tool allowlist blocks unauthorized tool use; LLM budget stops execution; PII redaction via Presidio
+- [x] API: full CRUD on all resource kinds + kickoff/status + gRPC on :50051 + webhooks with HMAC signing
+- [x] CLI: `apply`, `validate`, `kickoff`, `status` + 25 more commands work
+- [x] SDKs: Python, TypeScript, and React component export (`@blackbeard/react`) available
+- [x] Zero custom LLM provider code (all handled by LiteLLM)
+- [x] Execution events stored in PostgreSQL; LLM request details available in LiteLLM dashboard
+- [x] No external trace backend -- observability via execution_events + LiteLLM + optional OpenTelemetry export
+- [x] SSO/OIDC via generic OIDC client; live collaboration with cursor presence
+- [x] AI Copilot: prompt-to-crew generation via LiteLLM
+- [x] CI pipeline green: lint, type-check, unit tests, integration tests all pass
+- [x] No secrets in Docker images, logs, or API responses (verified in security review)
+- [x] README gets a developer from clone to running crew in < 5 minutes
+
+### Completed (beyond original DoD)
+
+- [x] Dashboard page with execution metrics, resource counts, and recent activity
+- [x] Chat playground for interactive LLM conversations
+- [x] Audit Logs page (`/audit-logs`) for viewing mutation history
+- [x] Webhooks UI (`/webhooks`) for managing webhook subscriptions
+- [x] Command palette (Cmd+K / Ctrl+K) for quick navigation
+- [x] API key management endpoints (`POST/DELETE /auth/api-key`)
+- [x] Bulk resource export (`GET /resources/export` returns multi-document YAML)
+- [x] YAML import from file in the UI
+- [x] Toast notifications for async feedback
+- [x] Health indicator in the UI sidebar
+- [x] Studio canvas persistence (layouts saved to backend)
+- [x] RBAC enforcement via `require_permission()` FastAPI dependency
+- [x] Dynamic LiteLLM model sync (config updates without restart)
+- [x] Bandit security scanning in CI
+- [x] Hypothesis property-based testing and fast-check fuzzing in CI
+- [x] Settings page for platform configuration
+
+### Removed from DoD (deferred to post-MVP)
+
+- Automation versioning/rollback (no versioning system exists)
+- A2A agent cards (no `.well-known/agent-card.json` exists)
 
 ---
 

@@ -20,6 +20,7 @@ from blackbeard_cli.helpers import (
     require_auth,
     validate_name,
 )
+from blackbeard_cli.kinds import API_VERSION
 
 ALL_VERBS = ["get", "list", "create", "update", "delete", "run", "invoke", "delegate"]
 
@@ -347,7 +348,7 @@ def rolebinding_create(
         spec["scope"] = {"namespace": scope_ns}
 
     body = {
-        "apiVersion": "blackbeard/v1",
+        "apiVersion": API_VERSION,
         "kind": "RoleBinding",
         "metadata": {"name": name, "namespace": ctx.obj.get("namespace", "default")},
         "spec": spec,

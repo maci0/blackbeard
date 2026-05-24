@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.config import settings
-from blackbeard.http_client import get_client, get_litellm_client
+from blackbeard.http_client import get_litellm_client
 from blackbeard.logging_config import request_id_var
 from blackbeard.models import User
 
@@ -35,6 +35,8 @@ class TokenUsage(BaseModel):
     prompt: int = 0
     completion: int = 0
     total: int = 0
+    prompt_time_ms: int | None = None
+    completion_time_ms: int | None = None
 
 
 def _get_litellm_client() -> httpx.AsyncClient:
@@ -51,10 +53,32 @@ def _extract_content(data: dict[str, Any]) -> tuple[str, TokenUsage]:
     if not isinstance(usage, dict):
         usage = {}
     content = message.get("content") or message.get("reasoning_content") or ""
+
+    prompt_time_ms: int | None = None
+    completion_time_ms: int | None = None
+
+    try:
+        # Ollama / vLLM: durations in nanoseconds
+        if usage.get("prompt_eval_duration"):
+            prompt_time_ms = int(float(usage["prompt_eval_duration"]) / 1_000_000)
+        if usage.get("eval_duration"):
+            completion_time_ms = int(float(usage["eval_duration"]) / 1_000_000)
+
+        # LiteLLM / OpenAI-compatible: _response_ms or prompt_time/completion_time
+        if prompt_time_ms is None and usage.get("prompt_time"):
+            prompt_time_ms = int(float(usage["prompt_time"]) * 1000)
+        if completion_time_ms is None and usage.get("completion_time"):
+            completion_time_ms = int(float(usage["completion_time"]) * 1000)
+    except (TypeError, ValueError, OverflowError):
+        prompt_time_ms = None
+        completion_time_ms = None
+
     tokens = TokenUsage(
         prompt=usage.get("prompt_tokens", 0),
         completion=usage.get("completion_tokens", 0),
         total=usage.get("total_tokens", 0),
+        prompt_time_ms=prompt_time_ms,
+        completion_time_ms=completion_time_ms,
     )
     return content, tokens
 
@@ -218,8 +242,6 @@ class ModelTestResult(BaseModel):
     error: str | None = None
     response_preview: str | None = None
     tokens: TokenUsage | None = None
-    context_length: int | None = None
-    parameter_size: str | None = None
 
 
 @router.post(
@@ -241,7 +263,8 @@ async def test_model(
 ) -> ModelTestResult:
     """Test connectivity and API key validity for a specific model.
 
-    Sends a minimal prompt ("Say hi") and checks if the model responds.
+    All requests route through the LiteLLM proxy so budget tracking,
+    rate limiting, and audit logging apply even during tests.
     """
     t0 = time.monotonic()
     try:
@@ -290,34 +313,6 @@ async def test_model(
             )
         content, tokens = _extract_content(data)
 
-        # Try to get model info (context length, parameter size) from Ollama.
-        # Use a separate client without LiteLLM auth headers to avoid leaking
-        # the master key to the Ollama endpoint.
-        ctx_len = None
-        param_size = None
-        try:
-            ollama_client = get_client("ollama")
-            info_resp = await ollama_client.post(
-                f"{settings.ollama_url}/api/show",
-                json={"model": model},
-                timeout=5,
-            )
-            if info_resp.status_code == 200:
-                info = info_resp.json()
-                model_info = info.get("model_info", {})
-                for k, v in model_info.items():
-                    if k.endswith(".context_length"):
-                        ctx_len = int(v)
-                        break
-                param_size = info.get("details", {}).get("parameter_size")
-        except (httpx.HTTPError, ValueError, KeyError):
-            logger.warning(
-                "Could not fetch Ollama model info for %s",
-                model,
-                exc_info=True,
-                extra={"event": "ollama_model_info_failed", "model": model},
-            )
-
         logger.info(
             "Model test ok: model=%s tokens=%d latency_ms=%d",
             model,
@@ -336,8 +331,6 @@ async def test_model(
             latency_ms=latency_ms,
             response_preview=content[:100],
             tokens=tokens,
-            context_length=ctx_len,
-            parameter_size=param_size,
         )
 
     except httpx.TransportError as e:

@@ -123,9 +123,7 @@ class TestGVisorSandboxDetection:
 
         with (
             patch("shutil.which", side_effect=_which),
-            patch(
-                "blackbeard.engine.sandbox.gvisor_runtime.logger"
-            ) as mock_logger,
+            patch("blackbeard.engine.sandbox.gvisor_runtime.logger") as mock_logger,
         ):
             sandbox = GVisorSandbox(container_runtime="docker")
             assert sandbox.runtime == "docker"

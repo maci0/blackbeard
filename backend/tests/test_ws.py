@@ -39,9 +39,7 @@ def test_ws_auth_empty_api_key_rejected():
 
 def test_ws_auth_valid_jwt_accepted():
     """The WS handler should accept a valid JWT access token."""
-    token = create_access_token(
-        user_id=str(uuid.uuid4())
-    )
+    token = create_access_token(user_id=str(uuid.uuid4()))
     assert validate_ws_auth(token, "") is True
 
 

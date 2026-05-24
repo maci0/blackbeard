@@ -90,7 +90,9 @@ async def test_hitl_response_with_feedback(client: AsyncClient):
     hitl_events = [e for e in events if e["event_type"] == "hitl_response"]
     assert len(hitl_events) == 1
     assert hitl_events[0]["data"]["response"] == "rejected"
-    assert hitl_events[0]["data"]["feedback"] == "Please include more details about the methodology."
+    assert (
+        hitl_events[0]["data"]["feedback"] == "Please include more details about the methodology."
+    )
 
 
 async def test_hitl_response_on_cancelled_execution_returns_409(client: AsyncClient):

@@ -12,7 +12,7 @@ Blackbeard's job is to:
 
 ### 1.1 MVP Scope
 
-**Implemented:** Fully implemented. LiteLLM Proxy co-deployed as a sidecar container, automatic config generation from `LLMConnection` resources, per-execution virtual key lifecycle (create on kickoff, delete on completion), spend tracking per key/user/model, per-user LiteLLM registration on Blackbeard user creation, LiteLLM dashboard accessible at `:4000/ui`. All LLM calls route through the proxy with no direct provider calls.
+**Implemented:** Fully implemented. LiteLLM Proxy co-deployed as a sidecar container, automatic config generation from `LLMConnection` resources, per-execution virtual key lifecycle (create on kickoff, delete on completion), spend tracking per key/user/model, per-user LiteLLM registration on Blackbeard user creation, LiteLLM dashboard accessible at `:4000/ui`. All LLM calls route through the proxy with no direct provider calls. Dynamic model sync via `model_sync.py` module (see section 10.1). Tokens-per-second metrics extracted from provider responses (see section 6.4).
 
 **Deferred to post-MVP:** Advanced routing strategies (`LLMRoutingConfig` resource), standalone/external deployment topologies, tag-based routing, Blackbeard-side spend dashboards (LiteLLM dashboard serves this role for now).
 
@@ -345,6 +345,22 @@ LiteLLM provides all LLM-level observability out of the box. No additional trace
 
 **No external trace backend.** LiteLLM handles all LLM-level observability. Crew/task/tool-level observability is handled by Blackbeard's `execution_events` table (see PRD 05, section 11.1 and PRD 07).
 
+### 6.4 Tokens-per-Second Metrics
+
+**Status: Implemented (backend + frontend).**
+
+The backend extracts prompt processing and text generation speed from LLM provider responses:
+
+- **Ollama**: `prompt_eval_duration` (nanoseconds) and `eval_duration` (nanoseconds) from the usage object, converted to `prompt_time_ms` and `completion_time_ms`.
+- **LiteLLM / OpenAI-compatible**: `prompt_time` and `completion_time` fields from usage metadata (seconds, converted to milliseconds).
+
+These timings are returned in the Chat API response alongside token counts, enabling tok/s calculation.
+
+**Frontend display:**
+- **Chat page**: Shows split pp/tg tok/s when both prompt and completion timings are available (e.g., "pp 245 . tg 38 tok/s"), with a tooltip explaining "Prompt processing: X tok/s, Text generation: Y tok/s". Falls back to end-to-end tok/s when only total timing is available.
+- **ExecutionDetail page**: Spend table includes a tok/s column.
+- **Models page**: Per-model inference speed displayed in model status.
+
 ### 6.3 Cost Dashboard Data
 
 | Dimension | Source |
@@ -485,6 +501,19 @@ When a `LLMConnection` or `LLMRoutingConfig` resource is created, updated, or de
 3. LiteLLM applies the change without restart — new models, routing rules, and fallbacks take effect immediately.
 4. If the reload fails (e.g., invalid config), Blackbeard logs the error and emits a `litellm.config.reload_failed` event. The previous config remains active.
 5. As a last resort, the worker can restart the LiteLLM sidecar container.
+
+### 10.1 Dynamic Model Sync
+
+**Status: Implemented** (`blackbeard/litellm/model_sync.py`).
+
+Instead of regenerating the full config file and reloading the proxy, Blackbeard now syncs model changes directly via LiteLLM's management API:
+
+- **On startup**: All `LLMConnection` resources are fetched from the database and pushed to LiteLLM via `model_sync.sync_all()`, which calls `POST /model/new` for each model. This runs during the application lifespan startup, after database initialization.
+- **On create**: When an `LLMConnection` resource is created via the API, `model_sync.add_model()` calls `POST /model/new` with the model's `litellm_params`.
+- **On update**: `model_sync.update_model()` performs a delete + re-add (since LiteLLM's model update semantics are replace-based).
+- **On delete**: `model_sync.delete_model()` calls `POST /model/delete`.
+
+No proxy restart is needed for any model configuration change. The sync is fire-and-forget from the resource API handler -- failures are logged but do not block the resource operation. The static config file generation (`config_gen.py`) remains as a fallback for initial proxy bootstrap.
 
 **Config reload safety:** Before applying a generated LiteLLM config, the system validates it:
 1. Generate `litellm_config.yaml` from LLMConnection resources
