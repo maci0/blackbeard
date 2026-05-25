@@ -17,14 +17,14 @@ test.describe('Authentication', () => {
     await login(page)
 
     await expect(page).toHaveURL('/studio')
-    await expect(page).toHaveTitle(/studio/i)
+    await expect(page).toHaveTitle(/blackbeard/i)
   })
 
   test('user info shows in sidebar after login', async ({ page }) => {
     await login(page)
 
     // The user section in the sidebar should display the user's email or name
-    await expect(page.getByText('e2e@test.com')).toBeVisible()
+    await expect(page.getByText('admin@blackbeard')).toBeVisible()
   })
 
   test('logout redirects to login page', async ({ page }) => {
