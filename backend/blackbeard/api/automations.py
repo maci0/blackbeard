@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.audit import audit_from_request, log_audit
-from blackbeard.auth.dependencies import get_current_user
+from blackbeard.auth.dependencies import require_permission
 from blackbeard.engine import ExecutionError, ExecutionNotFoundError
 from blackbeard.engine import executor as _executor_mod
 from blackbeard.kinds import NAME_PATTERN
@@ -100,7 +100,7 @@ async def trigger_automation(
         description="Namespace",
     ),
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User | None = Depends(require_permission("run", "Automation")),
 ) -> TriggerResponse:
     """Manually trigger an automation via API."""
     spec = await _get_automation_spec(session, name, namespace)

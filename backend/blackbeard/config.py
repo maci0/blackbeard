@@ -180,6 +180,7 @@ class Settings(BaseSettings):
         insecure_defaults = {
             "blackbeard_api_key": "change-me-in-production",
             "jwt_secret": "change-jwt-secret-in-production!",
+            "litellm_master_key": "sk-litellm-master-key",
         }
         for field_name, insecure_value in insecure_defaults.items():
             secret: SecretStr = getattr(self, field_name)
