@@ -45,11 +45,14 @@ function applyAuthResult(
   })
 }
 
-const _initialToken = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null
-const _initialRefresh = typeof window !== 'undefined' ? localStorage.getItem(REFRESH_KEY) : null
-
-if (_initialToken) {
-  api.setToken(_initialToken)
+let _initialToken: string | null = null
+let _initialRefresh: string | null = null
+try {
+  _initialToken = localStorage.getItem(TOKEN_KEY)
+  _initialRefresh = localStorage.getItem(REFRESH_KEY)
+  if (_initialToken) api.setToken(_initialToken)
+} catch {
+  // localStorage unavailable (SSR or test environment)
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({

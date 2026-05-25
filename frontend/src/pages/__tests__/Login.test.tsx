@@ -38,7 +38,7 @@ vi.mock('@/api/client', () => {
       setToken: vi.fn(),
       getToken: vi.fn(),
       post: vi.fn(),
-      get: vi.fn(),
+      get: vi.fn().mockResolvedValue({ oidc_enabled: false }),
     },
   }
 })

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import collections
+import itertools
 import logging
 import threading
 import time
@@ -45,15 +46,16 @@ def _set_cached(key: str, result: bool) -> None:
     with _cache_lock:
         if len(_cache) >= _CACHE_MAX_SIZE:
             to_evict = _CACHE_MAX_SIZE // 5
-            for _ in range(min(to_evict, len(_cache))):
-                _cache.popitem(last=False)
+            keys_to_evict = list(itertools.islice(_cache, to_evict))
+            for k in keys_to_evict:
+                del _cache[k]
             logger.debug(
                 "Authorization cache eviction: evicted=%d remaining=%d",
-                to_evict,
+                len(keys_to_evict),
                 len(_cache),
                 extra={
                     "event": "authz_cache_eviction",
-                    "evicted": to_evict,
+                    "evicted": len(keys_to_evict),
                     "remaining": len(_cache),
                     "max_size": _CACHE_MAX_SIZE,
                 },

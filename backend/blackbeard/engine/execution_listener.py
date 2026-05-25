@@ -7,9 +7,9 @@ since CrewAI callbacks run on a separate thread.
 
 from __future__ import annotations
 
+import collections
 import hashlib
 import hmac
-import itertools
 import json
 import logging
 import threading
@@ -312,7 +312,7 @@ def _deliver_single_webhook(
         )
 
 
-_webhook_host_cache: dict[str, str | None] = {}
+_webhook_host_cache: collections.OrderedDict[str, str | None] = collections.OrderedDict()
 _webhook_host_cache_lock = threading.Lock()
 _MAX_WEBHOOK_HOST_CACHE = 1000
 
@@ -321,16 +321,16 @@ def _get_webhook_hostname(webhook_url: str) -> str | None:
     """Return cached parsed hostname for a webhook URL. None if internal (blocked)."""
     with _webhook_host_cache_lock:
         cached = _webhook_host_cache.get(webhook_url)
-    if cached is not None:
-        return cached if cached != "" else None
+        if cached is not None:
+            _webhook_host_cache.move_to_end(webhook_url)
+            return cached if cached != "" else None
     hostname = urlparse(webhook_url).hostname or ""
     is_blocked = is_internal_host(hostname) if hostname else True
     with _webhook_host_cache_lock:
         if len(_webhook_host_cache) >= _MAX_WEBHOOK_HOST_CACHE:
             evict_count = _MAX_WEBHOOK_HOST_CACHE // 5
-            keys_to_evict = list(itertools.islice(_webhook_host_cache, evict_count))
-            for k in keys_to_evict:
-                del _webhook_host_cache[k]
+            for _ in range(evict_count):
+                _webhook_host_cache.popitem(last=False)
         _webhook_host_cache[webhook_url] = "" if is_blocked else hostname
     return None if is_blocked else hostname
 

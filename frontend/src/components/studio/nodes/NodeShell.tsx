@@ -85,7 +85,7 @@ export function NodeShell({
   label,
   ariaLabel,
   selected,
-  width = 'w-[140px]',
+  width = 'w-[200px]',
   targetPosition = Position.Top,
   sourcePosition = Position.Bottom,
   headerGradientTo,
@@ -120,7 +120,7 @@ export function NodeShell({
         </span>
       </div>
 
-      <div className="space-y-0.5 px-1.5 py-1">{children}</div>
+      <div className="space-y-0.5 px-2 py-1.5">{children}</div>
 
       <Handle
         type="source"

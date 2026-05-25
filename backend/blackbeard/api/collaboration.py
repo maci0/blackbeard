@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import collections
 import hmac
 import json
 import logging
@@ -462,7 +463,7 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
 
     # Per-client rate limiter for high-frequency message types.
     # Uses a simple sliding-window counter to prevent cursor_move flooding.
-    _hf_timestamps: list[float] = []
+    _hf_timestamps: collections.deque[float] = collections.deque()
 
     try:
         while True:
@@ -502,7 +503,8 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
                 now = time.monotonic()
                 # Prune timestamps outside the window
                 cutoff = now - _RATE_LIMIT_WINDOW_S
-                _hf_timestamps[:] = [t for t in _hf_timestamps if t > cutoff]
+                while _hf_timestamps and _hf_timestamps[0] <= cutoff:
+                    _hf_timestamps.popleft()
                 if len(_hf_timestamps) >= _RATE_LIMIT_MAX:
                     # Silently drop excess messages
                     continue

@@ -4,6 +4,7 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  ControlButton,
   MiniMap,
   useReactFlow,
   type Node,
@@ -11,6 +12,7 @@ import {
   type EdgeTypes,
   type Connection,
   type Edge,
+  type IsValidConnection,
 } from '@xyflow/react'
 import {
   User,
@@ -22,6 +24,7 @@ import {
   Route,
   Columns3,
   Sparkles,
+  Maximize2,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useStudioStore } from '@/stores/studioStore'
@@ -78,6 +81,18 @@ const SNAP_GRID: [number, number] = [20, 20]
 const PRO_OPTIONS = { hideAttribution: true } as const
 const DELETE_KEY_CODE = ['Delete', 'Backspace']
 const MINIMAP_STYLE = { width: 140, height: 90 } as const
+const CONNECTION_LINE_STYLE = { stroke: '#6366f1', strokeWidth: 2 } as const
+
+const VALID_CONNECTIONS = new Set([
+  'agent->task',
+  'task->task',
+  'task->agent',
+  'tool->agent',
+  'tool->task',
+  'flowStep->flowStep',
+])
+
+const UNIVERSAL_TARGETS = new Set(['condition', 'router', 'parallel'])
 
 function pickEdgeType(nodes: Node[], connection: Connection): string {
   const sourceNode = connection.source ? nodes.find((n) => n.id === connection.source) : undefined
@@ -113,7 +128,7 @@ function minimapNodeColor(node: Node): string {
 }
 
 function CanvasInner() {
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, fitView } = useReactFlow()
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -179,6 +194,19 @@ function CanvasInner() {
     [onConnect],
   )
 
+  const isValidConnection: IsValidConnection = useCallback((connection) => {
+    const sourceNode = nodesRef.current.find((n) => n.id === connection.source)
+    const targetNode = nodesRef.current.find((n) => n.id === connection.target)
+    if (!sourceNode?.type || !targetNode?.type) return false
+    if (sourceNode.type === 'stickyNote' || targetNode.type === 'stickyNote') return false
+    if (UNIVERSAL_TARGETS.has(targetNode.type)) return true
+    return VALID_CONNECTIONS.has(`${sourceNode.type}->${targetNode.type}`)
+  }, [])
+
+  const handleFitView = useCallback(() => {
+    void fitView(FIT_VIEW_OPTIONS)
+  }, [fitView])
+
   const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
@@ -222,6 +250,8 @@ function CanvasInner() {
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={handleConnect}
+      isValidConnection={isValidConnection}
+      connectionLineStyle={CONNECTION_LINE_STYLE}
       nodeTypes={NODE_TYPES}
       edgeTypes={EDGE_TYPES}
       onNodeClick={onNodeClick}
@@ -245,7 +275,11 @@ function CanvasInner() {
       <Controls
         className="!overflow-hidden !rounded-lg !border !border-border !shadow-md"
         showInteractive={false}
-      />
+      >
+        <ControlButton onClick={handleFitView} title="Fit view" aria-label="Fit view">
+          <Maximize2 className="h-3.5 w-3.5" />
+        </ControlButton>
+      </Controls>
       <MiniMap
         nodeColor={minimapNodeColor}
         nodeStrokeWidth={1}

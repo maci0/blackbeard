@@ -62,6 +62,10 @@ _MAX_STREAM_POLLS = 400
 
 _RETRY_AFTER_30 = {"Retry-After": "30"}
 
+_HEARTBEAT_JSON: dict[str, str] = {
+    s.value: json.dumps({"status": s.value}) for s in ExecutionStatus
+}
+
 # Phase thresholds for progressive poll backoff (shared by SSE + WS).
 _PHASE2_THRESHOLD = 30
 _PHASE3_THRESHOLD = 60
@@ -769,10 +773,9 @@ async def stream_execution(
                                     yield {"event": "status", "data": data}
                                 last_status = current_status
                             else:
-                                heartbeat = {"status": current_status.value}
                                 yield {
                                     "event": "heartbeat",
-                                    "data": json.dumps(heartbeat),
+                                    "data": _HEARTBEAT_JSON[current_status.value],
                                 }
 
                         # Skip events query when: status unchanged, non-terminal,

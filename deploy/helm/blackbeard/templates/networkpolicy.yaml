@@ -10,6 +10,7 @@ spec:
       {{- include "blackbeard.selectorLabels" (dict "context" . "component" "api") | nindent 6 }}
   policyTypes:
     - Ingress
+    - Egress
   ingress:
     - from:
         - podSelector:
@@ -24,6 +25,36 @@ spec:
         - protocol: TCP
           port: 8000
     {{- end }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "blackbeard.selectorLabels" (dict "context" . "component" "postgres") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "blackbeard.selectorLabels" (dict "context" . "component" "valkey") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 6379
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "blackbeard.selectorLabels" (dict "context" . "component" "litellm") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 4000
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - ports:
+        - protocol: TCP
+          port: 443
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -123,6 +154,7 @@ spec:
       {{- include "blackbeard.selectorLabels" (dict "context" . "component" "litellm") | nindent 6 }}
   policyTypes:
     - Ingress
+    - Egress
   ingress:
     - from:
         - podSelector:
@@ -131,4 +163,20 @@ spec:
       ports:
         - protocol: TCP
           port: 4000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "blackbeard.selectorLabels" (dict "context" . "component" "postgres") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 5432
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - ports:
+        - protocol: TCP
+          port: 443
 {{- end }}

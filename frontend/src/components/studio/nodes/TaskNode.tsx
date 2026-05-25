@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { type NodeProps } from '@xyflow/react'
-import { ListChecks, CheckCircle2, XCircle } from 'lucide-react'
+import { ListChecks, CheckCircle2, XCircle, User } from 'lucide-react'
 import { parseRef } from '@/lib/utils'
 import { NodeShell } from './NodeShell'
 import { ExecStatusBadge } from './ExecStatusBadge'
@@ -29,23 +29,24 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
         {name || 'Unnamed Task'}
       </p>
       {description ? (
-        <p className="truncate text-[10px] leading-snug text-muted-foreground" title={description}>
+        <p className="line-clamp-2 text-xs leading-snug text-muted-foreground" title={description}>
           {description}
         </p>
       ) : (
-        <p className="text-[10px] italic text-muted-foreground/60">No description</p>
+        <p className="text-xs italic text-muted-foreground/60">No description</p>
       )}
 
-      <div className="flex flex-wrap gap-0.5 pt-0.5">
-        {agent && (
+      {agent && (
+        <div className="pt-0.5">
           <span
-            className="inline-flex max-w-full items-center truncate rounded border border-blue-100 bg-blue-50 px-1 py-px text-[10px] font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300"
+            className="inline-flex max-w-full items-center gap-0.5 truncate rounded border border-blue-100 bg-blue-50 px-1 py-px text-[10px] font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300"
             title={`Agent: ${parseRef(agent)}`}
           >
-            → {parseRef(agent)}
+            <User className="h-2.5 w-2.5 shrink-0" />
+            {parseRef(agent)}
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {execStatus && <ExecStatusBadge status={execStatus} output={execOutput} />}
     </NodeShell>

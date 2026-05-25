@@ -265,26 +265,26 @@ def test_llm_connection_missing_provider():
 # ---------------------------------------------------------------------------
 
 
-def test_llm_connection_allows_localhost_base_url():
-    """base_url pointing to localhost is allowed (config value, not SSRF vector)."""
+def test_llm_connection_blocks_localhost_base_url():
+    """base_url pointing to localhost should be rejected (SSRF)."""
     spec = {
         "provider": "openai",
         "model": "gpt-4o",
         "base_url": "http://localhost:11434",
     }
     errors, _ = validate_resource("LLMConnection", spec)
-    assert not _has_error(errors, field_contains="base_url")
+    assert _has_error(errors, field_contains="base_url", msg_contains="internal")
 
 
-def test_llm_connection_allows_private_ip_base_url():
-    """base_url pointing to private IP is allowed (config value)."""
+def test_llm_connection_blocks_private_ip_base_url():
+    """base_url pointing to private IP should be rejected (SSRF)."""
     spec = {
         "provider": "openai",
         "model": "gpt-4o",
         "base_url": "http://10.0.0.1:8080/v1",
     }
     errors, _ = validate_resource("LLMConnection", spec)
-    assert not _has_error(errors, field_contains="base_url")
+    assert _has_error(errors, field_contains="base_url", msg_contains="internal")
 
 
 def test_llm_connection_rejects_non_http_base_url():
@@ -298,15 +298,15 @@ def test_llm_connection_rejects_non_http_base_url():
     assert _has_error(errors, field_contains="base_url", msg_contains="http")
 
 
-def test_llm_connection_allows_any_http_base_url():
-    """base_url allows any HTTP URL (config value, not SSRF vector)."""
+def test_llm_connection_blocks_internal_base_url():
+    """base_url pointing to internal hosts should be rejected (SSRF)."""
     spec = {
         "provider": "openai",
         "model": "gpt-4o",
         "base_url": "http://metadata.google.internal/v1",
     }
     errors, _ = validate_resource("LLMConnection", spec)
-    assert not _has_error(errors, field_contains="base_url")
+    assert _has_error(errors, field_contains="base_url", msg_contains="internal")
 
 
 def test_llm_connection_blocks_internal_env_var():
@@ -504,37 +504,37 @@ def test_knowledge_source_blocks_tilde_path():
 # ---------------------------------------------------------------------------
 
 
-def test_llm_connection_allows_link_local_ip():
-    """base_url allows any IP (config value, not SSRF vector)."""
+def test_llm_connection_blocks_link_local_ip():
+    """base_url pointing to link-local/metadata IP should be rejected (SSRF)."""
     spec = {
         "provider": "openai",
         "model": "gpt-4o",
         "base_url": "http://169.254.169.254/latest/meta-data",
     }
     errors, _ = validate_resource("LLMConnection", spec)
-    assert not _has_error(errors, field_contains="base_url")
+    assert _has_error(errors, field_contains="base_url", msg_contains="internal")
 
 
-def test_llm_connection_allows_kubernetes_svc():
-    """base_url allows k8s service domains."""
+def test_llm_connection_blocks_kubernetes_svc():
+    """base_url pointing to k8s service domains should be rejected (SSRF)."""
     spec = {
         "provider": "openai",
         "model": "gpt-4o",
         "base_url": "http://litellm.default.svc.cluster.local:4000/v1",
     }
     errors, _ = validate_resource("LLMConnection", spec)
-    assert not _has_error(errors, field_contains="base_url")
+    assert _has_error(errors, field_contains="base_url", msg_contains="internal")
 
 
-def test_llm_connection_allows_host_docker_internal():
-    """base_url allows host.docker.internal for Docker host access."""
+def test_llm_connection_blocks_host_docker_internal():
+    """base_url pointing to host.docker.internal should be rejected (SSRF)."""
     spec = {
         "provider": "ollama",
         "model": "qwen3.6",
         "base_url": "http://host.docker.internal:11434",
     }
     errors, _ = validate_resource("LLMConnection", spec)
-    assert not _has_error(errors, field_contains="base_url")
+    assert _has_error(errors, field_contains="base_url", msg_contains="internal")
 
 
 # ---------------------------------------------------------------------------
