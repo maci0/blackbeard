@@ -62,9 +62,7 @@ async def _resolve_bearer_user(token: str, session: AsyncSession) -> User:
         raise _bearer_401("Invalid token payload")
 
     result = await session.execute(
-        select(User)
-        .where(User.id == user_id)
-        .options(defer(User.password_hash))
+        select(User).where(User.id == user_id).options(defer(User.password_hash))
     )
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:

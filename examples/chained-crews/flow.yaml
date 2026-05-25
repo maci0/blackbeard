@@ -1,0 +1,18 @@
+apiVersion: blackbeard/v1
+kind: Flow
+metadata:
+  name: research-then-publish
+  namespace: default
+  labels:
+    category: pipeline
+spec:
+  description: "Chain two crews: research crew gathers data, then publishing crew formats and outputs"
+  steps:
+    - name: research
+      type: crew
+      crew: ref:crews/research-stage
+    - name: publish
+      type: crew
+      crew: ref:crews/publish-stage
+      listen_to:
+        - research

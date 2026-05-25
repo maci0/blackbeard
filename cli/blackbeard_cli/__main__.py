@@ -78,9 +78,10 @@ def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
 def validate_resources(
     resources: list[dict[str, Any]],
 ) -> tuple[list[tuple[dict[str, Any], list[ValidationError]]], list[list[str]]]:
-    """Validate resources and check for cycles."""
+    """Validate resources and check for cycles and duplicates."""
     per_errors = []
-    for res in resources:
+    seen: dict[str, int] = {}
+    for idx, res in enumerate(resources):
         kind = res.get("kind", "")
         spec = res.get("spec", {})
         errors: list[ValidationError] = []
@@ -98,6 +99,17 @@ def validate_resources(
                         " must match [a-z0-9][a-z0-9-]* (lowercase, hyphens only)",
                     )
                 )
+
+            key = f"{kind}/{name}"
+            if key in seen:
+                errors.append(
+                    ValidationError(
+                        "metadata.name",
+                        f"Duplicate resource {key} (first occurrence at index {seen[key]})",
+                    )
+                )
+            else:
+                seen[key] = idx
 
         schema_errors, _ = validate_resource(kind, spec)
         errors.extend(schema_errors)

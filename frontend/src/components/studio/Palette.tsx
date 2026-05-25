@@ -1,5 +1,14 @@
 import type { DragEvent } from 'react'
-import { User, ListChecks, Wrench, Workflow, ShieldCheck } from 'lucide-react'
+import {
+  User,
+  ListChecks,
+  Wrench,
+  Workflow,
+  ShieldCheck,
+  GitBranch,
+  Route,
+  Columns3,
+} from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
 import { getDefaultNodeData } from './defaults'
 
@@ -74,6 +83,36 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-rose-700 dark:text-rose-300',
     borderColor:
       'border-rose-200 hover:border-rose-400 dark:border-rose-800 dark:hover:border-rose-600',
+  },
+  {
+    type: 'condition',
+    label: 'Condition',
+    icon: GitBranch,
+    headerBg: 'bg-gradient-to-r from-amber-600 to-yellow-500',
+    iconBg: 'bg-white/20',
+    textColor: 'text-amber-700 dark:text-amber-300',
+    borderColor:
+      'border-amber-200 hover:border-amber-400 dark:border-amber-800 dark:hover:border-amber-600',
+  },
+  {
+    type: 'router',
+    label: 'Router',
+    icon: Route,
+    headerBg: 'bg-gradient-to-r from-cyan-600 to-cyan-500',
+    iconBg: 'bg-white/20',
+    textColor: 'text-cyan-700 dark:text-cyan-300',
+    borderColor:
+      'border-cyan-200 hover:border-cyan-400 dark:border-cyan-800 dark:hover:border-cyan-600',
+  },
+  {
+    type: 'parallel',
+    label: 'Parallel',
+    icon: Columns3,
+    headerBg: 'bg-gradient-to-r from-purple-600 to-purple-500',
+    iconBg: 'bg-white/20',
+    textColor: 'text-purple-700 dark:text-purple-300',
+    borderColor:
+      'border-purple-200 hover:border-purple-400 dark:border-purple-800 dark:hover:border-purple-600',
   },
 ]
 

@@ -12,6 +12,8 @@ import {
   Copy,
   Download,
   ClipboardCopy,
+  FlaskConical,
+  Zap,
 } from 'lucide-react'
 import { modKey } from '@/lib/platform'
 
@@ -233,6 +235,31 @@ export default function ResourceDetail() {
 
   useDocumentTitle(resource ? resource.metadata.name : 'Resource')
 
+  const [testingModel, setTestingModel] = useState(false)
+
+  const handleTestModel = async () => {
+    if (!resource) return
+    const spec = resource.spec as { model?: string }
+    if (!spec.model) return
+    setTestingModel(true)
+    toasts.info(`Testing connection to ${resource.metadata.name}…`)
+    try {
+      const resp = await api.post<{ status: string; latency_ms?: number; error?: string }>(
+        '/api/v1/models/test',
+        { model: spec.model },
+      )
+      if (resp.status === 'ok') {
+        toasts.success(`Connected to ${resource.metadata.name} (${resp.latency_ms ?? 0} ms)`)
+      } else {
+        toasts.error(`Connection failed: ${resp.error ?? 'Unknown error'}`)
+      }
+    } catch (err) {
+      toasts.error(getErrorMessage(err, 'Test failed'))
+    } finally {
+      setTestingModel(false)
+    }
+  }
+
   const handleEdit = () => {
     if (resource) setYamlContent(resourceToYaml(resource))
     setEditMode(true)
@@ -448,7 +475,12 @@ export default function ResourceDetail() {
               ›
             </li>
             <li>
-              <span className="text-foreground/80">{PLURAL_TO_KIND[kindPlural] ?? kindPlural}</span>
+              <Link
+                to={`/resources?kind=${kindPlural}`}
+                className="rounded transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {PLURAL_TO_KIND[kindPlural] ?? kindPlural}
+              </Link>
             </li>
             <li aria-hidden="true" className="text-muted-foreground/40">
               ›
@@ -507,6 +539,30 @@ export default function ResourceDetail() {
                     <Play className="h-3.5 w-3.5" />
                     Run
                   </button>
+                )}
+                {resource.kind === 'LLMConnection' && (
+                  <button
+                    onClick={() => void handleTestModel()}
+                    disabled={testingModel}
+                    aria-busy={testingModel || undefined}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {testingModel ? (
+                      <Spinner size="sm" className="text-current" />
+                    ) : (
+                      <Zap className="h-3.5 w-3.5" />
+                    )}
+                    {testingModel ? 'Testing…' : 'Test'}
+                  </button>
+                )}
+                {resource.kind === 'Guardrail' && (
+                  <Link
+                    to="/guardrails/playground"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-purple-600 px-3 py-2 text-sm text-white transition-colors hover:bg-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <FlaskConical className="h-3.5 w-3.5" />
+                    Playground
+                  </Link>
                 )}
                 <button
                   onClick={handleDownloadYaml}

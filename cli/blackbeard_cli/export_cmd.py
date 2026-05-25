@@ -49,11 +49,21 @@ def _fetch_resources(
     headers: dict[str, str],
     kind: str,
     namespace: str | None,
+    *,
+    lenient: bool = False,
 ) -> list[dict[str, Any]]:
-    """Fetch all resources of a given kind."""
+    """Fetch all resources of a given kind.
+
+    Args:
+        lenient: If True, log warnings and return [] on errors (used by --all).
+                 If False, propagate errors to the caller (used for single-kind export).
+    """
     plural = KIND_TO_PLURAL.get(kind)
     if not plural:
-        return []
+        if lenient:
+            return []
+        console.print(f"[red bold]Error:[/] Unknown kind: {kind}")
+        raise SystemExit(2)
 
     params: dict[str, Any] = {"limit": 1000}
     if namespace:
@@ -62,12 +72,16 @@ def _fetch_resources(
     try:
         resp = client.get(f"{server}/api/v1/{plural}", headers=headers, params=params)
     except httpx.RequestError as exc:
-        console.print(f"[yellow]Warning:[/] Failed to fetch {kind}: {exc}")
-        return []
+        if lenient:
+            console.print(f"[yellow]Warning:[/] Failed to fetch {kind}: {exc}")
+            return []
+        handle_request_error(server, exc)
 
     if resp.status_code != 200:
-        console.print(f"[yellow]Warning:[/] Failed to fetch {kind}: HTTP {resp.status_code}")
-        return []
+        if lenient:
+            console.print(f"[yellow]Warning:[/] Failed to fetch {kind}: HTTP {resp.status_code}")
+            return []
+        handle_http_error(resp)
 
     data = resp.json()
     items = data if isinstance(data, list) else data.get("items", [])
@@ -208,7 +222,7 @@ def _export_all(
     with console.status("Exporting resources...") as status:
         for i, kind in enumerate(kinds, 1):
             status.update(f"Fetching {kind} ({i}/{len(kinds)})...")
-            resources = _fetch_resources(client, server, headers, kind, namespace)
+            resources = _fetch_resources(client, server, headers, kind, namespace, lenient=True)
             all_resources.extend(resources)
     return all_resources
 

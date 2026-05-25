@@ -682,7 +682,8 @@ function StudioInner() {
       setNodes(result.nodes)
       setEdges(result.edges)
       applyStatus('success', 'Layout applied')
-    } catch {
+    } catch (err) {
+      console.error('[Studio] Auto layout failed:', err)
       applyStatus('error', 'Auto layout failed')
     } finally {
       setLayouting(false)

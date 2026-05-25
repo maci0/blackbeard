@@ -908,7 +908,7 @@ async def _run_crew_async(
             # --- Budget enforcement via LiteLLM virtual keys ---
             virtual_api_key: str | None = None
             policy_specs = _extract_policy_specs(resource_snapshot)
-            max_budget, max_tokens, listener_pii_config = _derive_budget_and_pii(
+            max_budget, max_tokens, listener_pii_config, alert_thresholds = _derive_budget_and_pii(
                 resource_snapshot, crew_name, policy_specs
             )
             has_budget = max_budget is not None or max_tokens is not None
@@ -1076,6 +1076,49 @@ async def _run_crew_async(
                         "target": "outputs",
                     },
                 )
+
+            # --- Cost alert checking ---
+            if alert_thresholds and listener is not None:
+                cost_usd = float(execution.cost_usd) if execution.cost_usd else 0.0
+                total_tokens = execution.total_tokens or 0
+                warn_usd = alert_thresholds.get("warn_at_usd")
+                warn_tokens = alert_thresholds.get("warn_at_tokens")
+                alerts_triggered: list[str] = []
+
+                if warn_usd is not None and cost_usd >= warn_usd:
+                    alerts_triggered.append("cost_usd")
+                if warn_tokens is not None and total_tokens >= warn_tokens:
+                    alerts_triggered.append("token_usage")
+
+                if alerts_triggered:
+                    alert_data: dict[str, Any] = {
+                        "crew_name": crew_name,
+                        "execution_id": str(execution_id),
+                        "alerts_triggered": alerts_triggered,
+                        "cost_usd": cost_usd,
+                        "total_tokens": total_tokens,
+                        "thresholds": alert_thresholds,
+                    }
+                    logger.warning(
+                        "Cost alert triggered for execution %s: %s "
+                        "(cost_usd=%.4f tokens=%d thresholds=%s)",
+                        execution_id,
+                        alerts_triggered,
+                        cost_usd,
+                        total_tokens,
+                        alert_thresholds,
+                        extra={
+                            "event": "cost_alert",
+                            "execution_id": str(execution_id),
+                            "crew_name": crew_name,
+                            "alerts_triggered": alerts_triggered,
+                            "cost_usd": cost_usd,
+                            "total_tokens": total_tokens,
+                            "warn_at_usd": warn_usd,
+                            "warn_at_tokens": warn_tokens,
+                        },
+                    )
+                    listener._write_event("cost_alert", alert_data)
 
             await session.commit()
             duration_s = (

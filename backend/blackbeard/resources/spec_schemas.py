@@ -300,6 +300,12 @@ LLM_CONNECTION_SCHEMA = {
             "pattern": "^https?://[a-zA-Z0-9][a-zA-Z0-9.\\-]+(:[0-9]+)?(/.*)?$",
             "maxLength": 2000,
         },
+        "fallbacks": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 255},
+            "maxItems": 5,
+            "description": "Fallback model names to try if this model fails",
+        },
     },
     "additionalProperties": False,
 }
@@ -329,6 +335,14 @@ AGENT_POLICY_SCHEMA = {
             "properties": {
                 "max_usd": {"type": "number", "minimum": 0},
                 "max_tokens": {"type": "integer", "minimum": 1},
+                "alerts": {
+                    "type": "object",
+                    "properties": {
+                        "warn_at_usd": {"type": "number", "minimum": 0},
+                        "warn_at_tokens": {"type": "integer", "minimum": 0},
+                    },
+                    "additionalProperties": False,
+                },
             },
             "additionalProperties": False,
         },

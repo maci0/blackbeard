@@ -1,0 +1,12 @@
+apiVersion: blackbeard/v1
+kind: Tool
+metadata:
+  name: http-request
+  namespace: default
+  labels:
+    category: integration
+spec:
+  type: python
+  class_path: crewai_tools.ScrapeWebsiteTool
+  description: "Make HTTP requests to APIs and websites. Fetches content from any URL."
+  sandbox: none

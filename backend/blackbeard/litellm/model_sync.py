@@ -55,6 +55,20 @@ def _build_litellm_params(spec: dict[str, Any]) -> dict[str, Any]:
     return litellm_params
 
 
+def _build_model_info(spec: dict[str, Any]) -> dict[str, Any] | None:
+    """Build model_info dict with fallback configuration from an LLMConnection spec.
+
+    Returns ``None`` when no model_info fields are needed.
+    """
+    fallbacks = spec.get("fallbacks")
+    if not fallbacks:
+        return None
+
+    return {
+        "fallbacks": [{"model_name": fb} for fb in fallbacks],
+    }
+
+
 def _proxy_url() -> str:
     return settings.litellm_proxy_url.rstrip("/")
 
@@ -74,10 +88,13 @@ def _get_client() -> httpx.AsyncClient:
 async def add_model(name: str, spec: dict[str, Any]) -> bool:
     """Add a model to LiteLLM proxy. Returns True on success."""
     litellm_params = _build_litellm_params(spec)
-    body = {
+    body: dict[str, Any] = {
         "model_name": name,
         "litellm_params": litellm_params,
     }
+    model_info = _build_model_info(spec)
+    if model_info is not None:
+        body["model_info"] = model_info
     client = _get_client()
     proxy = _proxy_url()
     try:

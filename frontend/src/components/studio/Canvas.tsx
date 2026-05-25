@@ -12,7 +12,17 @@ import {
   type Connection,
   type Edge,
 } from '@xyflow/react'
-import { User, ListChecks, Wrench, Workflow, ShieldCheck, Sparkles } from 'lucide-react'
+import {
+  User,
+  ListChecks,
+  Wrench,
+  Workflow,
+  ShieldCheck,
+  GitBranch,
+  Route,
+  Columns3,
+  Sparkles,
+} from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useStudioStore } from '@/stores/studioStore'
 import { DATAFLOW_MARKER_END, getDefaultNodeData } from './defaults'
@@ -21,6 +31,9 @@ import TaskNode from './nodes/TaskNode'
 import ToolNode from './nodes/ToolNode'
 import FlowStepNode from './nodes/FlowStepNode'
 import PIINode from './nodes/PIINode'
+import ConditionNode from './nodes/ConditionNode'
+import RouterNode from './nodes/RouterNode'
+import ParallelNode from './nodes/ParallelNode'
 import CrewGroupNode from './nodes/CrewGroupNode'
 import DataFlowEdge from './edges/DataFlowEdge'
 import ToolAssignEdge from './edges/ToolAssignEdge'
@@ -35,17 +48,29 @@ const NODE_TYPES: NodeTypes = {
   tool: ToolNode,
   flowStep: FlowStepNode,
   pii: PIINode,
+  condition: ConditionNode,
+  router: RouterNode,
+  parallel: ParallelNode,
   crewGroup: CrewGroupNode,
 }
 
-const DROPPABLE_TYPES = new Set(['agent', 'task', 'tool', 'flowStep', 'pii'])
+const DROPPABLE_TYPES = new Set([
+  'agent',
+  'task',
+  'tool',
+  'flowStep',
+  'pii',
+  'condition',
+  'router',
+  'parallel',
+])
 
 const EDGE_TYPES: EdgeTypes = {
   dataflow: DataFlowEdge,
   toolassign: ToolAssignEdge,
 }
 
-const FIT_VIEW_OPTIONS = { padding: 0.2 } as const
+const FIT_VIEW_OPTIONS = { padding: 0.5, maxZoom: 1 } as const
 const SNAP_GRID: [number, number] = [20, 20]
 const PRO_OPTIONS = { hideAttribution: true } as const
 const DELETE_KEY_CODE = ['Delete', 'Backspace']
@@ -69,6 +94,12 @@ function minimapNodeColor(node: Node): string {
       return '#f59e0b'
     case 'pii':
       return '#f43f5e'
+    case 'condition':
+      return '#f59e0b'
+    case 'router':
+      return '#06b6d4'
+    case 'parallel':
+      return '#a855f7'
     case 'crewGroup':
       return '#94a3b8'
     default:
@@ -242,6 +273,15 @@ function EmptyCanvasOverlay({ onLoadExample }: { onLoadExample?: () => void }) {
           </div>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-900">
             <ShieldCheck className="h-5 w-5 text-rose-500 dark:text-rose-400" />
+          </div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900">
+            <GitBranch className="h-5 w-5 text-amber-500 dark:text-amber-400" />
+          </div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100 dark:bg-cyan-900">
+            <Route className="h-5 w-5 text-cyan-500 dark:text-cyan-400" />
+          </div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 dark:bg-purple-900">
+            <Columns3 className="h-5 w-5 text-purple-500 dark:text-purple-400" />
           </div>
         </div>
 

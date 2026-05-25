@@ -197,7 +197,7 @@ Examples:
     "display_name",
     prompt="Display name",
     metavar="NAME",
-    help="Display name",
+    help="Display name shown in the UI (-d for display)",
 )
 @json_opt
 @click.pass_context

@@ -127,7 +127,14 @@ Examples:
     metavar="PASS",
     help="Initial password (prompted securely if omitted)",
 )
-@click.option("--name", "-d", "display_name", required=True, metavar="NAME", help="Display name")
+@click.option(
+    "--name",
+    "-d",
+    "display_name",
+    required=True,
+    metavar="NAME",
+    help="Display name shown in the UI (-d for display)",
+)
 @json_opt
 @click.pass_context
 def user_invite(
@@ -262,6 +269,7 @@ def group_list(ctx: click.Context, limit: int, output_json: bool = False) -> Non
 Examples:
   blackbeard group create backend-team
   blackbeard group create backend-team --description "Backend engineers"
+  blackbeard group create backend-team --json
 """,
 )
 @click.argument("name")
@@ -305,6 +313,7 @@ def group_create(
 Examples:
   blackbeard group delete 1
   blackbeard group delete 1 -y
+  blackbeard group delete 1 --json
 """,
 )
 @click.argument("group_id")

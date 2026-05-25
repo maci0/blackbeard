@@ -540,6 +540,230 @@ function PIIForm({
   )
 }
 
+function ConditionForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  const flowStepNodes = useStudioStore(
+    useShallow((state) =>
+      state.nodes.filter(
+        (n) =>
+          n.type === 'flowStep' ||
+          n.type === 'condition' ||
+          n.type === 'router' ||
+          n.type === 'parallel',
+      ),
+    ),
+  )
+
+  const currentName = str(data, 'name')
+  const otherStepNames = useMemo(
+    () =>
+      flowStepNodes
+        .map((n) => (n.data['name'] as string | undefined) ?? '')
+        .filter((n) => n && n !== currentName),
+    [flowStepNodes, currentName],
+  )
+
+  const branchOptions = useMemo(
+    () => [
+      { value: '', label: 'Select step...' },
+      ...otherStepNames.map((n) => ({ value: n, label: n })),
+    ],
+    [otherStepNames],
+  )
+
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Name">
+        <TextInput
+          value={str(data, 'name')}
+          onChange={(v) => onChange('name', v)}
+          placeholder="check-condition"
+        />
+      </FieldGroup>
+      <FieldGroup label="Condition">
+        <TextInput
+          value={str(data, 'condition')}
+          onChange={(v) => onChange('condition', v)}
+          placeholder="result.status == 'approved'"
+          multiline
+        />
+      </FieldGroup>
+      <FieldGroup label="True Branch">
+        <SelectInput
+          value={str(data, 'true_branch')}
+          onChange={(v) => onChange('true_branch', v)}
+          options={branchOptions}
+        />
+      </FieldGroup>
+      <FieldGroup label="False Branch">
+        <SelectInput
+          value={str(data, 'false_branch')}
+          onChange={(v) => onChange('false_branch', v)}
+          options={branchOptions}
+        />
+      </FieldGroup>
+    </div>
+  )
+}
+
+function RouterForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  const routes = useMemo(() => (data['routes'] as Record<string, string> | undefined) ?? {}, [data])
+  const entries = Object.entries(routes)
+
+  const addRoute = useCallback(() => {
+    const next = { ...routes, '': '' }
+    onChange('routes', next)
+  }, [routes, onChange])
+
+  const updateRouteKey = useCallback(
+    (oldKey: string, newKey: string) => {
+      const next: Record<string, string> = {}
+      for (const [k, v] of Object.entries(routes)) {
+        next[k === oldKey ? newKey : k] = v
+      }
+      onChange('routes', next)
+    },
+    [routes, onChange],
+  )
+
+  const updateRouteValue = useCallback(
+    (key: string, value: string) => {
+      onChange('routes', { ...routes, [key]: value })
+    },
+    [routes, onChange],
+  )
+
+  const removeRoute = useCallback(
+    (key: string) => {
+      const next = { ...routes }
+      delete next[key]
+      onChange('routes', next)
+    },
+    [routes, onChange],
+  )
+
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Name">
+        <TextInput
+          value={str(data, 'name')}
+          onChange={(v) => onChange('name', v)}
+          placeholder="route-step"
+        />
+      </FieldGroup>
+      <div className="space-y-1">
+        <Label>Routes</Label>
+        {entries.map(([condition, target], idx) => (
+          <div key={idx} className="flex items-center gap-1">
+            <input
+              type="text"
+              className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={condition}
+              placeholder="condition"
+              onChange={(e) => updateRouteKey(condition, e.target.value)}
+            />
+            <input
+              type="text"
+              className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={target}
+              placeholder="target"
+              onChange={(e) => updateRouteValue(condition, e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => removeRoute(condition)}
+              className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Remove route"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addRoute}
+          className="text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          + Add route
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ParallelForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  const flowStepNodes = useStudioStore(
+    useShallow((state) =>
+      state.nodes.filter(
+        (n) =>
+          n.type === 'flowStep' ||
+          n.type === 'condition' ||
+          n.type === 'router' ||
+          n.type === 'parallel',
+      ),
+    ),
+  )
+
+  const currentName = str(data, 'name')
+  const branches = (data['branches'] as string[] | undefined) ?? []
+
+  const otherStepNames = useMemo(
+    () =>
+      flowStepNodes
+        .map((n) => (n.data['name'] as string | undefined) ?? '')
+        .filter((n) => n && n !== currentName),
+    [flowStepNodes, currentName],
+  )
+
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Name">
+        <TextInput
+          value={str(data, 'name')}
+          onChange={(v) => onChange('name', v)}
+          placeholder="parallel-exec"
+        />
+      </FieldGroup>
+      {otherStepNames.length > 0 && (
+        <FieldGroup label="Branches">
+          <div className="space-y-1">
+            {otherStepNames.map((stepName) => (
+              <CheckboxInput
+                key={stepName}
+                label={stepName}
+                checked={branches.includes(stepName)}
+                onChange={(checked) => {
+                  const next = checked
+                    ? [...branches, stepName]
+                    : branches.filter((s) => s !== stepName)
+                  onChange('branches', next)
+                }}
+              />
+            ))}
+          </div>
+        </FieldGroup>
+      )}
+    </div>
+  )
+}
+
 function CrewGroupForm({
   data,
   onChange,
@@ -566,6 +790,9 @@ const TYPE_META: Record<string, { label: string; accent: string; border: string 
   tool: { label: 'Tool', accent: 'bg-emerald-500', border: 'border-emerald-200' },
   flowStep: { label: 'Flow Step', accent: 'bg-amber-500', border: 'border-amber-200' },
   pii: { label: 'PII Redaction', accent: 'bg-rose-500', border: 'border-rose-200' },
+  condition: { label: 'Condition', accent: 'bg-amber-500', border: 'border-amber-200' },
+  router: { label: 'Router', accent: 'bg-cyan-500', border: 'border-cyan-200' },
+  parallel: { label: 'Parallel', accent: 'bg-purple-500', border: 'border-purple-200' },
   crewGroup: { label: 'Crew Group', accent: 'bg-slate-500', border: 'border-slate-200' },
 }
 
@@ -688,6 +915,12 @@ export default function PropertyPanel() {
             <FlowStepForm data={data} onChange={onChange} />
           ) : nodeType === 'pii' ? (
             <PIIForm data={data} onChange={onChange} />
+          ) : nodeType === 'condition' ? (
+            <ConditionForm data={data} onChange={onChange} />
+          ) : nodeType === 'router' ? (
+            <RouterForm data={data} onChange={onChange} />
+          ) : nodeType === 'parallel' ? (
+            <ParallelForm data={data} onChange={onChange} />
           ) : nodeType === 'crewGroup' ? (
             <CrewGroupForm data={data} onChange={onChange} />
           ) : (

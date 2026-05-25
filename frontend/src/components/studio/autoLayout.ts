@@ -30,8 +30,8 @@ export async function autoLayout(
   // as top-level for ELK layout, then re-parent them afterwards
   const elkNodes: ElkNode[] = leafNodes.map((n) => ({
     id: n.id,
-    width: NODE_WIDTH,
-    height: NODE_HEIGHT,
+    width: (n.measured?.width ?? n.width) || NODE_WIDTH,
+    height: (n.measured?.height ?? n.height) || NODE_HEIGHT,
   }))
 
   // Only include edges where both source and target are leaf nodes

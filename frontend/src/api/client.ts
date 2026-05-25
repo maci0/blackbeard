@@ -108,7 +108,8 @@ class ApiClient {
       if (
         response.status === 401 &&
         this.unauthorizedHandler &&
-        !path.startsWith('/api/v1/auth/')
+        !path.startsWith('/api/v1/auth/') &&
+        !path.startsWith('/api/v1/health')
       ) {
         this.unauthorizedHandler()
       }

@@ -318,21 +318,18 @@ export default function Dashboard() {
     [resources],
   )
 
-  const activeExecutions = useMemo(
-    () => executions.filter((e) => e.status === 'running' || e.status === 'queued').length,
-    [executions],
-  )
-
   const totalModels = useMemo(() => (resources['llm-connections'] ?? []).length, [resources])
 
   const totalAutomations = useMemo(() => (resources['automations'] ?? []).length, [resources])
 
-  const totalSpend = useMemo(() => {
-    let sum = 0
+  const { activeExecutions, totalSpend } = useMemo(() => {
+    let active = 0
+    let spend = 0
     for (const e of executions) {
-      sum += typeof e.cost_usd === 'string' ? parseFloat(e.cost_usd) || 0 : e.cost_usd || 0
+      if (e.status === 'running' || e.status === 'queued') active++
+      spend += typeof e.cost_usd === 'string' ? parseFloat(e.cost_usd) || 0 : e.cost_usd || 0
     }
-    return sum
+    return { activeExecutions: active, totalSpend: spend }
   }, [executions])
 
   return (

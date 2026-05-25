@@ -1,0 +1,23 @@
+apiVersion: blackbeard/v1
+kind: Agent
+metadata:
+  name: researcher
+  namespace: default
+spec:
+  role: Research Specialist
+  goal: "Gather comprehensive information on the given topic"
+  backstory: "Expert researcher with access to web search and data analysis tools"
+  llm_connection: ref:llm-connections/default-llm
+  tools:
+    - ref:tools/web-search
+---
+apiVersion: blackbeard/v1
+kind: Agent
+metadata:
+  name: publisher
+  namespace: default
+spec:
+  role: Content Publisher
+  goal: "Format research into polished, publication-ready content"
+  backstory: "Experienced editor who transforms raw research into clear, engaging reports"
+  llm_connection: ref:llm-connections/default-llm

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable
 from uuid import UUID
 
 from fastapi import (
@@ -165,12 +165,10 @@ async def kickoff_crew(
 ) -> ExecutionResponse:
     """Kick off a crew execution. Returns immediately with status=queued."""
     execution = await _run_executor(
-        _executor_mod.kickoff,
-        session, crew_name, body.inputs, namespace,
-        event="kickoff_internal_error",
-        resource_name=crew_name,
-        namespace=namespace,
-        user=user,
+        _executor_mod.kickoff(session, crew_name, body.inputs, namespace, user=user),
+        log_event="kickoff_internal_error",
+        log_resource=crew_name,
+        log_namespace=namespace,
     )
     await log_audit(
         session,
@@ -215,8 +213,8 @@ async def train_crew_endpoint(
     user: User | None = Depends(require_permission("run", "Crew")),
 ) -> ExecutionResponse:
     """Start a crew training run. Returns immediately with status=queued."""
-    try:
-        execution = await _executor_mod.train_crew(
+    execution = await _run_executor(
+        _executor_mod.train_crew(
             session,
             crew_name,
             body.inputs,
@@ -224,28 +222,11 @@ async def train_crew_endpoint(
             body.filename,
             namespace,
             user=user,
-        )
-    except ExecutionNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ExecutionError as exc:
-        logger.error(
-            "Train internal error: crew=%s namespace=%s: %s",
-            crew_name,
-            namespace,
-            exc,
-            exc_info=True,
-            extra={
-                "event": "train_internal_error",
-                "crew_name": crew_name,
-                "namespace": namespace,
-                "error_type": type(exc).__name__,
-                "error_message": str(exc)[:500],
-            },
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Training execution could not be created. Check server logs.",
-        ) from exc
+        ),
+        log_event="train_internal_error",
+        log_resource=crew_name,
+        log_namespace=namespace,
+    )
     await log_audit(
         session,
         action="train_started",
@@ -289,36 +270,19 @@ async def test_crew_endpoint(
     user: User | None = Depends(require_permission("run", "Crew")),
 ) -> ExecutionResponse:
     """Start a crew test run. Returns immediately with status=queued."""
-    try:
-        execution = await _executor_mod.test_crew(
+    execution = await _run_executor(
+        _executor_mod.test_crew(
             session,
             crew_name,
             body.inputs,
             body.n_iterations,
             namespace,
             user=user,
-        )
-    except ExecutionNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ExecutionError as exc:
-        logger.error(
-            "Test internal error: crew=%s namespace=%s: %s",
-            crew_name,
-            namespace,
-            exc,
-            exc_info=True,
-            extra={
-                "event": "test_internal_error",
-                "crew_name": crew_name,
-                "namespace": namespace,
-                "error_type": type(exc).__name__,
-                "error_message": str(exc)[:500],
-            },
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Test execution could not be created. Check server logs.",
-        ) from exc
+        ),
+        log_event="test_internal_error",
+        log_resource=crew_name,
+        log_namespace=namespace,
+    )
     await log_audit(
         session,
         action="test_started",
@@ -362,34 +326,12 @@ async def run_flow_endpoint(
     user: User | None = Depends(require_permission("run", "Flow")),
 ) -> ExecutionResponse:
     """Run a flow. Returns immediately with status=queued."""
-    try:
-        execution = await _executor_mod.run_flow(
-            session,
-            flow_name,
-            body.inputs,
-            namespace=namespace,
-            user=user,
-        )
-    except ExecutionNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Flow '{flow_name}' not found") from None
-    except ExecutionError as exc:
-        logger.error(
-            "Flow run failed for '%s': %s",
-            flow_name,
-            exc,
-            exc_info=True,
-            extra={
-                "event": "flow_run_error",
-                "flow_name": flow_name,
-                "namespace": namespace,
-                "error_type": type(exc).__name__,
-                "error_message": str(exc)[:500],
-            },
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Flow execution could not be created. Check server logs.",
-        ) from exc
+    execution = await _run_executor(
+        _executor_mod.run_flow(session, flow_name, body.inputs, namespace=namespace, user=user),
+        log_event="flow_run_error",
+        log_resource=flow_name,
+        log_namespace=namespace,
+    )
     await log_audit(
         session,
         action="flow_started",
@@ -647,35 +589,18 @@ async def retry_execution(
             ),
         )
 
-    try:
-        new_execution = await _executor_mod.kickoff(
+    new_execution = await _run_executor(
+        _executor_mod.kickoff(
             session,
             original.crew_name,
             original.inputs,
             original.crew_namespace,
             user=user,
-        )
-    except ExecutionNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ExecutionError as exc:
-        logger.error(
-            "Retry failed for execution %s: %s",
-            execution_id,
-            exc,
-            exc_info=True,
-            extra={
-                "event": "retry_failed",
-                "original_execution_id": str(execution_id),
-                "crew_name": original.crew_name,
-                "namespace": original.crew_namespace,
-                "error_type": type(exc).__name__,
-                "error_message": str(exc)[:500],
-            },
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Retry could not create a new execution. Check server logs.",
-        ) from exc
+        ),
+        log_event="retry_failed",
+        log_resource=original.crew_name,
+        log_namespace=original.crew_namespace,
+    )
 
     await log_audit(
         session,

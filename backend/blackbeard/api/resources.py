@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Generator
 from typing import Any
 
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.audit import audit_from_request, log_audit
@@ -153,7 +155,7 @@ async def export_resources(
     ),
     session: AsyncSession = Depends(get_session),
     _user: User | None = Depends(get_current_user),
-) -> Response:
+) -> StreamingResponse:
     """Export all resources as a multi-document YAML stream.
 
     Returns resources separated by ``---`` document markers, suitable for
@@ -166,14 +168,19 @@ async def export_resources(
         offset=0,
     )
 
-    content = yaml.dump_all(
-        (_resource_to_document(r) for r in items),
-        Dumper=_yaml_dumper,
-        default_flow_style=False,
-        allow_unicode=True,
-        sort_keys=False,
-    )
-    return Response(content=content, media_type="application/x-yaml")
+    def _generate_yaml() -> Generator[str]:
+        for resource in items:
+            doc = _resource_to_document(resource)
+            yield yaml.dump(
+                doc,
+                Dumper=_yaml_dumper,
+                default_flow_style=False,
+                allow_unicode=True,
+                sort_keys=False,
+                explicit_start=True,
+            )
+
+    return StreamingResponse(_generate_yaml(), media_type="application/x-yaml")
 
 
 @router.get(

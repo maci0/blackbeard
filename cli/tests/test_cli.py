@@ -45,27 +45,31 @@ def test_cli_version():
 # Subcommand --help: every subcommand should produce exit 0 with help text
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("cmd", [
-    "health",
-    "validate",
-    "apply",
-    "get",
-    "list",
-    "delete",
-    "kickoff",
-    "status",
-    "login",
-    "logout",
-    "whoami",
-    "register",
-    "executions",
-    "events",
-    "cancel",
-    "export",
-    "pull",
-    "train",
-    "test-crew",
-])
+
+@pytest.mark.parametrize(
+    "cmd",
+    [
+        "health",
+        "validate",
+        "apply",
+        "get",
+        "list",
+        "delete",
+        "kickoff",
+        "status",
+        "login",
+        "logout",
+        "whoami",
+        "register",
+        "executions",
+        "events",
+        "cancel",
+        "export",
+        "pull",
+        "train",
+        "test-crew",
+    ],
+)
 def test_subcommand_help(cmd):
     result = runner.invoke(cli, [cmd, "--help"])
     assert result.exit_code == 0, f"'{cmd} --help' failed: {result.output}"
@@ -77,17 +81,21 @@ def test_subcommand_help(cmd):
 # Subgroup --help: user, group, role, rolebinding sub-commands
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("group,sub", [
-    ("user", "list"),
-    ("user", "invite"),
-    ("group", "list"),
-    ("group", "create"),
-    ("group", "delete"),
-    ("role", "list"),
-    ("role", "describe"),
-    ("rolebinding", "list"),
-    ("rolebinding", "create"),
-])
+
+@pytest.mark.parametrize(
+    "group,sub",
+    [
+        ("user", "list"),
+        ("user", "invite"),
+        ("group", "list"),
+        ("group", "create"),
+        ("group", "delete"),
+        ("role", "list"),
+        ("role", "describe"),
+        ("rolebinding", "list"),
+        ("rolebinding", "create"),
+    ],
+)
 def test_subgroup_help(group, sub):
     result = runner.invoke(cli, [group, sub, "--help"])
     assert result.exit_code == 0, f"'{group} {sub} --help' failed: {result.output}"
@@ -137,9 +145,7 @@ spec:
   goal: Find information
   backstory: Expert researcher
 """
-    with tempfile.NamedTemporaryFile(
-        suffix=".yaml", mode="w", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
         f.write(yaml_content)
         f.flush()
         try:
@@ -159,16 +165,12 @@ metadata:
 spec:
   role: R
 """
-    with tempfile.NamedTemporaryFile(
-        suffix=".yaml", mode="w", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
         f.write(yaml_content)
         f.flush()
         try:
             result = runner.invoke(cli, ["validate", "-f", f.name])
-            assert result.exit_code == 1, (
-                f"Expected validation to fail, got: {result.output}"
-            )
+            assert result.exit_code == 1, f"Expected validation to fail, got: {result.output}"
         finally:
             os.unlink(f.name)
 
@@ -185,9 +187,7 @@ spec:
   goal: G
   backstory: B
 """
-    with tempfile.NamedTemporaryFile(
-        suffix=".yaml", mode="w", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
         f.write(yaml_content)
         f.flush()
         try:
@@ -232,9 +232,7 @@ spec:
   expected_output: Key facts
   agent: "ref:agents/agent-a"
 """
-    with tempfile.NamedTemporaryFile(
-        suffix=".yaml", mode="w", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
         f.write(yaml_content)
         f.flush()
         try:
@@ -251,18 +249,14 @@ spec:
 
 def test_health_no_server():
     """Health with unreachable server should fail gracefully."""
-    result = runner.invoke(
-        cli, ["-s", "http://localhost:99999", "health"]
-    )
+    result = runner.invoke(cli, ["-s", "http://localhost:99999", "health"])
     assert result.exit_code != 0
     assert "error" in result.output.lower() or "cannot reach" in result.output.lower()
 
 
 def test_health_ready_no_server():
     """Health --ready with unreachable server should fail gracefully."""
-    result = runner.invoke(
-        cli, ["-s", "http://localhost:99999", "health", "--ready"]
-    )
+    result = runner.invoke(cli, ["-s", "http://localhost:99999", "health", "--ready"])
     assert result.exit_code != 0
 
 
@@ -379,9 +373,7 @@ spec:
   goal: Find facts
   backstory: Expert
 """
-    with tempfile.NamedTemporaryFile(
-        suffix=".yaml", mode="w", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
         f.write(yaml_content)
         f.flush()
         try:
@@ -407,9 +399,7 @@ spec:
   goal: Find facts
   backstory: Expert
 """
-    with tempfile.NamedTemporaryFile(
-        suffix=".yaml", mode="w", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
         f.write(yaml_content)
         f.flush()
         try:
@@ -435,9 +425,7 @@ metadata:
 spec:
   role: R
 """
-    with tempfile.NamedTemporaryFile(
-        suffix=".yaml", mode="w", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
         f.write(yaml_content)
         f.flush()
         try:
@@ -706,11 +694,14 @@ def test_event_color_unknown():
 def test_event_summary_with_data():
     from blackbeard_cli.exec import _event_summary
 
-    result = _event_summary("task_started", {
-        "task_name": "research",
-        "agent_name": "researcher",
-        "status": "running",
-    })
+    result = _event_summary(
+        "task_started",
+        {
+            "task_name": "research",
+            "agent_name": "researcher",
+            "status": "running",
+        },
+    )
     assert "task=research" in result
     assert "agent=researcher" in result
     assert "status=running" in result

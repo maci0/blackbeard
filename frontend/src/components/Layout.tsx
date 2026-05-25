@@ -32,8 +32,10 @@ import {
   FolderOpen,
   Plus,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react'
 import { useDarkMode, useHealthCheck } from '@/hooks'
+import { Spinner } from '@/components/ui/Spinner'
 import { cn, STORAGE_KEYS } from '@/lib/utils'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useNamespaceStore } from '@/stores/namespaceStore'
@@ -673,7 +675,21 @@ export default function Layout() {
         className="flex flex-1 flex-col overflow-hidden pt-12 md:pt-0"
         inert={sidebarOpen || undefined}
       >
-        <Outlet />
+        {apiHealth === 'disconnected' && (
+          <div className="flex flex-1 items-center justify-center bg-background/80 backdrop-blur-sm">
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+                <AlertTriangle className="h-6 w-6 text-destructive" />
+              </div>
+              <h2 className="text-lg font-semibold">API Unavailable</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Cannot connect to the Blackbeard API. Retrying automatically…
+              </p>
+              <Spinner size="sm" className="mx-auto mt-4 text-muted-foreground" />
+            </div>
+          </div>
+        )}
+        {apiHealth !== 'disconnected' && <Outlet />}
       </main>
 
       <CommandPalette open={cmdPaletteOpen} onOpenChange={setCmdPaletteOpen} />

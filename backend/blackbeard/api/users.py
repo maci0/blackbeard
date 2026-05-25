@@ -300,9 +300,7 @@ async def deactivate_user(
     )
     # Scrub user identity from execution records (principal_chain may reference user).
     await session.execute(
-        update(Execution)
-        .where(Execution.initiated_by == user.id)
-        .values(principal_chain=None)
+        update(Execution).where(Execution.initiated_by == user.id).values(principal_chain=None)
     )
     await log_audit(
         session,

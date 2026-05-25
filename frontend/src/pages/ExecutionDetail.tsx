@@ -397,12 +397,18 @@ function HITLPanel({
   const [submitting, setSubmitting] = useState(false)
 
   const pendingRequest = useMemo(() => {
-    const requests = events.filter((e) => e.event_type === 'hitl_request')
-    const responses = events.filter((e) => e.event_type === 'hitl_response')
-    if (requests.length > responses.length) {
-      return requests[requests.length - 1]
+    let requestCount = 0
+    let responseCount = 0
+    let lastRequest: ExecutionEvent | null = null
+    for (const e of events) {
+      if (e.event_type === 'hitl_request') {
+        requestCount++
+        lastRequest = e
+      } else if (e.event_type === 'hitl_response') {
+        responseCount++
+      }
     }
-    return null
+    return requestCount > responseCount ? lastRequest : null
   }, [events])
 
   if (!pendingRequest) return null

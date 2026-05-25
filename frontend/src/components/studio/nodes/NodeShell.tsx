@@ -2,7 +2,7 @@ import { type ReactNode } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { cn } from '@/lib/utils'
 
-type NodeColor = 'violet' | 'blue' | 'emerald' | 'amber' | 'rose'
+type NodeColor = 'violet' | 'blue' | 'emerald' | 'amber' | 'rose' | 'cyan' | 'purple'
 
 interface NodeShellProps {
   color: NodeColor
@@ -60,6 +60,22 @@ const COLOR_CLASSES: Record<
     handle: '!border-rose-400',
     from: 'from-rose-600',
     to: 'to-rose-500',
+  },
+  cyan: {
+    selected:
+      'border-cyan-400 shadow-md shadow-cyan-100 ring-2 ring-cyan-300 ring-offset-1 dark:shadow-cyan-950 dark:ring-offset-slate-900',
+    unselected: 'border-slate-200 hover:border-cyan-200 hover:shadow-md dark:border-slate-700',
+    handle: '!border-cyan-400',
+    from: 'from-cyan-600',
+    to: 'to-cyan-500',
+  },
+  purple: {
+    selected:
+      'border-purple-400 shadow-md shadow-purple-100 ring-2 ring-purple-300 ring-offset-1 dark:shadow-purple-950 dark:ring-offset-slate-900',
+    unselected: 'border-slate-200 hover:border-purple-200 hover:shadow-md dark:border-slate-700',
+    handle: '!border-purple-400',
+    from: 'from-purple-600',
+    to: 'to-purple-500',
   },
 }
 

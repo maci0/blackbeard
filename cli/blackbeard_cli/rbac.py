@@ -284,6 +284,7 @@ def rolebinding_list(ctx: click.Context, limit: int, output_json: bool = False) 
 Examples:
   blackbeard rolebinding create dev-binding -r developer --subject User:dev@example.com
   blackbeard rolebinding create team-binding -r admin --subject Group:backend-team
+  blackbeard rolebinding create dev-binding -r developer --subject User:dev@example.com --json
 """,
 )
 @click.argument("name")

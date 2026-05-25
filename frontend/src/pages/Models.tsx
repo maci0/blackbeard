@@ -563,21 +563,22 @@ export default function Models() {
   }
 
   const grouped = useMemo(() => {
-    const groups = new Map<string, Resource[]>()
+    const orderIndex = new Map(PROVIDER_ORDER.map((p, i) => [p, i]))
+    const result = new Map<string, Resource[]>()
+    for (const p of PROVIDER_ORDER) result.set(p, [])
     for (const model of models) {
       const provider = (model.spec as { provider?: string }).provider || 'other'
-      const list = groups.get(provider) ?? []
+      let list = result.get(provider)
+      if (!list) {
+        list = []
+        result.set(provider, list)
+      }
       list.push(model)
-      groups.set(provider, list)
     }
-    const sorted = new Map<string, Resource[]>()
-    for (const p of PROVIDER_ORDER) {
-      if (groups.has(p)) sorted.set(p, groups.get(p)!)
+    for (const [k, v] of result) {
+      if (v.length === 0 && orderIndex.has(k)) result.delete(k)
     }
-    for (const [k, v] of groups) {
-      if (!sorted.has(k)) sorted.set(k, v)
-    }
-    return sorted
+    return result
   }, [models])
 
   useEffect(() => {

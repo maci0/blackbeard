@@ -50,7 +50,7 @@ function compareExecutions(a: Execution, b: Execution, field: SortField, dir: So
   let cmp = 0
   switch (field) {
     case 'created_at':
-      cmp = (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0)
+      cmp = a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
       break
     case 'status':
       cmp = a.status.localeCompare(b.status)
@@ -183,13 +183,14 @@ export default function Executions() {
   }, [executions])
 
   const filtered = useMemo(() => {
-    let result = executions.filter((e) => {
+    const searchLower = crewSearch ? crewSearch.toLowerCase() : ''
+    const result = executions.filter((e) => {
       if (statusFilter !== 'all' && e.status !== statusFilter) return false
       if (typeFilter !== 'all' && e.execution_type !== typeFilter) return false
-      if (crewSearch && !e.crew_name.toLowerCase().includes(crewSearch.toLowerCase())) return false
+      if (searchLower && !e.crew_name.toLowerCase().includes(searchLower)) return false
       return true
     })
-    result = [...result].sort((a, b) => compareExecutions(a, b, sortField, sortDir))
+    result.sort((a, b) => compareExecutions(a, b, sortField, sortDir))
     return result
   }, [executions, statusFilter, typeFilter, crewSearch, sortField, sortDir])
 

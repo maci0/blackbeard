@@ -32,6 +32,26 @@ export function getDefaultNodeData(type: string): Record<string, unknown> {
         action: 'redact',
         backend: 'default',
       }
+    case 'condition':
+      return {
+        name: 'check-condition',
+        type: 'condition',
+        condition: '',
+        true_branch: '',
+        false_branch: '',
+      }
+    case 'router':
+      return {
+        name: 'route-step',
+        type: 'router',
+        routes: {},
+      }
+    case 'parallel':
+      return {
+        name: 'parallel-exec',
+        type: 'parallel',
+        branches: [],
+      }
     default:
       return { label: 'New Node' }
   }
