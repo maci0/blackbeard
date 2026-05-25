@@ -35,6 +35,7 @@ interface Message {
   id: string
   role: 'system' | 'user' | 'assistant'
   content: string
+  thinking?: string
   displayContent?: string
   streaming?: boolean
   tokens?: TokenUsage
@@ -103,6 +104,24 @@ function TokenBadge({ tokens, latency_ms }: { tokens: TokenUsage; latency_ms: nu
   )
 }
 
+function ThinkingBlock({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <details
+      className="mt-1 rounded border border-violet-200 bg-violet-50 dark:border-violet-800 dark:bg-violet-950/30"
+      open={open}
+      onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
+    >
+      <summary className="cursor-pointer select-none px-3 py-1.5 text-xs font-medium text-violet-600 dark:text-violet-400">
+        {open ? 'Hide' : 'Show'} thinking ({text.length} chars)
+      </summary>
+      <div className="max-h-48 overflow-y-auto whitespace-pre-wrap border-t border-violet-200 px-3 py-2 font-mono text-xs text-muted-foreground dark:border-violet-800">
+        {text}
+      </div>
+    </details>
+  )
+}
+
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user'
   const visibleText = message.displayContent ?? message.content
@@ -123,6 +142,7 @@ function MessageBubble({ message }: { message: Message }) {
         <p className="text-xs font-medium uppercase tracking-wide opacity-60">
           {isUser ? 'You' : 'Assistant'}
         </p>
+        {message.thinking && !message.streaming && <ThinkingBlock text={message.thinking} />}
         <div className="mt-1 whitespace-pre-wrap text-sm">
           {visibleText}
           {message.streaming && <span className="animate-pulse text-primary">&#9613;</span>}
@@ -260,6 +280,7 @@ export default function Chat() {
     const controller = new AbortController()
     abortRef.current = controller
     let accumulated = ''
+    let accumulatedThinking = ''
     let rafPending = 0
 
     function flushContent() {
@@ -300,6 +321,7 @@ export default function Chat() {
           try {
             const event = JSON.parse(dataStr) as {
               content?: string
+              reasoning_content?: string
               done?: boolean
               error?: string
               tokens?: TokenUsage
@@ -327,6 +349,9 @@ export default function Chat() {
               textareaRef.current?.focus()
               return
             }
+            if (event.reasoning_content) {
+              accumulatedThinking += event.reasoning_content
+            }
             if (event.content) {
               accumulated += event.content
               if (!rafPending) {
@@ -344,6 +369,7 @@ export default function Chat() {
                     ? {
                         ...m,
                         content: accumulated,
+                        thinking: accumulatedThinking || undefined,
                         streaming: false,
                         tokens: event.tokens,
                         latency_ms: event.latency_ms,

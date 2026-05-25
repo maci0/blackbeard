@@ -318,7 +318,7 @@ def cancel(ctx: click.Context, execution_id: str, yes: bool, output_json: bool =
     if (
         not yes
         and not ctx.obj["json"]
-        and not click.confirm(f"Cancel execution {execution_id}?", default=False)
+        and not click.confirm(f"Cancel execution {execution_id} on {server}?", default=False)
     ):
         console.print("[yellow]Aborted.[/]")
         return

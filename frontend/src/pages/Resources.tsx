@@ -23,6 +23,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { ApiError } from '@/api/client'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { formatDate } from '@/lib/formatters'
 import { KIND_TO_PLURAL, API_VERSION } from '@/lib/kinds'
@@ -138,7 +139,15 @@ export default function Resources() {
         })
         imported++
       } catch (err) {
-        toast.error(getErrorMessage(err, `Failed to import ${kind} "${name}"`))
+        if (err instanceof ApiError && Array.isArray(err.detail)) {
+          const msgs = (err.detail as Array<{ field?: string; message?: string }>)
+            .map((e) => e.message ?? '')
+            .filter(Boolean)
+            .join('; ')
+          toast.error(`${kind}/${name}: ${msgs || 'Validation failed'}`)
+        } else {
+          toast.error(getErrorMessage(err, `Failed to import ${kind} "${name}"`))
+        }
       }
     }
     if (imported > 0) void fetchAllResources()
@@ -221,7 +230,14 @@ export default function Resources() {
       resetDialog()
       void fetchAllResources()
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to create resource'))
+      if (err instanceof ApiError && Array.isArray(err.detail)) {
+        const msgs = (err.detail as Array<{ field?: string; message?: string }>)
+          .map((e) => `${e.field ?? ''}: ${e.message ?? ''}`.trim())
+          .join('\n')
+        setSpecError(msgs || 'Validation failed')
+      } else {
+        toast.error(getErrorMessage(err, 'Failed to create resource'))
+      }
     } finally {
       setSubmitting(false)
     }

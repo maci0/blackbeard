@@ -887,7 +887,7 @@ async def ws_execution(
     string.
     """
     from blackbeard.api.collaboration import validate_ws_auth
-    from blackbeard.api.middleware import is_rate_limited, record_auth_failure
+    from blackbeard.rate_limiter import is_rate_limited, record_auth_failure
 
     client_ip = websocket.client.host if websocket.client else "unknown"
     if is_rate_limited(client_ip):

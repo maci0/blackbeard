@@ -19,6 +19,7 @@ from blackbeard_cli.helpers import (
     HelpCommand,
     console,
     extract_detail,
+    handle_http_error,
     handle_request_error,
     json_opt,
     out,
@@ -70,6 +71,10 @@ def login(ctx: click.Context, email: str, password: str, output_json: bool = Fal
     if resp.status_code != 200:
         detail = extract_detail(resp)
         console.print(f"[red bold]Error:[/] Login failed: {escape(detail)}")
+        if resp.status_code == 401:
+            console.print(
+                "[dim]Hint: Check your email and password. New user? Try: blackbeard register[/]"
+            )
         raise SystemExit(1)
 
     data = resp.json()
@@ -140,9 +145,7 @@ def whoami(ctx: click.Context, output_json: bool = False) -> None:
         handle_request_error(server, exc)
 
     if resp.status_code != 200:
-        detail = extract_detail(resp)
-        console.print(f"[red bold]Error:[/] {escape(detail)}")
-        raise SystemExit(1)
+        handle_http_error(resp)
 
     data = resp.json()
 
@@ -172,7 +175,7 @@ def whoami(ctx: click.Context, output_json: bool = False) -> None:
     epilog="""\b
 Examples:
   blackbeard register
-  blackbeard register -e user@example.com -d "Jane Doe"
+  blackbeard register -e user@example.com --display-name "Jane Doe"
 """,
 )
 @click.option(
@@ -192,12 +195,11 @@ Examples:
     help="Password",
 )
 @click.option(
-    "--name",
-    "-d",
+    "--display-name",
     "display_name",
     prompt="Display name",
     metavar="NAME",
-    help="Display name shown in the UI (-d for display)",
+    help="Display name shown in the UI",
 )
 @json_opt
 @click.pass_context
@@ -228,6 +230,10 @@ def register(
     if resp.status_code not in (200, 201):
         detail = extract_detail(resp)
         console.print(f"[red bold]Error:[/] Registration failed: {escape(detail)}")
+        if resp.status_code == 409:
+            console.print(
+                "[dim]Hint: This email may already be registered. Try: blackbeard login[/]"
+            )
         raise SystemExit(1)
 
     data = resp.json()

@@ -343,7 +343,9 @@ function AddWebhookDialog({
                         onChange={() => toggleEvent(event)}
                         className="h-4 w-4 rounded border-gray-300 text-primary accent-primary focus-visible:ring-2 focus-visible:ring-ring"
                       />
-                      <span className="text-xs">{event.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</span>
+                      <span className="text-xs">
+                        {event.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                      </span>
                     </label>
                   ))}
                 </div>

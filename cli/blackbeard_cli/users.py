@@ -27,7 +27,7 @@ from blackbeard_cli.helpers import (
     epilog="""\b
 Examples:
   blackbeard user list
-  blackbeard user invite -e user@example.com -d "Jane Doe"
+  blackbeard user invite -e user@example.com --display-name "Jane Doe"
 """,
 )
 @click.pass_context
@@ -113,8 +113,8 @@ def user_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
     "invite",
     epilog="""\b
 Examples:
-  blackbeard user invite -e user@example.com -d "Jane Doe"
-  blackbeard user invite -e user@example.com -d "Jane Doe" --json
+  blackbeard user invite -e user@example.com --display-name "Jane Doe"
+  blackbeard user invite -e user@example.com --display-name "Jane Doe" --json
 """,
 )
 @click.option("--email", "-e", required=True, metavar="EMAIL", help="Email address")
@@ -128,12 +128,11 @@ Examples:
     help="Initial password (prompted securely if omitted)",
 )
 @click.option(
-    "--name",
-    "-d",
+    "--display-name",
     "display_name",
     required=True,
     metavar="NAME",
-    help="Display name shown in the UI (-d for display)",
+    help="Display name shown in the UI",
 )
 @json_opt
 @click.pass_context
@@ -336,7 +335,7 @@ def group_delete(ctx: click.Context, group_id: str, yes: bool, output_json: bool
     if (
         not yes
         and not ctx.obj["json"]
-        and not click.confirm(f"Delete group {group_id}?", default=False)
+        and not click.confirm(f"Delete group {group_id} on {server}?", default=False)
     ):
         console.print("[yellow]Aborted.[/]")
         return

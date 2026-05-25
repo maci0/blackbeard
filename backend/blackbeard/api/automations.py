@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from blackbeard.api.middleware import record_auth_failure
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.engine import ExecutionError, ExecutionNotFoundError
@@ -21,6 +20,7 @@ from blackbeard.engine import executor as _executor_mod
 from blackbeard.kinds import NAME_PATTERN
 from blackbeard.models import User, get_session
 from blackbeard.models.execution_schemas import ExecutionResponse, validate_inputs
+from blackbeard.rate_limiter import record_auth_failure
 from blackbeard.resources import ResourceNotFoundError, ResourceService
 
 logger = logging.getLogger(__name__)

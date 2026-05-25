@@ -147,7 +147,7 @@ async def client(db_session: AsyncSession):
 
     app.dependency_overrides[get_session] = override_get_session
     # Clear rate-limit state so tests don't accumulate auth failures across runs
-    from blackbeard.api.middleware import _auth_failures
+    from blackbeard.rate_limiter import _auth_failures
 
     _auth_failures.clear()
     transport = ASGITransport(app=app)

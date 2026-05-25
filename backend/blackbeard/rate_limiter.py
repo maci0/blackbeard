@@ -14,6 +14,8 @@ import time
 from blackbeard.config import settings
 
 __all__ = [
+    "_auth_failures",
+    "_is_rate_limited_with_count",
     "is_rate_limited",
     "record_auth_failure",
 ]

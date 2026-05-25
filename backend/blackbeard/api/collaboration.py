@@ -13,12 +13,12 @@ from typing import Any
 import jwt as pyjwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from blackbeard.api.middleware import record_auth_failure
 from blackbeard.auth.api_key import get_api_key
 from blackbeard.auth.jwt import decode_token
 from blackbeard.config import settings
 from blackbeard.kinds import NAME_PATTERN
 from blackbeard.models.execution_schemas import exceeds_depth as _exceeds_depth
+from blackbeard.rate_limiter import record_auth_failure
 
 logger = logging.getLogger(__name__)
 
@@ -389,7 +389,7 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
         await websocket.close(code=4422, reason="Invalid crew name")
         return
 
-    from blackbeard.api.middleware import is_rate_limited
+    from blackbeard.rate_limiter import is_rate_limited
 
     client_ip = websocket.client.host if websocket.client else "unknown"
     if is_rate_limited(client_ip):

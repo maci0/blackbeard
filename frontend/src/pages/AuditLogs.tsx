@@ -72,8 +72,7 @@ function ActionBadge({ action }: { action: string }) {
     user_login: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
   }
   const label =
-    ACTION_LABELS[action] ??
-    action.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    ACTION_LABELS[action] ?? action.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
   return (
     <span
       className={cn(
