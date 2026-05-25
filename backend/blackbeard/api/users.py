@@ -16,7 +16,7 @@ from sqlalchemy.orm import defer
 
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import require_permission
-from blackbeard.models import AuditLog, Group, GroupMember, User, get_session
+from blackbeard.models import AuditLog, Execution, Group, GroupMember, User, get_session
 from blackbeard.models.user_schemas import UserResponse, user_response
 
 logger = logging.getLogger(__name__)
@@ -297,6 +297,12 @@ async def deactivate_user(
         update(AuditLog)
         .where((AuditLog.actor_id == str(user.id)) | (AuditLog.actor_id == original_email))
         .values(actor_email=None, ip_address=None)
+    )
+    # Scrub user identity from execution records (principal_chain may reference user).
+    await session.execute(
+        update(Execution)
+        .where(Execution.initiated_by == user.id)
+        .values(principal_chain=None)
     )
     await log_audit(
         session,

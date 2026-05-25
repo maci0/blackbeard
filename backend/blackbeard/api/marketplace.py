@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from blackbeard.audit import audit_from_request, log_audit
-from blackbeard.auth.dependencies import get_current_user
+from blackbeard.auth.dependencies import require_permission
 from blackbeard.models.resource_schemas import ResourceCreate
 from blackbeard.resources import (
     ResourceService,
@@ -208,7 +208,7 @@ async def import_from_url(
     body: ImportRequest,
     request: Request,
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User | None = Depends(require_permission("create", "Resource")),
 ) -> ImportResponse:
     """Import resources from a git URL or built-in examples."""
     url = body.url.strip()
@@ -219,7 +219,7 @@ async def import_from_url(
         # Import from ALL bundled example directories
         if not _EXAMPLES_DIR.is_dir():
             raise HTTPException(
-                status_code=500,
+                status_code=503,
                 detail="Built-in examples not found on server",
             )
         raw_resources = []

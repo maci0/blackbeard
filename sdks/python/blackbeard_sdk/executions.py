@@ -230,19 +230,24 @@ class ExecutionMixin:
         self,
         execution_id: str,
         response: str,
+        feedback: str | None = None,
     ) -> dict[str, Any]:
         """Submit a human-in-the-loop response to a paused execution.
 
         Args:
             execution_id: Execution UUID string.
             response: Free-text response from the human reviewer.
+            feedback: Optional additional feedback or instructions.
 
         Returns:
             Dict with status and execution_id confirming the response was recorded.
         """
+        body: dict[str, str] = {"response": response}
+        if feedback is not None:
+            body["feedback"] = feedback
         resp = self._http.post(
             f"/api/v1/executions/{quote(execution_id, safe='')}/respond",
-            json={"response": response},
+            json=body,
         )
         raise_for_status(resp)
         return resp.json()

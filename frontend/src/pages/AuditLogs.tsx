@@ -107,12 +107,18 @@ function DetailPopover({ detail }: { detail: Record<string, unknown> }) {
           setOpen((v) => !v)
         }}
         aria-label="View details"
+        aria-expanded={open}
+        aria-haspopup="true"
         className="rounded px-1.5 py-0.5 text-xs text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         details
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-1 max-h-60 w-72 overflow-auto rounded-md border bg-card p-3 shadow-lg">
+        <div
+          role="dialog"
+          aria-label="Entry details"
+          className="absolute right-0 top-full z-20 mt-1 max-h-60 w-72 overflow-auto rounded-md border bg-card p-3 shadow-lg"
+        >
           <pre className="whitespace-pre-wrap text-xs text-muted-foreground">
             {JSON.stringify(detail, null, 2)}
           </pre>
@@ -135,25 +141,29 @@ export default function AuditLogs() {
 
   useDocumentTitle('Audit Logs')
 
+  const loadLogs = useCallback(async () => {
+    const params = new URLSearchParams()
+    params.set('limit', String(PAGE_SIZE))
+    params.set('offset', String(offset))
+    if (actionFilter) params.set('action', actionFilter)
+    if (resourceTypeFilter) params.set('resource_type', resourceTypeFilter)
+    if (actorSearch.trim()) params.set('actor_id', actorSearch.trim())
+    const result = await api.get<AuditLogListResponse>(`/api/v1/audit-logs?${params.toString()}`)
+    setLogs(result.items)
+    setTotal(result.total)
+  }, [offset, actionFilter, resourceTypeFilter, actorSearch])
+
   const fetchLogs = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams()
-      params.set('limit', String(PAGE_SIZE))
-      params.set('offset', String(offset))
-      if (actionFilter) params.set('action', actionFilter)
-      if (resourceTypeFilter) params.set('resource_type', resourceTypeFilter)
-      if (actorSearch.trim()) params.set('actor_id', actorSearch.trim())
-      const result = await api.get<AuditLogListResponse>(`/api/v1/audit-logs?${params.toString()}`)
-      setLogs(result.items)
-      setTotal(result.total)
+      await loadLogs()
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load audit logs'))
     } finally {
       setLoading(false)
     }
-  }, [offset, actionFilter, resourceTypeFilter, actorSearch])
+  }, [loadLogs])
 
   useEffect(() => {
     void fetchLogs()
@@ -161,19 +171,11 @@ export default function AuditLogs() {
 
   const pollLogs = useCallback(async () => {
     try {
-      const params = new URLSearchParams()
-      params.set('limit', String(PAGE_SIZE))
-      params.set('offset', String(offset))
-      if (actionFilter) params.set('action', actionFilter)
-      if (resourceTypeFilter) params.set('resource_type', resourceTypeFilter)
-      if (actorSearch.trim()) params.set('actor_id', actorSearch.trim())
-      const result = await api.get<AuditLogListResponse>(`/api/v1/audit-logs?${params.toString()}`)
-      setLogs(result.items)
-      setTotal(result.total)
+      await loadLogs()
     } catch {
       /* polling failures are silent */
     }
-  }, [offset, actionFilter, resourceTypeFilter, actorSearch])
+  }, [loadLogs])
 
   usePolling(pollLogs, 10_000, autoRefresh)
 

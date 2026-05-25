@@ -44,7 +44,7 @@ export interface ExecutionTask {
   task_name: string;
   agent_name: string | null;
   order: number;
-  status: string;
+  status: "pending" | "running" | "completed" | "failed";
   output: string | null;
   error: string | null;
   tokens_used: number;
@@ -170,5 +170,9 @@ export class BlackbeardApiError extends Error {
 
   get isServerError(): boolean {
     return this.status >= 500;
+  }
+
+  get isNetworkError(): boolean {
+    return this.status === 0;
   }
 }

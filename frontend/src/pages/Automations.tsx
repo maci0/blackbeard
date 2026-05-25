@@ -641,13 +641,12 @@ export default function Automations() {
     setTogglingName(automation.name)
     try {
       await api.put(`/api/v1/automations/${automation.name}`, {
-        apiVersion: 'blackbeard/v1',
-        kind: 'Automation',
         metadata: { name: automation.name },
         spec: {
           ...automation.spec,
           enabled: !automation.spec.enabled,
         },
+        version: automation.version,
       })
       toasts.success(
         `Automation "${automation.name}" ${automation.spec.enabled ? 'disabled' : 'enabled'}`,
@@ -683,6 +682,7 @@ export default function Automations() {
             actions={
               <>
                 <button
+                  type="button"
                   onClick={() => void fetchAutomations()}
                   aria-label="Refresh automations"
                   className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -696,6 +696,7 @@ export default function Automations() {
                   Refresh
                 </button>
                 <button
+                  type="button"
                   onClick={() => setCreateOpen(true)}
                   className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -745,6 +746,7 @@ export default function Automations() {
                   {filtered.length} of {automations.length} automations
                 </span>
                 <button
+                  type="button"
                   onClick={() => {
                     setSearch('')
                     searchRef.current?.focus()

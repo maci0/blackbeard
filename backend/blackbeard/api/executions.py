@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from uuid import UUID
 
 from fastapi import (
@@ -50,6 +50,7 @@ from blackbeard.models.execution_schemas import (
     KickoffRequest,
     TestRequest,
     TrainRequest,
+    redact_sensitive_values,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,40 @@ async def _require_execution_status(
     return status
 
 
+async def _run_executor(
+    coro: Awaitable[Execution],
+    *,
+    log_event: str,
+    log_resource: str,
+    log_namespace: str,
+) -> Execution:
+    """Await an executor coroutine, converting its exceptions to HTTP errors."""
+    try:
+        return await coro
+    except ExecutionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ExecutionError as exc:
+        logger.error(
+            "%s error: resource=%s namespace=%s: %s",
+            log_event,
+            log_resource,
+            log_namespace,
+            exc,
+            exc_info=True,
+            extra={
+                "event": log_event,
+                "resource_name": log_resource,
+                "namespace": log_namespace,
+                "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
+            },
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Execution could not be created. Check server logs.",
+        ) from exc
+
+
 router = APIRouter(tags=["executions"])
 
 
@@ -129,32 +164,14 @@ async def kickoff_crew(
     user: User | None = Depends(require_permission("run", "Crew")),
 ) -> ExecutionResponse:
     """Kick off a crew execution. Returns immediately with status=queued."""
-    try:
-        execution = await _executor_mod.kickoff(
-            session, crew_name, body.inputs, namespace, user=user
-        )
-    except ExecutionNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ExecutionError as exc:
-        # Internal consistency error (e.g., execution vanished after creation)
-        logger.error(
-            "Kickoff internal error: crew=%s namespace=%s: %s",
-            crew_name,
-            namespace,
-            exc,
-            exc_info=True,
-            extra={
-                "event": "kickoff_internal_error",
-                "crew_name": crew_name,
-                "namespace": namespace,
-                "error_type": type(exc).__name__,
-                "error_message": str(exc)[:500],
-            },
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Execution could not be created. Check server logs.",
-        ) from exc
+    execution = await _run_executor(
+        _executor_mod.kickoff,
+        session, crew_name, body.inputs, namespace,
+        event="kickoff_internal_error",
+        resource_name=crew_name,
+        namespace=namespace,
+        user=user,
+    )
     await log_audit(
         session,
         action="execution_started",
@@ -539,7 +556,7 @@ async def list_execution_events(
                 sequence=e.sequence,
                 event_type=e.event_type,
                 timestamp=e.timestamp,
-                data=e.data,
+                data=redact_sensitive_values(e.data) if e.data else {},
             )
             for e in items
         ],
@@ -562,7 +579,7 @@ async def respond_to_execution(
     execution_id: UUID = Path(..., description="Execution UUID"),
     body: HITLResponseRequest = Body(...),
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User | None = Depends(require_permission("update", "Execution")),
 ) -> HITLResponseResult:
     """Respond to a human-in-the-loop prompt during execution.
 
@@ -613,7 +630,7 @@ async def retry_execution(
     response: Response,
     execution_id: UUID = Path(..., description="Execution UUID to retry"),
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User | None = Depends(require_permission("run", "Crew")),
 ) -> ExecutionResponse:
     """Retry a failed or cancelled execution.
 
@@ -691,7 +708,7 @@ async def cancel_execution(
     request: Request,
     execution_id: UUID = Path(..., description="Execution UUID"),
     session: AsyncSession = Depends(get_session),
-    user: User | None = Depends(get_current_user),
+    user: User | None = Depends(require_permission("delete", "Execution")),
 ) -> ExecutionResponse:
     """Cancel a queued or running execution."""
     try:
@@ -816,7 +833,7 @@ async def stream_execution(
                                         {
                                             "sequence": ev.sequence,
                                             "timestamp": ev.timestamp.isoformat(),
-                                            **ev.data,
+                                            **redact_sensitive_values(ev.data),
                                         }
                                     ),
                                 }
@@ -998,7 +1015,7 @@ async def ws_execution(
                                 "data": {
                                     "sequence": ev.sequence,
                                     "timestamp": ev.timestamp.isoformat(),
-                                    **ev.data,
+                                    **redact_sensitive_values(ev.data),
                                 },
                             }
                         )

@@ -55,6 +55,10 @@ def _build_litellm_params(spec: dict[str, Any]) -> dict[str, Any]:
     return litellm_params
 
 
+def _proxy_url() -> str:
+    return settings.litellm_proxy_url.rstrip("/")
+
+
 def _get_client() -> httpx.AsyncClient:
     master_key = settings.litellm_master_key.get_secret_value()
     return get_client(
@@ -75,7 +79,7 @@ async def add_model(name: str, spec: dict[str, Any]) -> bool:
         "litellm_params": litellm_params,
     }
     client = _get_client()
-    proxy = settings.litellm_proxy_url.rstrip("/")
+    proxy = _proxy_url()
     try:
         resp = await client.post(f"{proxy}/model/new", json=body)
         if resp.status_code not in (200, 201):
@@ -116,7 +120,7 @@ async def update_model(name: str, spec: dict[str, Any]) -> None:
 async def delete_model(name: str) -> bool:
     """Delete a model from LiteLLM proxy. Returns True on success."""
     client = _get_client()
-    proxy = settings.litellm_proxy_url.rstrip("/")
+    proxy = _proxy_url()
     try:
         resp = await client.post(f"{proxy}/model/delete", json={"id": name})
         if resp.status_code not in (200, 204):
@@ -149,17 +153,22 @@ async def delete_model(name: str) -> bool:
 
 async def sync_all(llm_connections: list[dict[str, Any]]) -> int:
     """Sync all LLMConnection resources to LiteLLM. Returns count synced."""
-    synced = 0
-    failed = 0
+    import asyncio
+
+    tasks: list[tuple[str, dict[str, Any]]] = []
     for conn in llm_connections:
         name = conn.get("name", "")
         spec = conn.get("spec", {})
         if not spec.get("model"):
             continue
-        if await add_model(name, spec):
-            synced += 1
-        else:
-            failed += 1
+        tasks.append((name, spec))
+    if not tasks:
+        return 0
+    results = await asyncio.gather(
+        *(add_model(name, spec) for name, spec in tasks), return_exceptions=True
+    )
+    synced = sum(1 for r in results if r is True)
+    failed = len(results) - synced
     logger.info(
         "LiteLLM full sync: %d models synced, %d failed",
         synced,

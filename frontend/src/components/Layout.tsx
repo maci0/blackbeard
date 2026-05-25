@@ -41,7 +41,6 @@ import { isMac, modKey } from '@/lib/platform'
 import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
 import { CommandPalette } from './ui/CommandPalette'
-import { SessionExpiredDialog } from './ui/SessionExpiredDialog'
 import WelcomeDialog from './onboarding/WelcomeDialog'
 import GuidedTour from './onboarding/GuidedTour'
 import HelpMenu from './onboarding/HelpMenu'
@@ -275,7 +274,6 @@ export default function Layout() {
   const { status: apiHealth, lastChecked: apiLastChecked } = useHealthCheck()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
-  const sessionExpired = useAuthStore((s) => s.sessionExpired)
   const unreadCount = useNotificationStore((s) => s.unreadCount)
   const notifications = useNotificationStore((s) => s.notifications)
   const markAllRead = useNotificationStore((s) => s.markAllRead)
@@ -683,8 +681,6 @@ export default function Layout() {
       {/* ── Onboarding ── */}
       <WelcomeDialog open={showWelcome} onStartTour={handleStartTour} onSkip={handleSkipWelcome} />
       <GuidedTour key={tourKey} active={showTour} onComplete={handleTourComplete} />
-
-      <SessionExpiredDialog open={sessionExpired} />
     </div>
   )
 }

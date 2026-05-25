@@ -78,3 +78,24 @@ class AuthMixin:
         resp = self._http.get("/api/v1/auth/me")
         raise_for_status(resp)
         return resp.json()
+
+    def generate_api_key(self) -> dict[str, Any]:
+        """Generate or rotate the current user's API key.
+
+        Requires JWT Bearer authentication (not API key auth).
+        Any previously issued key for this user is replaced.
+
+        Returns:
+            Dict with ``api_key`` containing the new ``bb-`` prefixed key.
+        """
+        resp = self._http.post("/api/v1/auth/api-key")
+        raise_for_status(resp)
+        return resp.json()
+
+    def revoke_api_key(self) -> None:
+        """Revoke the current user's API key. Idempotent.
+
+        Requires JWT Bearer authentication (not API key auth).
+        """
+        resp = self._http.delete("/api/v1/auth/api-key")
+        raise_for_status(resp)

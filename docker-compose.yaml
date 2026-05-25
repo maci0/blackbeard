@@ -27,9 +27,8 @@ services:
       DEBUG: ${DEBUG:-false}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
       CLOUD_ML_REGION: ${CLOUD_ML_REGION:-us-east5}
-      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials.json
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
     volumes:
-      - ${GOOGLE_APPLICATION_CREDENTIALS:-deploy/docker/empty-credentials.json}:/app/credentials.json:ro
       - ./examples:/app/examples:ro
     depends_on:
       postgres:
@@ -213,10 +212,11 @@ services:
       DATABASE_URL: ${LITELLM_DATABASE_URL:-postgresql://blackbeard:blackbeard@postgres:5432/litellm}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
       CLOUD_ML_REGION: ${CLOUD_ML_REGION:-us-east5}
-      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials.json
+      # Only set GOOGLE_APPLICATION_CREDENTIALS when a real key file is provided.
+      # An empty JSON file causes LiteLLM to error on every Vertex AI request.
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
     volumes:
       - ./deploy/litellm/config.yaml:/app/config.yaml:ro
-      - ${GOOGLE_APPLICATION_CREDENTIALS:-deploy/docker/empty-credentials.json}:/app/credentials.json:ro
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     depends_on:
       postgres:

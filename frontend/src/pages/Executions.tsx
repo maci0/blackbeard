@@ -50,7 +50,7 @@ function compareExecutions(a: Execution, b: Execution, field: SortField, dir: So
   let cmp = 0
   switch (field) {
     case 'created_at':
-      cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      cmp = (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0)
       break
     case 'status':
       cmp = a.status.localeCompare(b.status)

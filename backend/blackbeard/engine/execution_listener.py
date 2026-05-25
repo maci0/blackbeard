@@ -503,8 +503,8 @@ class BlackbeardExecutionListener(BaseEventListener):
     def _flush_buffer(self) -> None:
         """Flush buffered events to DB in a single transaction."""
         with self._lock:
-            to_flush = list(self._buffer)
-            self._buffer.clear()
+            to_flush = self._buffer
+            self._buffer = []
         if not to_flush:
             return
         try:

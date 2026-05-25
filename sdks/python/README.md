@@ -10,7 +10,7 @@ pip install -e .
 cd sdks/python && uv sync
 ```
 
-**Requirements:** Python 3.10+, httpx, pyyaml
+**Requirements:** Python 3.10+, httpx
 
 ## Usage
 
@@ -134,6 +134,13 @@ client.refresh(refresh_token)
 
 # Get current user
 client.whoami()
+
+# Generate or rotate personal API key (requires JWT auth)
+result = client.generate_api_key()
+print(result["api_key"])
+
+# Revoke personal API key
+client.revoke_api_key()
 ```
 
 ### Context Manager
@@ -148,7 +155,7 @@ with BlackbeardClient(base_url="http://localhost:8000", api_key="key") as client
 
 | Area | Methods |
 |------|---------|
-| Auth | `login`, `register`, `refresh`, `whoami` |
+| Auth | `login`, `register`, `refresh`, `whoami`, `generate_api_key`, `revoke_api_key` |
 | Resources | `list`, `get`, `create`, `update`, `delete`, `apply`, `export_all` |
 | Executions | `kickoff`, `train`, `test`, `run_flow`, `cancel`, `retry`, `wait`, `respond`, `get_execution`, `list_executions`, `get_execution_events`, `get_execution_spend` |
 | Health | `health`, `readiness` |

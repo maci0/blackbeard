@@ -193,8 +193,6 @@ def export_cmd(
             console.print(f"[green]Wrote[/] {p} ({len(resources)} resource(s))")
     else:
         out.print(yaml_str, end="", highlight=False)
-
-    if not output_path:
         console.print(f"[dim]{len(resources)} resource(s) exported[/]")
 
 

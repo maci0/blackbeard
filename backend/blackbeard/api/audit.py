@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -11,8 +12,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
-from blackbeard.auth.dependencies import require_user
+from blackbeard.auth.dependencies import require_permission
 from blackbeard.models import AuditLog, User, get_session
+from blackbeard.models.execution_schemas import redact_sensitive_values
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +35,7 @@ class AuditLogItem(BaseModel):
     action: str
     resource_type: str | None = None
     resource_id: str | None = None
-    detail: dict | None = None
+    detail: dict[str, Any] | None = None
     request_id: str | None = None
 
 
@@ -77,7 +79,7 @@ async def list_audit_logs(
     ),
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
-    _current_user: User = Depends(require_user),
+    _current_user: User = Depends(require_permission("list", "AuditLog", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> AuditLogListResponse:
     """List audit log entries with optional filters. Requires authentication."""
@@ -118,7 +120,7 @@ async def list_audit_logs(
                 action=entry.action,
                 resource_type=entry.resource_type,
                 resource_id=entry.resource_id,
-                detail=entry.detail,
+                detail=redact_sensitive_values(entry.detail) if entry.detail else None,
                 request_id=entry.request_id,
             )
             for entry in logs

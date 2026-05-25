@@ -103,6 +103,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   setSessionExpired: (v: boolean) => {
+    if (v) {
+      get().logout()
+      window.location.href = '/login'
+      return
+    }
     set({ sessionExpired: v })
   },
 

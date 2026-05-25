@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
+import httpx
 import pytest
 
 from blackbeard_sdk import BlackbeardApiError, BlackbeardClient
@@ -416,71 +417,41 @@ class TestExportAll:
     def test_export_all_with_resources(
         self, client: BlackbeardClient, transport: MockTransport
     ) -> None:
-        """export_all with some actual resources produces valid YAML."""
+        """export_all uses the server's bulk export endpoint."""
         import yaml
 
-        for kind in KIND_TO_PLURAL:
-            if kind == "Agent":
-                transport.queue(
-                    _mock_response(
-                        200,
-                        {
-                            "items": [
-                                {
-                                    "kind": "Agent",
-                                    "metadata": {"name": "a1"},
-                                    "spec": {"role": "R"},
-                                },
-                            ],
-                            "total": 1,
-                            "limit": 1000,
-                            "offset": 0,
-                            "has_more": False,
-                        },
-                    )
-                )
-            else:
-                transport.queue(
-                    _mock_response(
-                        200,
-                        {
-                            "items": [],
-                            "total": 0,
-                            "limit": 1000,
-                            "offset": 0,
-                            "has_more": False,
-                        },
-                    )
-                )
+        yaml_body = (
+            b"---\nkind: Agent\nmetadata:\n  name: a1\nspec:\n  role: R\n"
+        )
+        transport.queue(
+            httpx.Response(
+                200,
+                content=yaml_body,
+                headers={"content-type": "application/x-yaml"},
+            )
+        )
 
         result = client.export_all()
         assert isinstance(result, str)
-        docs = list(yaml.safe_load_all(result))
-        # Filter out None docs
-        docs = [d for d in docs if d is not None]
+        docs = [d for d in yaml.safe_load_all(result) if d is not None]
         assert len(docs) == 1
         assert docs[0]["kind"] == "Agent"
+        assert len(transport.requests) == 1
+        assert transport.requests[0].url.path == "/api/v1/resources/export"
 
     def test_export_all_custom_namespace(
         self, client: BlackbeardClient, transport: MockTransport
     ) -> None:
-        for _kind in KIND_TO_PLURAL:
-            transport.queue(
-                _mock_response(
-                    200,
-                    {
-                        "items": [],
-                        "total": 0,
-                        "limit": 1000,
-                        "offset": 0,
-                        "has_more": False,
-                    },
-                )
+        transport.queue(
+            httpx.Response(
+                200,
+                content=b"",
+                headers={"content-type": "application/x-yaml"},
             )
+        )
         client.export_all(namespace="staging")
-        # All requests should use staging namespace
-        for req in transport.requests:
-            assert "namespace=staging" in str(req.url)
+        assert len(transport.requests) == 1
+        assert "namespace=staging" in str(transport.requests[0].url)
 
 
 # -- kind_plural edge cases ---------------------------------------------------

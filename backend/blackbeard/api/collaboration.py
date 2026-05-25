@@ -222,46 +222,52 @@ class ValkeyCollabBackend:
 
 _valkey_backend: ValkeyCollabBackend | None = None
 _valkey_init_done = False
+_valkey_init_lock = asyncio.Lock()
 
 
-def _get_valkey_backend() -> ValkeyCollabBackend | None:
-    """Return the Valkey collaboration backend, creating it on first call.
-
-    Returns None if the redis library is not installed or Valkey is not
-    configured.  After the first attempt (success or failure), the result
-    is cached so repeated failures don't re-attempt imports or log spam.
-    """
+async def _init_valkey_backend() -> ValkeyCollabBackend | None:
+    """Initialize the Valkey backend (async-safe, called once)."""
     global _valkey_backend, _valkey_init_done
     if _valkey_init_done:
         return _valkey_backend
 
-    try:
-        import redis.asyncio  # noqa: F401
+    async with _valkey_init_lock:
+        if _valkey_init_done:
+            return _valkey_backend
 
-        from blackbeard.config import settings
+        try:
+            import redis.asyncio  # noqa: F401
 
-        valkey_url = settings.valkey_url.get_secret_value()
-        if not valkey_url:
+            from blackbeard.config import settings
+
+            valkey_url = settings.valkey_url.get_secret_value()
+            if not valkey_url:
+                _valkey_init_done = True
+                return None
+            _valkey_backend = ValkeyCollabBackend()
             _valkey_init_done = True
+            return _valkey_backend
+        except ImportError:
+            _valkey_init_done = True
+            logger.info(
+                "redis package not installed — Valkey collaboration backend disabled",
+                extra={"event": "valkey_collab_no_redis"},
+            )
             return None
-        _valkey_backend = ValkeyCollabBackend()
-        _valkey_init_done = True
-        return _valkey_backend
-    except ImportError:
-        _valkey_init_done = True
-        logger.info(
-            "redis package not installed — Valkey collaboration backend disabled",
-            extra={"event": "valkey_collab_no_redis"},
-        )
-        return None
-    except Exception:
-        _valkey_init_done = True
-        logger.warning(
-            "Valkey collaboration backend init failed — cross-replica collaboration will not work",
-            exc_info=True,
-            extra={"event": "valkey_collab_init_failed"},
-        )
-        return None
+        except Exception:
+            _valkey_init_done = True
+            logger.warning(
+                "Valkey collaboration backend init failed — "
+                "cross-replica collaboration will not work",
+                exc_info=True,
+                extra={"event": "valkey_collab_init_failed"},
+            )
+            return None
+
+
+def _get_valkey_backend() -> ValkeyCollabBackend | None:
+    """Return the cached Valkey backend (None if not yet initialized or unavailable)."""
+    return _valkey_backend if _valkey_init_done else None
 
 
 async def _broadcast_local(
@@ -429,7 +435,7 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
 
     # Subscribe to Valkey channel for cross-replica messaging
     if is_new_room:
-        backend = _get_valkey_backend()
+        backend = await _init_valkey_backend()
         if backend is not None:
             await backend.subscribe(crew_name)
 

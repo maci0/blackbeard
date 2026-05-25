@@ -152,9 +152,9 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           changed = true
           return item
         })
-        return changed
-          ? { executions: merged, executionsTotal: result.total }
-          : { ...state, executionsTotal: result.total }
+        if (changed) return { executions: merged, executionsTotal: result.total }
+        if (state.executionsTotal !== result.total) return { executionsTotal: result.total }
+        return state
       })
     } catch (err) {
       console.warn('[poll] executions fetch failed:', getErrorMessage(err, 'unknown error'))

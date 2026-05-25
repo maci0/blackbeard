@@ -40,6 +40,11 @@ PUBLIC_PATHS = (
 
 _AUTOMATION_WEBHOOK_RE = re.compile(r"^/api/v1/automations/[a-z0-9][a-z0-9\-]*/webhook$")
 
+# Query-string API key fallback is ONLY for the execution SSE endpoint
+# where EventSource cannot set custom headers.  Matching any path that
+# happens to end in "/stream" would widen the attack surface (CWE-598).
+SSE_STREAM_RE = re.compile(r"^/api/v1/executions/[0-9a-fA-F\-]{36}/stream$")
+
 # Allowlist pattern for client-supplied request IDs — prevents header injection
 _REQUEST_ID_PATTERN = re.compile(r"^[a-zA-Z0-9\-]{1,64}$")
 
@@ -82,11 +87,16 @@ def _redact_query_string(query: str) -> str:
     pairs = parse_qsl(query, keep_blank_values=True)
     if not pairs:
         return query
-    if not any(k.lower() in _SENSITIVE_QS_PARAMS for k, _ in pairs):
+    needs_redaction = False
+    redacted = []
+    for k, v in pairs:
+        if k.lower() in _SENSITIVE_QS_PARAMS:
+            redacted.append((k, "[REDACTED]"))
+            needs_redaction = True
+        else:
+            redacted.append((k, v))
+    if not needs_redaction:
         return query
-    redacted = [
-        (k, "[REDACTED]") if k.lower() in _SENSITIVE_QS_PARAMS else (k, v) for k, v in pairs
-    ]
     return urlencode(redacted)
 
 
@@ -273,7 +283,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     # EventSource cannot set custom headers.  Query-string credentials leak via
     # proxy logs, browser history, and Referer headers (CWE-598).
     api_key = request.headers.get("X-API-Key", "")
-    if not api_key and path.endswith("/stream"):
+    if not api_key and SSE_STREAM_RE.match(path):
         api_key = request.query_params.get("api_key", "")
     if not hmac.compare_digest(api_key, get_api_key()):
         record_auth_failure(client_ip)
@@ -574,6 +584,8 @@ async def http_exception_handler(_request: Request, exc: Exception) -> JSONRespo
                 "user_id": uid or None,
             },
         )
+        if status_code == 500:
+            detail = "Internal server error"
     return JSONResponse(
         status_code=status_code,
         content={"detail": detail, "request_id": rid},

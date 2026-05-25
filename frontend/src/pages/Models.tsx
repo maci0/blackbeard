@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useDocumentTitle } from '@/hooks'
@@ -17,6 +17,7 @@ import {
   Settings,
   Zap,
   ExternalLink,
+  ChevronRight,
 } from 'lucide-react'
 import { api } from '@/api/client'
 import { useResourceStore } from '@/stores/resourceStore'
@@ -27,8 +28,10 @@ import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
+import { ViewToggle } from '@/components/ui/ViewToggle'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { useToastStore } from '@/stores/toastStore'
+import { useViewPrefsStore } from '@/stores/viewPrefsStore'
 
 /* ------------------------------------------------------------------ */
 /* Provider badge                                                      */
@@ -55,6 +58,16 @@ const PROVIDER_DISPLAY: Record<string, string> = {
   ollama: 'Ollama (local)',
   other: 'Other',
 }
+
+const PROVIDER_BORDER_CLASSES: Record<string, string> = {
+  openai: 'border-l-emerald-500 dark:border-l-emerald-400',
+  anthropic: 'border-l-violet-500 dark:border-l-violet-400',
+  vertex_ai: 'border-l-blue-500 dark:border-l-blue-400',
+  azure: 'border-l-sky-500 dark:border-l-sky-400',
+  ollama: 'border-l-orange-500 dark:border-l-orange-400',
+}
+
+const PROVIDER_ORDER = ['openai', 'anthropic', 'vertex_ai', 'azure', 'ollama', 'other']
 
 function ProviderBadge({ provider }: { provider: string }) {
   const label = PROVIDER_DISPLAY[provider] ?? provider
@@ -527,6 +540,8 @@ export default function Models() {
     )
 
   const toasts = useToastStore()
+  const { getView, setView } = useViewPrefsStore()
+  const viewMode = getView('models')
 
   const [addOpen, setAddOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -535,7 +550,35 @@ export default function Models() {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [testingModels, setTestingModels] = useState<Set<string>>(new Set())
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const deleteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const toggleCollapsed = (provider: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(provider)) next.delete(provider)
+      else next.add(provider)
+      return next
+    })
+  }
+
+  const grouped = useMemo(() => {
+    const groups = new Map<string, Resource[]>()
+    for (const model of models) {
+      const provider = (model.spec as { provider?: string }).provider || 'other'
+      const list = groups.get(provider) ?? []
+      list.push(model)
+      groups.set(provider, list)
+    }
+    const sorted = new Map<string, Resource[]>()
+    for (const p of PROVIDER_ORDER) {
+      if (groups.has(p)) sorted.set(p, groups.get(p)!)
+    }
+    for (const [k, v] of groups) {
+      if (!sorted.has(k)) sorted.set(k, v)
+    }
+    return sorted
+  }, [models])
 
   useEffect(() => {
     return () => {
@@ -644,6 +687,7 @@ export default function Models() {
             description="LLM connections and providers"
             actions={
               <>
+                <ViewToggle mode={viewMode} onChange={(m) => setView('models', m)} />
                 <button
                   type="button"
                   onClick={() => void fetchResources('llm-connections')}
@@ -712,15 +756,153 @@ export default function Models() {
             }}
           />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {models.map((resource) => (
-              <ModelCard
-                key={resource.id}
-                resource={resource}
-                onDelete={() => setDeleteTarget(resource.metadata.name)}
-                onTest={() => void handleTestModel(resource)}
-                testing={testingModels.has(resource.metadata.name)}
-              />
+          <div className="space-y-6">
+            {[...grouped.entries()].map(([provider, group]) => (
+              <section key={provider}>
+                <button
+                  type="button"
+                  onClick={() => toggleCollapsed(provider)}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-md border border-l-4 bg-card px-4 py-3 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    PROVIDER_BORDER_CLASSES[provider] ?? 'border-l-gray-400 dark:border-l-gray-500',
+                  )}
+                  aria-expanded={!collapsed.has(provider)}
+                >
+                  <ChevronRight
+                    className={cn(
+                      'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
+                      !collapsed.has(provider) && 'rotate-90',
+                    )}
+                  />
+                  <span className="text-sm font-semibold">
+                    {PROVIDER_DISPLAY[provider] ?? provider}
+                  </span>
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    {group.length}
+                  </span>
+                </button>
+
+                {!collapsed.has(provider) && (
+                  <div className="mt-3">
+                    {viewMode === 'cards' ? (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {group.map((resource) => (
+                          <ModelCard
+                            key={resource.id}
+                            resource={resource}
+                            onDelete={() => setDeleteTarget(resource.metadata.name)}
+                            onTest={() => void handleTestModel(resource)}
+                            testing={testingModels.has(resource.metadata.name)}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
+                        <div className="overflow-auto">
+                          <table
+                            className="w-full min-w-[640px] text-sm"
+                            aria-label={`${PROVIDER_DISPLAY[provider] ?? provider} models`}
+                          >
+                            <thead>
+                              <tr className="border-b bg-muted/60">
+                                {(['Name', 'Model', 'Base URL', 'Temp', 'Max Tokens'] as const).map(
+                                  (h) => (
+                                    <th
+                                      key={h}
+                                      scope="col"
+                                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                                    >
+                                      {h}
+                                    </th>
+                                  ),
+                                )}
+                                <th
+                                  scope="col"
+                                  className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                                >
+                                  Actions
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                              {group.map((resource) => {
+                                const spec = resource.spec as {
+                                  model?: string
+                                  base_url?: string
+                                  parameters?: { temperature?: number; max_tokens?: number }
+                                }
+                                return (
+                                  <tr
+                                    key={resource.id}
+                                    className="group transition-colors duration-150 hover:bg-muted/50"
+                                  >
+                                    <td className="px-4 py-3 font-medium">
+                                      <Link
+                                        to={`/resources/llm-connections/${resource.metadata.name}`}
+                                        className="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                      >
+                                        {resource.metadata.name}
+                                      </Link>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <span className="font-mono text-xs">{spec.model ?? '—'}</span>
+                                    </td>
+                                    <td className="max-w-[200px] truncate px-4 py-3 text-muted-foreground">
+                                      <span className="font-mono text-xs" title={spec.base_url}>
+                                        {spec.base_url ?? '—'}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-muted-foreground">
+                                      <span className="font-mono text-xs">
+                                        {spec.parameters?.temperature ?? '—'}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-muted-foreground">
+                                      <span className="font-mono text-xs">
+                                        {spec.parameters?.max_tokens != null
+                                          ? spec.parameters.max_tokens.toLocaleString()
+                                          : '—'}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                      <div className="flex items-center justify-end gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleTestModel(resource)}
+                                          disabled={testingModels.has(resource.metadata.name)}
+                                          className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950 dark:hover:text-emerald-400"
+                                          aria-label={`Test connection ${resource.metadata.name}`}
+                                        >
+                                          {testingModels.has(resource.metadata.name) ? (
+                                            <Spinner size="sm" />
+                                          ) : (
+                                            <Zap className="h-3 w-3" />
+                                          )}
+                                          {testingModels.has(resource.metadata.name)
+                                            ? 'Testing...'
+                                            : 'Test'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setDeleteTarget(resource.metadata.name)}
+                                          className="inline-flex items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                          aria-label={`Delete connection ${resource.metadata.name}`}
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
             ))}
           </div>
         )}

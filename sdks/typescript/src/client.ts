@@ -52,7 +52,7 @@ export class BlackbeardClient {
       config.baseUrl ??
       env?.BLACKBEARD_BASE_URL ??
       "http://localhost:8000"
-    ).replace(/\/$/, "");
+    ).replace(/\/+$/, "");
     this.apiKey = config.apiKey ?? env?.BLACKBEARD_API_KEY;
     this.token = config.token ?? env?.BLACKBEARD_TOKEN;
     this.timeout = config.timeout ?? 30_000;
@@ -69,11 +69,11 @@ export class BlackbeardClient {
     return h;
   }
 
-  private async request<T>(
+  private async rawRequest(
     method: string,
     path: string,
     body?: unknown
-  ): Promise<T> {
+  ): Promise<Response> {
     let resp: Response;
     try {
       resp = await fetch(`${this.baseUrl}${path}`, {
@@ -104,6 +104,15 @@ export class BlackbeardClient {
       throw new BlackbeardApiError(resp.status, detail, errorBody);
     }
 
+    return resp;
+  }
+
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown
+  ): Promise<T> {
+    const resp = await this.rawRequest(method, path, body);
     if (resp.status === 204) return undefined as T;
     return (await resp.json()) as T;
   }
@@ -162,6 +171,14 @@ export class BlackbeardClient {
 
   async whoami(): Promise<User> {
     return this.request<User>("GET", "/api/v1/auth/me");
+  }
+
+  async generateApiKey(): Promise<{ api_key: string }> {
+    return this.request<{ api_key: string }>("POST", "/api/v1/auth/api-key");
+  }
+
+  async revokeApiKey(): Promise<void> {
+    await this.request<void>("DELETE", "/api/v1/auth/api-key");
   }
 
   // ── Resources ──
@@ -394,12 +411,15 @@ export class BlackbeardClient {
 
   async respond(
     executionId: string,
-    response: string
+    response: string,
+    feedback?: string
   ): Promise<HITLResponseResult> {
+    const body: Record<string, string> = { response };
+    if (feedback !== undefined) body.feedback = feedback;
     return this.request<HITLResponseResult>(
       "POST",
       `/api/v1/executions/${encodeURIComponent(executionId)}/respond`,
-      { response }
+      body
     );
   }
 
@@ -431,11 +451,17 @@ export class BlackbeardClient {
   }
 
   async exportAll(namespace = "default"): Promise<Resource[]> {
-    const all: Resource[] = [];
-    for (const kind of Object.keys(KIND_PLURALS)) {
-      const resp = await this.list(kind, { namespace, limit: 1000 });
-      all.push(...resp.items);
-    }
-    return all;
+    const responses = await Promise.all(
+      Object.keys(KIND_PLURALS).map((kind) =>
+        this.list(kind, { namespace, limit: 1000 })
+      )
+    );
+    return responses.flatMap((r) => r.items);
+  }
+
+  async exportYaml(namespace = "default"): Promise<string> {
+    const params = new URLSearchParams({ namespace });
+    const resp = await this.rawRequest("GET", `/api/v1/resources/export?${params}`);
+    return resp.text();
   }
 }

@@ -261,7 +261,7 @@ function UserDetailPanel({
   const handleDeactivate = async () => {
     setDeactivating(true)
     try {
-      await api.patch(`/api/v1/users/${user.id}`, { is_active: false })
+      await api.delete(`/api/v1/users/${user.id}`)
       toasts.success(`User ${user.display_name || user.email} deactivated`)
       setDeactivateOpen(false)
       onUpdated()

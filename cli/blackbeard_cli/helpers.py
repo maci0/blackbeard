@@ -37,7 +37,8 @@ class HelpCommand(click.Command):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         cs = dict(kwargs.pop("context_settings", None) or {})
         cs.setdefault("help_option_names", ["-h", "--help"])
-        super().__init__(*args, context_settings=cs, **kwargs)
+        kwargs["context_settings"] = cs
+        super().__init__(*args, **kwargs)
 
 
 def print_json(data: object, *, compact: bool = False) -> None:

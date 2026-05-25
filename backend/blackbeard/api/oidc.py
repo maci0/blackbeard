@@ -7,6 +7,7 @@ OIDC_CLIENT_SECRET.  Optional: OIDC_REDIRECT_URI, OIDC_SCOPES.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 from datetime import UTC, datetime
@@ -42,35 +43,43 @@ def _make_oidc_placeholder_hash() -> str:
 
 
 _oauth: OAuth | None = None
+_oauth_lock = asyncio.Lock()
 
 
-def _get_oauth() -> OAuth:
+async def _ensure_oauth() -> OAuth:
+    """Return the shared OAuth client, creating it on first call (async-safe)."""
     global _oauth
     if _oauth is not None:
         return _oauth
 
-    if not settings.oidc_issuer:
-        raise HTTPException(status_code=501, detail="OIDC not configured. Set OIDC_ISSUER env var.")
+    async with _oauth_lock:
+        if _oauth is not None:
+            return _oauth
 
-    oauth = OAuth()
-    client_secret = (
-        settings.oidc_client_secret.get_secret_value() if settings.oidc_client_secret else None
-    )
-    oauth.register(
-        name="provider",
-        server_metadata_url=f"{settings.oidc_issuer.rstrip('/')}/.well-known/openid-configuration",
-        client_id=settings.oidc_client_id,
-        client_secret=client_secret,
-        client_kwargs={"scope": settings.oidc_scopes},
-    )
-    _oauth = oauth
-    return oauth
+        if not settings.oidc_issuer:
+            raise HTTPException(
+                status_code=501, detail="OIDC not configured. Set OIDC_ISSUER env var."
+            )
+
+        oauth = OAuth()
+        client_secret = (
+            settings.oidc_client_secret.get_secret_value() if settings.oidc_client_secret else None
+        )
+        oauth.register(
+            name="provider",
+            server_metadata_url=f"{settings.oidc_issuer.rstrip('/')}/.well-known/openid-configuration",
+            client_id=settings.oidc_client_id,
+            client_secret=client_secret,
+            client_kwargs={"scope": settings.oidc_scopes},
+        )
+        _oauth = oauth
+        return oauth
 
 
 @router.get("/login")
 async def oidc_login(request: Request) -> RedirectResponse:
     """Redirect to OIDC provider's authorization endpoint."""
-    oauth = _get_oauth()
+    oauth = await _ensure_oauth()
     redirect_uri = settings.oidc_redirect_uri or str(request.url_for("oidc_callback"))
     return await oauth.provider.authorize_redirect(request, redirect_uri)
 
@@ -81,7 +90,7 @@ async def oidc_callback(
     session: AsyncSession = Depends(get_session),
 ) -> RedirectResponse:
     """Handle OIDC callback — exchange code, create/link user, redirect with tokens."""
-    oauth = _get_oauth()
+    oauth = await _ensure_oauth()
 
     try:
         token: dict[str, Any] = await oauth.provider.authorize_access_token(request)

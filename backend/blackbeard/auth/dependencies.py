@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
+from blackbeard.api.middleware import SSE_STREAM_RE
 from blackbeard.auth.authorizer import Authorizer
 from blackbeard.auth.jwt import decode_token
 from blackbeard.config import settings
@@ -33,6 +34,49 @@ def _bearer_401(detail: str) -> HTTPException:
     return HTTPException(status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"})
 
 
+async def _resolve_bearer_user(token: str, session: AsyncSession) -> User:
+    """Decode a JWT Bearer token and return the corresponding active User.
+
+    Raises HTTPException(401) on any validation failure.
+    """
+    try:
+        payload = decode_token(token)
+    except pyjwt.ExpiredSignatureError:
+        logger.info("JWT expired", extra={"event": "jwt_expired"})
+        raise _bearer_401("Token has expired") from None
+    except pyjwt.InvalidTokenError:
+        logger.warning("JWT invalid", extra={"event": "jwt_invalid"})
+        raise _bearer_401("Invalid token") from None
+
+    if payload.get("type") != "access":
+        logger.warning(
+            "JWT wrong type: %s",
+            payload.get("type"),
+            extra={"event": "jwt_wrong_type", "token_type": payload.get("type")},
+        )
+        raise _bearer_401("Invalid token type")
+
+    user_id = payload.get("sub")
+    if not user_id:
+        logger.warning("JWT missing sub claim", extra={"event": "jwt_missing_sub"})
+        raise _bearer_401("Invalid token payload")
+
+    result = await session.execute(
+        select(User)
+        .where(User.id == user_id)
+        .options(defer(User.password_hash))
+    )
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        logger.warning(
+            "JWT user not found or inactive: sub=%s",
+            user_id,
+            extra={"event": "jwt_user_invalid", "user_id": str(user_id)},
+        )
+        raise _bearer_401("User not found or inactive")
+    return user
+
+
 async def get_current_user(
     request: Request,
     session: AsyncSession = Depends(get_session),
@@ -44,61 +88,9 @@ async def get_current_user(
     system-level access; this dependency resolves user identity from
     JWT tokens or per-user API keys.
     """
-    # Try Authorization: Bearer <token>
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-        try:
-            payload = decode_token(token)
-        except pyjwt.ExpiredSignatureError:
-            logger.info(
-                "JWT expired",
-                extra={"event": "jwt_expired"},
-            )
-            raise _bearer_401("Token has expired") from None
-        except pyjwt.InvalidTokenError:
-            logger.warning(
-                "JWT invalid",
-                extra={"event": "jwt_invalid"},
-            )
-            raise _bearer_401("Invalid token") from None
-
-        if payload.get("type") != "access":
-            logger.warning(
-                "JWT wrong type: %s",
-                payload.get("type"),
-                extra={
-                    "event": "jwt_wrong_type",
-                    "token_type": payload.get("type"),
-                },
-            )
-            raise _bearer_401("Invalid token type")
-
-        user_id = payload.get("sub")
-        if not user_id:
-            logger.warning(
-                "JWT missing sub claim",
-                extra={"event": "jwt_missing_sub"},
-            )
-            raise _bearer_401("Invalid token payload")
-
-        result = await session.execute(
-            select(User)
-            .where(User.id == user_id)
-            .options(defer(User.password_hash), defer(User.api_key))
-        )
-        user = result.scalar_one_or_none()
-        if user is None or not user.is_active:
-            logger.warning(
-                "JWT user not found or inactive: sub=%s",
-                user_id,
-                extra={
-                    "event": "jwt_user_invalid",
-                    "user_id": str(user_id),
-                },
-            )
-            raise _bearer_401("User not found or inactive")
-        return user
+        return await _resolve_bearer_user(auth_header[7:], session)
 
     # Try resolving the X-API-Key to a user (optional — API key may belong to
     # the global system key rather than a user-specific key).
@@ -106,7 +98,7 @@ async def get_current_user(
     # cannot set custom headers — query-string credentials leak via proxy logs,
     # browser history, and Referer headers (CWE-598).
     api_key = request.headers.get("X-API-Key", "")
-    if not api_key and request.url.path.endswith("/stream"):
+    if not api_key and SSE_STREAM_RE.match(request.url.path):
         api_key = request.query_params.get("api_key", "")
     if api_key and len(api_key) >= 16:
         result = await session.execute(
@@ -116,8 +108,6 @@ async def get_current_user(
         if user is not None and user.is_active:
             return user
 
-    # No user-level credentials found — request may still be authenticated
-    # via the global API key middleware
     return None
 
 
@@ -152,28 +142,7 @@ async def require_jwt_user(
         )
         raise _bearer_401("JWT Bearer token required. API key authentication is not accepted.")
 
-    token = auth_header[7:]
-    try:
-        payload = decode_token(token)
-    except pyjwt.ExpiredSignatureError:
-        raise _bearer_401("Token has expired") from None
-    except pyjwt.InvalidTokenError:
-        raise _bearer_401("Invalid token") from None
-
-    if payload.get("type") != "access":
-        raise _bearer_401("Invalid token type")
-
-    user_id = payload.get("sub")
-    if not user_id:
-        raise _bearer_401("Invalid token payload")
-
-    result = await session.execute(
-        select(User).where(User.id == user_id).options(defer(User.password_hash))
-    )
-    user = result.scalar_one_or_none()
-    if user is None or not user.is_active:
-        raise _bearer_401("User not found or inactive")
-    return user
+    return await _resolve_bearer_user(auth_header[7:], session)
 
 
 def require_permission(

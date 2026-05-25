@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
+from blackbeard.logging_config import scrub_pii
+
 if TYPE_CHECKING:
     from blackbeard.models.execution import Execution
 
@@ -249,7 +251,7 @@ class ExecutionResponse(BaseModel):
                     order=t.order,
                     status=t.status.value,
                     output=t.output,
-                    error=t.error,
+                    error=scrub_pii(t.error) if t.error else None,
                     tokens_used=t.tokens_used,
                     cost_usd=t.cost_usd,
                     started_at=t.started_at,
@@ -281,7 +283,7 @@ class ExecutionResponse(BaseModel):
                 if (raw_outputs := execution.__dict__.get("outputs"))
                 else None
             ),
-            error=execution.error,
+            error=scrub_pii(execution.error) if execution.error else None,
             total_tokens=execution.total_tokens,
             prompt_tokens=execution.prompt_tokens,
             completion_tokens=execution.completion_tokens,

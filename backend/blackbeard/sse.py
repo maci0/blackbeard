@@ -11,36 +11,29 @@ if TYPE_CHECKING:
 
 from blackbeard.config import settings
 
-semaphore = asyncio.Semaphore(settings.max_concurrent_sse)
-_active_count = 0
+_max_sse = settings.max_concurrent_sse
+semaphore = asyncio.Semaphore(_max_sse)
 
 
 @asynccontextmanager
 async def acquire_stream() -> AsyncIterator[bool]:
-    """Try to acquire an SSE slot. Yields True on success, False if full.
-
-    Ensures active_count stays in sync with the semaphore via
-    paired increment/decrement in a context manager.
-    """
-    global _active_count
+    """Try to acquire an SSE slot. Yields True on success, False if full."""
     try:
         await asyncio.wait_for(semaphore.acquire(), timeout=0)
     except TimeoutError:
         yield False
         return
-    _active_count += 1
     try:
         yield True
     finally:
-        _active_count -= 1
         semaphore.release()
 
 
 def get_active_count() -> int:
     """Return the current number of active SSE streams."""
-    return _active_count
+    return _max_sse - semaphore._value
 
 
 def get_status() -> dict[str, int]:
     """Return current SSE stream usage for health checks."""
-    return {"active": _active_count, "max": settings.max_concurrent_sse}
+    return {"active": get_active_count(), "max": _max_sse}

@@ -6,7 +6,6 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
-import yaml
 
 from blackbeard_sdk.errors import raise_for_status
 
@@ -182,11 +181,9 @@ class ResourceMixin:
     def export_all(self, namespace: str = "default") -> str:
         """Export all resources in a namespace as a YAML string.
 
-        Fetches every known resource kind and serializes them into a
-        multi-document YAML string.  To re-import, parse with
+        Uses the server's bulk export endpoint (single request) and returns
+        a multi-document YAML string.  To re-import, parse with
         ``yaml.safe_load_all()`` and pass the resulting list to ``apply()``.
-
-        Note: fetches at most 1000 resources per kind.
 
         Args:
             namespace: Namespace to export.
@@ -194,8 +191,9 @@ class ResourceMixin:
         Returns:
             Multi-document YAML string.
         """
-        all_resources: list[dict[str, Any]] = []
-        for kind in KIND_TO_PLURAL:
-            items = self.list(kind, namespace=namespace, limit=1000)
-            all_resources.extend(items)
-        return yaml.dump_all(all_resources, default_flow_style=False, sort_keys=False)
+        resp = self._http.get(
+            "/api/v1/resources/export",
+            params={"namespace": namespace},
+        )
+        raise_for_status(resp)
+        return resp.text

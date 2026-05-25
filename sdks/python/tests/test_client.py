@@ -191,24 +191,21 @@ class TestResources:
     def test_export_all(
         self, client: BlackbeardClient, transport: MockTransport
     ) -> None:
-        # Queue one response per kind
-        for _kind in KIND_TO_PLURAL:
-            transport.queue(
-                _mock_response(
-                    200,
-                    {
-                        "items": [],
-                        "total": 0,
-                        "limit": 1000,
-                        "offset": 0,
-                        "has_more": False,
-                    },
-                )
+        yaml_body = b"---\nkind: Agent\nmetadata:\n  name: a1\n"
+        transport.queue(
+            httpx.Response(
+                200,
+                content=yaml_body,
+                headers={"content-type": "application/x-yaml"},
             )
+        )
         result = client.export_all()
         assert isinstance(result, str)
-        # Should have made one request per kind
-        assert len(transport.requests) == len(KIND_TO_PLURAL)
+        assert "Agent" in result
+        assert len(transport.requests) == 1
+        req = transport.requests[0]
+        assert req.url.path == "/api/v1/resources/export"
+        assert "namespace=default" in str(req.url)
 
     def test_unknown_kind_raises(self, client: BlackbeardClient) -> None:
         with pytest.raises(ValueError, match="Unknown resource kind"):

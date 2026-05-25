@@ -137,10 +137,10 @@ spec:
             marketplace_mod._EXAMPLES_DIR = original_examples
 
 
-async def test_marketplace_import_builtin_no_examples_returns_500(
+async def test_marketplace_import_builtin_no_examples_returns_503(
     client: AsyncClient,
 ):
-    """Import with 'built-in' when examples dir missing should return 500."""
+    """Import with 'built-in' when examples dir missing should return 503."""
     from blackbeard.api import marketplace as marketplace_mod
 
     original_examples = marketplace_mod._EXAMPLES_DIR
@@ -151,7 +151,7 @@ async def test_marketplace_import_builtin_no_examples_returns_500(
             json={"url": "built-in"},
             headers=API_KEY_HEADER,
         )
-        assert response.status_code == 500
+        assert response.status_code == 503
         assert "not found" in response.json()["detail"].lower()
     finally:
         marketplace_mod._EXAMPLES_DIR = original_examples
