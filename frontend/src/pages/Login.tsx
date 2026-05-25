@@ -27,7 +27,10 @@ export default function Login() {
 
   useEffect(() => {
     fetch('/api/v1/config/public')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${String(r.status)}`)
+        return r.json()
+      })
       .then((d: { oidc_enabled?: boolean }) => setOidcEnabled(d.oidc_enabled === true))
       .catch((err: unknown) => {
         console.debug('[Login] OIDC config fetch failed — SSO button hidden', err)
@@ -116,7 +119,7 @@ export default function Login() {
                 aria-invalid={(emailMissing ? !email.trim() : !!error) || undefined}
                 aria-describedby={
                   emailMissing && !email.trim()
-                    ? 'login-email-error login-error'
+                    ? 'login-email-error'
                     : error
                       ? 'login-error'
                       : undefined
@@ -149,7 +152,7 @@ export default function Login() {
                   aria-invalid={(passwordMissing ? !password.trim() : !!error) || undefined}
                   aria-describedby={
                     passwordMissing && !password.trim()
-                      ? 'login-password-error login-error'
+                      ? 'login-password-error'
                       : error
                         ? 'login-error'
                         : undefined

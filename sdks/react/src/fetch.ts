@@ -36,10 +36,12 @@ export async function apiFetch<T>(
     if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
       throw new BlackbeardApiError(0, `Request timed out after ${timeout}ms`)
     }
-    throw new BlackbeardApiError(
+    const networkError = new BlackbeardApiError(
       0,
       err instanceof Error ? err.message : 'Network request failed',
     )
+    networkError.cause = err
+    throw networkError
   }
 
   if (!response.ok) {

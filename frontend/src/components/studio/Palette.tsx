@@ -8,6 +8,7 @@ import {
   GitBranch,
   Route,
   Columns3,
+  StickyNote,
 } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
 import { getDefaultNodeData } from './defaults'
@@ -113,6 +114,16 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-purple-700 dark:text-purple-300',
     borderColor:
       'border-purple-200 hover:border-purple-400 dark:border-purple-800 dark:hover:border-purple-600',
+  },
+  {
+    type: 'stickyNote',
+    label: 'Note',
+    icon: StickyNote,
+    headerBg: 'bg-gradient-to-r from-amber-400 to-yellow-300',
+    iconBg: 'bg-white/20',
+    textColor: 'text-amber-700 dark:text-amber-300',
+    borderColor:
+      'border-amber-200 hover:border-amber-400 dark:border-amber-800 dark:hover:border-amber-600',
   },
 ]
 

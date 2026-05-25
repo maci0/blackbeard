@@ -239,7 +239,9 @@ def run_flow_steps(
                                 "error_type": type(exc).__name__,
                             },
                         )
-                        step_outputs[step_name] = "error: step failed"
+                        step_outputs[step_name] = (
+                            f"error: {type(exc).__name__}: {exc}"
+                        )
 
         elif step_type == "router":
             fn_path = step.get("function_path", "")
@@ -291,7 +293,9 @@ def run_flow_steps(
                                 "error_type": type(exc).__name__,
                             },
                         )
-                        step_outputs[step_name] = "error: router failed"
+                        step_outputs[step_name] = (
+                            f"error: router {type(exc).__name__}: {exc}"
+                        )
 
         elif step_type == "condition":
             condition = step.get("condition", "")

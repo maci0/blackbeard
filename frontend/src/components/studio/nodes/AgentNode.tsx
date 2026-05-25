@@ -1,19 +1,21 @@
 import { memo } from 'react'
 import { type NodeProps } from '@xyflow/react'
-import { User } from 'lucide-react'
+import { User, CheckCircle2, XCircle } from 'lucide-react'
 import { parseRef } from '@/lib/utils'
 import { NodeShell } from './NodeShell'
+import { ExecStatusBadge } from './ExecStatusBadge'
 
 export default memo(function AgentNode({ data, selected }: NodeProps) {
   const role = data['role'] as string | undefined
   const goal = data['goal'] as string | undefined
   const llm = data['llm'] as string | undefined
   const llmDisplay = llm ? parseRef(llm) : undefined
+  const execStatus = data['_execStatus'] as string | undefined
 
   return (
     <NodeShell
       color="violet"
-      icon={User}
+      icon={execStatus === 'completed' ? CheckCircle2 : execStatus === 'failed' ? XCircle : User}
       label="Agent"
       ariaLabel={`Agent: ${role || 'Unnamed Agent'}`}
       selected={!!selected}
@@ -42,6 +44,8 @@ export default memo(function AgentNode({ data, selected }: NodeProps) {
           </span>
         </div>
       )}
+
+      {execStatus && <ExecStatusBadge status={execStatus} />}
     </NodeShell>
   )
 })

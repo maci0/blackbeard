@@ -45,7 +45,7 @@ export function ExecutionStatus({ executionId }: ExecutionStatusProps) {
   const config = useBlackbeard()
   const [execution, setExecution] = useState<Execution | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     let active = true
@@ -61,9 +61,9 @@ export function ExecutionStatus({ executionId }: ExecutionStatusProps) {
         setError(null)
 
         if (!TERMINAL_STATUSES.has(data.status)) {
-          intervalRef.current = setTimeout(() => void poll(), POLL_INTERVAL_MS)
+          timerRef.current = setTimeout(() => void poll(), POLL_INTERVAL_MS)
         } else {
-          intervalRef.current = null
+          timerRef.current = null
         }
       } catch (err) {
         if (!active) return
@@ -75,9 +75,9 @@ export function ExecutionStatus({ executionId }: ExecutionStatusProps) {
 
     return () => {
       active = false
-      if (intervalRef.current) {
-        clearTimeout(intervalRef.current)
-        intervalRef.current = null
+      if (timerRef.current) {
+        clearTimeout(timerRef.current)
+        timerRef.current = null
       }
     }
   }, [config, executionId])

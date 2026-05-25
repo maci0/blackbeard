@@ -14,19 +14,24 @@ export function CopyButton({
   const [copied, setCopied] = useState(false)
 
   const handleCopy = useCallback(() => {
-    void navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      })
+      .catch(() => {
+        /* clipboard API unavailable (e.g. non-HTTPS context) */
+      })
   }, [text])
 
   return (
     <button
       type="button"
       onClick={handleCopy}
-      aria-label={label}
+      aria-label={copied ? 'Copied' : label}
       className={cn(
-        'inline-flex h-7 w-7 items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'inline-flex h-8 w-8 items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         className,
       )}
     >

@@ -480,11 +480,16 @@ export default function ResourceDetail() {
   const handleCopyYaml = () => {
     if (!resource) return
     const yaml = resourceToYaml(resource)
-    void navigator.clipboard.writeText(yaml).then(() => {
-      setYamlCopied(true)
-      toasts.success('YAML copied to clipboard')
-      setTimeout(() => setYamlCopied(false), 2000)
-    })
+    void navigator.clipboard
+      .writeText(yaml)
+      .then(() => {
+        setYamlCopied(true)
+        toasts.success('YAML copied to clipboard')
+        setTimeout(() => setYamlCopied(false), 2000)
+      })
+      .catch(() => {
+        toasts.error('Failed to copy to clipboard')
+      })
   }
 
   const handleRun = async (params: RunParams) => {

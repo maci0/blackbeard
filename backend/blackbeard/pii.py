@@ -184,7 +184,20 @@ class LLMPIIRecognizer(EntityRecognizer):
                 msg = "LLM PII recognizer: no choices in response"
                 raise RuntimeError(msg)
             content = choices[0].get("message", {}).get("content", "")
-            items = json.loads(content)
+            try:
+                items = json.loads(content)
+            except json.JSONDecodeError as exc:
+                logger.warning(
+                    "LLM PII recognizer returned invalid JSON — treating as no PII found",
+                    exc_info=True,
+                    extra={
+                        "event": "llm_pii_invalid_json",
+                        "model": self._model,
+                        "content_preview": content[:200],
+                        "error": str(exc),
+                    },
+                )
+                return []
             if not isinstance(items, list):
                 return []
 

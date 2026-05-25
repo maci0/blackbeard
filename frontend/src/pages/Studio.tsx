@@ -12,7 +12,8 @@ import Palette, { MobilePalette } from '@/components/studio/Palette'
 import Canvas from '@/components/studio/Canvas'
 import PropertyPanel from '@/components/studio/PropertyPanel'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import type { RunStatus } from '@/lib/types'
+import type { RunStatus, Execution, ExecutionTask } from '@/lib/types'
+import { TERMINAL_STATUSES } from '@/lib/types'
 import { RunDialog, type RunParams } from '@/components/studio/RunDialog'
 import { Toolbar } from '@/components/studio/Toolbar'
 import { CopilotDialog, type CopilotResource } from '@/components/studio/CopilotDialog'
@@ -586,6 +587,98 @@ function StudioInner() {
     [crewName, handleSave, applyStatus],
   )
 
+  const [hasExecResults, setHasExecResults] = useState(false)
+
+  const clearExecResults = useCallback(() => {
+    const { nodes } = useStudioStore.getState()
+    const cleaned = nodes.map((n) => {
+      if (n.data['_execStatus'] === undefined) return n
+      const next = { ...n.data }
+      delete next['_execStatus']
+      delete next['_execOutput']
+      return { ...n, data: next }
+    })
+    setNodes(cleaned)
+    setHasExecResults(false)
+  }, [setNodes])
+
+  const applyExecResults = useCallback(
+    (tasks: ExecutionTask[], execStatus: string) => {
+      const { nodes } = useStudioStore.getState()
+      const taskByName = new Map<string, ExecutionTask>()
+      for (const t of tasks) {
+        taskByName.set(t.task_name, t)
+      }
+
+      const updated = nodes.map((n) => {
+        if (n.type === 'task') {
+          const name = (n.data['name'] as string | undefined) ?? ''
+          const match = taskByName.get(name)
+          if (match) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                _execStatus: match.status,
+                _execOutput: match.output ?? match.error ?? undefined,
+              },
+            }
+          }
+        }
+        if (n.type === 'agent') {
+          const role = (n.data['role'] as string | undefined) ?? ''
+          const agentName = toResourceName(role)
+          const agentTasks = tasks.filter((t) => t.agent_name === agentName)
+          if (agentTasks.length > 0) {
+            const allCompleted = agentTasks.every((t) => t.status === 'completed')
+            const anyFailed = agentTasks.some((t) => t.status === 'failed')
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                _execStatus: anyFailed ? 'failed' : allCompleted ? 'completed' : execStatus,
+              },
+            }
+          }
+        }
+        return n
+      })
+
+      setNodes(updated)
+      setHasExecResults(true)
+    },
+    [setNodes],
+  )
+
+  useEffect(() => {
+    if (!executionId) return
+
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    async function poll() {
+      if (cancelled) return
+      try {
+        const exec = await api.get<Execution>(`/api/v1/executions/${executionId}`)
+        if (cancelled) return
+        if (TERMINAL_STATUSES.has(exec.status) && exec.tasks && exec.tasks.length > 0) {
+          applyExecResults(exec.tasks, exec.status)
+          return
+        }
+      } catch {
+        if (cancelled) return
+      }
+      timer = setTimeout(() => void poll(), 3000)
+    }
+
+    timer = setTimeout(() => void poll(), 2000)
+
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [executionId, applyExecResults])
+
   const handleLoadExample = useCallback(() => {
     const childNodes: Node[] = [
       {
@@ -804,6 +897,8 @@ function StudioInner() {
         collabConnected={collabConnected}
         collabParticipants={collabParticipants}
         presenceUsers={presenceConnected ? presenceUsers : []}
+        hasExecResults={hasExecResults}
+        onClearExecResults={clearExecResults}
       />
 
       <div

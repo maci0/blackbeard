@@ -123,6 +123,7 @@ async def add_model(name: str, spec: dict[str, Any]) -> bool:
             "LiteLLM add_model error: %s %s",
             name,
             exc,
+            exc_info=True,
             extra={"event": "litellm_add_model_error", "model_name": name},
         )
         return False
@@ -163,6 +164,7 @@ async def delete_model(name: str) -> bool:
             "LiteLLM delete_model error: %s %s",
             name,
             exc,
+            exc_info=True,
             extra={"event": "litellm_delete_model_error", "model_name": name},
         )
         return False

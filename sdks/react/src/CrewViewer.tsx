@@ -152,6 +152,18 @@ export function CrewViewer({ crewName, namespace }: CrewViewerProps) {
           height={svgHeight}
           style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
         >
+          <defs>
+            <marker
+              id={markerId}
+              markerWidth="8"
+              markerHeight="6"
+              refX="8"
+              refY="3"
+              orient="auto"
+            >
+              <polygon points="0 0, 8 3, 0 6" fill="#94a3b8" />
+            </marker>
+          </defs>
           {edges.map(({ fromIdx, toIdx }, i) => {
             const x1 = agentX + NODE_W
             const y1 = PAD + fromIdx * (NODE_H + ROW_GAP) + NODE_H / 2
@@ -170,18 +182,6 @@ export function CrewViewer({ crewName, namespace }: CrewViewerProps) {
               />
             )
           })}
-          <defs>
-            <marker
-              id={markerId}
-              markerWidth="8"
-              markerHeight="6"
-              refX="8"
-              refY="3"
-              orient="auto"
-            >
-              <polygon points="0 0, 8 3, 0 6" fill="#94a3b8" />
-            </marker>
-          </defs>
         </svg>
 
         {/* Agent nodes */}

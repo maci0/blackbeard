@@ -120,6 +120,7 @@ async def generate_crew(
         logger.warning(
             "Copilot error: %s",
             e,
+            exc_info=True,
             extra={
                 "event": "copilot_error",
                 "error": str(e),

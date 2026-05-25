@@ -562,4 +562,5 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
 
 def get_room_stats() -> dict[str, int]:
     """Return per-room participant counts for health/debug endpoints."""
-    return {room: len(clients) for room, clients in _rooms.items() if clients}
+    snapshot = _rooms.copy()
+    return {room: len(clients) for room, clients in snapshot.items() if clients}

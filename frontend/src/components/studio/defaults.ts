@@ -52,6 +52,8 @@ export function getDefaultNodeData(type: string): Record<string, unknown> {
         type: 'parallel',
         branches: [],
       }
+    case 'stickyNote':
+      return { text: '', color: 'yellow' }
     default:
       return { label: 'New Node' }
   }

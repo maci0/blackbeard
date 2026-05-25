@@ -208,10 +208,17 @@ def shutdown_executor(wait: bool = False) -> None:
     """Shut down the thread pool executor and dispose all background DB engines."""
     global _executor, _bg_engine, _bg_session_factory
     with _executor_lock:
-        if _executor is not None:
-            _executor.shutdown(wait=wait, cancel_futures=True)
+        executor = _executor
+        if executor is not None:
+            executor.shutdown(wait=wait, cancel_futures=True)
             _executor = None
     logger.info("Execution thread pool shut down", extra={"event": "executor_shutdown"})
+
+    # Running threads use the shared bg engine — wait for them to finish
+    # before disposing it.  The second shutdown(wait=True) only joins
+    # threads; pending futures were already cancelled above.
+    if executor is not None and not wait:
+        executor.shutdown(wait=True)
 
     with _bg_engine_lock:
         bg = _bg_engine

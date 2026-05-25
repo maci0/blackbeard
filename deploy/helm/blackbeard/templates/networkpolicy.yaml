@@ -68,6 +68,7 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+  egress: []
 {{- end }}
 ---
 {{- if .Values.valkey.enabled }}
@@ -92,6 +93,7 @@ spec:
       ports:
         - protocol: TCP
           port: 6379
+  egress: []
 {{- end }}
 ---
 {{- if .Values.litellm.enabled }}

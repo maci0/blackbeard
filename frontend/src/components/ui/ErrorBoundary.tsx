@@ -32,7 +32,8 @@ export class ErrorBoundary extends Component<Props, State> {
         >
           <h1 className="text-xl font-semibold">Something went wrong</h1>
           <p className="max-w-md text-sm text-muted-foreground">
-            An unexpected error occurred. Try reloading the page.
+            An unexpected error occurred. You can try again, reload the page, or navigate to a
+            different section.
           </p>
           {this.state.errorMessage && (
             <p className="mt-2 max-w-md rounded border bg-muted px-3 py-2 font-mono text-xs text-muted-foreground">

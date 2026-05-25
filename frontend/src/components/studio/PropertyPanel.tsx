@@ -784,6 +784,53 @@ function CrewGroupForm({
   )
 }
 
+const STICKY_COLORS = [
+  { value: 'yellow', label: 'Yellow', swatch: 'bg-amber-300' },
+  { value: 'blue', label: 'Blue', swatch: 'bg-sky-300' },
+  { value: 'green', label: 'Green', swatch: 'bg-emerald-300' },
+  { value: 'pink', label: 'Pink', swatch: 'bg-pink-300' },
+] as const
+
+function StickyNoteForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  const currentColor = (data['color'] as string | undefined) ?? 'yellow'
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Text">
+        <TextInput
+          value={str(data, 'text')}
+          onChange={(v) => onChange('text', v)}
+          placeholder="Write a note..."
+          multiline
+        />
+      </FieldGroup>
+      <FieldGroup label="Color">
+        <div className="flex gap-2">
+          {STICKY_COLORS.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => onChange('color', c.value)}
+              aria-label={c.label}
+              aria-pressed={currentColor === c.value}
+              className={`h-6 w-6 rounded-full border-2 transition-all ${c.swatch} ${
+                currentColor === c.value
+                  ? 'scale-110 border-foreground'
+                  : 'border-transparent hover:border-muted-foreground/40'
+              }`}
+            />
+          ))}
+        </div>
+      </FieldGroup>
+    </div>
+  )
+}
+
 const TYPE_META: Record<string, { label: string; accent: string; border: string }> = {
   agent: { label: 'Agent', accent: 'bg-violet-500', border: 'border-violet-200' },
   task: { label: 'Task', accent: 'bg-blue-500', border: 'border-blue-200' },
@@ -794,6 +841,7 @@ const TYPE_META: Record<string, { label: string; accent: string; border: string 
   router: { label: 'Router', accent: 'bg-cyan-500', border: 'border-cyan-200' },
   parallel: { label: 'Parallel', accent: 'bg-purple-500', border: 'border-purple-200' },
   crewGroup: { label: 'Crew Group', accent: 'bg-slate-500', border: 'border-slate-200' },
+  stickyNote: { label: 'Note', accent: 'bg-amber-400', border: 'border-amber-200' },
 }
 
 export default function PropertyPanel() {
@@ -923,6 +971,8 @@ export default function PropertyPanel() {
             <ParallelForm data={data} onChange={onChange} />
           ) : nodeType === 'crewGroup' ? (
             <CrewGroupForm data={data} onChange={onChange} />
+          ) : nodeType === 'stickyNote' ? (
+            <StickyNoteForm data={data} onChange={onChange} />
           ) : (
             <p className="text-xs text-muted-foreground">No properties for this node type.</p>
           )}

@@ -157,6 +157,7 @@ _INTERNAL_HOSTNAMES = frozenset(
 )
 
 _INTERNAL_DOMAIN_SUFFIXES = (
+    ".internal",
     ".local",
     ".svc",
     ".svc.cluster.local",
@@ -257,9 +258,8 @@ def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError])
 
     NOTE: DNS resolution uses socket.getaddrinfo which is a blocking call.
     A 5-second timeout is applied to prevent slow/hanging DNS lookups from
-    blocking the async event loop. This is acceptable because validation
-    runs infrequently (resource create/update) and the timeout caps worst-case
-    latency.
+    blocking the CLI. This is acceptable because validation runs
+    infrequently and the timeout caps worst-case latency.
     """
     try:
         parsed = urlparse(url)
@@ -310,7 +310,7 @@ def _get_dns_executor() -> concurrent.futures.ThreadPoolExecutor:
 def _check_dns_resolution(hostname: str, field_name: str, errors: list[ValidationError]) -> None:
     """Resolve hostname via DNS and reject if any address is internal.
 
-    Runs in a thread with a timeout to avoid blocking the async event loop
+    Runs in a thread with a 5-second timeout to avoid blocking the CLI
     when DNS is slow or unresponsive.
     """
 

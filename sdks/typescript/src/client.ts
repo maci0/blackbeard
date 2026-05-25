@@ -89,10 +89,12 @@ export class BlackbeardClient {
       ) {
         throw new BlackbeardApiError(0, `Request timed out after ${this.timeout}ms`);
       }
-      throw new BlackbeardApiError(
+      const networkError = new BlackbeardApiError(
         0,
         err instanceof Error ? err.message : "Network request failed"
       );
+      networkError.cause = err;
+      throw networkError;
     }
 
     if (!resp.ok) {
@@ -263,9 +265,22 @@ export class BlackbeardClient {
 
   async apply(resources: Resource[]): Promise<Resource[]> {
     const results: Resource[] = [];
-    for (const res of resources) {
-      const result = await this.create(res);
-      results.push(result);
+    for (let i = 0; i < resources.length; i++) {
+      try {
+        results.push(await this.create(resources[i]!));
+      } catch (err) {
+        if (err instanceof BlackbeardApiError) {
+          const name = resources[i]!.metadata?.name ?? "?";
+          const wrapped = new BlackbeardApiError(
+            err.status,
+            `${resources[i]!.kind}/${name}: ${err.detail}`,
+            err.body,
+          );
+          wrapped.cause = err;
+          throw wrapped;
+        }
+        throw err;
+      }
     }
     return results;
   }
@@ -428,12 +443,12 @@ export class BlackbeardClient {
     pollInterval = 2000,
     timeout = 300_000
   ): Promise<Execution> {
-    const deadline = Date.now() + timeout;
+    const deadline = performance.now() + timeout;
 
     while (true) {
       const exec = await this.getExecution(executionId);
       if (TERMINAL_STATUSES.has(exec.status)) return exec;
-      if (Date.now() >= deadline) {
+      if (performance.now() >= deadline) {
         throw new BlackbeardApiError(
           0,
           `Execution ${executionId} did not complete within ${timeout}ms (current status: ${exec.status})`

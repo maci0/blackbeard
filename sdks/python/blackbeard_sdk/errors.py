@@ -36,8 +36,18 @@ class BlackbeardApiError(Exception):
         return self.status_code >= 500
 
     @property
+    def is_not_found(self) -> bool:
+        return self.status_code == 404
+
+    @property
     def is_network_error(self) -> bool:
         return self.status_code == 0
+
+    def __repr__(self) -> str:
+        return (
+            f"BlackbeardApiError(status_code={self.status_code}, "
+            f"detail={self.detail!r})"
+        )
 
 
 def raise_for_status(resp: httpx.Response) -> None:

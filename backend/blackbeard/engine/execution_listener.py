@@ -313,6 +313,7 @@ def _deliver_single_webhook(
 
 _webhook_host_cache: dict[str, str | None] = {}
 _webhook_host_cache_lock = threading.Lock()
+_MAX_WEBHOOK_HOST_CACHE = 1000
 
 
 def _get_webhook_hostname(webhook_url: str) -> str | None:
@@ -324,6 +325,10 @@ def _get_webhook_hostname(webhook_url: str) -> str | None:
     hostname = urlparse(webhook_url).hostname or ""
     is_blocked = is_internal_host(hostname) if hostname else True
     with _webhook_host_cache_lock:
+        if len(_webhook_host_cache) >= _MAX_WEBHOOK_HOST_CACHE:
+            oldest = list(_webhook_host_cache.keys())[: _MAX_WEBHOOK_HOST_CACHE // 5]
+            for k in oldest:
+                _webhook_host_cache.pop(k, None)
         _webhook_host_cache[webhook_url] = "" if is_blocked else hostname
     return None if is_blocked else hostname
 
@@ -555,6 +560,7 @@ class BlackbeardExecutionListener(BaseEventListener):
             self._otel_root_span = None
         if timer is not None:
             timer.cancel()
+            timer.join(timeout=5.0)
         self._flush_buffer()
         for attempt in range(self._FLUSH_RETRIES):
             with self._lock:

@@ -116,7 +116,7 @@ function SecretReveal({ secret }: { secret: string }) {
       setCopied(true)
       setTimeout(() => setCopied(false), 3000)
     } catch {
-      // clipboard API not available
+      console.warn('[Webhooks] Clipboard API unavailable — secret not copied')
     }
   }
 
@@ -313,7 +313,9 @@ function AddWebhookDialog({
 
               <div>
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-medium">Events</span>
+                  <span id="webhook-events-label" className="text-xs font-medium">
+                    Events
+                  </span>
                   <button
                     type="button"
                     onClick={toggleAll}
@@ -325,7 +327,11 @@ function AddWebhookDialog({
                 <p className="mb-2 text-xs text-muted-foreground">
                   Leave empty to receive all events
                 </p>
-                <div className="grid grid-cols-2 gap-2" role="group" aria-label="Event types">
+                <div
+                  className="grid grid-cols-2 gap-2"
+                  role="group"
+                  aria-labelledby="webhook-events-label"
+                >
                   {ALL_EVENTS.map((event) => (
                     <label
                       key={event}

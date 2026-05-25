@@ -1,18 +1,23 @@
 import { memo } from 'react'
 import { type NodeProps } from '@xyflow/react'
-import { ListChecks } from 'lucide-react'
+import { ListChecks, CheckCircle2, XCircle } from 'lucide-react'
 import { parseRef } from '@/lib/utils'
 import { NodeShell } from './NodeShell'
+import { ExecStatusBadge } from './ExecStatusBadge'
 
 export default memo(function TaskNode({ data, selected }: NodeProps) {
   const name = data['name'] as string | undefined
   const description = data['description'] as string | undefined
   const agent = data['agent'] as string | undefined
+  const execStatus = data['_execStatus'] as string | undefined
+  const execOutput = data['_execOutput'] as string | undefined
 
   return (
     <NodeShell
       color="blue"
-      icon={ListChecks}
+      icon={
+        execStatus === 'completed' ? CheckCircle2 : execStatus === 'failed' ? XCircle : ListChecks
+      }
       label="Task"
       ariaLabel={`Task: ${name || 'Unnamed Task'}`}
       selected={!!selected}
@@ -41,6 +46,8 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
           </span>
         )}
       </div>
+
+      {execStatus && <ExecStatusBadge status={execStatus} output={execOutput} />}
     </NodeShell>
   )
 })

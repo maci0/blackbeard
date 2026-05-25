@@ -91,9 +91,14 @@ export default function Settings() {
 
   useEffect(() => {
     fetch('/api/v1/config/public')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${String(r.status)}`)
+        return r.json()
+      })
       .then((d: PublicConfig) => setConfig(d))
-      .catch(() => {})
+      .catch((err: unknown) => {
+        console.warn('[Settings] Failed to load public config:', err)
+      })
   }, [])
 
   useEffect(() => {
@@ -176,9 +181,14 @@ export default function Settings() {
 
   const handleCopyKey = () => {
     if (!revealedKey) return
-    void navigator.clipboard.writeText(revealedKey).then(() => {
-      useToastStore.getState().success('API key copied to clipboard')
-    })
+    void navigator.clipboard
+      .writeText(revealedKey)
+      .then(() => {
+        useToastStore.getState().success('API key copied to clipboard')
+      })
+      .catch(() => {
+        useToastStore.getState().error('Failed to copy to clipboard')
+      })
   }
 
   const handleSaveApiBase = () => {
@@ -458,13 +468,16 @@ export default function Settings() {
               </span>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Bell className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-sm">Browser notifications</span>
+                  <Bell className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                  <span id="browser-notif-label" className="text-sm">
+                    Browser notifications
+                  </span>
                 </div>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={browserNotifications}
+                  aria-labelledby="browser-notif-label"
                   onClick={() => handleBrowserNotificationsChange(!browserNotifications)}
                   className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${browserNotifications ? 'bg-primary' : 'bg-muted'}`}
                 >
@@ -475,13 +488,16 @@ export default function Settings() {
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Volume2 className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-sm">Sound on notification</span>
+                  <Volume2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                  <span id="sound-notif-label" className="text-sm">
+                    Sound on notification
+                  </span>
                 </div>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={soundNotifications}
+                  aria-labelledby="sound-notif-label"
                   onClick={() => handleSoundNotificationsChange(!soundNotifications)}
                   className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${soundNotifications ? 'bg-primary' : 'bg-muted'}`}
                 >

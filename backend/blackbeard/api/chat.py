@@ -73,6 +73,11 @@ def _extract_content(data: dict[str, Any]) -> tuple[str, TokenUsage]:
         if completion_time_ms is None and usage.get("completion_time"):
             completion_time_ms = int(float(usage["completion_time"]) * 1000)
     except (TypeError, ValueError, OverflowError):
+        logger.debug(
+            "Could not parse timing data from LLM response usage — timing will be omitted",
+            exc_info=True,
+            extra={"event": "chat_timing_parse_error"},
+        )
         prompt_time_ms = None
         completion_time_ms = None
 

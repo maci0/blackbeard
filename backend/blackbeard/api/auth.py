@@ -203,6 +203,7 @@ async def login(
 
     password_hash = user.password_hash if user else _DUMMY_HASH
     if not password_hash.startswith("$2"):
+        # Spend bcrypt time to equalize timing with the normal path
         await asyncio.to_thread(verify_password, data.password, _DUMMY_HASH)
         valid = False
         if user is not None:

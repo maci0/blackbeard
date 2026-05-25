@@ -155,6 +155,12 @@ def _validate_startup_config() -> None:
             )
         if not settings.oidc_client_id:
             raise _fatal("Refusing to start: OIDC_ISSUER is set but OIDC_CLIENT_ID is missing.")
+    if not settings.enforce_rbac and not settings.debug:
+        logger.warning(
+            "SECURITY: ENFORCE_RBAC is False — all authenticated users have full access. "
+            "Set ENFORCE_RBAC=true and configure Role/RoleBinding resources for production.",
+            extra={"event": "rbac_disabled_in_production"},
+        )
     if settings.forwarded_allow_ips == "*" and not settings.debug:
         logger.warning(
             "SECURITY: FORWARDED_ALLOW_IPS='*' trusts X-Forwarded-For from any source. "

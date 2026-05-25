@@ -24,6 +24,7 @@ api:
   # Additional environment variables as key-value pairs:
   #   DEBUG: "false"
   #   LOG_LEVEL: "info"
+  #   ENFORCE_RBAC: "true"
 
 # -- UI (React/Vite + nginx) --
 ui:

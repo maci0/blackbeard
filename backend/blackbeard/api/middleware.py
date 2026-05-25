@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from starlette.middleware.base import RequestResponseEndpoint
 
 from blackbeard.auth.api_key import get_api_key
+from blackbeard.auth.dependencies import SSE_STREAM_RE
 from blackbeard.auth.jwt import decode_token
 from blackbeard.config import settings
 from blackbeard.logging_config import request_id_var, scrub_pii, user_id_var
@@ -39,11 +40,6 @@ PUBLIC_PATHS = (
 )
 
 _AUTOMATION_WEBHOOK_RE = re.compile(r"^/api/v1/automations/[a-z0-9][a-z0-9\-]*/webhook$")
-
-# Query-string API key fallback is ONLY for the execution SSE endpoint
-# where EventSource cannot set custom headers.  Matching any path that
-# happens to end in "/stream" would widen the attack surface (CWE-598).
-SSE_STREAM_RE = re.compile(r"^/api/v1/executions/[0-9a-fA-F\-]{36}/stream$")
 
 # Allowlist pattern for client-supplied request IDs — prevents header injection
 _REQUEST_ID_PATTERN = re.compile(r"^[a-zA-Z0-9\-]{1,64}$")

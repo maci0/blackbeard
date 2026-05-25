@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable, Coroutine
 from typing import Any
 
@@ -12,7 +13,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
-from blackbeard.api.middleware import SSE_STREAM_RE
 from blackbeard.auth.authorizer import Authorizer
 from blackbeard.auth.jwt import decode_token
 from blackbeard.config import settings
@@ -20,6 +20,11 @@ from blackbeard.kinds import PLURAL_TO_KIND
 from blackbeard.models import User, get_session
 
 logger = logging.getLogger(__name__)
+
+# Query-string API key fallback is ONLY for the execution SSE endpoint
+# where EventSource cannot set custom headers.  Matching any path that
+# happens to end in "/stream" would widen the attack surface (CWE-598).
+SSE_STREAM_RE = re.compile(r"^/api/v1/executions/[0-9a-fA-F\-]{36}/stream$")
 
 _METHOD_TO_VERB: dict[str, str] = {
     "GET": "get",

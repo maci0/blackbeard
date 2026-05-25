@@ -15,6 +15,7 @@ import {
   Sparkles,
   Download,
   ClipboardCopy,
+  XCircle,
 } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { toResourceName } from '@/lib/utils'
@@ -54,6 +55,8 @@ export function Toolbar({
   collabConnected,
   collabParticipants,
   presenceUsers,
+  hasExecResults,
+  onClearExecResults,
 }: {
   crewName: string
   onCrewNameChange: (v: string) => void
@@ -82,6 +85,8 @@ export function Toolbar({
   collabConnected?: boolean
   collabParticipants?: number
   presenceUsers?: Array<{ email: string; name: string }>
+  hasExecResults?: boolean
+  onClearExecResults?: () => void
 }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const toasts = useToastStore()
@@ -282,6 +287,18 @@ export function Toolbar({
           )}
           Run
         </button>
+
+        {hasExecResults && onClearExecResults && (
+          <button
+            onClick={onClearExecResults}
+            aria-label="Clear execution results from canvas"
+            title="Clear results"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <XCircle className="h-3.5 w-3.5" />
+            Clear results
+          </button>
+        )}
 
         {/* AI Copilot */}
         <button

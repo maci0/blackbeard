@@ -87,6 +87,10 @@ class Authorizer:
     ) -> bool:
         """Check if the subject is authorized for the given verb on resource_kind.
 
+        *namespace* is included in the cache key so that cache entries are
+        scoped per-namespace, but the underlying authorization check is
+        namespace-agnostic (roles and bindings are global).
+
         Returns True if authorized, False otherwise.
         """
         key = _cache_key(subject_kind, subject_name, verb, resource_kind, namespace)

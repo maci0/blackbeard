@@ -304,6 +304,11 @@ class ResourceLoader:
                     f"{', '.join(ALLOWED_TOOL_MODULE_PREFIXES)}"
                 )
             module_path, class_name = class_path.rsplit(".", 1)
+            if class_name.startswith("_"):
+                raise LoaderError(
+                    f"Tool '{resource.name}': class_path '{class_path}' references a "
+                    f"private/dunder attribute"
+                )
             for blocked in BLOCKED_TOOL_SUBMODULES:
                 if module_path == blocked or module_path.startswith(blocked + "."):
                     raise LoaderError(

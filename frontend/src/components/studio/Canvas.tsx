@@ -35,6 +35,7 @@ import ConditionNode from './nodes/ConditionNode'
 import RouterNode from './nodes/RouterNode'
 import ParallelNode from './nodes/ParallelNode'
 import CrewGroupNode from './nodes/CrewGroupNode'
+import StickyNoteNode from './nodes/StickyNoteNode'
 import DataFlowEdge from './edges/DataFlowEdge'
 import ToolAssignEdge from './edges/ToolAssignEdge'
 
@@ -52,6 +53,7 @@ const NODE_TYPES: NodeTypes = {
   router: RouterNode,
   parallel: ParallelNode,
   crewGroup: CrewGroupNode,
+  stickyNote: StickyNoteNode,
 }
 
 const DROPPABLE_TYPES = new Set([
@@ -63,6 +65,7 @@ const DROPPABLE_TYPES = new Set([
   'condition',
   'router',
   'parallel',
+  'stickyNote',
 ])
 
 const EDGE_TYPES: EdgeTypes = {
@@ -102,6 +105,8 @@ function minimapNodeColor(node: Node): string {
       return '#a855f7'
     case 'crewGroup':
       return '#94a3b8'
+    case 'stickyNote':
+      return '#fbbf24'
     default:
       return '#94a3b8'
   }

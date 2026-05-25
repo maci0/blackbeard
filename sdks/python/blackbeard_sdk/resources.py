@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 import httpx
 
-from blackbeard_sdk.errors import raise_for_status
+from blackbeard_sdk.errors import BlackbeardApiError, raise_for_status
 
 # Canonical kind-to-plural mapping matching backend/blackbeard/kinds.py
 KIND_TO_PLURAL: dict[str, str] = {
@@ -166,6 +166,8 @@ class ResourceMixin:
         """Create or update multiple resources (sequential upsert).
 
         Each resource is sent as a POST (which the API treats as upsert).
+        On failure, the error detail includes the kind/name of the resource
+        that failed and its position in the list.
 
         Args:
             resources: List of resource definition dicts.
@@ -174,8 +176,17 @@ class ResourceMixin:
             List of created/updated resource dicts.
         """
         results: list[dict[str, Any]] = []
-        for resource in resources:
-            results.append(self.create(resource))
+        for i, resource in enumerate(resources):
+            try:
+                results.append(self.create(resource))
+            except BlackbeardApiError as exc:
+                kind = resource.get("kind", "?")
+                name = resource.get("metadata", {}).get("name", "?")
+                raise BlackbeardApiError(
+                    exc.status_code,
+                    f"{kind}/{name}: {exc.detail}",
+                    exc.body,
+                ) from exc
         return results
 
     def export_all(self, namespace: str = "default") -> str:
