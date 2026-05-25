@@ -16,6 +16,8 @@ from blackbeard.engine.policy import (
 
 def test_default_policy_allows_all():
     assert DEFAULT_POLICY.tool_mode == "all"
+    assert DEFAULT_POLICY.check_tool_access("any-agent", "any_tool") is None
+    assert DEFAULT_POLICY.check_tool_access("any-agent", "dangerous_tool") is None
 
 
 # ---------------------------------------------------------------------------
@@ -36,6 +38,7 @@ def test_allowlist_denies_unlisted_tool():
     err = exc_info.value
     assert err.agent == "agent-1"
     assert "file_writer" in err.action
+    assert err.reason, "PolicyDeniedError must include a reason"
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +108,9 @@ def test_resolve_agent_policy():
     policies = {"strict-policy": {"tools": {"mode": "allowlist", "allow": ["web_search"]}}}
     resolved = resolve_policy(agent_spec, policies=policies)
     assert resolved.tool_mode == "allowlist"
+    assert resolved.check_tool_access("researcher", "web_search") is None
+    with pytest.raises(PolicyDeniedError):
+        resolved.check_tool_access("researcher", "file_writer")
 
 
 def test_resolve_crew_default_policy():

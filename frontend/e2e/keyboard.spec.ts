@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { login } from './helpers'
+import { login, loginAndNavigate } from './helpers'
 
 test.describe('Keyboard accessibility', () => {
   test('Tab through login form fields', async ({ page }) => {
@@ -40,7 +40,7 @@ test.describe('Keyboard accessibility', () => {
   })
 
   test('Escape closes dialogs', async ({ page }) => {
-    await login(page)
+    await loginAndNavigate(page, '/dashboard')
 
     // Open keyboard shortcuts dialog
     const shortcutsBtn = page.getByRole('button', { name: /keyboard shortcuts/i })
@@ -57,7 +57,7 @@ test.describe('Keyboard accessibility', () => {
   })
 
   test('Tab navigates sidebar items', async ({ page }) => {
-    await login(page)
+    await loginAndNavigate(page, '/dashboard')
 
     // Focus the first sidebar nav link
     const nav = page.getByRole('navigation', { name: /primary/i })
@@ -76,7 +76,7 @@ test.describe('Keyboard accessibility', () => {
   })
 
   test('Skip to main content link exists', async ({ page }) => {
-    await login(page)
+    await loginAndNavigate(page, '/dashboard')
 
     // The skip link should exist in the DOM
     const skipLink = page.getByRole('link', { name: /skip to main content/i })
@@ -85,9 +85,7 @@ test.describe('Keyboard accessibility', () => {
   })
 
   test('Enter and Space activate table rows', async ({ page }) => {
-    await login(page)
-    await page.getByRole('link', { name: 'Resources' }).click()
-    await page.waitForURL('/resources')
+    await loginAndNavigate(page, '/resources')
 
     // Focus the first table row
     const firstRow = page.getByRole('row', { name: /press enter to view details/i }).first()

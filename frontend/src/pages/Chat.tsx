@@ -259,17 +259,18 @@ export default function Chat() {
     const controller = new AbortController()
     abortRef.current = controller
     let accumulated = ''
+    let rafPending = 0
+
+    function flushContent() {
+      rafPending = 0
+      const snapshot = accumulated
+      setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, content: snapshot } : m)))
+    }
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      const token = api.getToken()
-      if (token) headers['Authorization'] = `Bearer ${token}`
-      const apiKey = api.getApiKey()
-      if (apiKey) headers['X-API-Key'] = apiKey
-
       const resp = await fetch('/api/v1/chat/stream', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json', ...api.getAuthHeaders() },
         body: JSON.stringify(body),
         signal: controller.signal,
       })
@@ -305,6 +306,10 @@ export default function Chat() {
               model?: string
             }
             if (event.error) {
+              if (rafPending) {
+                cancelAnimationFrame(rafPending)
+                rafPending = 0
+              }
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === msgId
@@ -323,11 +328,15 @@ export default function Chat() {
             }
             if (event.content) {
               accumulated += event.content
-              setMessages((prev) =>
-                prev.map((m) => (m.id === msgId ? { ...m, content: accumulated } : m)),
-              )
+              if (!rafPending) {
+                rafPending = requestAnimationFrame(flushContent)
+              }
             }
             if (event.done) {
+              if (rafPending) {
+                cancelAnimationFrame(rafPending)
+                rafPending = 0
+              }
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === msgId
@@ -348,6 +357,10 @@ export default function Chat() {
         }
       }
     } catch (err: unknown) {
+      if (rafPending) {
+        cancelAnimationFrame(rafPending)
+        rafPending = 0
+      }
       if (controller.signal.aborted) return
       const errorText = err instanceof Error ? err.message : getErrorMessage(err, 'Request failed')
       setMessages((prev) =>

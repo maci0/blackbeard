@@ -90,12 +90,9 @@ export default function Settings() {
   const [revokeOpen, setRevokeOpen] = useState(false)
 
   useEffect(() => {
-    fetch('/api/v1/config/public')
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${String(r.status)}`)
-        return r.json()
-      })
-      .then((d: PublicConfig) => setConfig(d))
+    api
+      .get<PublicConfig>('/api/v1/config/public')
+      .then((d) => setConfig(d))
       .catch((err: unknown) => {
         console.warn('[Settings] Failed to load public config:', err)
       })

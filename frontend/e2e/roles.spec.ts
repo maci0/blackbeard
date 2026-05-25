@@ -1,11 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { login } from './helpers'
+import { loginAndNavigate } from './helpers'
 
 test.describe('Roles page', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page)
-    await page.getByRole('link', { name: 'Roles' }).click()
-    await page.waitForURL('/roles')
+    await loginAndNavigate(page, '/roles')
   })
 
   test('displays role cards', async ({ page }) => {

@@ -180,7 +180,11 @@ async def export_resources(
                 explicit_start=True,
             )
 
-    return StreamingResponse(_generate_yaml(), media_type="application/x-yaml")
+    return StreamingResponse(
+        _generate_yaml(),
+        media_type="application/x-yaml",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.get(

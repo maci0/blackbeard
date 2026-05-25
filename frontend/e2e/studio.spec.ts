@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { login } from './helpers'
+import { loginAndNavigate } from './helpers'
 
 test.describe('Studio', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page)
+    await loginAndNavigate(page, '/studio')
   })
 
   test('empty canvas shows placeholder message', async ({ page }) => {

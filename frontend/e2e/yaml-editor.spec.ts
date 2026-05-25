@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { login } from './helpers'
+import { loginAndNavigate } from './helpers'
 
 test.describe('YAML Editor', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page)
+    await loginAndNavigate(page, '/studio')
   })
 
   test('YAML editor toggle button exists', async ({ page }) => {

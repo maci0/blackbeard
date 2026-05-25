@@ -60,6 +60,9 @@ async def test_cors_disallows_unauthorized_origin(client):
         "CORS should not reflect an unauthorized origin"
     )
     assert allow_origin != "*", "CORS must not use wildcard — would allow any origin"
+    assert allow_origin in ("", "http://localhost:3000", "http://localhost:5173"), (
+        f"Unexpected CORS origin: {allow_origin!r} — should be empty or a configured origin"
+    )
 
 
 async def test_docs_no_auth(client):
@@ -162,7 +165,8 @@ async def test_invalid_request_id_replaced(client):
     response = await client.get("/api/v1/agents", headers=headers)
     returned_id = response.headers.get("X-Request-Id")
     assert returned_id != "bad id with spaces!@#"
-    assert uuid.UUID(returned_id)  # must be a valid UUID, not just 36 chars
+    parsed = uuid.UUID(returned_id)
+    assert isinstance(parsed, uuid.UUID), "Replaced request ID must be a valid UUID"
 
 
 # ---------------------------------------------------------------------------

@@ -700,7 +700,9 @@ def test_build_principal_chain_with_user():
     assert chain["user"]["id"] == "12345678-1234-1234-1234-123456789abc"
     assert "email" not in chain["user"], "Email must not leak into principal chain"
     assert "password_hash" not in chain["user"], "Password hash must not leak into principal chain"
-    assert "password" not in str(chain["user"]).lower(), "No password data in principal chain"
+    assert "hashed" not in str(chain["user"]), "Actual password hash value must not appear in chain"
+    for key in chain["user"]:
+        assert "password" not in key.lower(), f"Key {key!r} contains 'password' — must not leak"
     assert chain["crew"] == "my-crew"
 
 
@@ -903,7 +905,8 @@ async def test_execution_response_has_required_fields(client: AsyncClient):
         f"cost_usd should be numeric or string-encoded decimal, got {type(data['cost_usd'])}"
     )
     if isinstance(data["cost_usd"], str):
-        float(data["cost_usd"])  # must be parseable as a number
+        parsed = float(data["cost_usd"])
+        assert parsed >= 0, f"cost_usd must be non-negative, got {parsed}"
     assert data["crew_namespace"] == "default"
     assert data["total_tokens"] == 0
     assert data["prompt_tokens"] == 0

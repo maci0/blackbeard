@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { memo, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Database,
@@ -27,7 +27,7 @@ import { PLURAL_TO_KIND } from '@/lib/kinds'
 import { cn } from '@/lib/utils'
 import type { Resource, Execution } from '@/lib/types'
 
-function StatCard({
+const StatCard = memo(function StatCard({
   label,
   value,
   icon: Icon,
@@ -63,9 +63,15 @@ function StatCard({
       />
     </Link>
   )
-}
+})
 
-function RecentExecutions({ executions, loading }: { executions: Execution[]; loading: boolean }) {
+const RecentExecutions = memo(function RecentExecutions({
+  executions,
+  loading,
+}: {
+  executions: Execution[]
+  loading: boolean
+}) {
   const navigate = useNavigate()
   const recent = useMemo(() => executions.slice(0, 5), [executions])
 
@@ -165,9 +171,9 @@ function RecentExecutions({ executions, loading }: { executions: Execution[]; lo
       </div>
     </section>
   )
-}
+})
 
-function ResourcesByKind({
+const ResourcesByKind = memo(function ResourcesByKind({
   resources,
   loading,
 }: {
@@ -250,13 +256,19 @@ function ResourcesByKind({
       </div>
     </section>
   )
-}
+})
 
 function parseCost(cost: number | string): number {
   return typeof cost === 'string' ? parseFloat(cost) || 0 : cost || 0
 }
 
-function SpendByCrew({ executions, loading }: { executions: Execution[]; loading: boolean }) {
+const SpendByCrew = memo(function SpendByCrew({
+  executions,
+  loading,
+}: {
+  executions: Execution[]
+  loading: boolean
+}) {
   const crewSpend = useMemo(() => {
     const map = new Map<string, number>()
     for (const e of executions) {
@@ -336,9 +348,15 @@ function SpendByCrew({ executions, loading }: { executions: Execution[]; loading
       </div>
     </section>
   )
-}
+})
 
-function SpendOverTime({ executions, loading }: { executions: Execution[]; loading: boolean }) {
+const SpendOverTime = memo(function SpendOverTime({
+  executions,
+  loading,
+}: {
+  executions: Execution[]
+  loading: boolean
+}) {
   const dailySpend = useMemo(() => {
     const now = new Date()
     const days: Array<{ label: string; date: string; spend: number }> = []
@@ -355,12 +373,13 @@ function SpendOverTime({ executions, loading }: { executions: Execution[]; loadi
       days.push({ label: dayLabel, date: dateStr, spend: 0 })
     }
 
+    const daysByDate = new Map(days.map((d) => [d.date, d]))
     for (const e of executions) {
       if (!e.created_at) continue
       const eDate = e.created_at.slice(0, 10)
       const cost = parseCost(e.cost_usd)
       if (cost > 0) {
-        const day = days.find((d) => d.date === eDate)
+        const day = daysByDate.get(eDate)
         if (day) day.spend += cost
       }
     }
@@ -443,7 +462,7 @@ function SpendOverTime({ executions, loading }: { executions: Execution[]; loadi
       </div>
     </section>
   )
-}
+})
 
 function QuickActions() {
   return (

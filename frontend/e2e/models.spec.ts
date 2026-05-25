@@ -1,11 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { login } from './helpers'
+import { loginAndNavigate } from './helpers'
 
 test.describe('Models page', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page)
-    await page.getByRole('link', { name: 'Models' }).click()
-    await page.waitForURL('/models')
+    await loginAndNavigate(page, '/models')
   })
 
   test('page loads with header', async ({ page }) => {

@@ -1,11 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { login } from './helpers'
+import { loginAndNavigate } from './helpers'
 
 test.describe('Resources page', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page)
-    await page.getByRole('link', { name: 'Resources' }).click()
-    await page.waitForURL('/resources')
+    await loginAndNavigate(page, '/resources')
   })
 
   test('displays total resource count', async ({ page }) => {

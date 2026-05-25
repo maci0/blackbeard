@@ -41,6 +41,12 @@ class ApiClient {
     return this.token
   }
 
+  getAuthHeaders(): Record<string, string> {
+    if (this.token) return { Authorization: `Bearer ${this.token}` }
+    if (this.apiKey) return { 'X-API-Key': this.apiKey }
+    return {}
+  }
+
   onUnauthorized(handler: () => void) {
     this.unauthorizedHandler = handler
   }

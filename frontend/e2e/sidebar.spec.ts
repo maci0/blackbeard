@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { login } from './helpers'
+import { loginAndNavigate } from './helpers'
 
 test.describe('Sidebar', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page)
+    await loginAndNavigate(page, '/dashboard')
   })
 
   test('all nav links are present', async ({ page }) => {
@@ -90,7 +90,9 @@ test.describe('Sidebar', () => {
   })
 
   test('active link has visual distinction', async ({ page }) => {
-    // On /studio after login, Studio link should have active class
+    await page.goto('/studio')
+
+    // On /studio, Studio link should have active class
     const studioLink = page
       .getByRole('navigation', { name: /primary/i })
       .getByRole('link', { name: 'Studio' })

@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { login } from './helpers'
+import { loginAndNavigate } from './helpers'
 
 test.describe('Dark Mode', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page)
+    await loginAndNavigate(page, '/dashboard')
   })
 
   test('theme toggle button exists', async ({ page }) => {
@@ -53,14 +53,14 @@ test.describe('Dark Mode', () => {
     await expect(htmlEl).toHaveClass(/dark/)
 
     // Navigate to resources
-    await page.getByRole('link', { name: 'Resources' }).click()
+    await page.goto('/resources')
     await expect(page.getByRole('heading', { name: 'Resources' })).toBeVisible()
 
     // Verify dark class persists
     await expect(htmlEl).toHaveClass(/dark/)
 
     // Navigate to executions
-    await page.getByRole('link', { name: 'Executions' }).click()
+    await page.goto('/executions')
     await expect(page.getByRole('heading', { name: 'Executions' })).toBeVisible()
 
     // Verify dark class still persists

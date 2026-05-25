@@ -36,6 +36,7 @@ from blackbeard.models import (
     TERMINAL_STATUSES,
     Execution,
     ExecutionStatus,
+    ExecutionType,
     User,
     async_session,
     get_session,
@@ -430,7 +431,11 @@ async def get_execution_spend(
             headers={"X-Request-Id": request_id_var.get("-")},
         )
         if resp.status_code == 200:
-            return Response(content=resp.content, media_type="application/json")
+            return Response(
+                content=resp.content,
+                media_type="application/json",
+                headers={"Cache-Control": "no-store"},
+            )
         logger.warning(
             "LiteLLM spend query returned %d for execution %s",
             resp.status_code,
@@ -589,14 +594,45 @@ async def retry_execution(
             ),
         )
 
-    new_execution = await _run_executor(
-        _executor_mod.kickoff(
+    exec_type = original.execution_type or ExecutionType.KICKOFF
+    if exec_type == ExecutionType.FLOW:
+        coro = _executor_mod.run_flow(
+            session,
+            original.crew_name,
+            original.inputs,
+            namespace=original.crew_namespace,
+            user=user,
+        )
+    elif exec_type == ExecutionType.TRAIN:
+        coro = _executor_mod.train_crew(
+            session,
+            original.crew_name,
+            original.inputs,
+            n_iterations=original.n_iterations or 3,
+            filename=original.training_file or "training_data.pkl",
+            namespace=original.crew_namespace,
+            user=user,
+        )
+    elif exec_type == ExecutionType.TEST:
+        coro = _executor_mod.test_crew(
+            session,
+            original.crew_name,
+            original.inputs,
+            n_iterations=original.n_iterations or 3,
+            namespace=original.crew_namespace,
+            user=user,
+        )
+    else:
+        coro = _executor_mod.kickoff(
             session,
             original.crew_name,
             original.inputs,
             original.crew_namespace,
             user=user,
-        ),
+        )
+
+    new_execution = await _run_executor(
+        coro,
         log_event="retry_failed",
         log_resource=original.crew_name,
         log_namespace=original.crew_namespace,

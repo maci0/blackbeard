@@ -939,8 +939,8 @@ export default function ExecutionDetail() {
     void fetchExecution(id)
   }, [id, fetchExecution, clearEvents])
 
-  const isActive = currentExecution ? !TERMINAL_STATUSES.has(currentExecution.status) : false
   const isTerminal = currentExecution ? TERMINAL_STATUSES.has(currentExecution.status) : false
+  const isActive = currentExecution ? !isTerminal : false
 
   // SSE connection for live events when execution is active
   useEffect(() => {

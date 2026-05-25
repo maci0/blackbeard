@@ -215,6 +215,10 @@ services:
       # Only set GOOGLE_APPLICATION_CREDENTIALS when a real key file is provided.
       # An empty JSON file causes LiteLLM to error on every Vertex AI request.
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      # Langfuse observability (optional — set keys in .env to enable)
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
     volumes:
       - ./deploy/litellm/config.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml", "--port", "4000"]

@@ -69,12 +69,14 @@ def role_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
+    namespace = ctx.obj["namespace"]
+
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             resp = client.get(
                 f"{server}/api/v1/roles",
                 headers=headers,
-                params={"limit": limit},
+                params={"namespace": namespace, "limit": limit},
             )
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
@@ -131,9 +133,15 @@ def role_describe(ctx: click.Context, name: str, output_json: bool = False) -> N
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
+    namespace = ctx.obj["namespace"]
+
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-            resp = client.get(f"{server}/api/v1/roles/{name}", headers=headers)
+            resp = client.get(
+                f"{server}/api/v1/roles/{name}",
+                headers=headers,
+                params={"namespace": namespace},
+            )
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
 
@@ -233,12 +241,14 @@ def rolebinding_list(ctx: click.Context, limit: int, output_json: bool = False) 
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
+    namespace = ctx.obj["namespace"]
+
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             resp = client.get(
                 f"{server}/api/v1/role-bindings",
                 headers=headers,
-                params={"limit": limit},
+                params={"namespace": namespace, "limit": limit},
             )
     except httpx.RequestError as exc:
         handle_request_error(server, exc)

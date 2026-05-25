@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { login } from './helpers'
+import { loginAndNavigate } from './helpers'
 
 test.describe('Copilot', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page)
+    await loginAndNavigate(page, '/studio')
   })
 
   test('copilot button visible in studio', async ({ page }) => {

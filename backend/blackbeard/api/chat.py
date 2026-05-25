@@ -107,6 +107,18 @@ class ChatRequest(BaseModel):
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     max_tokens: int | None = Field(default=None, ge=1, le=128_000)
 
+    def to_litellm_payload(self, **extra: Any) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": [m.model_dump() for m in self.messages],
+            **extra,
+        }
+        if self.temperature is not None:
+            payload["temperature"] = self.temperature
+        if self.max_tokens is not None:
+            payload["max_tokens"] = self.max_tokens
+        return payload
+
 
 class ChatResponse(BaseModel):
     model: str
@@ -128,14 +140,7 @@ async def chat(
     _user: User | None = Depends(get_current_user),
 ) -> ChatResponse:
     """Send an ad-hoc chat completion through LiteLLM."""
-    payload: dict[str, Any] = {
-        "model": body.model,
-        "messages": [m.model_dump() for m in body.messages],
-    }
-    if body.temperature is not None:
-        payload["temperature"] = body.temperature
-    if body.max_tokens is not None:
-        payload["max_tokens"] = body.max_tokens
+    payload = body.to_litellm_payload()
 
     t0 = time.monotonic()
     try:
@@ -273,16 +278,10 @@ async def chat_stream(
     Each event is ``data: {"content": "...", "done": false}\\n\\n``.
     The final event includes ``"done": true`` plus token usage and latency.
     """
-    payload: dict[str, Any] = {
-        "model": body.model,
-        "messages": [m.model_dump() for m in body.messages],
-        "stream": True,
-        "stream_options": {"include_usage": True},
-    }
-    if body.temperature is not None:
-        payload["temperature"] = body.temperature
-    if body.max_tokens is not None:
-        payload["max_tokens"] = body.max_tokens
+    payload = body.to_litellm_payload(
+        stream=True,
+        stream_options={"include_usage": True},
+    )
 
     t0 = time.monotonic()
     request_model = body.model
@@ -427,8 +426,7 @@ async def chat_stream(
         _event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
             "X-Accel-Buffering": "no",
         },
     )

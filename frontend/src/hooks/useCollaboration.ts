@@ -29,8 +29,10 @@ interface UseCollaborationReturn {
 /* Constants                                                           */
 /* ------------------------------------------------------------------ */
 
-/** Reconnect delay in milliseconds. */
-const RECONNECT_DELAY_MS = 2000
+/** Initial reconnect delay in milliseconds. */
+const RECONNECT_DELAY_MS = 1000
+/** Maximum reconnect delay in milliseconds. */
+const MAX_RECONNECT_DELAY_MS = 16000
 /** Maximum reconnect attempts before giving up. */
 const MAX_RECONNECT_ATTEMPTS = 5
 /** Minimum interval between cursor broadcast messages (ms). */
@@ -64,6 +66,8 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
   const applyingRemoteRef = useRef(false)
   /** Counter for assigning deterministic colors to new participants. */
   const colorIndexRef = useRef(0)
+  /** Current reconnect delay for exponential backoff. */
+  const reconnectDelayRef = useRef(RECONNECT_DELAY_MS)
 
   useEffect(() => {
     if (!enabled || !crewName) {
@@ -89,6 +93,7 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
       ws.onopen = () => {
         setConnected(true)
         reconnectAttemptsRef.current = 0
+        reconnectDelayRef.current = RECONNECT_DELAY_MS
       }
 
       ws.onclose = () => {
@@ -97,10 +102,11 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
         setRemoteCursors(new Map())
         wsRef.current = null
 
-        // Auto-reconnect with backoff
         if (enabled && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
           reconnectAttemptsRef.current += 1
-          reconnectTimeoutRef.current = setTimeout(connect, RECONNECT_DELAY_MS)
+          const delay = reconnectDelayRef.current
+          reconnectDelayRef.current = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS)
+          reconnectTimeoutRef.current = setTimeout(connect, delay)
         }
       }
 

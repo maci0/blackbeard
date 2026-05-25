@@ -405,8 +405,8 @@ def test_check_path_safety_rejects_traversal():
 
 def test_check_path_safety_accepts_safe_path():
     """_check_path_safety should not raise for safe relative paths."""
-    # Should not raise
-    _check_path_safety("data/notes.txt", "Test context")
+    result = _check_path_safety("data/notes.txt", "Test context")
+    assert result is None, "_check_path_safety should return None for safe paths"
 
 
 # ---------------------------------------------------------------------------

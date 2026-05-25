@@ -45,10 +45,17 @@ function applyAuthResult(
   })
 }
 
+const _initialToken = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null
+const _initialRefresh = typeof window !== 'undefined' ? localStorage.getItem(REFRESH_KEY) : null
+
+if (_initialToken) {
+  api.setToken(_initialToken)
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  token: null,
-  refreshToken: null,
+  token: _initialToken,
+  refreshToken: _initialRefresh,
   loading: false,
   error: null,
   sessionExpired: false,

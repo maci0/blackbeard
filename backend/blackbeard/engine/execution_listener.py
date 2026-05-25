@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import itertools
 import json
 import logging
 import threading
@@ -326,9 +327,10 @@ def _get_webhook_hostname(webhook_url: str) -> str | None:
     is_blocked = is_internal_host(hostname) if hostname else True
     with _webhook_host_cache_lock:
         if len(_webhook_host_cache) >= _MAX_WEBHOOK_HOST_CACHE:
-            oldest = list(_webhook_host_cache.keys())[: _MAX_WEBHOOK_HOST_CACHE // 5]
-            for k in oldest:
-                _webhook_host_cache.pop(k, None)
+            evict_count = _MAX_WEBHOOK_HOST_CACHE // 5
+            keys_to_evict = list(itertools.islice(_webhook_host_cache, evict_count))
+            for k in keys_to_evict:
+                del _webhook_host_cache[k]
         _webhook_host_cache[webhook_url] = "" if is_blocked else hostname
     return None if is_blocked else hostname
 

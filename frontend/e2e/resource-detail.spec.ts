@@ -7,8 +7,7 @@ test.describe('Resource detail page', () => {
   })
 
   test('navigating to a resource shows detail page', async ({ page }) => {
-    await page.getByRole('link', { name: 'Resources' }).click()
-    await page.waitForURL('/resources')
+    await page.goto('/resources')
 
     // Click the first resource row to navigate to detail
     const firstRow = page.getByRole('row', { name: /press enter to view details/i }).first()
@@ -19,8 +18,7 @@ test.describe('Resource detail page', () => {
   })
 
   test('detail page shows breadcrumb navigation', async ({ page }) => {
-    await page.getByRole('link', { name: 'Resources' }).click()
-    await page.waitForURL('/resources')
+    await page.goto('/resources')
 
     const firstRow = page.getByRole('row', { name: /press enter to view details/i }).first()
     await firstRow.click()
@@ -32,8 +30,7 @@ test.describe('Resource detail page', () => {
   })
 
   test('detail page shows Edit and Delete buttons', async ({ page }) => {
-    await page.getByRole('link', { name: 'Resources' }).click()
-    await page.waitForURL('/resources')
+    await page.goto('/resources')
 
     const firstRow = page.getByRole('row', { name: /press enter to view details/i }).first()
     await firstRow.click()
@@ -47,8 +44,7 @@ test.describe('Resource detail page', () => {
   })
 
   test('detail page shows spec fields', async ({ page }) => {
-    await page.getByRole('link', { name: 'Resources' }).click()
-    await page.waitForURL('/resources')
+    await page.goto('/resources')
 
     const firstRow = page.getByRole('row', { name: /press enter to view details/i }).first()
     await firstRow.click()
@@ -59,8 +55,7 @@ test.describe('Resource detail page', () => {
   })
 
   test('back navigation from detail page works', async ({ page }) => {
-    await page.getByRole('link', { name: 'Resources' }).click()
-    await page.waitForURL('/resources')
+    await page.goto('/resources')
 
     const firstRow = page.getByRole('row', { name: /press enter to view details/i }).first()
     await firstRow.click()
@@ -73,8 +68,7 @@ test.describe('Resource detail page', () => {
   })
 
   test('detail page shows metadata strip', async ({ page }) => {
-    await page.getByRole('link', { name: 'Resources' }).click()
-    await page.waitForURL('/resources')
+    await page.goto('/resources')
 
     const firstRow = page.getByRole('row', { name: /press enter to view details/i }).first()
     await firstRow.click()
@@ -85,8 +79,7 @@ test.describe('Resource detail page', () => {
   })
 
   test('Edit button switches to YAML editing mode', async ({ page }) => {
-    await page.getByRole('link', { name: 'Resources' }).click()
-    await page.waitForURL('/resources')
+    await page.goto('/resources')
 
     const firstRow = page.getByRole('row', { name: /press enter to view details/i }).first()
     await firstRow.click()
