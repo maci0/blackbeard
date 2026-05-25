@@ -140,7 +140,7 @@ function ModelCard({
               onKeyDown={(e) => e.stopPropagation()}
               disabled={testing}
               aria-busy={testing || undefined}
-              className="flex h-[44px] items-center gap-1 rounded border px-2 text-[10px] font-medium text-muted-foreground transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950 dark:hover:text-emerald-400 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
+              className="flex h-[44px] items-center gap-1 rounded border px-2 text-[10px] font-medium text-muted-foreground transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950 dark:hover:text-emerald-400 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
               title={`Test connectivity to ${resource.metadata.name}`}
               aria-label={
                 testing
@@ -158,7 +158,7 @@ function ModelCard({
                 onDelete()
               }}
               onKeyDown={(e) => e.stopPropagation()}
-              className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
+              className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
               title={`Delete ${resource.metadata.name}`}
               aria-label={`Delete connection ${resource.metadata.name}`}
             >

@@ -303,6 +303,7 @@ function SpendByCrew({ executions, loading }: { executions: Execution[]; loading
                         spend / maxSpend > 0.75 ? 'bg-amber-500/70' : 'bg-primary/60',
                       )}
                       style={{ width: `${(spend / maxSpend) * 100}%` }}
+                      title={spend / maxSpend > 0.75 ? 'High spend' : undefined}
                     />
                   </div>
                 </div>

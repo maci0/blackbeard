@@ -26,7 +26,7 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
         <ChevronLeft className="h-3.5 w-3.5" />
         Prev
       </button>
-      <span className="text-sm text-muted-foreground">
+      <span aria-current="page" className="text-sm text-muted-foreground">
         Page {page} of {totalPages}
       </span>
       <button

@@ -26,6 +26,7 @@ export function StatusBadge({ status, live }: { status: string; live?: boolean }
   return (
     <span
       role={live ? 'status' : undefined}
+      aria-label={`Status: ${label}`}
       className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${classes}`}
     >
       {status === 'running' ? (

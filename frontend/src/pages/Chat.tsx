@@ -61,15 +61,27 @@ function TokenBadge({ tokens, latency_ms }: { tokens: TokenUsage; latency_ms: nu
 
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-      <span className="inline-flex items-center gap-1" title="Prompt tokens">
+      <span
+        className="inline-flex items-center gap-1"
+        title="Prompt tokens"
+        aria-label={`${tokens.prompt.toLocaleString()} prompt tokens`}
+      >
         <Hash className="h-3 w-3" aria-hidden="true" />
         {tokens.prompt.toLocaleString()} in
       </span>
-      <span className="inline-flex items-center gap-1" title="Completion tokens">
+      <span
+        className="inline-flex items-center gap-1"
+        title="Completion tokens"
+        aria-label={`${tokens.completion.toLocaleString()} completion tokens`}
+      >
         <Hash className="h-3 w-3" aria-hidden="true" />
         {tokens.completion.toLocaleString()} out
       </span>
-      <span className="inline-flex items-center gap-1 border-l pl-3" title="Response latency">
+      <span
+        className="inline-flex items-center gap-1 border-l pl-3"
+        title="Response latency"
+        aria-label={`${latency_ms.toLocaleString()} milliseconds latency`}
+      >
         <Clock className="h-3 w-3" aria-hidden="true" />
         {latency_ms.toLocaleString()} ms
       </span>
@@ -103,6 +115,7 @@ function MessageBubble({ message }: { message: Message }) {
   return (
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
       <div
+        aria-label={`${isUser ? 'You' : 'Assistant'} message`}
         className={cn(
           'max-w-[80%] rounded-lg px-4 py-3',
           isUser

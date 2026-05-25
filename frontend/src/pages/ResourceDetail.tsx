@@ -14,6 +14,7 @@ import {
   ClipboardCopy,
   FlaskConical,
   Zap,
+  History,
 } from 'lucide-react'
 import { modKey } from '@/lib/platform'
 
@@ -33,6 +34,7 @@ import { extractRefs } from '@/lib/refs'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { RunDialog, type RunParams } from '@/components/studio/RunDialog'
 import { Spinner } from '@/components/ui/Spinner'
+import { SmartTime } from '@/components/ui/SmartTime'
 import { useToastStore } from '@/stores/toastStore'
 
 /* ------------------------------------------------------------------ */
@@ -178,6 +180,107 @@ function ReferencesSection({ spec }: { spec: Record<string, unknown> }) {
         ))}
       </div>
     </section>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Audit log types + History timeline                                  */
+/* ------------------------------------------------------------------ */
+
+interface AuditLogEntry {
+  id: string
+  action: string
+  resource_type: string
+  resource_id: string
+  actor_email: string | null
+  timestamp: string
+  details: Record<string, unknown> | null
+}
+
+function HistoryTimeline({
+  kindPlural,
+  name,
+  version,
+}: {
+  kindPlural: string
+  name: string
+  version: number
+}) {
+  const [entries, setEntries] = useState<AuditLogEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const kind = PLURAL_TO_KIND[kindPlural] ?? kindPlural
+
+  useEffect(() => {
+    setLoading(true)
+    setError(null)
+    api
+      .get<{ items: AuditLogEntry[] }>(
+        `/api/v1/audit-logs?resource_type=${encodeURIComponent(kind)}&resource_id=${encodeURIComponent(name)}&limit=20`,
+      )
+      .then((res) => setEntries(res.items))
+      .catch((err: unknown) => setError(getErrorMessage(err, 'Failed to load history')))
+      .finally(() => setLoading(false))
+  }, [kind, name])
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-8 text-muted-foreground">
+        <Spinner size="sm" />
+        <span className="text-sm">Loading history...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+        {error}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="rounded-full border px-2 py-0.5 font-medium text-foreground">
+          v{version}
+        </span>
+        <span>Current version</span>
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="py-4 text-sm italic text-muted-foreground">No history available.</p>
+      ) : (
+        <div className="relative ml-3 border-l-2 border-border pl-6">
+          {entries.map((entry) => (
+            <div key={entry.id} className="relative pb-6 last:pb-0">
+              <div className="absolute -left-[31px] top-1 h-3 w-3 rounded-full border-2 border-background bg-muted-foreground/40" />
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      'rounded px-1.5 py-0.5 text-xs font-medium',
+                      entry.action === 'create'
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-400'
+                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-400',
+                    )}
+                  >
+                    {entry.action === 'create' ? 'Created' : 'Updated'}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    <SmartTime date={entry.timestamp} />
+                  </span>
+                </div>
+                {entry.actor_email && (
+                  <span className="text-xs text-muted-foreground">by {entry.actor_email}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -679,7 +782,7 @@ export default function ResourceDetail() {
         {/* Tabs */}
         <TabsPrimitive.Root value={activeTab} onValueChange={setActiveTab}>
           <TabsPrimitive.List className="mb-6 flex gap-0 border-b">
-            {['spec', 'yaml'].map((tab) => (
+            {(['spec', 'yaml', 'history'] as const).map((tab) => (
               <TabsPrimitive.Trigger
                 key={tab}
                 value={tab}
@@ -689,7 +792,10 @@ export default function ResourceDetail() {
                   'data-[state=inactive]:border-transparent data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground',
                 )}
               >
-                {tab === 'spec' ? 'Spec' : 'YAML'}
+                <span className="inline-flex items-center gap-1.5">
+                  {tab === 'history' && <History className="h-3.5 w-3.5" />}
+                  {tab === 'spec' ? 'Spec' : tab === 'yaml' ? 'YAML' : 'History'}
+                </span>
               </TabsPrimitive.Trigger>
             ))}
           </TabsPrimitive.List>
@@ -744,6 +850,12 @@ export default function ResourceDetail() {
                 to modify this resource
               </p>
             )}
+          </TabsPrimitive.Content>
+
+          <TabsPrimitive.Content value="history">
+            <div className="rounded-lg border bg-card p-4">
+              <HistoryTimeline kindPlural={kindPlural} name={name} version={resource.version} />
+            </div>
           </TabsPrimitive.Content>
         </TabsPrimitive.Root>
 

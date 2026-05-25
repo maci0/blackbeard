@@ -1,8 +1,21 @@
-import { useState, useEffect } from 'react'
-import { Save, ExternalLink, Key, Copy, RotateCw, Trash2, Eye, EyeOff } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import {
+  Save,
+  ExternalLink,
+  Key,
+  Copy,
+  RotateCw,
+  Trash2,
+  Eye,
+  EyeOff,
+  Bell,
+  Volume2,
+  Monitor,
+} from 'lucide-react'
 import { useDocumentTitle } from '@/hooks'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { useToastStore } from '@/stores/toastStore'
+import { useNamespaceStore } from '@/stores/namespaceStore'
 import { api, ApiError } from '@/api/client'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -22,6 +35,51 @@ export default function Settings() {
 
   const [apiBase, setApiBase] = useState(() => localStorage.getItem('blackbeard_api_base') || '')
   const [config, setConfig] = useState<PublicConfig | null>(null)
+
+  const { namespaces, fetchNamespaces } = useNamespaceStore()
+  const [defaultNamespace, setDefaultNamespace] = useState(
+    () => localStorage.getItem('blackbeard_default_namespace') || 'default',
+  )
+  const [browserNotifications, setBrowserNotifications] = useState(
+    () => localStorage.getItem('blackbeard_browser_notifications') === 'true',
+  )
+  const [soundNotifications, setSoundNotifications] = useState(
+    () => localStorage.getItem('blackbeard_sound_notifications') === 'true',
+  )
+  const [currentTheme, setCurrentTheme] = useState(() =>
+    document.documentElement.classList.contains('dark') ? 'Dark' : 'Light',
+  )
+
+  useEffect(() => {
+    void fetchNamespaces()
+  }, [fetchNamespaces])
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setCurrentTheme(document.documentElement.classList.contains('dark') ? 'Dark' : 'Light')
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+
+  const handleDefaultNamespaceChange = useCallback((ns: string) => {
+    setDefaultNamespace(ns)
+    localStorage.setItem('blackbeard_default_namespace', ns)
+    useToastStore.getState().success('Default namespace saved')
+  }, [])
+
+  const handleBrowserNotificationsChange = useCallback((enabled: boolean) => {
+    setBrowserNotifications(enabled)
+    localStorage.setItem('blackbeard_browser_notifications', String(enabled))
+    if (enabled && 'Notification' in window && Notification.permission === 'default') {
+      void Notification.requestPermission()
+    }
+  }, [])
+
+  const handleSoundNotificationsChange = useCallback((enabled: boolean) => {
+    setSoundNotifications(enabled)
+    localStorage.setItem('blackbeard_sound_notifications', String(enabled))
+  }, [])
 
   const [keyStatus, setKeyStatus] = useState<ApiKeyStatus>('unknown')
   const [maskedKey, setMaskedKey] = useState('')
@@ -358,6 +416,93 @@ export default function Settings() {
               <span className="text-xs font-medium">
                 {config?.oidc_enabled ? 'OIDC + Email/Password' : 'Email/Password + API Key'}
               </span>
+            </div>
+          </div>
+        </section>
+
+        {/* Preferences */}
+        <section className="space-y-4 rounded-lg border p-5">
+          <h2 className="text-sm font-semibold">Preferences</h2>
+          <p className="text-xs text-muted-foreground">
+            Customize your Blackbeard experience. Preferences are saved locally in your browser.
+          </p>
+
+          <div className="space-y-5">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="default-namespace"
+                className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                Default Namespace
+              </label>
+              <select
+                id="default-namespace"
+                value={defaultNamespace}
+                onChange={(e) => handleDefaultNamespaceChange(e.target.value)}
+                className="w-full max-w-xs rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {namespaces.map((ns) => (
+                  <option key={ns} value={ns}>
+                    {ns}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted-foreground">
+                Pre-selected namespace when creating new resources
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Notifications
+              </span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-sm">Browser notifications</span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={browserNotifications}
+                  onClick={() => handleBrowserNotificationsChange(!browserNotifications)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${browserNotifications ? 'bg-primary' : 'bg-muted'}`}
+                >
+                  <span
+                    className={`pointer-events-none block h-3.5 w-3.5 rounded-full bg-background shadow-sm transition-transform ${browserNotifications ? 'translate-x-4' : 'translate-x-0.5'}`}
+                  />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Volume2 className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-sm">Sound on notification</span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={soundNotifications}
+                  onClick={() => handleSoundNotificationsChange(!soundNotifications)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${soundNotifications ? 'bg-primary' : 'bg-muted'}`}
+                >
+                  <span
+                    className={`pointer-events-none block h-3.5 w-3.5 rounded-full bg-background shadow-sm transition-transform ${soundNotifications ? 'translate-x-4' : 'translate-x-0.5'}`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Theme
+              </span>
+              <div className="flex items-center gap-2">
+                <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-sm">{currentTheme}</span>
+                <span className="text-xs text-muted-foreground">
+                  (use the sidebar toggle to change)
+                </span>
+              </div>
             </div>
           </div>
         </section>

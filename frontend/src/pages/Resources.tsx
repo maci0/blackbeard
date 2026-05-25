@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Loader2,
   Upload,
+  Trash2,
 } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useShallow } from 'zustand/react/shallow'
@@ -20,6 +21,7 @@ import { KindBadge } from '@/components/ui/KindBadge'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { formatDate } from '@/lib/formatters'
 import { KIND_TO_PLURAL, API_VERSION } from '@/lib/kinds'
@@ -49,15 +51,17 @@ const NAME_RE = /^[a-z0-9][a-z0-9-]*$/
 
 export default function Resources() {
   const navigate = useNavigate()
-  const { resources, loading, error, fetchAllResources, createResource } = useResourceStore(
-    useShallow((s) => ({
-      resources: s.resources,
-      loading: s.loading,
-      error: s.error,
-      fetchAllResources: s.fetchAllResources,
-      createResource: s.createResource,
-    })),
-  )
+  const { resources, loading, error, fetchAllResources, createResource, deleteResource } =
+    useResourceStore(
+      useShallow((s) => ({
+        resources: s.resources,
+        loading: s.loading,
+        error: s.error,
+        fetchAllResources: s.fetchAllResources,
+        createResource: s.createResource,
+        deleteResource: s.deleteResource,
+      })),
+    )
   const toast = useToastStore()
   const [kindFilter, setKindFilter] = useState('')
   const [search, setSearch] = useState('')
@@ -74,6 +78,25 @@ export default function Resources() {
   const [submitting, setSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [kindFilter, search])
+
+  const toggleSelected = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }, [])
 
   async function handleYamlImport(file: File) {
     setImporting(true)
@@ -217,6 +240,41 @@ export default function Resources() {
     return filtered.slice(start, start + PAGE_SIZE)
   }, [filtered, page])
 
+  const toggleAllVisible = useCallback(() => {
+    setSelectedIds((prev) => {
+      const visibleIds = paginated.map((r) => `${r.kindPlural}/${r.metadata.name}`)
+      const allSelected = visibleIds.every((id) => prev.has(id))
+      if (allSelected) {
+        const next = new Set(prev)
+        for (const id of visibleIds) next.delete(id)
+        return next
+      }
+      return new Set([...prev, ...visibleIds])
+    })
+  }, [paginated])
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true)
+    let deleted = 0
+    for (const id of selectedIds) {
+      const [kindPlural, ...rest] = id.split('/')
+      const name = rest.join('/')
+      if (!kindPlural || !name) continue
+      try {
+        await deleteResource(kindPlural, name)
+        deleted++
+      } catch (err) {
+        toast.error(getErrorMessage(err, `Failed to delete ${name}`))
+      }
+    }
+    if (deleted > 0) {
+      toast.success(`Deleted ${deleted} resource${deleted === 1 ? '' : 's'}`)
+    }
+    setSelectedIds(new Set())
+    setBulkDeleteOpen(false)
+    setBulkDeleting(false)
+  }
+
   const handleKindFilterChange = useCallback((value: string) => {
     setKindFilter(value)
     setPage(1)
@@ -310,6 +368,27 @@ export default function Resources() {
           />
         )}
 
+        {selectedIds.size > 0 && (
+          <div className="mb-4 flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5">
+            <span className="text-sm font-medium">{selectedIds.size} selected</span>
+            <button
+              type="button"
+              onClick={() => setBulkDeleteOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete selected
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="ml-auto text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Clear selection
+            </button>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="relative min-w-[200px] max-w-sm flex-1">
@@ -388,6 +467,20 @@ export default function Resources() {
                 <table className="w-full min-w-[640px] text-sm" aria-label="Resources">
                   <thead className="sticky top-0 z-10">
                     <tr className="border-b bg-muted/60">
+                      <th scope="col" className="w-10 px-3 py-3">
+                        <input
+                          type="checkbox"
+                          checked={
+                            paginated.length > 0 &&
+                            paginated.every((r) =>
+                              selectedIds.has(`${r.kindPlural}/${r.metadata.name}`),
+                            )
+                          }
+                          onChange={toggleAllVisible}
+                          aria-label="Select all visible resources"
+                          className="h-4 w-4 rounded border-muted-foreground/40 accent-primary"
+                        />
+                      </th>
                       {(
                         [
                           'Kind',
@@ -411,58 +504,77 @@ export default function Resources() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {paginated.map((resource) => (
-                      <tr
-                        key={`${resource.kindPlural}/${resource.metadata.name}`}
-                        onClick={() =>
-                          void navigate(
-                            `/resources/${resource.kindPlural}/${resource.metadata.name}`,
-                          )
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
+                    {paginated.map((resource) => {
+                      const rowId = `${resource.kindPlural}/${resource.metadata.name}`
+                      return (
+                        <tr
+                          key={rowId}
+                          onClick={() =>
                             void navigate(
                               `/resources/${resource.kindPlural}/${resource.metadata.name}`,
                             )
                           }
-                        }}
-                        tabIndex={0}
-                        role="row"
-                        aria-label={`${resource.kind}: ${resource.metadata.name} — press Enter to view details`}
-                        className="group cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                      >
-                        <td className="px-4 py-3">
-                          <KindBadge kind={resource.kind} />
-                        </td>
-                        <td className="px-4 py-3 font-medium">{resource.metadata.name}</td>
-                        {showNamespace && (
-                          <td className="px-4 py-3 text-muted-foreground">
-                            {!resource.metadata.namespace ||
-                            resource.metadata.namespace === 'default' ? (
-                              <>
-                                <span className="text-muted-foreground/40" aria-hidden="true">
-                                  —
-                                </span>
-                                <span className="sr-only">default namespace</span>
-                              </>
-                            ) : (
-                              resource.metadata.namespace
-                            )}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              void navigate(
+                                `/resources/${resource.kindPlural}/${resource.metadata.name}`,
+                              )
+                            }
+                          }}
+                          tabIndex={0}
+                          role="row"
+                          aria-label={`${resource.kind}: ${resource.metadata.name} — press Enter to view details`}
+                          className={cn(
+                            'group cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                            selectedIds.has(rowId) && 'bg-primary/5',
+                          )}
+                        >
+                          <td className="px-3 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(rowId)}
+                              onChange={(e) => {
+                                e.stopPropagation()
+                                toggleSelected(rowId)
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Select ${resource.metadata.name}`}
+                              className="h-4 w-4 rounded border-muted-foreground/40 accent-primary"
+                            />
                           </td>
-                        )}
-                        <td className="px-4 py-3 text-muted-foreground">v{resource.version}</td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {formatDate(resource.updated_at)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <ChevronRight
-                            aria-hidden="true"
-                            className="h-4 w-4 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground"
-                          />
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="px-4 py-3">
+                            <KindBadge kind={resource.kind} />
+                          </td>
+                          <td className="px-4 py-3 font-medium">{resource.metadata.name}</td>
+                          {showNamespace && (
+                            <td className="px-4 py-3 text-muted-foreground">
+                              {!resource.metadata.namespace ||
+                              resource.metadata.namespace === 'default' ? (
+                                <>
+                                  <span className="text-muted-foreground/40" aria-hidden="true">
+                                    —
+                                  </span>
+                                  <span className="sr-only">default namespace</span>
+                                </>
+                              ) : (
+                                resource.metadata.namespace
+                              )}
+                            </td>
+                          )}
+                          <td className="px-4 py-3 text-muted-foreground">v{resource.version}</td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {formatDate(resource.updated_at)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <ChevronRight
+                              aria-hidden="true"
+                              className="h-4 w-4 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground"
+                            />
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -471,6 +583,17 @@ export default function Resources() {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        title="Delete selected resources"
+        description={`Are you sure you want to delete ${selectedIds.size} resource${selectedIds.size === 1 ? '' : 's'}? This action cannot be undone.`}
+        confirmLabel="Delete"
+        confirmVariant="destructive"
+        onConfirm={() => void handleBulkDelete()}
+        loading={bulkDeleting}
+      />
 
       <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
         <Dialog.Portal>
