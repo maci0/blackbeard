@@ -14,7 +14,15 @@ Provide comprehensive visibility into every crew, flow, and agent execution thro
 
 **Implemented:** Execution event log (`execution_events` table) with SSE and WebSocket streaming to the frontend, REST endpoint for historical event replay, LiteLLM dashboard at `:4000/ui` for LLM-level request inspection, token and cost tracking per execution, audit log API for RBAC and resource mutation events (all mutations logged), audit logs UI (`/audit-logs` page with filterable table, auto-refresh at 10s intervals, pagination), tokens-per-second metrics in Chat and ExecutionDetail (see PRD 06, section 6.4), sidebar health check indicator (colored dot polling `/api/v1/health` every 30s -- green/amber/red for connected/degraded/disconnected), optional OpenTelemetry export configuration.
 
-**Deferred to post-MVP:** Custom trace backend integration, execution timeline (Gantt) view, advanced dashboards (policy denials, sandbox usage, budget utilization charts).
+**Implemented (beyond MVP):**
+- Real-time presence indicators (`PresenceAvatars` component): Shows colored avatar circles for users currently viewing the same resource or canvas. Displayed on ResourceDetail pages and in Studio. Powered by WebSocket rooms and Valkey pub/sub.
+- Execution timeline / Gantt chart: Horizontal bars per task with status colors, time scale axis, hover for duration/tokens/cost.
+- Grouped/collapsible execution logs: Events grouped by task with expand/collapse, similar to GitHub Actions log groups.
+- Loading skeletons on Dashboard, Chat, and KnowledgeSources pages -- pulse-animated placeholder shapes while data loads.
+
+**Planned (post-MVP concepts):** Latency heatmap (visual grid showing model response latency by time-of-day and model). Token sparklines (inline mini-charts on dashboard cards showing token usage trends over the last 24h).
+
+**Deferred to post-MVP:** Custom trace backend integration, advanced dashboards (policy denials, sandbox usage, budget utilization charts).
 
 ### What LiteLLM provides (LLM-level)
 
@@ -37,6 +45,8 @@ Provide comprehensive visibility into every crew, flow, and agent execution thro
 - Sidebar health check indicator: colored dot (green/amber/red) polling `/api/v1/health` every 30s via `useHealthCheck` hook
 - Browser notifications for completed/failed executions + sidebar bell badge with unread count
 - Blackbeard-specific dashboards (policy denials, sandbox usage, budget utilization)
+- Real-time presence indicators (`PresenceAvatars`): Colored avatar circles showing who is viewing the same resource or canvas
+- Loading skeletons: Pulse-animated placeholder shapes on Dashboard, Chat, and KnowledgeSources pages while data loads
 
 ## 2. Observability Model
 
@@ -119,7 +129,7 @@ Every LLM call is separately logged in LiteLLM with full request/response detail
 
 ## 4. Execution UI
 
-**MVP scope:** The MVP ships with the execution list page, execution detail page (summary cards + live event log + task list), and a link to the LiteLLM dashboard. Dashboards (section 5) and the timeline view (section 4.3) are post-MVP.
+**MVP scope:** The MVP ships with the execution list page, execution detail page (summary cards + live event log + task list), and a link to the LiteLLM dashboard. The execution timeline (Gantt view, section 4.3) is now implemented. Full dashboards (section 5) are post-MVP.
 
 All execution observability is built into **Blackbeard's own UI**, powered by data from the `execution_events` table and the `executions`/`execution_tasks` tables. LLM-level drill-down links to the LiteLLM dashboard.
 
@@ -139,7 +149,7 @@ All execution observability is built into **Blackbeard's own UI**, powered by da
 - **Final output**: Rendered markdown or JSON.
 - **LLM detail link**: "View LLM requests in LiteLLM" link to `:4000/ui` filtered by the execution's virtual key, for full prompt/completion inspection.
 
-### 4.3 Execution Timeline (post-MVP)
+### 4.3 Execution Timeline (Implemented)
 
 Visual Gantt chart:
 - X-axis: wall-clock time.

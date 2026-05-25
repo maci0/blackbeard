@@ -666,6 +666,7 @@ async def cancel_execution(
 )
 async def stream_execution(
     execution_id: UUID = Path(..., description="Execution UUID"),
+    _user: User | None = Depends(get_current_user),
 ) -> EventSourceResponse:
     """SSE stream of execution status events."""
     async with async_session() as check_session:

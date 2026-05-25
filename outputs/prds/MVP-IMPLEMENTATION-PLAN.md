@@ -9,19 +9,19 @@ The MVP proves one thesis: **you can define agents, tasks, and crews in YAML, wi
 | Feature | Scope for MVP |
 |---------|---------------|
 | Resource model | All 13 kinds: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding, Flow (all step types), KnowledgeSource, Automation (cron/webhook/API triggers), Namespace (with resource quotas). No EnvironmentVariable or standalone ServiceAccount. Nested namespaces (hierarchical `org/team/project`) deferred. |
-| Visual editor | Canvas with Agent/Task/Tool/FlowStep nodes, CrewGroup compound nodes, edges for context/tool assignment, property panel, YAML editor (Monaco, bidirectional sync), ELK.js auto-layout, Run/Train/Test mode selector, undo/redo (30 snapshots). AI Copilot (prompt-to-crew via LiteLLM). Live collaboration (WebSocket rooms + Valkey pub/sub). Cursor presence (colored cursors + names). |
+| Visual editor | Canvas with Agent/Task/Tool/FlowStep/Condition/Router/Parallel nodes, CrewGroup compound nodes, sticky notes (4 colors), edges for context/tool assignment, property panel with per-node testing (Test Agent/Test Task), expression editor with syntax validation + variable autocomplete, YAML editor (Monaco, bidirectional sync), ELK.js auto-layout, Run/Train/Test mode selector, undo/redo (30 snapshots), execution data overlay (green/red borders, output preview), Gantt timeline, grouped/collapsible logs, crew settings dialog, canvas JSON export. AI Copilot (prompt-to-crew via LiteLLM). Live collaboration (WebSocket rooms + Valkey pub/sub). Cursor presence (colored cursors + names). Real-time presence indicators (PresenceAvatars). |
 | Execution | Sequential + hierarchical crews. Flow steps: crew, function, router (Python dispatch), condition (safe eval), transform (WASM). Train/test via CrewAI native. HITL (`POST /executions/{id}/respond`). Workflow hooks (before/after kickoff, task, flow step). Automation scheduler (cron/webhook/API). gRPC API on :50051 with auth interceptor. Schema guardrails (JSON Schema output validation). Budget enforcement via per-execution LiteLLM virtual keys. |
-| LLM routing | Fully implemented: LiteLLM Proxy with config generation, virtual keys, spend tracking, per-user registration, budget enforcement |
+| LLM routing | Fully implemented: LiteLLM Proxy with config generation, virtual keys, spend tracking, per-user registration, budget enforcement, model fallback chains, SSE chat streaming (`POST /chat/stream`), rate limit badges (RPM/TPM) |
 | Sandbox | Full hierarchy: `none` < `wasm` < `docker/podman` (ContainerSandbox) < `gVisor` (GVisorSandbox) < `MicroVM` (Firecracker + libkrun) |
 | Tools | Python tools (`BaseTool`), WASM tools, MCP tools (stdio + HTTP), builtin tools. Tool discovery. Marketplace import from git. No Composio, no OAuth connectors, no tool compilation CLI |
 | Agent policy | Tool allowlists/denylists, LLM budget enforcement via per-execution LiteLLM virtual keys, delegation constraints (allowed/targets), sandbox tier promotion. Audit logging on all mutations. PII redaction via Presidio. No network/FS policy enforcement at runtime. |
 | Guardrails | Task-level guardrails (function-based, LLM-based, and schema-based) -- wired through CrewAI's built-in guardrail system. PII guardrail type via Presidio integration. No composite chains, no namespace or crew-level guardrails |
-| Observability | Execution event log + SSE streaming + WebSocket streaming + LiteLLM dashboard + token/cost tracking + audit log API (all mutations logged) + optional OpenTelemetry export |
+| Observability | Execution event log + SSE streaming + WebSocket streaming + LiteLLM dashboard + token/cost tracking + audit log API (all mutations logged) + optional OpenTelemetry export + Gantt timeline + grouped/collapsible logs + execution comparison + presence indicators + loading skeletons + cost alert thresholds |
 | API | REST CRUD for all resource kinds + execution lifecycle + auth + health + audit + marketplace + webhooks (register/deliver with HMAC signing) + HITL. OpenAPI schema auto-generated. gRPC API on :50051 with auth interceptor. Python SDK (`sdks/python/`) + TypeScript SDK (`sdks/typescript/`). React component export via `@blackbeard/react` (`sdks/react/`). |
 | Auth & RBAC | Built-in email/password auth with JWT tokens (access + refresh). User and Group models (with member management). Role and RoleBinding resource kinds with predefined roles and policies. Authorization middleware accepts both `X-API-Key` and `Authorization: Bearer <jwt>`. Principal chain tracking. WebSocket auth. Visual RBAC editor (Roles, Users, RoleBindings). SSO/OIDC via generic OIDC client (`api/oidc.py`). No SpiceDB, no OPA. |
 | CLI | Fully implemented as standalone package with 25+ commands: `apply`, `validate`, `kickoff`, `status`, `get`, `list`, `delete`, `export`, `login`/`logout`/`whoami`/`register`, `user list/invite`, `group list/create/delete/add-member/remove-member/members`, `role list/describe`, `rolebinding list/create`, `executions`, `events --follow`, `cancel`, `apikey generate/rotate/show`, `health`. JWT credential storage in `~/.config/blackbeard/`. |
 | Memory | MuninnDB cognitive memory backend (temporal priority, Hebbian learning, semantic triggers) alongside lancedb/chromadb/qdrant |
-| Onboarding | 5-step welcome wizard dialog on first visit |
+| Onboarding | 5-step welcome wizard dialog on first visit, global keyboard shortcuts (`Cmd+Shift+S/E/N`, `Cmd+.`, `?`), loading skeletons (Dashboard, Chat, KnowledgeSources) |
 | Deployment | `docker compose up` (5 containers) + Helm chart. Automation triggers (cron, webhook, API). |
 
 ### Out of scope (post-MVP)
@@ -554,6 +554,34 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 - [x] Bandit security scanning in CI
 - [x] Hypothesis property-based testing and fast-check fuzzing in CI
 - [x] Settings page for platform configuration
+- [x] Sticky notes on Studio canvas (4 colors, editable inline)
+- [x] Execution data overlay on nodes (green/red borders, output preview, clear results)
+- [x] Per-node testing (Test Agent/Test Task in PropertyPanel, uses first available model)
+- [x] Condition, Router, and Parallel node types with property forms
+- [x] Expression editor with syntax validation and variable autocomplete
+- [x] Crew Settings dialog (error workflow: run error crew / retry / ignore)
+- [x] Canvas JSON export (Export + Copy as JSON)
+- [x] Execution timeline / Gantt chart (horizontal bars, status colors, time scale)
+- [x] Grouped/collapsible execution logs (group by task, expand/collapse)
+- [x] Execution Comparison page (`/executions/compare?a=&b=`) -- side-by-side metrics diff
+- [x] Guardrail Playground (`/guardrails/playground`) -- test guardrails with sample input
+- [x] Knowledge Sources page (`/knowledge`) -- card grid with source type badges
+- [x] Credentials Manager (`/credentials`) -- centralized secret management
+- [x] Scheduled Reports in Settings
+- [x] Global keyboard shortcuts (`Cmd+Shift+S/E/N`, `Cmd+.`, `?`, shortcuts dialog)
+- [x] Loading skeletons on Dashboard, Chat, KnowledgeSources
+- [x] Real-time presence indicators (`PresenceAvatars` on ResourceDetail + Studio)
+- [x] Streaming chat (real SSE from LiteLLM, stop button)
+- [x] Bulk delete with multi-select (table + card views)
+- [x] Resource version history tab (audit log timeline)
+- [x] User preferences in Settings (default namespace, notifications, sound)
+- [x] Clipboard YAML import (paste multi-doc YAML)
+- [x] Rate limit badges on model cards (RPM/TPM)
+- [x] Run history tab on Crew ResourceDetail
+- [x] `POST /api/v1/chat/stream` -- real SSE streaming endpoint
+- [x] Model fallback chains via LiteLLM `model_info.fallbacks`
+- [x] Cost alert thresholds on AgentPolicy (`warn_at_usd`, `warn_at_tokens`, `cost_alert` event)
+- [x] Enhanced Marketplace template gallery (search, category chips, preview dialog, resource summaries)
 
 ### Removed from DoD (deferred to post-MVP)
 

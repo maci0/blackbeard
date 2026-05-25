@@ -15,6 +15,10 @@ import {
   FlaskConical,
   Zap,
   History,
+  BarChart3,
+  Clock,
+  CheckCircle2,
+  DollarSign,
 } from 'lucide-react'
 import { modKey } from '@/lib/platform'
 
@@ -23,15 +27,16 @@ import { PresenceAvatars } from '@/components/ui/PresenceAvatars'
 import { CopyButton } from '@/components/ui/CopyButton'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { useResourceStore } from '@/stores/resourceStore'
-import type { Resource } from '@/lib/types'
+import type { Resource, Execution } from '@/lib/types'
 import { api } from '@/api/client'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { useDocumentTitle, usePresence } from '@/hooks'
 import { resourceToYaml, parseYaml } from '@/lib/yaml'
-import { formatDate } from '@/lib/formatters'
+import { formatDate, getDuration, formatCost } from '@/lib/formatters'
 import { KindBadge } from '@/components/ui/KindBadge'
 import { PLURAL_TO_KIND } from '@/lib/kinds'
 import { extractRefs } from '@/lib/refs'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { RunDialog, type RunParams } from '@/components/studio/RunDialog'
 import { Spinner } from '@/components/ui/Spinner'
@@ -279,6 +284,169 @@ function HistoryTimeline({
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Runs tab (Crew only)                                                */
+/* ------------------------------------------------------------------ */
+
+function RunStatChip({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: string
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0">
+        <p className="text-2xs text-muted-foreground">{label}</p>
+        <p className="text-sm font-semibold tracking-tight">{value}</p>
+      </div>
+    </div>
+  )
+}
+
+function RunsTab({ crewName }: { crewName: string }) {
+  const [executions, setExecutions] = useState<Execution[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    setError(null)
+    api
+      .get<{ items: Execution[]; total: number }>(
+        `/api/v1/executions?crew_name=${encodeURIComponent(crewName)}&limit=20`,
+      )
+      .then((res) => setExecutions(res.items))
+      .catch((err: unknown) => setError(getErrorMessage(err, 'Failed to load runs')))
+      .finally(() => setLoading(false))
+  }, [crewName])
+
+  const stats = useMemo(() => {
+    const total = executions.length
+    const completed = executions.filter((e) => e.status === 'completed').length
+    const successRate = total > 0 ? Math.round((completed / total) * 100) : 0
+
+    let totalDurationMs = 0
+    let durationCount = 0
+    for (const e of executions) {
+      if (e.started_at && e.completed_at) {
+        totalDurationMs += new Date(e.completed_at).getTime() - new Date(e.started_at).getTime()
+        durationCount++
+      }
+    }
+    const avgDurationSec =
+      durationCount > 0 ? Math.round(totalDurationMs / durationCount / 1000) : 0
+    const avgDuration =
+      avgDurationSec >= 60
+        ? `${Math.floor(avgDurationSec / 60)}m ${avgDurationSec % 60}s`
+        : `${avgDurationSec}s`
+
+    let totalCost = 0
+    for (const e of executions) {
+      const c = typeof e.cost_usd === 'string' ? parseFloat(e.cost_usd) : (e.cost_usd ?? 0)
+      if (!isNaN(c)) totalCost += c
+    }
+
+    return { total, successRate, avgDuration, totalCost }
+  }, [executions])
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-8 text-muted-foreground">
+        <Spinner size="sm" />
+        <span className="text-sm">Loading runs...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+        {error}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {executions.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <RunStatChip icon={BarChart3} label="Total Runs" value={String(stats.total)} />
+          <RunStatChip icon={CheckCircle2} label="Success Rate" value={`${stats.successRate}%`} />
+          <RunStatChip icon={Clock} label="Avg Duration" value={stats.avgDuration} />
+          <RunStatChip
+            icon={DollarSign}
+            label="Total Cost"
+            value={formatCost(stats.totalCost) === '—' ? '$0.00' : formatCost(stats.totalCost)}
+          />
+        </div>
+      )}
+
+      {executions.length === 0 ? (
+        <p className="py-4 text-sm italic text-muted-foreground">
+          No executions yet. Run this crew to see results here.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/30">
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                  Status
+                </th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                  Type
+                </th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                  Duration
+                </th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                  Cost
+                </th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                  Created
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {executions.map((exec) => (
+                <tr key={exec.id} className="transition-colors hover:bg-accent/50">
+                  <td className="px-4 py-2.5">
+                    <Link
+                      to={`/executions/${exec.id}`}
+                      className="inline-block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <StatusBadge status={exec.status} />
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className="rounded bg-secondary px-1.5 py-0.5 text-xs font-medium text-secondary-foreground">
+                      {exec.execution_type}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
+                    {getDuration(exec.started_at, exec.completed_at)}
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
+                    {formatCost(exec.cost_usd)}
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                    <SmartTime date={exec.created_at} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -794,7 +962,9 @@ export default function ResourceDetail() {
         {/* Tabs */}
         <TabsPrimitive.Root value={activeTab} onValueChange={setActiveTab}>
           <TabsPrimitive.List className="mb-6 flex gap-0 border-b">
-            {(['spec', 'yaml', 'history'] as const).map((tab) => (
+            {(
+              ['spec', 'yaml', ...(resource.kind === 'Crew' ? ['runs'] : []), 'history'] as const
+            ).map((tab) => (
               <TabsPrimitive.Trigger
                 key={tab}
                 value={tab}
@@ -806,7 +976,14 @@ export default function ResourceDetail() {
               >
                 <span className="inline-flex items-center gap-1.5">
                   {tab === 'history' && <History className="h-3.5 w-3.5" />}
-                  {tab === 'spec' ? 'Spec' : tab === 'yaml' ? 'YAML' : 'History'}
+                  {tab === 'runs' && <Play className="h-3.5 w-3.5" />}
+                  {tab === 'spec'
+                    ? 'Spec'
+                    : tab === 'yaml'
+                      ? 'YAML'
+                      : tab === 'runs'
+                        ? 'Runs'
+                        : 'History'}
                 </span>
               </TabsPrimitive.Trigger>
             ))}
@@ -863,6 +1040,14 @@ export default function ResourceDetail() {
               </p>
             )}
           </TabsPrimitive.Content>
+
+          {resource.kind === 'Crew' && (
+            <TabsPrimitive.Content value="runs">
+              <div className="rounded-lg border bg-card p-4">
+                <RunsTab crewName={name} />
+              </div>
+            </TabsPrimitive.Content>
+          )}
 
           <TabsPrimitive.Content value="history">
             <div className="rounded-lg border bg-card p-4">

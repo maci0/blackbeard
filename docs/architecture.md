@@ -259,11 +259,23 @@ A gRPC server (`blackbeard/grpc/server.py`) starts alongside FastAPI during the 
 /webhooks             → Webhook subscription management
 /login                → Login form
 /register             → Registration form
-/marketplace          → Import crews from git
-/settings             → Platform configuration
+/marketplace          → Import crews from git (search, category chips, preview dialog)
+/settings             → Platform configuration (user preferences, scheduled reports)
+/knowledge            → Knowledge Sources management (card grid with source type badges)
+/credentials          → Credentials Manager (centralized secret management)
+/guardrails/playground → Guardrail Playground (test guardrails with sample input)
+/executions/compare   → Execution Comparison (side-by-side metrics diff, ?a=&b= params)
 ```
 
 **Command palette:** Press `Cmd+K` (macOS) or `Ctrl+K` (Windows/Linux) to open the command palette for quick navigation to any page, resource, or action.
+
+**Global keyboard shortcuts:** `Cmd+Shift+S` (save), `Cmd+Shift+E` (executions), `Cmd+Shift+N` (new resource), `Cmd+.` (settings), `?` (keyboard shortcuts dialog).
+
+**Real-time presence:** `PresenceAvatars` component shows colored avatar circles for users currently viewing the same resource or canvas, powered by WebSocket rooms and Valkey pub/sub.
+
+**Streaming chat:** `POST /api/v1/chat/stream` provides real SSE streaming. The Chat page renders tokens incrementally with a stop button for in-flight cancellation.
+
+**Loading skeletons:** Dashboard, Chat, and KnowledgeSources pages display pulse-animated placeholder shapes while data loads.
 
 ### State Management
 
@@ -540,6 +552,22 @@ The frontend polls the events endpoint for `hitl_request` events, presents them 
 
 The Studio visual editor uses [ELK.js](https://github.com/kieler/elkjs) for automatic graph layout. When you click the auto-layout button, nodes are arranged left-to-right using the ELK layered algorithm, respecting agent-to-task and task-to-crew edges.
 
+**Node types:** Agent, Task, Tool, FlowStep, Condition (diamond, true/false outputs), Router (diamond, N labelled outputs), Parallel (fork/join bar), Crew (bounding box group), and Sticky Note (4 colors, annotation-only, no ports).
+
+**Expression editor:** Condition and Router nodes include an expression editor with syntax validation and variable autocomplete (triggered by `{{` or Ctrl+Space).
+
+**Per-node testing:** PropertyPanel includes "Test Agent" and "Test Task" buttons that run individual nodes against the first available LLMConnection and display results inline.
+
+**Execution data overlay:** After a crew runs, nodes display green borders (success) or red borders (failure) with output preview on hover. A "Clear Results" button resets the overlay.
+
+**Execution timeline:** A Gantt chart at the bottom of the execution view shows horizontal bars per task with status colors and a time scale axis.
+
+**Grouped execution logs:** Execution events are grouped by task with expand/collapse controls (similar to GitHub Actions), showing task name, status, duration, and token count per group.
+
+**Canvas JSON export:** Toolbar "Export" button downloads canvas state as JSON; "Copy as JSON" copies to clipboard.
+
+**Crew Settings:** Configures error workflow (run error crew / retry N times / ignore) via a dialog accessible from crew node context menu.
+
 ---
 
 ## Marketplace
@@ -549,6 +577,8 @@ The Marketplace (`/marketplace` page) allows importing resources from external g
 **Built-in examples:** Seven example crews (research, code-review, content-pipeline, data-analysis, seo-writer, simple-crew, support-triage) plus a shared tools collection are bundled with the platform and can be imported without any external connectivity.
 
 **Git import:** The backend clones repositories (shallow, HTTPS only), finds all YAML files, validates them against resource schemas, and upserts them via the standard ResourceService. Safety limits apply: 60-second clone timeout, max 200 YAML files, max 256KB per file, symlinks are skipped, and path traversal is prevented.
+
+**Enhanced template gallery:** The Marketplace page includes a search bar for filtering templates, category chips (research, content, code, data, SEO, support), a preview dialog showing full crew details before import, and resource summary badges (agent count, task count, tool count) on each template card.
 
 ---
 

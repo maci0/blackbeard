@@ -10,6 +10,9 @@ Provide configurable safety mechanisms that validate, filter, and redact agent o
 
 **LLM-based PII recognizer note:** The `litellm` backend registers an `LLMPIIRecognizer` as a custom Presidio recognizer. All LLM calls for PII detection route through the LiteLLM proxy (not direct to Ollama or any provider). The recognizer sends text to a configurable model (default: `ollama/gliner-pii`) via `POST {litellm_proxy_url}/v1/chat/completions` with the master key. Responses are validated (entity type allowlist, bounds checking, score clamping) before being converted to `RecognizerResult` objects. On any LLM failure, the recognizer raises to prevent unredacted PII from being stored.
 
+**Implemented (beyond MVP):**
+- Guardrail Playground (`/guardrails/playground`): Interactive page for testing guardrails with sample input before deploying them to production tasks. Users select a guardrail resource, provide sample text, and see the validation result (pass/fail, score, feedback) in real-time. Supports function-based, LLM-based, and schema-based guardrail types.
+
 **Deferred to post-MVP:** Hallucination detection, namespace-level and crew-level guardrails, composite guardrail chains.
 
 ---

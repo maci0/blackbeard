@@ -14,6 +14,11 @@ Blackbeard's job is to:
 
 **Implemented:** Fully implemented. LiteLLM Proxy co-deployed as a sidecar container, automatic config generation from `LLMConnection` resources, per-execution virtual key lifecycle (create on kickoff, delete on completion), spend tracking per key/user/model, per-user LiteLLM registration on Blackbeard user creation, LiteLLM dashboard accessible at `:4000/ui`. All LLM calls route through the proxy with no direct provider calls. Dynamic model sync via `model_sync.py` module (see section 10.1). Tokens-per-second metrics extracted from provider responses (see section 6.4).
 
+**Implemented (beyond MVP):**
+- `POST /api/v1/chat/stream` -- Real SSE streaming endpoint for interactive chat. Frontend connects via `EventSource`, displays tokens as they arrive, and provides a stop button to cancel in-flight generation.
+- Model fallback chains via LiteLLM `model_info.fallbacks` -- configured per `LLMConnection` resource, automatically retries with fallback models on provider errors.
+- Rate limit badges on model cards -- RPM (requests per minute) and TPM (tokens per minute) limits displayed as badges on the Models page (`/models`).
+
 **Deferred to post-MVP:** Advanced routing strategies (`LLMRoutingConfig` resource), standalone/external deployment topologies, tag-based routing, Blackbeard-side spend dashboards (LiteLLM dashboard serves this role for now).
 
 ## 2. Architecture
@@ -360,6 +365,26 @@ These timings are returned in the Chat API response alongside token counts, enab
 - **Chat page**: Shows split pp/tg tok/s when both prompt and completion timings are available (e.g., "pp 245 . tg 38 tok/s"), with a tooltip explaining "Prompt processing: X tok/s, Text generation: Y tok/s". Falls back to end-to-end tok/s when only total timing is available.
 - **ExecutionDetail page**: Spend table includes a tok/s column.
 - **Models page**: Per-model inference speed displayed in model status.
+
+### 6.5 Chat Streaming Endpoint (Implemented)
+
+**Status: Implemented (beyond MVP).**
+
+`POST /api/v1/chat/stream` provides real SSE streaming for the Chat page:
+
+- Frontend sends model selection, conversation history, and optional system prompt.
+- Backend proxies through LiteLLM with `stream=True`, forwarding SSE chunks directly to the client.
+- Frontend renders tokens incrementally as they arrive via `EventSource`.
+- **Stop button**: Users can cancel in-flight generation. The frontend closes the SSE connection, and the backend signals LiteLLM to abort the request.
+- Uses the authenticated user's credentials for spend attribution via LiteLLM virtual keys.
+
+### 6.6 Rate Limit Display (Implemented)
+
+The Models page (`/models`) displays rate limit information as badges on each model card:
+
+- **RPM badge**: Requests per minute limit from the `LLMConnection` spec.
+- **TPM badge**: Tokens per minute limit from the `LLMConnection` spec.
+- Badges are color-coded: green when usage is well below limits, amber when approaching limits, red when at or near capacity.
 
 ### 6.3 Cost Dashboard Data
 

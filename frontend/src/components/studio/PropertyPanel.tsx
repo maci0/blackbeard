@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import * as Tabs from '@radix-ui/react-tabs'
-import { X, Trash2 } from 'lucide-react'
+import { X, Trash2, Play, ChevronDown, ChevronRight, Copy, Check } from 'lucide-react'
 import { CodeBlock } from '@/components/ui/CodeBlock'
 import { Link } from 'react-router-dom'
 import { useStudioStore } from '@/stores/studioStore'
@@ -19,6 +19,9 @@ import { modKey } from '@/lib/platform'
 import { nodeToYaml } from './nodeYaml'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ExpressionEditor } from './ExpressionEditor'
+import { Spinner } from '@/components/ui/Spinner'
+import { api } from '@/api/client'
+import { getErrorMessage } from '@/lib/utils'
 
 /** Context providing a generated field id from the enclosing FieldGroup */
 const FieldIdContext = createContext<string>('')
@@ -229,6 +232,7 @@ function AgentForm({
         checked={bool(data, 'verbose')}
         onChange={(v) => onChange('verbose', v)}
       />
+      <NodeTestSection nodeType="agent" data={data} />
     </div>
   )
 }
@@ -297,6 +301,7 @@ function TaskForm({
           options={agentOptions}
         />
       </FieldGroup>
+      <NodeTestSection nodeType="task" data={data} />
     </div>
   )
 }
@@ -833,6 +838,145 @@ function StickyNoteForm({
           ))}
         </div>
       </FieldGroup>
+    </div>
+  )
+}
+
+interface ChatResponse {
+  content: string
+}
+
+interface ModelInfo {
+  name: string
+}
+
+function NodeTestSection({
+  nodeType,
+  data,
+}: {
+  nodeType: 'agent' | 'task'
+  data: Record<string, unknown>
+}) {
+  const [testing, setTesting] = useState(false)
+  const [result, setResult] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(true)
+  const [copied, setCopied] = useState(false)
+
+  const handleTest = async () => {
+    setTesting(true)
+    setResult(null)
+    try {
+      const models = await api.get<ModelInfo[]>('/api/v1/models/available')
+      if (models.length === 0) {
+        setResult('Error: No models available. Configure an LLM connection first.')
+        setExpanded(true)
+        return
+      }
+
+      const model = models[0]!.name
+      const messages: { role: string; content: string }[] = []
+
+      if (nodeType === 'agent') {
+        const role = str(data, 'role')
+        const goal = str(data, 'goal')
+        const backstory = str(data, 'backstory')
+        const systemParts = [
+          role && `You are a ${role}.`,
+          goal && `Your goal: ${goal}`,
+          backstory && `Background: ${backstory}`,
+        ].filter(Boolean)
+        if (systemParts.length > 0) {
+          messages.push({ role: 'system', content: systemParts.join(' ') })
+        }
+        messages.push({ role: 'user', content: 'Introduce yourself briefly.' })
+      } else {
+        const description = str(data, 'description')
+        const expectedOutput = str(data, 'expected_output')
+        const prompt = [
+          description && `Task: ${description}`,
+          expectedOutput && `Expected output format: ${expectedOutput}`,
+          'Provide a brief sample output for this task.',
+        ]
+          .filter(Boolean)
+          .join('\n')
+        messages.push({ role: 'user', content: prompt })
+      }
+
+      const resp = await api.post<ChatResponse>('/api/v1/chat', {
+        model,
+        messages,
+        max_tokens: 150,
+      })
+      setResult(resp.content)
+      setExpanded(true)
+    } catch (err: unknown) {
+      setResult(`Error: ${getErrorMessage(err, 'Test failed')}`)
+      setExpanded(true)
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const handleCopy = () => {
+    if (!result) return
+    void navigator.clipboard.writeText(result).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  const hasEnoughData =
+    nodeType === 'agent'
+      ? Boolean(str(data, 'role') || str(data, 'goal'))
+      : Boolean(str(data, 'description'))
+
+  return (
+    <div className="mt-4 border-t border-border pt-4">
+      <button
+        type="button"
+        disabled={testing || !hasEnoughData}
+        onClick={() => void handleTest()}
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {testing ? <Spinner size="sm" className="text-current" /> : <Play className="h-3 w-3" />}
+        {testing ? 'Testing...' : `Test ${nodeType === 'agent' ? 'Agent' : 'Task'}`}
+      </button>
+      {!hasEnoughData && (
+        <p className="text-2xs mt-1.5 text-center text-muted-foreground">
+          {nodeType === 'agent' ? 'Add a role or goal first' : 'Add a description first'}
+        </p>
+      )}
+      {result !== null && (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="mb-1.5 flex w-full items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            Test Result
+          </button>
+          {expanded && (
+            <div className="relative rounded-md border bg-muted/30 p-2.5">
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="absolute right-1.5 top-1.5 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Copy result"
+              >
+                {copied ? (
+                  <Check className="h-3 w-3 text-emerald-500" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
+              </button>
+              <pre className="text-2xs max-h-48 overflow-auto whitespace-pre-wrap pr-6 font-mono leading-relaxed text-foreground">
+                {result}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

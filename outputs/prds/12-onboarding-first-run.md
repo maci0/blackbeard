@@ -8,6 +8,10 @@ Provide a guided first-run experience that helps new users understand Blackbeard
 
 **Implemented:** Onboarding wizard — a 5-step welcome dialog that introduces new users to the platform on first visit, stored in localStorage. The "Load Example" button is available on the empty canvas.
 
+**Implemented (beyond MVP):**
+- Global keyboard shortcuts: `Cmd+Shift+S` (save), `Cmd+Shift+E` (executions), `Cmd+Shift+N` (new resource), `Cmd+.` (settings), `?` (shortcuts dialog). Keyboard shortcuts dialog accessible from the Help menu or by pressing `?`.
+- Loading skeletons: Dashboard, Chat, and KnowledgeSources pages display pulse-animated placeholder shapes while data loads, replacing blank/flashing states.
+
 **Deferred to post-MVP:** Guided tour (step-by-step tooltip walkthrough of Studio UI elements), progressive disclosure (contextual tooltips on first interaction), help sidebar with "Restart tour" and documentation links, interactive tutorial, "What's new" dialog.
 
 ---
@@ -82,7 +86,7 @@ Add a small "?" icon or "Help" link at the bottom of the sidebar (above the vers
 - Opens a dropdown with:
   - "Restart tour" → Re-triggers the guided tour
   - "Documentation" → Opens docs/getting-started.md (or external docs URL)
-  - "Keyboard shortcuts" → Shows a shortcuts cheat sheet dialog
+  - "Keyboard shortcuts" → Shows a shortcuts cheat sheet dialog (also triggered by pressing `?`)
 
 **Documentation hosting:** For MVP, the documentation link points to the GitHub repository's `docs/` directory. Post-MVP, documentation will be hosted on a dedicated site (GitHub Pages or similar) at `docs.blackbeard.sh`.
 

@@ -13,6 +13,10 @@ import {
   RotateCcw,
   MessageCircle,
   Send,
+  ChevronRight,
+  List,
+  GanttChart,
+  Layers,
 } from 'lucide-react'
 import { useDocumentTitle, usePolling } from '@/hooks'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -146,6 +150,139 @@ const TaskRow = memo(function TaskRow({ task, index }: { task: ExecutionTask; in
 })
 
 /* ------------------------------------------------------------------ */
+/* Task timeline (Gantt chart)                                         */
+/* ------------------------------------------------------------------ */
+
+const STATUS_BAR_COLORS: Record<string, string> = {
+  completed: 'bg-emerald-500',
+  failed: 'bg-red-500',
+  running: 'bg-blue-500',
+  pending: 'bg-gray-400',
+  queued: 'bg-gray-400',
+}
+
+function formatDurationMs(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  const sec = ms / 1000
+  if (sec < 60) return `${sec.toFixed(1)}s`
+  const min = Math.floor(sec / 60)
+  const rem = sec % 60
+  return `${min}m ${Math.round(rem)}s`
+}
+
+const TaskTimeline = memo(function TaskTimeline({
+  tasks,
+  executionStart,
+  executionEnd,
+}: {
+  tasks: ExecutionTask[]
+  executionStart: string | null
+  executionEnd: string | null
+}) {
+  const timelineData = useMemo(() => {
+    if (!executionStart || tasks.length === 0) return null
+
+    const startMs = new Date(executionStart).getTime()
+    const endMs = executionEnd
+      ? new Date(executionEnd).getTime()
+      : Math.max(
+          Date.now(),
+          ...tasks.filter((t) => t.completed_at).map((t) => new Date(t.completed_at!).getTime()),
+        )
+    const totalMs = Math.max(endMs - startMs, 1)
+
+    const tickCount = 5
+    const ticks: { label: string; left: number }[] = []
+    for (let i = 0; i <= tickCount; i++) {
+      const ms = (totalMs / tickCount) * i
+      ticks.push({ label: formatDurationMs(ms), left: (i / tickCount) * 100 })
+    }
+
+    const bars = tasks.map((task) => {
+      const taskStart = task.started_at ? new Date(task.started_at).getTime() : startMs
+      const taskEnd = task.completed_at
+        ? new Date(task.completed_at).getTime()
+        : task.status === 'running'
+          ? Date.now()
+          : taskStart
+
+      const left = ((taskStart - startMs) / totalMs) * 100
+      const width = Math.max(((taskEnd - taskStart) / totalMs) * 100, 0.5)
+      const durationMs = taskEnd - taskStart
+
+      return {
+        task,
+        left: Math.min(left, 100),
+        width: Math.min(width, 100 - Math.min(left, 100)),
+        durationMs,
+      }
+    })
+
+    return { bars, ticks }
+  }, [tasks, executionStart, executionEnd])
+
+  if (!timelineData) return null
+
+  return (
+    <div className="space-y-1">
+      {timelineData.bars.map(({ task, left, width, durationMs }) => (
+        <div key={task.id} className="group flex items-center gap-3">
+          <span
+            className="w-28 shrink-0 truncate text-right text-xs text-muted-foreground"
+            title={task.task_name}
+          >
+            {task.task_name}
+          </span>
+          <div className="relative h-7 flex-1 rounded bg-muted/30">
+            <div
+              className={cn(
+                'absolute bottom-0.5 top-0.5 flex items-center overflow-hidden rounded-sm px-1.5 text-[10px] font-medium text-white transition-all',
+                STATUS_BAR_COLORS[task.status] ?? 'bg-gray-400',
+                task.status === 'running' && 'animate-pulse motion-reduce:animate-none',
+              )}
+              style={{
+                left: `${left}%`,
+                width: `${width}%`,
+                minWidth: '2px',
+              }}
+              title={`${task.task_name} — ${formatDurationMs(durationMs)}`}
+            >
+              <span className="truncate">{width > 8 ? task.task_name : ''}</span>
+            </div>
+          </div>
+          <span className="w-16 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
+            {durationMs > 0 ? formatDurationMs(durationMs) : '—'}
+          </span>
+        </div>
+      ))}
+      <div className="flex items-center gap-3">
+        <span className="w-28 shrink-0" />
+        <div className="relative h-5 flex-1">
+          {timelineData.ticks.map((tick, i) => (
+            <span
+              key={i}
+              className="absolute top-0 text-[10px] tabular-nums text-muted-foreground/60"
+              style={{
+                left: `${tick.left}%`,
+                transform:
+                  i === timelineData.ticks.length - 1
+                    ? 'translateX(-100%)'
+                    : i > 0
+                      ? 'translateX(-50%)'
+                      : undefined,
+              }}
+            >
+              {tick.label}
+            </span>
+          ))}
+        </div>
+        <span className="w-16 shrink-0" />
+      </div>
+    </div>
+  )
+})
+
+/* ------------------------------------------------------------------ */
 /* Event log                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -216,10 +353,133 @@ const EventRow = memo(function EventRow({ event }: { event: ExecutionEvent }) {
   )
 })
 
+interface EventGroup {
+  name: string
+  status: 'completed' | 'failed' | 'running' | 'pending'
+  events: ExecutionEvent[]
+  startTime: string | null
+  endTime: string | null
+  durationMs: number | null
+}
+
+function buildEventGroups(events: ExecutionEvent[]): EventGroup[] {
+  const groups: EventGroup[] = []
+  let current: EventGroup | null = null
+
+  for (const event of events) {
+    if (event.event_type === 'task_started') {
+      if (current) {
+        groups.push(current)
+      }
+      current = {
+        name: str(event.data.task_name, 'Unnamed Task'),
+        status: 'running',
+        events: [event],
+        startTime: event.timestamp,
+        endTime: null,
+        durationMs: null,
+      }
+    } else if (event.event_type === 'task_completed' && current) {
+      current.events.push(event)
+      current.status = 'completed'
+      current.endTime = event.timestamp
+      if (current.startTime) {
+        current.durationMs =
+          new Date(event.timestamp).getTime() - new Date(current.startTime).getTime()
+      }
+      groups.push(current)
+      current = null
+    } else if (current) {
+      current.events.push(event)
+    } else {
+      if (groups.length === 0 || groups[groups.length - 1]!.status !== 'pending') {
+        groups.push({
+          name: groups.length === 0 ? 'Setup' : 'Between Tasks',
+          status: 'pending',
+          events: [event],
+          startTime: event.timestamp,
+          endTime: null,
+          durationMs: null,
+        })
+      } else {
+        groups[groups.length - 1]!.events.push(event)
+      }
+    }
+  }
+
+  if (current) {
+    groups.push(current)
+  }
+
+  return groups
+}
+
+const GROUP_STATUS_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  completed: CheckCircle2,
+  failed: XCircle,
+  running: Clock,
+  pending: Clock,
+}
+
+const GROUP_STATUS_COLOR: Record<string, string> = {
+  completed: 'text-emerald-400',
+  failed: 'text-red-400',
+  running: 'text-blue-400',
+  pending: 'text-gray-500',
+}
+
+const EventGroupSection = memo(function EventGroupSection({
+  group,
+  defaultOpen,
+}: {
+  group: EventGroup
+  defaultOpen: boolean
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  const Icon = GROUP_STATUS_ICON[group.status] ?? Clock
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-expanded={open}
+        aria-label={`${group.name} — ${group.events.length} events`}
+      >
+        <ChevronRight
+          className={cn('h-3 w-3 shrink-0 text-gray-500 transition-transform', open && 'rotate-90')}
+        />
+        <Icon className={cn('h-3.5 w-3.5 shrink-0', GROUP_STATUS_COLOR[group.status])} />
+        <span className="flex-1 truncate text-xs font-medium text-gray-200">{group.name}</span>
+        {group.durationMs != null && (
+          <span className="shrink-0 text-[10px] tabular-nums text-gray-500">
+            {formatDurationMs(group.durationMs)}
+          </span>
+        )}
+        <span className="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] tabular-nums text-gray-400">
+          {group.events.length}
+        </span>
+      </button>
+      {open && (
+        <div className="ml-5 border-l border-white/10 pl-3 pt-0.5">
+          <div className="space-y-0.5">
+            {group.events.map((event) => (
+              <EventRow key={event.sequence} event={event} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+})
+
 const EventLog = memo(function EventLog({ events }: { events: ExecutionEvent[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
+  const [grouped, setGrouped] = useState(true)
   const rafRef = useRef(0)
+
+  const groups = useMemo(() => buildEventGroups(events), [events])
 
   useEffect(() => {
     if (autoScroll && containerRef.current) {
@@ -243,11 +503,43 @@ const EventLog = memo(function EventLog({ events }: { events: ExecutionEvent[] }
 
   return (
     <div className="mt-6">
-      <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
-        <Terminal className="h-4 w-4 text-muted-foreground" />
-        Event Log
-        <span className="text-xs font-normal text-muted-foreground">({events.length})</span>
-      </h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-base font-semibold">
+          <Terminal className="h-4 w-4 text-muted-foreground" />
+          Event Log
+          <span className="text-xs font-normal text-muted-foreground">({events.length})</span>
+        </h2>
+        <div className="flex items-center rounded-md border bg-muted/30 p-0.5">
+          <button
+            onClick={() => setGrouped(true)}
+            className={cn(
+              'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              grouped
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+            aria-pressed={grouped}
+            aria-label="Group events by task"
+          >
+            <Layers className="h-3 w-3" />
+            Grouped
+          </button>
+          <button
+            onClick={() => setGrouped(false)}
+            className={cn(
+              'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              !grouped
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+            aria-pressed={!grouped}
+            aria-label="Flat event list"
+          >
+            <List className="h-3 w-3" />
+            Flat
+          </button>
+        </div>
+      </div>
       <div
         ref={containerRef}
         onScroll={handleScroll}
@@ -255,11 +547,27 @@ const EventLog = memo(function EventLog({ events }: { events: ExecutionEvent[] }
         aria-label="Execution event log"
         className="max-h-[400px] overflow-y-auto rounded-lg border bg-[#0d1117] p-4"
       >
-        <div className="space-y-0.5 font-mono text-xs leading-relaxed">
-          {events.map((event) => (
-            <EventRow key={event.sequence} event={event} />
-          ))}
-        </div>
+        {grouped ? (
+          <div className="space-y-1">
+            {groups.map((group, idx) => (
+              <EventGroupSection
+                key={`${group.name}-${idx}`}
+                group={group}
+                defaultOpen={
+                  group.status === 'running' ||
+                  group.status === 'failed' ||
+                  idx === groups.length - 1
+                }
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-0.5 font-mono text-xs leading-relaxed">
+            {events.map((event) => (
+              <EventRow key={event.sequence} event={event} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -472,6 +780,97 @@ function HITLPanel({
           Respond
         </button>
       </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Tasks section with list/timeline toggle                             */
+/* ------------------------------------------------------------------ */
+
+function TasksSection({
+  tasks,
+  isActive,
+  executionStart,
+  executionEnd,
+}: {
+  tasks: ExecutionTask[]
+  isActive: boolean
+  executionStart: string | null
+  executionEnd: string | null
+}) {
+  const [view, setView] = useState<'list' | 'timeline'>('list')
+  const hasTimingData = tasks.some((t) => t.started_at)
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-base font-semibold">
+          Tasks
+          <span className="text-xs font-normal text-muted-foreground">({tasks.length})</span>
+        </h2>
+        {tasks.length > 0 && hasTimingData && (
+          <div className="flex items-center rounded-md border bg-muted/30 p-0.5">
+            <button
+              onClick={() => setView('list')}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                view === 'list'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+              aria-pressed={view === 'list'}
+              aria-label="List view"
+            >
+              <List className="h-3 w-3" />
+              List
+            </button>
+            <button
+              onClick={() => setView('timeline')}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                view === 'timeline'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+              aria-pressed={view === 'timeline'}
+              aria-label="Timeline view"
+            >
+              <GanttChart className="h-3 w-3" />
+              Timeline
+            </button>
+          </div>
+        )}
+      </div>
+      {tasks.length > 0 ? (
+        view === 'timeline' && hasTimingData ? (
+          <div className="rounded-lg border bg-card p-4">
+            <TaskTimeline
+              tasks={tasks}
+              executionStart={executionStart}
+              executionEnd={executionEnd}
+            />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {tasks.map((task, idx) => (
+              <TaskRow key={task.id} task={task} index={idx} />
+            ))}
+          </div>
+        )
+      ) : (
+        <div
+          role="status"
+          className="flex items-center justify-center rounded-lg border-2 border-dashed py-12 text-center"
+        >
+          <div>
+            <Clock aria-hidden="true" className="mx-auto mb-2 h-6 w-6 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">
+              {isActive ? 'Waiting for tasks to start…' : 'No tasks recorded for this execution'}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -851,38 +1250,12 @@ export default function ExecutionDetail() {
         )}
 
         {/* Tasks */}
-        <div>
-          <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
-            Tasks
-            <span className="text-xs font-normal text-muted-foreground">
-              ({sortedTasks.length})
-            </span>
-          </h2>
-          {sortedTasks.length > 0 ? (
-            <div className="space-y-3">
-              {sortedTasks.map((task, idx) => (
-                <TaskRow key={task.id} task={task} index={idx} />
-              ))}
-            </div>
-          ) : (
-            <div
-              role="status"
-              className="flex items-center justify-center rounded-lg border-2 border-dashed py-12 text-center"
-            >
-              <div>
-                <Clock
-                  aria-hidden="true"
-                  className="mx-auto mb-2 h-6 w-6 text-muted-foreground/40"
-                />
-                <p className="text-sm text-muted-foreground">
-                  {isActive
-                    ? 'Waiting for tasks to start…'
-                    : 'No tasks recorded for this execution'}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+        <TasksSection
+          tasks={sortedTasks}
+          isActive={isActive}
+          executionStart={execution.started_at}
+          executionEnd={execution.completed_at}
+        />
 
         {/* Event log */}
         <EventLog events={events} />

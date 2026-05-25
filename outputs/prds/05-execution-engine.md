@@ -8,6 +8,13 @@ The Execution Engine is the runtime that loads YAML resource definitions, resolv
 
 **Implemented:** Sequential and hierarchical crew execution. Flow execution with all step types: crew, function, router (Python function dispatch), condition (safe expression eval), and transform (WASM data massaging). Train and test via CrewAI native. Budget enforcement via LiteLLM virtual keys. Guardrails (function, LLM, schema, PII). AgentPolicy enforcement (tool allowlist/denylist, delegation, sandbox tier, PII redaction). Workflow hooks (before/after on crews and flow steps). HITL: backend `POST /executions/{id}/respond` endpoint + frontend HITL response panel in ExecutionDetail (polls for `hitl_request` events, displays prompt, submits response). Execution retry: `POST /executions/{id}/retry` endpoint creates a new execution from the original's configuration + frontend retry button on terminal executions. SSE + WebSocket streaming with fallback polling (frontend detects SSE disconnection after 3 failed reconnects, switches to REST polling at 3s/5s intervals, shows reconnection state). Browser notifications via Notification API for completed/failed executions + sidebar bell badge with unread count (`useNotifications` hook + `notificationStore`). Webhooks (register/deliver with HMAC signing). Automation triggers (cron, webhook, API). gRPC API on :50051 with auth interceptor. AI Copilot (prompt-to-crew via LiteLLM). Live collaboration (WebSocket rooms + Valkey pub/sub). Memory backends: lancedb, chromadb, qdrant, MuninnDB (cognitive memory with temporal priority + Hebbian learning). Full sandbox hierarchy: none < wasm < docker/podman (ContainerSandbox) < gVisor (GVisorSandbox) < MicroVM (full Firecracker + libkrun). Schema guardrails (JSON Schema output validation). WASM transforms (transform step type in flows). OpenTelemetry optional trace export.
 
+**Implemented (beyond MVP):**
+- Execution Comparison page (`/executions/compare?a=&b=`) -- side-by-side metrics diff of two executions (tokens, cost, duration, task-level comparison).
+- Execution timeline / Gantt chart -- horizontal bars per task with status colors (green/red/blue/gray), time scale axis, hover for duration/tokens/cost.
+- Grouped/collapsible execution logs -- events grouped by task with expand/collapse controls (similar to GitHub Actions), headers show task name, status badge, duration, token count.
+- Cost alert thresholds on AgentPolicy (`warn_at_usd`, `warn_at_tokens`) -- triggers `cost_alert` event when spend crosses warning thresholds during execution, before hard budget limit.
+- Run history tab on Crew ResourceDetail -- shows past executions for a specific crew with status, duration, cost, and re-run button.
+
 **Deferred to post-MVP:** Temporal workflow backend, dynamic task creation in hierarchical mode, warm container/VM pools.
 
 ## 2. Architecture
@@ -1235,6 +1242,7 @@ Indexes:
 | `policy.denied` | `{execution_id, agent, action, resource, policy, rule}` |
 | `guardrail.failed` | `{execution_id, task_name, guardrail_name, retry_count}` |
 | `execution.budget_warning` | `{execution_id, agent, budget_type, used, limit}` |
+| `execution.cost_alert` | `{execution_id, agent, alert_type, threshold_usd, current_usd}` or `{..., threshold_tokens, current_tokens}` -- triggered when AgentPolicy `warn_at_usd` or `warn_at_tokens` thresholds are crossed |
 | `execution.human_input_required` | `{execution_id, task_name, prompt}` |
 | `execution.human_input_received` | `{execution_id, feedback}` |
 | `execution.completed` | `{execution_id, outputs, token_usage, duration}` |

@@ -300,8 +300,23 @@ async def chat_stream(
                     error_text = ""
                     async for chunk in response.aiter_text():
                         error_text += chunk
+                    logger.warning(
+                        "LiteLLM stream error: model=%s status=%d body=%s",
+                        request_model,
+                        response.status_code,
+                        error_text[:200],
+                        extra={
+                            "event": "chat_stream_litellm_error",
+                            "model": request_model,
+                            "http_status": response.status_code,
+                        },
+                    )
+                    if response.status_code == 429:
+                        client_error = "Model rate limit exceeded. Try again later."
+                    else:
+                        client_error = f"Model request failed with status {response.status_code}."
                     evt = StreamEvent(
-                        error=error_text[:500],
+                        error=client_error,
                         done=True,
                         latency_ms=int((time.monotonic() - t0) * 1000),
                     )

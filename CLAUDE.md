@@ -78,13 +78,19 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **HITL (Human-in-the-Loop)**: Tasks with `human_input: true` pause execution. Frontend polls for `hitl_request` events and submits responses via `POST /executions/{id}/respond`. Response recorded as `hitl_response` event.
 
+**Chat streaming**: `POST /api/v1/chat/stream` provides real SSE streaming endpoint. Backend proxies through LiteLLM with `stream=True`, forwarding SSE chunks to the client.
+
+**Model fallback chains**: Configured per `LLMConnection` via `spec.fallback_to` refs. LiteLLM automatically retries with fallback models on provider errors.
+
+**Cost alert thresholds**: AgentPolicy supports `warn_at_usd` and `warn_at_tokens` fields. Triggers `cost_alert` event when spend crosses warning thresholds during execution, before the hard budget limit.
+
 **OpenTelemetry**: Optional trace export via `OTEL_ENDPOINT` env var. When unset, tracing is disabled with no overhead.
 
 **External services**: PostgreSQL (resources + executions + users), Valkey (real-time collaboration pub/sub for multi-replica WebSocket fan-out + health checks), LiteLLM proxy (model routing to Vertex AI / OpenAI, with per-execution virtual keys for budget enforcement + spend tracking).
 
 ### Frontend (React + React Flow)
 
-**Studio**: Visual graph editor (`@xyflow/react`) where users drag Agent/Task/Tool/FlowStep nodes onto a canvas, configure them via PropertyPanel, save as resources, and run/train/test crews. `studioStore` (Zustand) manages canvas state with undo/redo (30-snapshot history). Crew group nodes wrap agents+tasks in a visual bounding box. ELK.js auto-layout arranges nodes left-to-right. Bidirectional YAML editor syncs with canvas.
+**Studio**: Visual graph editor (`@xyflow/react`) where users drag Agent/Task/Tool/FlowStep/Condition/Router/Parallel nodes and sticky notes (4 colors) onto a canvas, configure them via PropertyPanel, save as resources, and run/train/test crews. `studioStore` (Zustand) manages canvas state with undo/redo (30-snapshot history). Crew group nodes wrap agents+tasks in a visual bounding box. ELK.js auto-layout arranges nodes left-to-right. Bidirectional YAML editor syncs with canvas. Per-node testing ("Test Agent"/"Test Task" in PropertyPanel). Expression editor with syntax validation and variable autocomplete for Condition/Router nodes. Execution data overlay (green/red borders, output preview). Gantt timeline and grouped/collapsible execution logs. Crew Settings dialog (error workflow). Canvas JSON export (Export + Copy as JSON).
 
 **Resource CRUD**: `resourceStore` handles all resource kinds through the generic `/api/v1/{kind_plural}` endpoints. Updates use optimistic locking via `version` field.
 
@@ -104,7 +110,33 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Health indicator**: Sidebar displays a live health status indicator for the backend API connection.
 
-**Marketplace**: `/marketplace` page for importing resources from git repos. Backend clones repos, validates YAML, upserts resources. 7 built-in example crews plus a shared tools collection available.
+**Marketplace**: `/marketplace` page for importing resources from git repos. Backend clones repos, validates YAML, upserts resources. 7 built-in example crews plus a shared tools collection available. Enhanced template gallery with search, category chips, preview dialog, and resource summaries.
+
+**Knowledge Sources**: `/knowledge` page with card grid showing knowledge sources and source type badges.
+
+**Credentials Manager**: `/credentials` page for centralized secret management.
+
+**Guardrail Playground**: `/guardrails/playground` for testing guardrails with sample input before deploying to tasks.
+
+**Execution Comparison**: `/executions/compare?a=&b=` for side-by-side metrics diff of two executions.
+
+**Streaming chat**: `POST /api/v1/chat/stream` provides real SSE streaming. Chat page renders tokens as they arrive with a stop button for in-flight cancellation.
+
+**Presence indicators**: `PresenceAvatars` component shows colored avatar circles on ResourceDetail and Studio pages for users viewing the same resource.
+
+**Loading skeletons**: Dashboard, Chat, and KnowledgeSources pages display pulse-animated placeholders while data loads.
+
+**Keyboard shortcuts**: `Cmd+Shift+S` (save), `Cmd+Shift+E` (executions), `Cmd+Shift+N` (new resource), `Cmd+.` (settings), `?` (shortcuts dialog).
+
+**Bulk operations**: Multi-select with bulk delete in table and card views. Clipboard YAML import (paste multi-doc YAML).
+
+**Resource version history**: Audit log timeline tab on ResourceDetail pages showing all mutations for that resource.
+
+**User preferences**: Settings page includes default namespace, notification preferences, and sound settings.
+
+**Rate limit badges**: Models page shows RPM/TPM badges on model cards.
+
+**Run history**: Crew ResourceDetail pages include a run history tab showing past executions with re-run button.
 
 **API client**: `src/api/client.ts` — typed fetch wrapper, proxied through Vite dev server (`:3000/api → :8000`). Auto-generated OpenAPI types in `src/api/schema.d.ts` (`bun run generate:api`).
 

@@ -11,7 +11,8 @@ Provide a shared, versioned library of reusable agents, tasks, tools, crews, flo
 **Deferred to post-MVP:** No MinIO, no custom registry (`repository_assets` table), no publishing UI, no `blackbeard repo publish/install` commands, no approval workflows, no semver resolution, no asset overrides on use (`overrides`/`extend` syntax), no asset forking (`blackbeard repo fork`). The full repository system described in this PRD remains post-MVP.
 
 **Implemented (beyond initial MVP):**
-- Marketplace: Full `/marketplace` page with 6 built-in example crews, git URL import, and one-click import of bundled starters. Backend validates and upserts imported resources.
+- Marketplace: Full `/marketplace` page with 7 built-in example crews, git URL import, and one-click import of bundled starters. Backend validates and upserts imported resources.
+- Enhanced template gallery: Search bar for filtering templates by name or description. Category chips for filtering by type (research, content, code, data, SEO, support). Preview dialog showing full crew details (agents, tasks, tools, description) before import. Resource summaries on each template card (agent count, task count, tool count).
 
 ## 2. Asset Types
 

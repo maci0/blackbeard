@@ -8,9 +8,9 @@ Provide a browser-based drag-and-drop canvas where users compose agents, tasks, 
 
 **Implemented:** Canvas with Agent/Task/Tool nodes, edges for context and tool assignment, property panel with spec fields, YAML editor with bidirectional sync (Monaco), save to API, Run/Train/Test mode selector, FlowStep nodes, CrewGroup compound nodes (bounding box), ELK.js auto-layout, undo/redo (30 snapshots), execution view with status badges. AI Copilot (prompt-to-crew via LiteLLM, Sparkles button + dialog, `api/copilot.py` + `engine/copilot.py`). Live collaboration (WebSocket rooms, participant count, node/edge sync, auto-reconnect). Cursor presence (colored cursors + names for collaborating users).
 
-**Implemented additionally:** Command palette (Cmd+K) for global search across resources. Resource clone/duplicate. YAML file import on Resources page. Resource creation dialog on Resources page. Execution retry button. HITL response panel (frontend polls for `hitl_request` events, submits responses via API). Studio state persists to `localStorage`. Execution filtering (status, crew, type) with sortable columns.
+**Implemented additionally:** Command palette (Cmd+K) for global search across resources. Resource clone/duplicate. YAML file import on Resources page. Resource creation dialog on Resources page. Execution retry button. HITL response panel (frontend polls for `hitl_request` events, submits responses via API). Studio state persists to `localStorage`. Execution filtering (status, crew, type) with sortable columns. Sticky notes on canvas (4 color variants, editable inline text). Execution data overlay on nodes (green/red borders for success/failure, output preview on hover, "Clear Results" button). Per-node testing ("Test Agent" / "Test Task" buttons in PropertyPanel, uses first available LLMConnection). Condition, Router, and Parallel node types with dedicated property forms. Expression editor with syntax validation and variable autocomplete for condition/router expressions. Crew Settings dialog (error workflow: run error crew / retry N times / ignore). Canvas JSON export (toolbar "Export" + "Copy as JSON" buttons). Execution timeline / Gantt chart (horizontal bars per task, status-colored, time scale axis). Grouped/collapsible execution logs (group by task with expand/collapse, similar to GitHub Actions log groups).
 
-**Partial:** Training tab — Run/Train/Test modes available in RunDialog; dedicated training panel with feedback workflow (section 7.1) deferred. Execution View — Streaming implemented (SSE + WebSocket + polling fallback); canvas-integrated execution view with Gantt timeline deferred.
+**Partial:** Training tab -- Run/Train/Test modes available in RunDialog; dedicated training panel with feedback workflow (section 7.1) deferred.
 
 **Deferred to post-MVP:** Export ZIP/PNG/SVG/React (YAML export only implemented), drag reparenting.
 
@@ -63,6 +63,42 @@ Provide a browser-based drag-and-drop canvas where users compose agents, tasks, 
 - **Implementation**: Uses React Flow's `Group` node type. Agent and Task nodes within the crew have `parentId` set to the Crew node's ID. When collapsed, child nodes are hidden and the Crew node renders a summary view with agent count, task count, and process mode.
 - **Drag reparenting**: Dragging an Agent or Task node into a Crew bounding box sets its `parentId` to the Crew node and adds a `ref:` entry to the Crew's `spec.agents` or `spec.tasks`. Dragging a node out of a Crew removes the `parentId` and the corresponding `ref:` entry. The Crew's YAML updates immediately on reparent.
 
+### 3.6 Condition Node
+
+**Status: Implemented (beyond MVP).**
+
+- **Display**: Diamond shape with condition label, true/false output port labels.
+- **Ports**: Single input, two outputs (true branch, false branch).
+- **Property form**: Expression editor with syntax validation and variable autocomplete. Supports referencing prior task outputs and flow state variables.
+- **Edge rules**: True output connects to the step executed when condition is met; false output to the alternative.
+
+### 3.7 Router Node
+
+**Status: Implemented (beyond MVP).**
+
+- **Display**: Diamond shape with labelled output ports for each route.
+- **Ports**: Single input, N outputs (one per route label).
+- **Property form**: Route definitions with label and condition pairs. Expression editor with variable autocomplete for each route condition.
+- **Edge rules**: Each output port connects to the downstream step for that route.
+
+### 3.8 Parallel Node
+
+**Status: Implemented (beyond MVP).**
+
+- **Display**: Horizontal bar with fork/join indicators, containing child step references.
+- **Ports**: Single input (fork point), single output (join point after all parallel branches complete).
+- **Property form**: List of parallel branch step references with add/remove controls.
+- **Edge rules**: Downstream steps wait for all parallel branches to complete before proceeding.
+
+### 3.9 Sticky Note
+
+**Status: Implemented (beyond MVP).**
+
+- **Display**: Colored rectangle (4 color variants: yellow, blue, green, pink) with editable inline text.
+- **Not connectable**: Sticky notes have no ports and cannot participate in edges.
+- **Purpose**: Annotation-only -- allows users to leave notes, reminders, or documentation on the canvas.
+- **Inline editing**: Double-click to edit text directly on the canvas.
+
 ## 4. Edge Semantics
 
 | Edge Type | Visual | Semantics |
@@ -100,6 +136,29 @@ When a node is selected, a right-side panel shows an auto-generated form from th
 
 All other fields (strings, numbers, booleans, enums, tags) use auto-generated inputs from JSON Schema.
 
+### 5.1 Expression Editor (Implemented)
+
+Condition and Router nodes include a dedicated **expression editor** widget:
+
+- **Syntax validation**: Real-time syntax checking with inline error markers.
+- **Variable autocomplete**: Suggests available variables from prior task outputs, flow state, and execution inputs. Triggered by typing `{{` or pressing Ctrl+Space.
+- **Preview**: Shows the expression's evaluated type and a preview of what the expression would resolve to given sample data.
+
+### 5.2 Per-Node Testing (Implemented)
+
+The PropertyPanel includes **"Test Agent"** and **"Test Task"** buttons for individual node testing:
+
+- **Test Agent**: Runs the selected agent against a sample task using the first available LLMConnection. Results displayed inline in the PropertyPanel.
+- **Test Task**: Runs the selected task with its assigned agent. Results include output preview, token usage, and duration.
+- Uses the first available model from configured LLMConnections -- no manual model selection required.
+
+### 5.3 Crew Settings Dialog (Implemented)
+
+Accessible via the crew group node's context menu or the toolbar, the Crew Settings dialog configures crew-level behavior:
+
+- **Error workflow**: Three options -- run a designated error crew, retry N times with backoff, or ignore errors and continue.
+- **Settings are persisted** to the Crew resource's `spec` on save.
+
 ## 6. Canvas Operations
 
 | Operation | Trigger | Behaviour |
@@ -130,11 +189,14 @@ A second tab on the canvas switches to **Execution View**:
   - Wall-clock time.
   - Raw input/output.
   - Tool calls with arguments and responses.
-- A timeline bar at the bottom shows task start/end with Gantt-like visualisation.
+- **Execution timeline / Gantt chart (Implemented)**: A timeline bar at the bottom shows task start/end with horizontal bars per task, status-colored (green=completed, red=failed, blue=running, gray=pending), with a time scale axis. Hover shows duration, tokens, and cost.
+- **Execution data overlay (Implemented)**: Nodes display green borders on success, red borders on failure, with output preview on hover. A "Clear Results" button resets the overlay.
 - Errors highlight the failed node in red with the error message inline.
 - **Loading state**: While waiting for execution to start, all nodes show a pulsing gray border. A "Connecting to execution..." overlay appears if SSE connection takes >3s.
 - **Error recovery**: If the SSE stream disconnects, the UI polls `GET /executions/{id}` every 5s as fallback. A "Reconnecting..." banner shows at the top of the canvas. When SSE reconnects, polling stops.
 - **Stale execution**: If an execution hasn't emitted events for >5 minutes, a "Execution may be stalled" warning appears on the current task node. The 5-minute threshold is configurable via execution metadata. For long-running LLM calls (reasoning models, large context), the threshold is automatically extended to `agent.max_execution_time * 1.5` if defined.
+
+**Grouped/collapsible execution logs (Implemented)**: Execution events in the log panel are grouped by task, with expand/collapse controls similar to GitHub Actions log groups. Each group header shows the task name, status badge, duration, and token count. Expanding a group reveals individual events (LLM calls, tool calls, policy events) within that task.
 
 **Node-to-execution mapping**: Canvas nodes use the convention `{kind}-{name}` as their React Flow node ID (e.g., `task-research-ai`, `agent-researcher`). Execution SSE events carry `task_name` and `agent_name` fields. The UI maps events to nodes by constructing the node ID from the event's resource name. If a node ID doesn't match any canvas node (e.g., a dynamically-created subtask in hierarchical mode), the event is displayed in a "Unmapped Events" panel below the canvas. This convention must match the SSE event payload format defined in PRD 05. Execution SSE events carry `event_type`, `task_name`, and `agent_name` fields that map to canvas nodes via `{kind}-{name}` node IDs.
 
@@ -241,6 +303,7 @@ Copilot always generates YAML that passes validation. User can accept/reject eac
 |--------|--------|
 | **Import** | Upload a folder of YAML files → parsed into canvas nodes |
 | **Export YAML** | Download all resources as a directory of YAML files |
+| **Export JSON (Implemented)** | Toolbar "Export" button downloads canvas state as JSON; "Copy as JSON" copies to clipboard |
 | **Export ZIP** | Download as a deployable project (YAML + pyproject.toml + scaffold) |
 | **Export PNG/SVG** | Snapshot of the current canvas |
 | **Export React Component** | Generates an embeddable React component for the crew's UI |

@@ -280,10 +280,10 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
 
         try:
             spec = json.loads(request.spec_json) if request.spec_json else {}
-        except json.JSONDecodeError as exc:
+        except json.JSONDecodeError:
             await context.abort(
                 grpc.StatusCode.INVALID_ARGUMENT,
-                f"Invalid spec_json: {exc}",
+                "Invalid spec_json: malformed JSON",
             )
             return blackbeard_pb2.Resource()
 
@@ -300,9 +300,10 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
                 resource, _created = await service.create(data)
                 await session.commit()
             except ResourceValidationError as exc:
+                msgs = "; ".join(e.message for e in exc.errors)
                 await context.abort(
                     grpc.StatusCode.INVALID_ARGUMENT,
-                    str(exc),
+                    f"Resource validation failed: {msgs[:500]}",
                 )
                 return blackbeard_pb2.Resource()
 
@@ -339,10 +340,10 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
         namespace = request.namespace or "default"
         try:
             inputs = json.loads(request.inputs_json) if request.inputs_json else {}
-        except json.JSONDecodeError as exc:
+        except json.JSONDecodeError:
             await context.abort(
                 grpc.StatusCode.INVALID_ARGUMENT,
-                f"Invalid inputs_json: {exc}",
+                "Invalid inputs_json: malformed JSON",
             )
             return blackbeard_pb2.Execution()
 
@@ -358,7 +359,21 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
                 await context.abort(grpc.StatusCode.NOT_FOUND, str(exc))
                 return blackbeard_pb2.Execution()
             except ExecutionError as exc:
-                await context.abort(grpc.StatusCode.INTERNAL, str(exc))
+                logger.error(
+                    "gRPC Kickoff failed: crew=%s: %s",
+                    request.crew_name,
+                    exc,
+                    exc_info=True,
+                    extra={
+                        "event": "grpc_kickoff_failed",
+                        "crew_name": request.crew_name,
+                        "error_type": type(exc).__name__,
+                    },
+                )
+                await context.abort(
+                    grpc.StatusCode.INTERNAL,
+                    "Execution could not be created. Check server logs.",
+                )
                 return blackbeard_pb2.Execution()
 
         return _execution_to_proto(execution)
