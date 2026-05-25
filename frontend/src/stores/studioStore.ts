@@ -24,6 +24,11 @@ interface HistorySnapshot {
   edges: Edge[]
 }
 
+export interface CrewSettings {
+  onErrorCrew: string
+  onErrorAction: string
+}
+
 interface StudioState {
   nodes: Node[]
   edges: Edge[]
@@ -34,6 +39,7 @@ interface StudioState {
   historyIndex: number
   canUndo: boolean
   canRedo: boolean
+  crewSettings: CrewSettings
 
   onNodesChange: (changes: NodeChange[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
@@ -45,6 +51,7 @@ interface StudioState {
   setCrewName: (name: string) => void
   setNodes: (nodes: Node[]) => void
   setEdges: (edges: Edge[]) => void
+  setCrewSettings: (settings: CrewSettings) => void
   markClean: () => void
   undo: () => void
   redo: () => void
@@ -83,6 +90,7 @@ export const useStudioStore = create<StudioState>()(
         historyIndex: -1,
         canUndo: false,
         canRedo: false,
+        crewSettings: { onErrorCrew: '', onErrorAction: '' },
 
         onNodesChange: (changes) => {
           const hasStructuralChange = changes.some(
@@ -149,6 +157,7 @@ export const useStudioStore = create<StudioState>()(
         setCrewName: (name) => set({ crewName: name }),
         setNodes: (nodes) => set({ nodes }),
         setEdges: (edges) => set({ edges }),
+        setCrewSettings: (settings) => set({ crewSettings: settings, dirty: true }),
         markClean: () => set({ dirty: false }),
 
         undo: () => {
@@ -199,6 +208,7 @@ export const useStudioStore = create<StudioState>()(
         nodes: state.nodes,
         edges: state.edges,
         crewName: state.crewName,
+        crewSettings: state.crewSettings,
       }),
     },
   ),

@@ -16,6 +16,7 @@ import {
   Download,
   ClipboardCopy,
   XCircle,
+  Settings,
 } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { toResourceName } from '@/lib/utils'
@@ -57,6 +58,7 @@ export function Toolbar({
   presenceUsers,
   hasExecResults,
   onClearExecResults,
+  onCrewSettingsClick,
 }: {
   crewName: string
   onCrewNameChange: (v: string) => void
@@ -87,6 +89,7 @@ export function Toolbar({
   presenceUsers?: Array<{ email: string; name: string }>
   hasExecResults?: boolean
   onClearExecResults?: () => void
+  onCrewSettingsClick: () => void
 }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const toasts = useToastStore()
@@ -299,6 +302,16 @@ export function Toolbar({
             Clear results
           </button>
         )}
+
+        {/* Crew settings */}
+        <button
+          onClick={onCrewSettingsClick}
+          aria-label="Crew settings"
+          title="Crew Settings"
+          className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Settings className="h-3.5 w-3.5" />
+        </button>
 
         {/* AI Copilot */}
         <button

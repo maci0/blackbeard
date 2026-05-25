@@ -17,6 +17,8 @@ import { TERMINAL_STATUSES } from '@/lib/types'
 import { RunDialog, type RunParams } from '@/components/studio/RunDialog'
 import { Toolbar } from '@/components/studio/Toolbar'
 import { CopilotDialog, type CopilotResource } from '@/components/studio/CopilotDialog'
+import { CrewSettingsDialog } from '@/components/studio/CrewSettingsDialog'
+import type { CrewSettings } from '@/stores/studioStore'
 import { CursorOverlay } from '@/components/studio/CursorOverlay'
 import { YamlEditor } from '@/components/studio/YamlEditor'
 import { autoLayout } from '@/components/studio/autoLayout'
@@ -158,6 +160,7 @@ function StudioInner() {
   const [layouting, setLayouting] = useState(false)
   const [copilotOpen, setCopilotOpen] = useState(false)
   const [collabEnabled, setCollabEnabled] = useState(false)
+  const [crewSettingsOpen, setCrewSettingsOpen] = useState(false)
 
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -173,6 +176,8 @@ function StudioInner() {
     canRedo,
     undo,
     redo,
+    crewSettings,
+    setCrewSettings,
   } = useStudioStore(
     useShallow((s) => ({
       crewName: s.crewName,
@@ -186,6 +191,8 @@ function StudioInner() {
       canRedo: s.canRedo,
       undo: s.undo,
       redo: s.redo,
+      crewSettings: s.crewSettings,
+      setCrewSettings: s.setCrewSettings,
     })),
   )
 
@@ -507,15 +514,24 @@ function StudioInner() {
           const raw = (d['name'] as string | undefined) ?? n.id
           return `ref:tasks/${toResourceName(raw)}`
         })
+        const { crewSettings: currentCrewSettings } = useStudioStore.getState()
+        const crewSpec: Record<string, unknown> = {
+          process: 'sequential',
+          agents: agentRefs,
+          tasks: taskRefs,
+        }
+        if (currentCrewSettings.onErrorAction) {
+          const onError: Record<string, string> = { action: currentCrewSettings.onErrorAction }
+          if (currentCrewSettings.onErrorAction === 'run' && currentCrewSettings.onErrorCrew) {
+            onError.crew = currentCrewSettings.onErrorCrew
+          }
+          crewSpec.hooks = { on_error: JSON.stringify(onError) }
+        }
         const crewBody = {
           apiVersion: API_VERSION,
           kind: 'Crew',
           metadata: { name: toResourceName(crewName) },
-          spec: {
-            process: 'sequential',
-            agents: agentRefs,
-            tasks: taskRefs,
-          },
+          spec: crewSpec,
         }
         await api.post('/api/v1/crews', crewBody)
 
@@ -899,6 +915,7 @@ function StudioInner() {
         presenceUsers={presenceConnected ? presenceUsers : []}
         hasExecResults={hasExecResults}
         onClearExecResults={clearExecResults}
+        onCrewSettingsClick={() => setCrewSettingsOpen(true)}
       />
 
       <div
@@ -945,6 +962,14 @@ function StudioInner() {
         open={copilotOpen}
         onOpenChange={setCopilotOpen}
         onApply={handleCopilotApply}
+      />
+
+      <CrewSettingsDialog
+        open={crewSettingsOpen}
+        onOpenChange={setCrewSettingsOpen}
+        settings={crewSettings}
+        onSave={(s: CrewSettings) => setCrewSettings(s)}
+        currentCrewName={toResourceName(crewName)}
       />
     </div>
   )

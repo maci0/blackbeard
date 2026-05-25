@@ -18,6 +18,7 @@ import type { Resource } from '@/lib/types'
 import { modKey } from '@/lib/platform'
 import { nodeToYaml } from './nodeYaml'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { ExpressionEditor } from './ExpressionEditor'
 
 /** Context providing a generated field id from the enclosing FieldGroup */
 const FieldIdContext = createContext<string>('')
@@ -586,11 +587,10 @@ function ConditionForm({
         />
       </FieldGroup>
       <FieldGroup label="Condition">
-        <TextInput
+        <ExpressionEditor
           value={str(data, 'condition')}
           onChange={(v) => onChange('condition', v)}
-          placeholder="result.status == 'approved'"
-          multiline
+          placeholder="state.status == 'approved'"
         />
       </FieldGroup>
       <FieldGroup label="True Branch">
@@ -665,29 +665,35 @@ function RouterForm({
       <div className="space-y-1">
         <Label>Routes</Label>
         {entries.map(([condition, target], idx) => (
-          <div key={idx} className="flex items-center gap-1">
-            <input
-              type="text"
-              className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              value={condition}
-              placeholder="condition"
-              onChange={(e) => updateRouteKey(condition, e.target.value)}
-            />
-            <input
-              type="text"
-              className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              value={target}
-              placeholder="target"
-              onChange={(e) => updateRouteValue(condition, e.target.value)}
-            />
-            <button
-              type="button"
-              onClick={() => removeRoute(condition)}
-              className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Remove route"
-            >
-              <X className="h-3 w-3" />
-            </button>
+          <div key={idx} className="space-y-1 rounded-md border border-border bg-muted/20 p-2">
+            <div>
+              <span className="text-[10px] font-medium text-muted-foreground">Condition</span>
+              <ExpressionEditor
+                value={condition}
+                onChange={(v) => updateRouteKey(condition, v)}
+                placeholder="state.status == 'approved'"
+              />
+            </div>
+            <div>
+              <span className="text-[10px] font-medium text-muted-foreground">Target step</span>
+              <input
+                type="text"
+                className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={target}
+                placeholder="target"
+                onChange={(e) => updateRouteValue(condition, e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => removeRoute(condition)}
+                className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove route"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
           </div>
         ))}
         <button
