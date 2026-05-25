@@ -101,7 +101,7 @@ function EventBadge({ event }: { event: string }) {
         colors[event] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
       )}
     >
-      {event}
+      {event.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
     </span>
   )
 }
@@ -343,7 +343,7 @@ function AddWebhookDialog({
                         onChange={() => toggleEvent(event)}
                         className="h-4 w-4 rounded border-gray-300 text-primary accent-primary focus-visible:ring-2 focus-visible:ring-ring"
                       />
-                      <span className="font-mono text-xs">{event}</span>
+                      <span className="text-xs">{event.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</span>
                     </label>
                   ))}
                 </div>

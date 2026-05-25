@@ -236,7 +236,6 @@ _KEY_GEN_REQ = httpx.Request("POST", "http://litellm:4000/key/generate")
 _KEY_DEL_REQ = httpx.Request("POST", "http://litellm:4000/key/delete")
 
 
-@pytest.mark.asyncio
 async def test_create_key_success():
     """VirtualKeyManager.create_key() returns key info on success."""
     mock_response = httpx.Response(
@@ -260,7 +259,6 @@ async def test_create_key_success():
     assert result["key_alias"] == "exec-abc"
 
 
-@pytest.mark.asyncio
 async def test_create_key_sends_correct_payload():
     """VirtualKeyManager.create_key() sends the right payload to LiteLLM."""
     mock_response = httpx.Response(
@@ -296,7 +294,6 @@ async def test_create_key_sends_correct_payload():
     assert "Bearer sk-master-key" in captured_kwargs["headers"]["Authorization"]
 
 
-@pytest.mark.asyncio
 async def test_create_key_without_limits():
     """VirtualKeyManager.create_key() omits budget fields when not provided."""
     mock_response = httpx.Response(
@@ -322,7 +319,6 @@ async def test_create_key_without_limits():
     assert "tpm_limit" not in payload
 
 
-@pytest.mark.asyncio
 async def test_create_key_http_error():
     """VirtualKeyManager.create_key() raises VirtualKeyError on HTTP errors."""
     mock_response = httpx.Response(
@@ -340,7 +336,6 @@ async def test_create_key_http_error():
             await mgr.create_key(name="exec-fail")
 
 
-@pytest.mark.asyncio
 async def test_create_key_missing_key_in_response():
     """VirtualKeyManager.create_key() raises when response lacks 'key'."""
     mock_response = httpx.Response(
@@ -358,7 +353,6 @@ async def test_create_key_missing_key_in_response():
             await mgr.create_key(name="exec-nokey")
 
 
-@pytest.mark.asyncio
 async def test_create_key_connection_error():
     """VirtualKeyManager.create_key() raises VirtualKeyError on connection errors."""
     with patch(
@@ -374,7 +368,6 @@ async def test_create_key_connection_error():
             await mgr.create_key(name="exec-connfail")
 
 
-@pytest.mark.asyncio
 async def test_delete_key_success():
     """VirtualKeyManager.delete_key() returns True on success."""
     mock_response = httpx.Response(200, json={"deleted": True}, request=_KEY_DEL_REQ)
@@ -389,7 +382,6 @@ async def test_delete_key_success():
     assert result is True
 
 
-@pytest.mark.asyncio
 async def test_delete_key_sends_correct_payload():
     """VirtualKeyManager.delete_key() sends the right payload."""
     mock_response = httpx.Response(200, json={"deleted": True}, request=_KEY_DEL_REQ)
@@ -411,7 +403,6 @@ async def test_delete_key_sends_correct_payload():
     assert captured_kwargs["json"] == {"keys": ["sk-virtual-456"]}
 
 
-@pytest.mark.asyncio
 async def test_delete_key_failure_returns_false():
     """VirtualKeyManager.delete_key() returns False on errors (no exception)."""
     with patch(
@@ -428,7 +419,6 @@ async def test_delete_key_failure_returns_false():
     assert result is False
 
 
-@pytest.mark.asyncio
 async def test_delete_key_http_error_returns_false():
     """VirtualKeyManager.delete_key() returns False on HTTP status errors."""
     mock_response = httpx.Response(
@@ -503,7 +493,6 @@ def test_loader_multiple_llms_use_same_override():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_proxy_url_trailing_slash_stripped():
     """Trailing slash in proxy_url should be stripped."""
     mock_response = httpx.Response(

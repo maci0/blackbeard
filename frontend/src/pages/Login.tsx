@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Anchor, LogIn, Shield, Eye, EyeOff } from 'lucide-react'
+import { api } from '@/api/client'
 import { useAuthStore, TOKEN_KEY, REFRESH_KEY } from '@/stores/authStore'
 import { useDocumentTitle } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
@@ -26,15 +27,10 @@ export default function Login() {
   const clearError = () => setLocalError(null)
 
   useEffect(() => {
-    fetch('/api/v1/config/public')
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${String(r.status)}`)
-        return r.json()
-      })
-      .then((d: { oidc_enabled?: boolean }) => setOidcEnabled(d.oidc_enabled === true))
-      .catch((err: unknown) => {
-        console.debug('[Login] OIDC config fetch failed — SSO button hidden', err)
-      })
+    api
+      .get<{ oidc_enabled?: boolean }>('/api/v1/config/public')
+      .then((d) => setOidcEnabled(d.oidc_enabled === true))
+      .catch(() => {})
   }, [])
 
   useEffect(() => {

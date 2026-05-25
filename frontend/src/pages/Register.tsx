@@ -97,10 +97,21 @@ export default function Register() {
                   (!validationField && !!storeError) ||
                   undefined
                 }
-                aria-describedby={error ? 'register-error' : undefined}
+                aria-describedby={
+                  validationField === 'displayName'
+                    ? 'register-displayname-error'
+                    : error
+                      ? 'register-error'
+                      : undefined
+                }
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="Your name"
               />
+              {validationField === 'displayName' && (
+                <p id="register-displayname-error" className="mt-1 text-xs text-destructive">
+                  Display name is required
+                </p>
+              )}
             </div>
 
             <div>
@@ -120,10 +131,21 @@ export default function Register() {
                 aria-invalid={
                   validationField === 'email' || (!validationField && !!storeError) || undefined
                 }
-                aria-describedby={error ? 'register-error' : undefined}
+                aria-describedby={
+                  validationField === 'email'
+                    ? 'register-email-error'
+                    : error
+                      ? 'register-error'
+                      : undefined
+                }
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 placeholder="you@example.com"
               />
+              {validationField === 'email' && (
+                <p id="register-email-error" className="mt-1 text-xs text-destructive">
+                  Email is required
+                </p>
+              )}
             </div>
 
             <div>
@@ -147,7 +169,7 @@ export default function Register() {
                     (!validationField && !!storeError) ||
                     undefined
                   }
-                  aria-describedby={`register-password-hint${error ? ' register-error' : ''}`}
+                  aria-describedby={`register-password-hint${validationField === 'password' ? ' register-password-error' : ''}${error ? ' register-error' : ''}`}
                   className="w-full rounded-md border bg-background px-3 py-2 pr-10 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                   placeholder="Min 8 characters"
                 />
@@ -173,6 +195,11 @@ export default function Register() {
                   {password.length >= 8
                     ? 'Password meets minimum length'
                     : 'Must be at least 8 characters'}
+                </p>
+              )}
+              {validationField === 'password' && (
+                <p id="register-password-error" className="mt-1 text-xs text-destructive">
+                  Password must be at least 8 characters
                 </p>
               )}
             </div>

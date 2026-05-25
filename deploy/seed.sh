@@ -234,6 +234,7 @@ seed "LLMConnection/ollama-qwen" -X POST "$API/api/v1/llm-connections" "${H[@]}"
   "spec": {
     "provider": "ollama",
     "model": "qwen3.6",
+    "base_url": "http://host.docker.internal:11434",
     "parameters": {"temperature": 0.3, "max_tokens": 4096}
   }
 }'

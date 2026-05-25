@@ -240,7 +240,7 @@ function ModelCard({
         {spec.vertex?.project && (
           <div className="flex items-center justify-between border-t pt-1">
             <span className="text-xs text-muted-foreground">GCP Project</span>
-            <span className="max-w-[160px] truncate font-mono text-xs">{spec.vertex.project}</span>
+            <span className="max-w-[160px] truncate font-mono text-xs" title={spec.vertex.project}>{spec.vertex.project}</span>
           </div>
         )}
 

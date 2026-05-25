@@ -87,7 +87,7 @@ function TriggerBadge({ type }: { type: string }) {
       )}
     >
       <Icon className="h-3 w-3" aria-hidden="true" />
-      {type}
+      {type.charAt(0).toUpperCase() + type.slice(1)}
     </span>
   )
 }

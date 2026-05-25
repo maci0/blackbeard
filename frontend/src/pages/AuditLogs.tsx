@@ -57,6 +57,13 @@ const PAGE_SIZE = 25
 
 const TABLE_HEADERS = ['Timestamp', 'Action', 'Actor', 'Resource Type', 'Resource ID'] as const
 
+const ACTION_LABELS: Record<string, string> = {
+  resource_created: 'Created',
+  resource_updated: 'Updated',
+  resource_deleted: 'Deleted',
+  user_login: 'Login',
+}
+
 function ActionBadge({ action }: { action: string }) {
   const colors: Record<string, string> = {
     resource_created: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
@@ -64,6 +71,9 @@ function ActionBadge({ action }: { action: string }) {
     resource_deleted: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
     user_login: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
   }
+  const label =
+    ACTION_LABELS[action] ??
+    action.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
   return (
     <span
       className={cn(
@@ -71,7 +81,7 @@ function ActionBadge({ action }: { action: string }) {
         colors[action] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200',
       )}
     >
-      {action}
+      {label}
     </span>
   )
 }

@@ -818,7 +818,8 @@ def test_execution_response_empty_inputs():
     """ExecutionResponse.from_db with None inputs should return empty dict."""
     from blackbeard.models.execution_schemas import ExecutionResponse
 
-    e = _make_execution(inputs=None)
+    e = _make_execution()
+    e.inputs = None
     resp = ExecutionResponse.from_db(e)
     assert resp.inputs == {}
 

@@ -11,8 +11,10 @@ import {
   Bell,
   Volume2,
   Monitor,
+  Sun,
+  Moon,
 } from 'lucide-react'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle, useDarkMode } from '@/hooks'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { useToastStore } from '@/stores/toastStore'
 import { useNamespaceStore } from '@/stores/namespaceStore'
@@ -46,6 +48,7 @@ export default function Settings() {
   const [soundNotifications, setSoundNotifications] = useState(
     () => localStorage.getItem('blackbeard_sound_notifications') === 'true',
   )
+  const { preference: themePreference, cycle: cycleTheme } = useDarkMode()
   const [currentTheme, setCurrentTheme] = useState(() =>
     document.documentElement.classList.contains('dark') ? 'Dark' : 'Light',
   )
@@ -510,11 +513,23 @@ export default function Settings() {
                 Theme
               </span>
               <div className="flex items-center gap-2">
-                <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-sm">{currentTheme}</span>
-                <span className="text-xs text-muted-foreground">
-                  (use the sidebar toggle to change)
-                </span>
+                <button
+                  type="button"
+                  onClick={cycleTheme}
+                  className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`Theme: ${themePreference}. Click to cycle.`}
+                >
+                  {themePreference === 'dark' ? (
+                    <Moon className="h-3.5 w-3.5" />
+                  ) : themePreference === 'light' ? (
+                    <Sun className="h-3.5 w-3.5" />
+                  ) : (
+                    <Monitor className="h-3.5 w-3.5" />
+                  )}
+                  {themePreference === 'system'
+                    ? `System (${currentTheme})`
+                    : themePreference.charAt(0).toUpperCase() + themePreference.slice(1)}
+                </button>
               </div>
             </div>
           </div>

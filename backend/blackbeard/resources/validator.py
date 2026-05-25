@@ -218,7 +218,20 @@ def _validate_llm_connection_extra(spec: dict[str, Any], errors: list[Validation
 
     base_url = spec.get("base_url")
     if base_url and isinstance(base_url, str):
-        _validate_url_ssrf(base_url, "spec.base_url", errors)
+        if not base_url.startswith(("http://", "https://")):
+            errors.append(
+                ValidationError(
+                    field="spec.base_url",
+                    message="base_url must start with http:// or https://",
+                )
+            )
+        elif "@" in base_url.split("//", 1)[-1].split("/", 1)[0]:
+            errors.append(
+                ValidationError(
+                    field="spec.base_url",
+                    message="base_url must not contain embedded credentials (user:pass@)",
+                )
+            )
 
 
 _SAFE_PATH_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/ -]*$")

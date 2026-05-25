@@ -17,17 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from blackbeard.audit import log_audit
-from blackbeard.auth.dependencies import require_jwt_user, require_user
+from blackbeard.auth.dependencies import _bearer_401, require_jwt_user, require_user
 from blackbeard.auth.jwt import create_access_token, create_refresh_token, decode_token
 from blackbeard.auth.passwords import hash_password, verify_password
 from blackbeard.models import User, get_session
 from blackbeard.models.user_schemas import UserResponse, user_response
 
 logger = logging.getLogger(__name__)
-
-
-def _bearer_401(detail: str) -> HTTPException:
-    return HTTPException(status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"})
 
 
 async def _register_litellm_user(user_id: str) -> None:
@@ -131,7 +127,7 @@ async def register(
 ) -> AuthResponse:
     """Register a new user account."""
     email = data.email.lower()
-    client_ip = request.client.host if request.client else "unknown"
+    ip = request.client.host if request.client else None
 
     hashed = await asyncio.to_thread(hash_password, data.password)
     user = User(
@@ -146,8 +142,8 @@ async def register(
         await session.rollback()
         logger.info(
             "Registration conflict from %s",
-            client_ip,
-            extra={"event": "registration_conflict", "client_ip": client_ip},
+            ip or "unknown",
+            extra={"event": "registration_conflict", "client_ip": ip or "unknown"},
         )
         raise HTTPException(
             status_code=409, detail="Registration failed — please try again or log in"
@@ -161,7 +157,7 @@ async def register(
         actor_email=user.email,
         resource_type="User",
         resource_id=str(user.id),
-        ip_address=client_ip if client_ip != "unknown" else None,
+        ip_address=ip,
     )
     await session.commit()
     await session.refresh(user)
@@ -169,11 +165,11 @@ async def register(
     logger.info(
         "User registered: user_id=%s from %s",
         user.id,
-        client_ip,
+        ip or "unknown",
         extra={
             "event": "user_registered",
             "user_id": str(user.id),
-            "client_ip": client_ip,
+            "client_ip": ip or "unknown",
         },
     )
 

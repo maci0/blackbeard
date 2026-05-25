@@ -488,7 +488,7 @@ async def test_webhook_list_returns_list(client: AsyncClient):
 
 
 async def test_trigger_automation_with_custom_inputs(client: AsyncClient):
-    """POST /automations/{name}/trigger with custom inputs merges them."""
+    """POST /automations/{name}/trigger accepts custom inputs without validation error."""
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "Automation",

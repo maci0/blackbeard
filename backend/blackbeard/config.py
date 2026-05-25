@@ -150,7 +150,7 @@ class Settings(BaseSettings):
             )
         return v
 
-    @field_validator("otel_endpoint", "muninndb_url", "litellm_proxy_url")
+    @field_validator("otel_endpoint", "muninndb_url", "litellm_proxy_url", "oidc_redirect_uri")
     @classmethod
     def _validate_http_url(cls, v: str | None) -> str | None:
         if v is not None and not v.startswith(("http://", "https://")):
@@ -170,13 +170,6 @@ class Settings(BaseSettings):
                     f"CORS origin {origin!r} must not end with a trailing slash "
                     "(browsers strip it during CORS checks)"
                 )
-        return v
-
-    @field_validator("oidc_redirect_uri")
-    @classmethod
-    def _validate_oidc_redirect_uri(cls, v: str | None) -> str | None:
-        if v is not None and not v.startswith(("http://", "https://")):
-            raise ValueError(f"OIDC_REDIRECT_URI must start with http:// or https:// (got {v!r})")
         return v
 
     @model_validator(mode="after")

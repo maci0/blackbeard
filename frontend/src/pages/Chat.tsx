@@ -14,6 +14,7 @@ import { useDocumentTitle } from '@/hooks'
 import { api } from '@/api/client'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ModelSelectorSkeleton } from '@/components/ui/Skeleton'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { cn, getErrorMessage } from '@/lib/utils'
 
 interface TokenUsage {
@@ -400,11 +401,14 @@ export default function Chat() {
     textareaRef.current?.focus()
   }, [])
 
+  const [clearOpen, setClearOpen] = useState(false)
+
   const handleClear = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = null
     setMessages([])
     setSending(false)
+    setClearOpen(false)
     textareaRef.current?.focus()
   }, [])
 
@@ -419,7 +423,7 @@ export default function Chat() {
               messages.length > 0 ? (
                 <button
                   type="button"
-                  onClick={handleClear}
+                  onClick={() => setClearOpen(true)}
                   className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Clear conversation"
                 >
@@ -603,6 +607,16 @@ export default function Chat() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={clearOpen}
+        onOpenChange={setClearOpen}
+        title="Clear conversation"
+        description="This will delete all messages in the current conversation. This cannot be undone."
+        confirmLabel="Clear"
+        confirmVariant="destructive"
+        onConfirm={handleClear}
+      />
     </div>
   )
 }

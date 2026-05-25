@@ -106,48 +106,51 @@ export default function Resources() {
     })
   }, [])
 
+  async function importYamlDocs(text: string): Promise<number> {
+    const docs = text
+      .split(/\n---(?:\n|$)/)
+      .map((d) => d.trim())
+      .filter(Boolean)
+    let imported = 0
+    for (const doc of docs) {
+      const parsed = parseYaml(doc)
+      const kind = typeof parsed.kind === 'string' ? parsed.kind : ''
+      const metadata = parsed.metadata as
+        | { name?: string; namespace?: string; labels?: Record<string, string> }
+        | undefined
+      const name = metadata?.name ?? ''
+      const spec = (parsed.spec ?? {}) as Record<string, unknown>
+      if (!kind || !name) {
+        toast.error(`Skipped document: missing kind or metadata.name`)
+        continue
+      }
+      const apiVersion = typeof parsed.apiVersion === 'string' ? parsed.apiVersion : API_VERSION
+      try {
+        await createResource({
+          apiVersion,
+          kind,
+          metadata: {
+            name,
+            namespace: metadata?.namespace || 'default',
+            labels: metadata?.labels,
+          },
+          spec,
+        })
+        imported++
+      } catch (err) {
+        toast.error(getErrorMessage(err, `Failed to import ${kind} "${name}"`))
+      }
+    }
+    if (imported > 0) void fetchAllResources()
+    return imported
+  }
+
   async function handleYamlImport(file: File) {
     setImporting(true)
     try {
       const text = await file.text()
-      const docs = text
-        .split(/\n---(?:\n|$)/)
-        .map((d) => d.trim())
-        .filter(Boolean)
-      let imported = 0
-      for (const doc of docs) {
-        const parsed = parseYaml(doc)
-        const kind = typeof parsed.kind === 'string' ? parsed.kind : ''
-        const metadata = parsed.metadata as
-          | { name?: string; namespace?: string; labels?: Record<string, string> }
-          | undefined
-        const name = metadata?.name ?? ''
-        const spec = (parsed.spec ?? {}) as Record<string, unknown>
-        if (!kind || !name) {
-          toast.error(`Skipped document: missing kind or metadata.name`)
-          continue
-        }
-        const apiVersion = typeof parsed.apiVersion === 'string' ? parsed.apiVersion : API_VERSION
-        try {
-          await createResource({
-            apiVersion,
-            kind,
-            metadata: {
-              name,
-              namespace: metadata?.namespace || 'default',
-              labels: metadata?.labels,
-            },
-            spec,
-          })
-          toast.success(`Imported ${kind} "${name}"`)
-          imported++
-        } catch (err) {
-          toast.error(getErrorMessage(err, `Failed to import ${kind} "${name}"`))
-        }
-      }
-      if (imported > 0) {
-        void fetchAllResources()
-      }
+      const count = await importYamlDocs(text)
+      if (count > 0) toast.success(`Imported ${count} resource${count === 1 ? '' : 's'}`)
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to read YAML file'))
     } finally {
@@ -161,44 +164,8 @@ export default function Resources() {
     if (!text) return
     setPasteImporting(true)
     try {
-      const docs = text
-        .split(/\n---(?:\n|$)/)
-        .map((d) => d.trim())
-        .filter(Boolean)
-      let imported = 0
-      for (const doc of docs) {
-        const parsed = parseYaml(doc)
-        const kind = typeof parsed.kind === 'string' ? parsed.kind : ''
-        const metadata = parsed.metadata as
-          | { name?: string; namespace?: string; labels?: Record<string, string> }
-          | undefined
-        const name = metadata?.name ?? ''
-        const spec = (parsed.spec ?? {}) as Record<string, unknown>
-        if (!kind || !name) {
-          toast.error(`Skipped document: missing kind or metadata.name`)
-          continue
-        }
-        const apiVersion = typeof parsed.apiVersion === 'string' ? parsed.apiVersion : API_VERSION
-        try {
-          await createResource({
-            apiVersion,
-            kind,
-            metadata: {
-              name,
-              namespace: metadata?.namespace || 'default',
-              labels: metadata?.labels,
-            },
-            spec,
-          })
-          imported++
-        } catch (err) {
-          toast.error(getErrorMessage(err, `Failed to import ${kind} "${name}"`))
-        }
-      }
-      if (imported > 0) {
-        toast.success(`Imported ${imported} resource${imported === 1 ? '' : 's'}`)
-        void fetchAllResources()
-      }
+      const count = await importYamlDocs(text)
+      if (count > 0) toast.success(`Imported ${count} resource${count === 1 ? '' : 's'}`)
       setPasteOpen(false)
       setPasteYaml('')
     } catch (err) {
