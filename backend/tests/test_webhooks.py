@@ -26,6 +26,7 @@ from blackbeard.engine.execution_listener import (
     invalidate_webhook_cache,
     shutdown_webhook_executor,
 )
+from blackbeard.models.webhook import Webhook
 
 
 @pytest.fixture(autouse=True)
@@ -48,13 +49,15 @@ def _make_webhook(
     active: bool = True,
 ) -> MagicMock:
     """Create a mock Webhook ORM object."""
-    wh = MagicMock()
+    wh = MagicMock(spec=Webhook)
     wh.id = uuid.uuid4()
     wh.url = url
     wh.events = events if events is not None else []
     wh.secret = secret
     wh.active = active
-    wh.created_at = datetime.now(UTC)
+    now = datetime.now(UTC)
+    wh.created_at = now
+    wh.updated_at = now
     return wh
 
 

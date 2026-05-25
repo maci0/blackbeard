@@ -147,14 +147,11 @@ describe('ApiClient', () => {
     })
 
     it('throws ApiError with correct status and message on 401', async () => {
-      expect.assertions(6)
+      expect.assertions(5)
       const fetchMock = vi.mocked(globalThis.fetch)
       fetchMock.mockResolvedValueOnce(mockResponse(401, { detail: 'Invalid credentials' }))
 
-      await expect(api.get('/api/v1/protected')).rejects.toThrow(ApiError)
-
       try {
-        fetchMock.mockResolvedValueOnce(mockResponse(401, { detail: 'Invalid credentials' }))
         await api.get('/api/v1/protected')
       } catch (err) {
         expect(err).toBeInstanceOf(ApiError)

@@ -26,7 +26,6 @@ from blackbeard.resources.refs import (
 
 def test_parse_valid_ref():
     ref = parse_ref("ref:agents/researcher")
-    assert ref is not None
     assert isinstance(ref, RefInfo)
     assert ref.kind == ResourceKind.AGENT
     assert ref.name == "researcher"
@@ -331,7 +330,7 @@ def test_detect_multiple_cycles():
         "Crew/d": ["Crew/c"],
     }
     result = detect_cycles(adjacency)
-    assert len(result) >= 2
+    assert len(result) == 2
 
 
 # ---------------------------------------------------------------------------

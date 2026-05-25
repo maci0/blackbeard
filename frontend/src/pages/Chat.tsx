@@ -13,6 +13,7 @@ import { useDocumentTitle } from '@/hooks'
 import { api, ApiError } from '@/api/client'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
+import { ModelSelectorSkeleton } from '@/components/ui/Skeleton'
 import { cn, getErrorMessage } from '@/lib/utils'
 
 interface TokenUsage {
@@ -354,10 +355,7 @@ export default function Chat() {
               Model
             </label>
             {modelsLoading ? (
-              <div className="flex h-9 items-center gap-2 rounded-md border px-3">
-                <Spinner size="sm" label="Loading models" />
-                <span className="text-sm text-muted-foreground">Loading models...</span>
-              </div>
+              <ModelSelectorSkeleton />
             ) : modelsError ? (
               <div className="flex h-9 items-center gap-2 rounded-md border border-destructive/30 px-3 text-sm text-destructive">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />

@@ -24,7 +24,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { TableSkeleton } from '@/components/ui/Skeleton'
+import { KnowledgeCardSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { cn, getErrorMessage } from '@/lib/utils'
@@ -591,7 +591,7 @@ export default function KnowledgeSources() {
         )}
 
         {loading && sources.length === 0 ? (
-          <TableSkeleton />
+          <KnowledgeCardSkeleton count={6} />
         ) : sources.length === 0 ? (
           <EmptyState
             icon={<BookOpen />}

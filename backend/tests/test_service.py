@@ -202,6 +202,10 @@ async def test_service_list_pagination(db_session: AsyncSession):
     assert len(items2) == 1
     assert total2 == 5
 
+    page1_names = {r.name for r in items}
+    page2_names = {r.name for r in items2}
+    assert page1_names.isdisjoint(page2_names), "Pages should not overlap"
+
 
 async def test_service_list_filters_by_namespace(db_session: AsyncSession):
     """list_resources() filters by namespace."""

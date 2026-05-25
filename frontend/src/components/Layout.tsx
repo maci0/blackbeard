@@ -33,6 +33,7 @@ import {
   Plus,
   Loader2,
   AlertTriangle,
+  Keyboard,
 } from 'lucide-react'
 import { useDarkMode, useHealthCheck } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
@@ -43,6 +44,7 @@ import { isMac, modKey } from '@/lib/platform'
 import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
 import { CommandPalette } from './ui/CommandPalette'
+import { KeyboardShortcutsDialog } from './ui/KeyboardShortcutsDialog'
 import WelcomeDialog from './onboarding/WelcomeDialog'
 import GuidedTour from './onboarding/GuidedTour'
 import HelpMenu from './onboarding/HelpMenu'
@@ -281,6 +283,7 @@ export default function Layout() {
   const markAllRead = useNotificationStore((s) => s.markAllRead)
 
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false)
+  const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
   const [showWelcome, setShowWelcome] = useState(false)
@@ -326,15 +329,50 @@ export default function Layout() {
   }, [sidebarOpen, handleKeyDown])
 
   useEffect(() => {
-    const onCmdK = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (isMac ? e.metaKey : e.ctrlKey)) {
+    const onGlobalShortcut = (e: KeyboardEvent) => {
+      const mod = isMac ? e.metaKey : e.ctrlKey
+
+      if (e.key === 'k' && mod) {
         e.preventDefault()
         setCmdPaletteOpen((v) => !v)
+        return
+      }
+
+      if (mod && e.shiftKey) {
+        if (e.key === 'S' || e.key === 's') {
+          e.preventDefault()
+          void navigate('/studio')
+          return
+        }
+        if (e.key === 'E' || e.key === 'e') {
+          e.preventDefault()
+          void navigate('/executions')
+          return
+        }
+        if (e.key === 'N' || e.key === 'n') {
+          e.preventDefault()
+          void navigate('/resources')
+          return
+        }
+      }
+
+      if (e.key === '.' && mod) {
+        e.preventDefault()
+        void navigate('/settings')
+        return
+      }
+
+      if (e.key === '?') {
+        const tag = (e.target as HTMLElement).tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+        if ((e.target as HTMLElement).isContentEditable) return
+        e.preventDefault()
+        setShortcutsDialogOpen(true)
       }
     }
-    document.addEventListener('keydown', onCmdK)
-    return () => document.removeEventListener('keydown', onCmdK)
-  }, [])
+    document.addEventListener('keydown', onGlobalShortcut)
+    return () => document.removeEventListener('keydown', onGlobalShortcut)
+  }, [navigate])
 
   useEffect(() => {
     if (!notifOpen) return
@@ -655,6 +693,15 @@ export default function Layout() {
             </button>
             <button
               type="button"
+              onClick={() => setShortcutsDialogOpen(true)}
+              aria-label="Keyboard shortcuts"
+              title="Keyboard shortcuts (?)"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Keyboard className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
               onClick={() => setCollapsed((v) => !v)}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               className="hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
@@ -693,6 +740,7 @@ export default function Layout() {
       </main>
 
       <CommandPalette open={cmdPaletteOpen} onOpenChange={setCmdPaletteOpen} />
+      <KeyboardShortcutsDialog open={shortcutsDialogOpen} onOpenChange={setShortcutsDialogOpen} />
 
       {/* ── Onboarding ── */}
       <WelcomeDialog open={showWelcome} onStartTour={handleStartTour} onSkip={handleSkipWelcome} />

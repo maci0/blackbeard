@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react'
+import { useState, useCallback, type ChangeEvent } from 'react'
 import {
   Save,
   Play,
@@ -13,10 +13,14 @@ import {
   Users,
   Radio,
   Sparkles,
+  Download,
+  ClipboardCopy,
 } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { toResourceName } from '@/lib/utils'
 import { modKey } from '@/lib/platform'
+import { useStudioStore } from '@/stores/studioStore'
+import { useToastStore } from '@/stores/toastStore'
 import type { RunStatus } from '@/lib/types'
 import { RunStatusBadge } from './RunStatusBadge'
 import { KeyboardShortcuts } from './KeyboardShortcuts'
@@ -77,6 +81,36 @@ export function Toolbar({
   collabParticipants?: number
 }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const toasts = useToastStore()
+
+  const getExportData = useCallback(() => {
+    const { nodes, edges } = useStudioStore.getState()
+    return JSON.stringify({ crewName, nodes, edges }, null, 2)
+  }, [crewName])
+
+  const handleExportJSON = useCallback(() => {
+    const json = getExportData()
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${toResourceName(crewName) || 'crew'}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    toasts.success('Exported as JSON')
+  }, [crewName, getExportData, toasts])
+
+  const handleCopyJSON = useCallback(async () => {
+    const json = getExportData()
+    try {
+      await navigator.clipboard.writeText(json)
+      toasts.success('Copied to clipboard')
+    } catch {
+      toasts.error('Failed to copy to clipboard')
+    }
+  }, [getExportData, toasts])
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-card px-2 sm:gap-3 sm:px-4">
@@ -257,6 +291,43 @@ export function Toolbar({
           <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
           Copilot
         </button>
+
+        {/* Export dropdown */}
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              aria-label="Export crew"
+              title="Export"
+              className="flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              sideOffset={6}
+              align="end"
+              className="bg-popover z-50 min-w-[180px] rounded-lg border border-border py-1 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+            >
+              <DropdownMenu.Item
+                onSelect={handleExportJSON}
+                className="mx-1 flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus:bg-muted focus:outline-none"
+              >
+                <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                Export JSON
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                onSelect={() => void handleCopyJSON()}
+                className="mx-1 flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus:bg-muted focus:outline-none"
+              >
+                <ClipboardCopy className="h-3.5 w-3.5 text-muted-foreground" />
+                Copy as JSON
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
 
         {/* YAML editor toggle */}
         <button

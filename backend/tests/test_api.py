@@ -49,6 +49,9 @@ async def test_health_is_public(client: AsyncClient):
     """Health endpoint should not require an API key."""
     response = await client.get("/api/v1/health")
     assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["service"] == "blackbeard"
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +103,7 @@ async def test_create_agent(client: AsyncClient):
     assert "id" in data
     import uuid as _uuid
 
-    _uuid.UUID(data["id"])  # must be a valid UUID
+    assert _uuid.UUID(data["id"]), "id must be a valid UUID"
     assert data["kind"] == "Agent"
     assert data["metadata"]["name"] == "researcher"
     assert data["metadata"]["namespace"] == "default"

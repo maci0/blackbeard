@@ -67,9 +67,9 @@ describe('fuzz: KIND_TO_PLURAL inverse consistency', () => {
     expect(Object.keys(KIND_TO_PLURAL).length).toBe(Object.keys(PLURAL_TO_KIND).length)
   })
 
-  it('all kind values are PascalCase', () => {
+  it('all kind values are PascalCase starting with uppercase letter', () => {
     for (const kind of Object.values(PLURAL_TO_KIND)) {
-      expect(kind).toMatch(/^[A-Z][a-zA-Z]*$/)
+      expect(kind).toMatch(/^[A-Z][a-zA-Z]+$/)
     }
   })
 

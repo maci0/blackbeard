@@ -207,6 +207,9 @@ describe('executionStore', () => {
       expect(mockApi.get).toHaveBeenCalledWith('/api/v1/executions/exec-1')
       // State reference should be the same (no unnecessary re-render)
       expect(stateAfter.currentExecution).toBe(stateBefore.currentExecution)
+      // Verify actual field values are preserved
+      expect(stateAfter.currentExecution?.status).toBe('running')
+      expect(stateAfter.currentExecution?.total_tokens).toBe(100)
     })
 
     it('handles undefined tasks array (the tasks?.length bug fix)', async () => {
@@ -384,7 +387,9 @@ describe('executionStore', () => {
 
       useExecutionStore.getState().addEvents([])
 
-      expect(useExecutionStore.getState()).toBe(stateBefore)
+      const stateAfter = useExecutionStore.getState()
+      expect(stateAfter).toBe(stateBefore)
+      expect(stateAfter.events).toEqual([])
     })
   })
 

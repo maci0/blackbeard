@@ -20,7 +20,7 @@ import { useDocumentTitle } from '@/hooks'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { KindBadge } from '@/components/ui/KindBadge'
-import { Spinner } from '@/components/ui/Spinner'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { getDuration, formatCost } from '@/lib/formatters'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { PLURAL_TO_KIND } from '@/lib/kinds'
@@ -52,7 +52,7 @@ function StatCard({
       <div className="min-w-0 flex-1">
         <p className="text-sm text-muted-foreground">{label}</p>
         {loading ? (
-          <Spinner size="sm" label={`Loading ${label.toLowerCase()}`} />
+          <Skeleton className="h-7 w-16" />
         ) : (
           <p className="text-2xl font-semibold tracking-tight">{value}</p>
         )}
@@ -85,8 +85,15 @@ function RecentExecutions({ executions, loading }: { executions: Execution[]; lo
       </div>
       <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
         {loading && recent.length === 0 ? (
-          <div className="flex items-center justify-center py-12">
-            <Spinner label="Loading executions" />
+          <div className="space-y-3 p-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4">
+                <Skeleton className="h-5 w-16 rounded-full" />
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+            ))}
           </div>
         ) : recent.length === 0 ? (
           <div className="py-12 text-center">
@@ -196,8 +203,14 @@ function ResourcesByKind({
       </div>
       <div className="rounded-lg border bg-card p-4 shadow-sm">
         {loading && kindCounts.length === 0 ? (
-          <div className="flex items-center justify-center py-8">
-            <Spinner label="Loading resources" />
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-5 w-20 rounded-full" />
+                <Skeleton className="h-2 flex-1 rounded-full" />
+                <Skeleton className="h-4 w-6" />
+              </div>
+            ))}
           </div>
         ) : kindCounts.length === 0 ? (
           <div className="py-8 text-center">
@@ -270,8 +283,14 @@ function SpendByCrew({ executions, loading }: { executions: Execution[]; loading
       </div>
       <div className="rounded-lg border bg-card p-4 shadow-sm">
         {loading && crewSpend.length === 0 ? (
-          <div className="flex items-center justify-center py-8">
-            <Spinner label="Loading spend data" />
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-2 flex-1 rounded-full" />
+                <Skeleton className="h-4 w-12" />
+              </div>
+            ))}
           </div>
         ) : crewSpend.length === 0 ? (
           <div className="py-8 text-center">
@@ -374,8 +393,19 @@ function SpendOverTime({ executions, loading }: { executions: Execution[]; loadi
       </div>
       <div className="rounded-lg border bg-card p-4 shadow-sm">
         {loading && totalWeekSpend === 0 ? (
-          <div className="flex items-center justify-center py-8">
-            <Spinner label="Loading spend data" />
+          <div className="flex items-end gap-2" style={{ height: 120 }}>
+            {[20, 45, 12, 60, 35, 50, 28].map((h, i) => (
+              <div key={i} className="flex flex-1 flex-col items-center gap-1">
+                <Skeleton className="h-3 w-8" />
+                <div className="flex w-full flex-1 items-end justify-center">
+                  <div
+                    className="w-full max-w-8 animate-pulse rounded-t bg-muted/60"
+                    style={{ height: `${h}px` }}
+                  />
+                </div>
+                <Skeleton className="h-3 w-8" />
+              </div>
+            ))}
           </div>
         ) : (
           <div className="flex items-end gap-2" style={{ height: 120 }}>
