@@ -7,6 +7,7 @@ test.describe('Namespace Switcher', () => {
   })
 
   test('namespace switcher in sidebar shows default', async ({ page }) => {
+    // Namespace switcher is in the sidebar, keep page scope intentionally
     await expect(
       page.getByRole('button', { name: /default/i }).or(
         page.getByText(/namespace.*default/i),

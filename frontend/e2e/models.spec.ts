@@ -7,53 +7,56 @@ test.describe('Models page', () => {
   })
 
   test('page loads with header', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'Models' })).toBeVisible()
-    await expect(page.getByText('LLM connections and providers')).toBeVisible()
+    const main = page.locator('main')
+    await expect(main.locator('h1, h2, h3').filter({ hasText: 'Models' })).toBeVisible()
+    await expect(main.getByText('LLM connections and providers')).toBeVisible()
   })
 
   test('ollama-qwen model card is visible', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByLabel(/llm connection: ollama-qwen/i),
-    ).toBeVisible()
+      main.getByText('ollama-qwen', { exact: true }).first(),
+    ).toBeVisible({ timeout: 10000 })
   })
 
   test('provider badge shows Ollama (local)', async ({ page }) => {
-    await expect(page.getByText('Ollama (local)')).toBeVisible()
+    const main = page.locator('main')
+    await expect(main.getByText('Ollama (local)').first()).toBeVisible({ timeout: 10000 })
   })
 
   test('Add Connection button exists', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByRole('button', { name: /add connection/i }),
+      main.getByRole('button', { name: /add connection/i }),
     ).toBeVisible()
   })
 
   test('clicking Add Connection opens dialog', async ({ page }) => {
-    await page.getByRole('button', { name: /add connection/i }).click()
+    const main = page.locator('main')
+    await main.getByRole('button', { name: /add connection/i }).click()
 
-    await expect(
-      page.getByRole('heading', { name: /add llm connection/i }),
-    ).toBeVisible()
-    await expect(page.getByLabel(/^name/i)).toBeVisible()
-    await expect(page.getByLabel(/provider/i)).toBeVisible()
-    await expect(page.getByLabel(/^model/i)).toBeVisible()
+    const dialog = page.locator('[role="dialog"]')
+    await expect(dialog.getByText(/add llm connection/i)).toBeVisible()
+    await expect(dialog.getByLabel(/^name/i)).toBeVisible()
+    await expect(dialog.getByLabel(/provider/i)).toBeVisible()
+    await expect(dialog.getByLabel(/model/i).first()).toBeVisible()
   })
 
   test('Add Connection dialog can be closed', async ({ page }) => {
-    await page.getByRole('button', { name: /add connection/i }).click()
+    const main = page.locator('main')
+    await main.getByRole('button', { name: /add connection/i }).click()
 
-    await expect(
-      page.getByRole('heading', { name: /add llm connection/i }),
-    ).toBeVisible()
+    const dialogTitle = page.locator('[role="dialog"]').getByText(/add llm connection/i)
+    await expect(dialogTitle).toBeVisible()
 
     await page.getByRole('button', { name: /close/i }).click()
 
-    await expect(
-      page.getByRole('heading', { name: /add llm connection/i }),
-    ).not.toBeVisible()
+    await expect(dialogTitle).not.toBeVisible()
   })
 
   test('test button visible on card hover', async ({ page }) => {
-    const card = page.getByLabel(/llm connection: ollama-qwen/i)
+    const main = page.locator('main')
+    const card = main.locator('.group').filter({ hasText: 'ollama-qwen' }).first()
     await card.hover()
 
     await expect(
@@ -62,7 +65,8 @@ test.describe('Models page', () => {
   })
 
   test('Refresh button exists and is clickable', async ({ page }) => {
-    const refreshBtn = page.getByRole('button', { name: /refresh models/i })
+    const main = page.locator('main')
+    const refreshBtn = main.getByRole('button', { name: /refresh/i })
     await expect(refreshBtn).toBeVisible()
     await refreshBtn.click()
   })

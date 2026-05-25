@@ -104,10 +104,11 @@ test.describe('Navigation', () => {
   test('navigating to unknown route shows 404 page', async ({ page }) => {
     await page.goto('/nonexistent-page')
 
-    await expect(page.getByText('Page not found')).toBeVisible()
-    await expect(page.getByRole('link', { name: /go to studio/i })).toBeVisible()
+    const main = page.locator('main')
+    await expect(main.getByText('Page not found')).toBeVisible()
+    await expect(main.getByRole('link', { name: /go to studio/i })).toBeVisible()
     await expect(
-      page.getByRole('link', { name: /browse resources/i }),
+      main.getByRole('link', { name: /browse resources/i }),
     ).toBeVisible()
   })
 

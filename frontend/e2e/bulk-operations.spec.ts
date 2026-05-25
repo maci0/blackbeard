@@ -9,11 +9,12 @@ test.describe('Bulk operations', () => {
   test('Resources page shows checkboxes in list view', async ({ page }) => {
     await page.goto('/resources')
 
-    const viewToggle = page.getByRole('radiogroup', { name: /view mode/i })
+    const main = page.locator('main')
+    const viewToggle = main.getByRole('radiogroup', { name: /view mode/i })
     await viewToggle.getByRole('radio', { name: /list view/i }).click()
 
-    const table = page.getByRole('table', { name: /resources/i })
-    const emptyState = page.getByText(/no resources found/i)
+    const table = main.getByRole('table', { name: /resources/i })
+    const emptyState = main.getByText(/no resources found/i)
 
     await expect(table.or(emptyState)).toBeVisible()
 
@@ -28,11 +29,12 @@ test.describe('Bulk operations', () => {
   }) => {
     await page.goto('/resources')
 
-    const viewToggle = page.getByRole('radiogroup', { name: /view mode/i })
+    const main = page.locator('main')
+    const viewToggle = main.getByRole('radiogroup', { name: /view mode/i })
     await viewToggle.getByRole('radio', { name: /list view/i }).click()
 
-    const table = page.getByRole('table', { name: /resources/i })
-    const emptyState = page.getByText(/no resources found/i)
+    const table = main.getByRole('table', { name: /resources/i })
+    const emptyState = main.getByText(/no resources found/i)
 
     await expect(table.or(emptyState)).toBeVisible()
 
@@ -44,9 +46,9 @@ test.describe('Bulk operations', () => {
 
       if (await firstCheckbox.isVisible()) {
         await firstCheckbox.click()
-        await expect(page.getByText(/1 selected/i)).toBeVisible()
+        await expect(main.getByText(/1 selected/i)).toBeVisible()
         await expect(
-          page.getByRole('button', { name: /delete selected/i }),
+          main.getByRole('button', { name: /delete selected/i }),
         ).toBeVisible()
       }
     }
@@ -55,11 +57,12 @@ test.describe('Bulk operations', () => {
   test('clear selection button works', async ({ page }) => {
     await page.goto('/resources')
 
-    const viewToggle = page.getByRole('radiogroup', { name: /view mode/i })
+    const main = page.locator('main')
+    const viewToggle = main.getByRole('radiogroup', { name: /view mode/i })
     await viewToggle.getByRole('radio', { name: /list view/i }).click()
 
-    const table = page.getByRole('table', { name: /resources/i })
-    const emptyState = page.getByText(/no resources found/i)
+    const table = main.getByRole('table', { name: /resources/i })
+    const emptyState = main.getByText(/no resources found/i)
 
     await expect(table.or(emptyState)).toBeVisible()
 
@@ -71,10 +74,10 @@ test.describe('Bulk operations', () => {
 
       if (await firstCheckbox.isVisible()) {
         await firstCheckbox.click()
-        await expect(page.getByText(/1 selected/i)).toBeVisible()
+        await expect(main.getByText(/1 selected/i)).toBeVisible()
 
-        await page.getByRole('button', { name: /clear selection/i }).click()
-        await expect(page.getByText(/1 selected/i)).not.toBeVisible()
+        await main.getByRole('button', { name: /clear selection/i }).click()
+        await expect(main.getByText(/1 selected/i)).not.toBeVisible()
       }
     }
   })
@@ -82,13 +85,14 @@ test.describe('Bulk operations', () => {
   test('compare button on Executions page', async ({ page }) => {
     await page.goto('/executions')
 
-    const table = page.getByRole('table', { name: /executions/i })
-    const emptyState = page.getByText(/no executions yet/i)
+    const main = page.locator('main')
+    const table = main.getByRole('table', { name: /executions/i })
+    const emptyState = main.getByText(/no executions yet/i)
 
     await expect(table.or(emptyState)).toBeVisible()
 
     if (await table.isVisible()) {
-      const compareButton = page.getByRole('button', {
+      const compareButton = main.getByRole('button', {
         name: /compare/i,
       })
       await expect(compareButton).toBeVisible()
@@ -105,7 +109,7 @@ test.describe('Bulk operations', () => {
         await checkbox2.click()
 
         await expect(
-          page.getByRole('button', {
+          main.getByRole('button', {
             name: /compare selected executions/i,
           }),
         ).toBeEnabled()

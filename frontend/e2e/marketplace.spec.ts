@@ -11,23 +11,26 @@ test.describe('Marketplace', () => {
   })
 
   test('shows import from URL section', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByText(/import from url|import resources/i),
+      main.getByText(/import from url|import resources/i),
     ).toBeVisible()
   })
 
   test('shows research crew starter card', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByText(/research crew/i),
+      main.getByText(/research crew/i),
     ).toBeVisible()
   })
 
   test('shows content pipeline as coming soon', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByText(/content pipeline/i),
+      main.getByText(/content pipeline/i),
     ).toBeVisible()
     await expect(
-      page.getByText(/coming soon/i),
+      main.getByText(/coming soon/i),
     ).toBeVisible()
   })
 })

@@ -7,8 +7,9 @@ test.describe('Roles page', () => {
   })
 
   test('displays role cards', async ({ page }) => {
+    const main = page.locator('main')
     // Wait for roles to load — expect at least one role button
-    const roleCards = page.getByRole('button', { name: /^role:/i })
+    const roleCards = main.getByRole('button', { name: /^role:/i })
     await expect(roleCards.first()).toBeVisible()
 
     // Verify we have the expected number of roles from seed data
@@ -16,6 +17,7 @@ test.describe('Roles page', () => {
   })
 
   test('shows expected role names', async ({ page }) => {
+    const main = page.locator('main')
     const expectedRoles = [
       'admin',
       'developer',
@@ -25,15 +27,16 @@ test.describe('Roles page', () => {
     ]
 
     for (const roleName of expectedRoles) {
-      await expect(page.getByText(roleName, { exact: true }).first()).toBeVisible()
+      await expect(main.getByText(roleName, { exact: true }).first()).toBeVisible()
     }
   })
 
   test('create role button opens dialog', async ({ page }) => {
-    await page.getByRole('button', { name: /create role/i }).first().click()
+    const main = page.locator('main')
+    await main.getByRole('button', { name: /create role/i }).first().click()
 
     await expect(
-      page.getByRole('heading', { name: /create role/i }),
+      page.locator('h1, h2, h3').filter({ hasText: /create role/i }),
     ).toBeVisible()
     await expect(page.getByLabel(/^name/i)).toBeVisible()
     await expect(page.getByLabel(/description/i)).toBeVisible()
@@ -43,23 +46,25 @@ test.describe('Roles page', () => {
   })
 
   test('create role dialog can be closed', async ({ page }) => {
-    await page.getByRole('button', { name: /create role/i }).first().click()
+    const main = page.locator('main')
+    await main.getByRole('button', { name: /create role/i }).first().click()
 
     await expect(
-      page.getByRole('heading', { name: /create role/i }),
+      page.locator('h1, h2, h3').filter({ hasText: /create role/i }),
     ).toBeVisible()
 
     await page.getByRole('button', { name: /close/i }).click()
 
     await expect(
-      page.getByRole('heading', { name: /create role/i }),
+      page.locator('h1, h2, h3').filter({ hasText: /create role/i }),
     ).not.toBeVisible()
   })
 
   test('page header shows title and description', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'Roles' })).toBeVisible()
+    const main = page.locator('main')
+    await expect(main.locator('h1, h2, h3').filter({ hasText: 'Roles' })).toBeVisible()
     await expect(
-      page.getByText('Access control roles and permissions'),
+      main.getByText('Access control roles and permissions'),
     ).toBeVisible()
   })
 })

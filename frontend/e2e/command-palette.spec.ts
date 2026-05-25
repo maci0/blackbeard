@@ -17,7 +17,8 @@ test.describe('Command Palette', () => {
   test('search input focuses automatically', async ({ page }) => {
     await page.keyboard.press('Meta+k')
 
-    const searchInput = page.getByRole('combobox', { name: /search/i })
+    const dialog = page.getByRole('dialog', { name: /command palette/i })
+    const searchInput = dialog.getByRole('combobox', { name: /search/i })
     await expect(searchInput).toBeVisible()
     await expect(searchInput).toBeFocused()
   })
@@ -45,7 +46,7 @@ test.describe('Command Palette', () => {
 
     for (const pageName of expectedPages) {
       await expect(
-        dialog.getByRole('option', { name: new RegExp(pageName) }),
+        dialog.getByRole('option', { name: pageName, exact: true }),
       ).toBeVisible()
     }
   })

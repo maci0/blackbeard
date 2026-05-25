@@ -7,6 +7,7 @@ test.describe('Dark Mode', () => {
   })
 
   test('theme toggle button exists', async ({ page }) => {
+    // Theme toggle is in the sidebar, keep page scope intentionally
     const themeBtn = page.getByRole('button', { name: /theme/i })
     await expect(themeBtn).toBeVisible()
   })
@@ -54,14 +55,15 @@ test.describe('Dark Mode', () => {
 
     // Navigate to resources
     await page.goto('/resources')
-    await expect(page.getByRole('heading', { name: 'Resources' })).toBeVisible()
+    const main = page.locator('main')
+    await expect(main.locator('h1, h2, h3').filter({ hasText: 'Resources' })).toBeVisible()
 
     // Verify dark class persists
     await expect(htmlEl).toHaveClass(/dark/)
 
     // Navigate to executions
     await page.goto('/executions')
-    await expect(page.getByRole('heading', { name: 'Executions' })).toBeVisible()
+    await expect(main.locator('h1, h2, h3').filter({ hasText: 'Executions' })).toBeVisible()
 
     // Verify dark class still persists
     await expect(htmlEl).toHaveClass(/dark/)

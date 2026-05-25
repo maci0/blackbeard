@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 __all__ = [
@@ -178,6 +178,30 @@ class Settings(BaseSettings):
         if v is not None and not v.startswith(("http://", "https://")):
             raise ValueError(f"OIDC_REDIRECT_URI must start with http:// or https:// (got {v!r})")
         return v
+
+    @model_validator(mode="after")
+    def _check_production_secrets(self) -> Settings:
+        """Reject insecure default secrets in production (debug=False)."""
+        if self.debug:
+            return self
+        insecure_defaults = {
+            "blackbeard_api_key": "change-me-in-production",
+            "jwt_secret": "change-jwt-secret-in-production!",
+        }
+        for field_name, insecure_value in insecure_defaults.items():
+            secret: SecretStr = getattr(self, field_name)
+            if secret.get_secret_value() == insecure_value:
+                raise ValueError(
+                    f"{field_name.upper()} is set to the insecure default. "
+                    f"Set a strong, unique value via environment variable before running "
+                    f"in production (DEBUG=false)."
+                )
+        if "*" in self.cors_origins:
+            raise ValueError(
+                "CORS_ORIGINS contains wildcard '*' which is not allowed in production "
+                "(DEBUG=false). Set explicit origins instead."
+            )
+        return self
 
     model_config = SettingsConfigDict(env_prefix="", case_sensitive=False)
 

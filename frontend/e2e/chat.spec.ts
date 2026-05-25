@@ -7,19 +7,21 @@ test.describe('Chat page', () => {
   })
 
   test('page loads with model selector', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible()
+    const main = page.locator('main')
+    await expect(main.locator('h1, h2, h3').filter({ hasText: 'Chat' })).toBeVisible()
     await expect(
-      page.getByText('Test models with ad-hoc conversations'),
+      main.getByText('Test models with ad-hoc conversations'),
     ).toBeVisible()
 
-    const modelSelect = page.getByLabel('Model')
-    const modelError = page.getByText(/Failed to load models/i)
+    const modelSelect = main.getByLabel('Model')
+    const modelError = main.getByText(/Failed to load models/i)
 
     await expect(modelSelect.or(modelError)).toBeVisible()
   })
 
   test('system prompt toggle works', async ({ page }) => {
-    const toggle = page.getByRole('button', { name: /system prompt/i })
+    const main = page.locator('main')
+    const toggle = main.getByRole('button', { name: /system prompt/i })
     await expect(toggle).toBeVisible()
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
@@ -33,14 +35,15 @@ test.describe('Chat page', () => {
   })
 
   test('temperature and max tokens inputs work', async ({ page }) => {
-    const tempInput = page.getByLabel('Temperature')
+    const main = page.locator('main')
+    const tempInput = main.getByLabel('Temperature')
     await expect(tempInput).toBeVisible()
     await expect(tempInput).toHaveValue('0.7')
 
     await tempInput.fill('1.0')
     await expect(tempInput).toHaveValue('1.0')
 
-    const maxTokensInput = page.getByLabel('Max tokens')
+    const maxTokensInput = main.getByLabel('Max tokens')
     await expect(maxTokensInput).toBeVisible()
     await expect(maxTokensInput).toHaveValue('4096')
 
@@ -49,7 +52,8 @@ test.describe('Chat page', () => {
   })
 
   test('send button disabled when empty input', async ({ page }) => {
-    const sendButton = page.getByRole('button', { name: /send message/i })
+    const main = page.locator('main')
+    const sendButton = main.getByRole('button', { name: /send message/i })
     await expect(sendButton).toBeVisible()
     await expect(sendButton).toBeDisabled()
   })
@@ -57,26 +61,27 @@ test.describe('Chat page', () => {
   test('clear button appears after adding a message and removes messages', async ({
     page,
   }) => {
-    const clearButton = page.getByRole('button', {
+    const main = page.locator('main')
+    const clearButton = main.getByRole('button', {
       name: /clear conversation/i,
     })
     await expect(clearButton).not.toBeVisible()
 
-    const modelSelect = page.getByLabel('Model')
+    const modelSelect = main.getByLabel('Model')
     if (await modelSelect.isVisible()) {
-      const messageInput = page.getByLabel('Message input')
+      const messageInput = main.getByLabel('Message input')
       await messageInput.fill('Hello test')
-      const sendButton = page.getByRole('button', { name: /send message/i })
+      const sendButton = main.getByRole('button', { name: /send message/i })
       if (await sendButton.isEnabled()) {
         await sendButton.click()
         await expect(
-          page.getByRole('button', { name: /clear conversation/i }),
+          main.getByRole('button', { name: /clear conversation/i }),
         ).toBeVisible()
-        await page
+        await main
           .getByRole('button', { name: /clear conversation/i })
           .click()
         await expect(
-          page.getByRole('button', { name: /clear conversation/i }),
+          main.getByRole('button', { name: /clear conversation/i }),
         ).not.toBeVisible()
       }
     }

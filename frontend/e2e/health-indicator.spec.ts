@@ -7,6 +7,7 @@ test.describe('Health Indicator', () => {
   })
 
   test('health dot visible in sidebar footer', async ({ page }) => {
+    // Health indicator is in the sidebar, keep page scope intentionally
     await expect(
       page.locator('[data-testid="health-dot"]').or(
         page.getByRole('status', { name: /health/i }),

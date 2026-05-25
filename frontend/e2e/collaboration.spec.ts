@@ -7,15 +7,17 @@ test.describe('Collaboration', () => {
   })
 
   test('collaboration toggle exists in toolbar', async ({ page }) => {
+    const main = page.locator('main')
     // Studio page should be loaded after login
-    const collabBtn = page.getByRole('button', {
+    const collabBtn = main.getByRole('button', {
       name: /collab|collaboration/i,
     })
     await expect(collabBtn).toBeVisible()
   })
 
   test('collaboration button can be toggled', async ({ page }) => {
-    const collabBtn = page.getByRole('button', {
+    const main = page.locator('main')
+    const collabBtn = main.getByRole('button', {
       name: /enable live collaboration/i,
     })
     await expect(collabBtn).toBeVisible()

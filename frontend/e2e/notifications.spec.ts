@@ -7,6 +7,7 @@ test.describe('Notifications', () => {
   })
 
   test('bell icon in sidebar footer', async ({ page }) => {
+    // Notifications button is in the sidebar, keep page scope intentionally
     await expect(
       page.getByRole('button', { name: /notifications/i }),
     ).toBeVisible()

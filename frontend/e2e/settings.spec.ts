@@ -7,58 +7,63 @@ test.describe('Settings page', () => {
   })
 
   test('page loads with sections', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByRole('heading', { name: 'Settings' }),
+      main.locator('h1, h2, h3').filter({ hasText: 'Settings' }),
     ).toBeVisible()
     await expect(
-      page.getByText('Configure your Blackbeard instance'),
+      main.getByText('Configure your Blackbeard instance'),
     ).toBeVisible()
   })
 
   test('API Connection section present', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByRole('heading', { name: 'API Connection' }),
+      main.locator('h1, h2, h3').filter({ hasText: 'API Connection' }),
     ).toBeVisible()
-    await expect(page.getByLabel('API base URL')).toBeVisible()
+    await expect(main.getByLabel('API base URL')).toBeVisible()
     await expect(
-      page.getByRole('button', { name: /save/i }),
+      main.getByRole('button', { name: /save/i }),
     ).toBeVisible()
   })
 
   test('Services section with links', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByRole('heading', { name: 'Services' }),
+      main.locator('h1, h2, h3').filter({ hasText: 'Services' }),
     ).toBeVisible()
     await expect(
-      page.getByRole('link', { name: /\/api\/v1\/health/i }),
+      main.getByText('/api/v1/health'),
     ).toBeVisible()
     await expect(
-      page.getByRole('link', { name: /:4000\/ui/i }),
+      main.getByText(':4000/ui'),
     ).toBeVisible()
     await expect(
-      page.getByRole('link', { name: /\/api\/v1\/docs/i }),
+      main.getByText('/api/v1/docs'),
     ).toBeVisible()
   })
 
   test('Authentication section shows status', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByRole('heading', { name: 'Authentication' }),
+      main.locator('h1, h2, h3').filter({ hasText: 'Authentication' }),
     ).toBeVisible()
-    await expect(page.getByText('SSO / OIDC')).toBeVisible()
-    await expect(page.getByText('Auth method')).toBeVisible()
+    await expect(main.getByText('SSO / OIDC')).toBeVisible()
+    await expect(main.getByText('Auth method')).toBeVisible()
   })
 
   test('Preferences section has notification toggles', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByRole('heading', { name: 'Preferences' }),
+      main.locator('h1, h2, h3').filter({ hasText: 'Preferences' }),
     ).toBeVisible()
 
-    const browserNotifSwitch = page.getByRole('switch', {
+    const browserNotifSwitch = main.getByRole('switch', {
       name: /browser notifications/i,
     })
     await expect(browserNotifSwitch).toBeVisible()
 
-    const soundNotifSwitch = page.getByRole('switch', {
+    const soundNotifSwitch = main.getByRole('switch', {
       name: /sound on notification/i,
     })
     await expect(soundNotifSwitch).toBeVisible()

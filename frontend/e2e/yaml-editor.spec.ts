@@ -7,25 +7,28 @@ test.describe('YAML Editor', () => {
   })
 
   test('YAML editor toggle button exists', async ({ page }) => {
-    const yamlBtn = page.getByRole('button', { name: /yaml/i })
+    const main = page.locator('main')
+    const yamlBtn = main.getByRole('button', { name: /yaml/i })
     await expect(yamlBtn).toBeVisible()
   })
 
   test('YAML editor opens and shows content', async ({ page }) => {
+    const main = page.locator('main')
     // Load example crew first
-    await page.getByRole('button', { name: /load example/i }).click()
-    await expect(page.getByText('Example crew loaded')).toBeVisible()
+    await main.getByRole('button', { name: /load example/i }).click()
+    await expect(main.getByText('Example crew loaded')).toBeVisible()
 
     // Open YAML editor
-    const yamlBtn = page.getByRole('button', { name: /yaml/i })
+    const yamlBtn = main.getByRole('button', { name: /yaml/i })
     await yamlBtn.click()
 
     // Verify YAML content is visible (apiVersion is a standard YAML field)
-    await expect(page.getByText('apiVersion')).toBeVisible()
+    await expect(main.getByText('apiVersion')).toBeVisible()
   })
 
   test('YAML editor toggle has pressed state', async ({ page }) => {
-    const yamlBtn = page.getByRole('button', { name: /yaml/i })
+    const main = page.locator('main')
+    const yamlBtn = main.getByRole('button', { name: /yaml/i })
 
     // Initially not pressed
     await expect(yamlBtn).toHaveAttribute('aria-pressed', 'false')

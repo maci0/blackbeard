@@ -5,9 +5,10 @@ test.describe('Authentication', () => {
   test('login page renders form elements', async ({ page }) => {
     await page.goto('/login')
 
-    await expect(page.getByRole('heading', { name: /sign in to blackbeard/i })).toBeVisible()
+    // Login form is the main content, keep page scope for form elements
+    await expect(page.locator('h1, h2, h3').filter({ hasText: /sign in to blackbeard/i })).toBeVisible()
     await expect(page.getByRole('textbox', { name: /email/i })).toBeVisible()
-    await expect(page.getByLabel(/password/i)).toBeVisible()
+    await expect(page.locator('input[type="password"]')).toBeVisible()
     await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible()
     await expect(page.getByRole('link', { name: /create one/i })).toBeVisible()
   })
@@ -37,11 +38,11 @@ test.describe('Authentication', () => {
     await page.goto('/register')
 
     await expect(
-      page.getByRole('heading', { name: /create your account/i }),
+      page.locator('h1, h2, h3').filter({ hasText: /create your account/i }),
     ).toBeVisible()
     await expect(page.getByLabel(/display name/i)).toBeVisible()
     await expect(page.getByRole('textbox', { name: /email/i })).toBeVisible()
-    await expect(page.getByLabel(/password/i)).toBeVisible()
+    await expect(page.locator('input[type="password"]')).toBeVisible()
     await expect(page.getByRole('button', { name: /create account/i })).toBeVisible()
     await expect(page.getByRole('link', { name: /sign in/i })).toBeVisible()
   })
@@ -50,7 +51,7 @@ test.describe('Authentication', () => {
     await page.goto('/login')
 
     await page.getByRole('textbox', { name: /email/i }).fill('e2e@test.com')
-    await page.getByLabel(/password/i).fill('WrongPassword123!')
+    await page.locator('input[type="password"]').fill('WrongPassword123!')
     await page.getByRole('button', { name: /sign in/i }).click()
 
     await expect(page.getByRole('alert')).toBeVisible()

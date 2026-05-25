@@ -7,12 +7,14 @@ test.describe('Users page', () => {
   })
 
   test('page loads with header', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
-    await expect(page.getByText('Manage platform users and access')).toBeVisible()
+    const main = page.locator('main')
+    await expect(main.locator('h1, h2, h3').filter({ hasText: 'Users' })).toBeVisible()
+    await expect(main.getByText('Manage platform users and access')).toBeVisible()
   })
 
   test('user table is visible with at least one user', async ({ page }) => {
-    const table = page.getByRole('table', { name: /users/i })
+    const main = page.locator('main')
+    const table = main.getByRole('table', { name: /users/i })
     await expect(table).toBeVisible()
 
     // At least the admin or e2e test user should be present
@@ -22,61 +24,68 @@ test.describe('Users page', () => {
   })
 
   test('Invite User button exists', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByRole('button', { name: /invite user/i }),
+      main.getByRole('button', { name: /invite user/i }),
     ).toBeVisible()
   })
 
   test('Invite User dialog opens', async ({ page }) => {
-    await page.getByRole('button', { name: /invite user/i }).click()
+    const main = page.locator('main')
+    await main.getByRole('button', { name: /invite user/i }).click()
 
     await expect(
-      page.getByRole('heading', { name: /invite user/i }),
+      page.locator('h1, h2, h3').filter({ hasText: /invite user/i }),
     ).toBeVisible()
     await expect(page.getByLabel(/email address/i)).toBeVisible()
     await expect(page.getByLabel(/role/i)).toBeVisible()
   })
 
   test('Invite User dialog can be closed', async ({ page }) => {
-    await page.getByRole('button', { name: /invite user/i }).click()
+    const main = page.locator('main')
+    await main.getByRole('button', { name: /invite user/i }).click()
 
     await expect(
-      page.getByRole('heading', { name: /invite user/i }),
+      page.locator('h1, h2, h3').filter({ hasText: /invite user/i }),
     ).toBeVisible()
 
     await page.getByRole('button', { name: /close/i }).click()
 
     await expect(
-      page.getByRole('heading', { name: /invite user/i }),
+      page.locator('h1, h2, h3').filter({ hasText: /invite user/i }),
     ).not.toBeVisible()
   })
 
   test('search filter works', async ({ page }) => {
-    const searchInput = page.getByLabel(/search users/i)
+    const main = page.locator('main')
+    const searchInput = main.getByLabel(/search users/i)
     await expect(searchInput).toBeVisible()
 
     await searchInput.fill('e2e')
 
     // Should show filtered count
-    await expect(page.getByRole('status')).toBeVisible()
+    await expect(main.getByRole('status')).toBeVisible()
   })
 
   test('search clear button resets results', async ({ page }) => {
-    const searchInput = page.getByLabel(/search users/i)
+    const main = page.locator('main')
+    const searchInput = main.getByLabel(/search users/i)
     await searchInput.fill('e2e')
 
-    await page.getByRole('button', { name: /clear search/i }).click()
+    await main.getByRole('button', { name: /clear search/i }).click()
 
     await expect(searchInput).toHaveValue('')
   })
 
   test('Refresh button exists', async ({ page }) => {
-    const refreshBtn = page.getByRole('button', { name: /refresh users/i })
+    const main = page.locator('main')
+    const refreshBtn = main.getByRole('button', { name: /refresh users/i })
     await expect(refreshBtn).toBeVisible()
   })
 
   test('table headers are present', async ({ page }) => {
-    const table = page.getByRole('table', { name: /users/i })
+    const main = page.locator('main')
+    const table = main.getByRole('table', { name: /users/i })
     await expect(table.getByRole('columnheader', { name: /email/i })).toBeVisible()
     await expect(table.getByRole('columnheader', { name: /display name/i })).toBeVisible()
     await expect(table.getByRole('columnheader', { name: /role/i })).toBeVisible()

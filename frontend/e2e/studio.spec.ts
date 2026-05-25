@@ -7,27 +7,30 @@ test.describe('Studio', () => {
   })
 
   test('empty canvas shows placeholder message', async ({ page }) => {
-    await expect(page.getByText('Canvas is empty')).toBeVisible()
+    const main = page.locator('main')
+    await expect(main.getByText('Canvas is empty')).toBeVisible()
     await expect(
-      page.getByText(/drag agents and tasks from the palette/i),
+      main.getByText(/drag agents and tasks from the palette/i),
     ).toBeVisible()
   })
 
   test('load example crew populates canvas with nodes', async ({ page }) => {
-    await page.getByRole('button', { name: /load example crew/i }).click()
+    const main = page.locator('main')
+    await main.getByRole('button', { name: /load example crew/i }).click()
 
     // Verify the status message confirms load
-    await expect(page.getByText('Example crew loaded')).toBeVisible()
+    await expect(main.getByText('Example crew loaded')).toBeVisible()
 
     // The "Canvas is empty" message should no longer be visible
-    await expect(page.getByText('Canvas is empty')).not.toBeVisible()
+    await expect(main.getByText('Canvas is empty')).not.toBeVisible()
 
     // Crew name input should reflect the example crew name
-    await expect(page.locator('#crew-name-input')).toHaveValue('research-crew')
+    await expect(main.locator('#crew-name-input')).toHaveValue('research-crew')
   })
 
   test('palette has Agent, Task, and Tool items', async ({ page }) => {
-    const palette = page.getByLabel('Node palette')
+    const main = page.locator('main')
+    const palette = main.getByLabel('Node palette')
     await expect(palette).toBeVisible()
 
     await expect(
@@ -42,12 +45,14 @@ test.describe('Studio', () => {
   })
 
   test('toolbar shows save and run buttons', async ({ page }) => {
-    await expect(page.getByRole('button', { name: /save/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /run/i })).toBeVisible()
+    const main = page.locator('main')
+    await expect(main.getByRole('button', { name: /save crew/i })).toBeVisible()
+    await expect(main.getByRole('button', { name: /run/i })).toBeVisible()
   })
 
   test('toolbar shows undo and redo buttons', async ({ page }) => {
-    await expect(page.getByRole('button', { name: /undo/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /redo/i })).toBeVisible()
+    const main = page.locator('main')
+    await expect(main.getByRole('button', { name: /undo/i })).toBeVisible()
+    await expect(main.getByRole('button', { name: /redo/i })).toBeVisible()
   })
 })

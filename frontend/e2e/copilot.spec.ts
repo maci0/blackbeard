@@ -7,13 +7,15 @@ test.describe('Copilot', () => {
   })
 
   test('copilot button visible in studio', async ({ page }) => {
+    const main = page.locator('main')
     // The studio page should have a copilot/sparkles button
-    const sparklesBtn = page.getByRole('button', { name: /copilot|sparkles|generate/i })
+    const sparklesBtn = main.getByRole('button', { name: /copilot|sparkles|generate/i })
     await expect(sparklesBtn).toBeVisible()
   })
 
   test('clicking copilot opens dialog with textarea', async ({ page }) => {
-    const sparklesBtn = page.getByRole('button', { name: /copilot|sparkles|generate/i })
+    const main = page.locator('main')
+    const sparklesBtn = main.getByRole('button', { name: /copilot|sparkles|generate/i })
     await sparklesBtn.click()
 
     // Dialog should open with a textarea for prompt
@@ -25,7 +27,8 @@ test.describe('Copilot', () => {
   })
 
   test('copilot dialog has textarea and generate button', async ({ page }) => {
-    const sparklesBtn = page.getByRole('button', { name: /copilot|sparkles|generate/i })
+    const main = page.locator('main')
+    const sparklesBtn = main.getByRole('button', { name: /copilot|sparkles|generate/i })
     await sparklesBtn.click()
 
     const dialog = page.getByRole('dialog')

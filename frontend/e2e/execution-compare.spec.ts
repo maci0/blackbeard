@@ -11,8 +11,9 @@ test.describe('Execution Compare', () => {
   }) => {
     await page.goto('/executions/compare')
 
+    const main = page.locator('main')
     await expect(
-      page.getByText(/select.*executions|no executions selected/i),
+      main.getByText(/select.*executions|no executions selected/i),
     ).toBeVisible()
   })
 
@@ -21,16 +22,18 @@ test.describe('Execution Compare', () => {
       '/executions/compare?ids=00000000-0000-0000-0000-000000000000,00000000-0000-0000-0000-000000000001',
     )
 
+    const main = page.locator('main')
     await expect(
-      page.getByText(/not found|failed to load|error/i),
+      main.getByText(/not found|failed to load|error/i),
     ).toBeVisible()
   })
 
   test('page has comparison layout structure', async ({ page }) => {
     await page.goto('/executions/compare')
 
+    const main = page.locator('main')
     await expect(
-      page.getByRole('heading', { name: /compare/i }),
+      main.locator('h1, h2, h3').filter({ hasText: /compare/i }),
     ).toBeVisible()
   })
 })

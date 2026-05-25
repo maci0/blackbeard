@@ -5,6 +5,7 @@ test.describe('Keyboard accessibility', () => {
   test('Tab through login form fields', async ({ page }) => {
     await page.goto('/login')
 
+    // Login form - no sidebar present, page scope is correct
     // The first focusable element should be the email input (autofocused)
     const emailInput = page.getByRole('textbox', { name: /email/i })
     await expect(emailInput).toBeFocused()
@@ -42,11 +43,11 @@ test.describe('Keyboard accessibility', () => {
   test('Escape closes dialogs', async ({ page }) => {
     await loginAndNavigate(page, '/dashboard')
 
-    // Open keyboard shortcuts dialog
+    // Open keyboard shortcuts dialog — button is in sidebar
     const shortcutsBtn = page.getByRole('button', { name: /keyboard shortcuts/i })
     await shortcutsBtn.click()
 
-    // Dialog should be visible
+    // Dialog should be visible (dialogs are portals, page scope is correct)
     await expect(page.getByRole('dialog')).toBeVisible()
 
     // Press Escape to close
@@ -59,7 +60,7 @@ test.describe('Keyboard accessibility', () => {
   test('Tab navigates sidebar items', async ({ page }) => {
     await loginAndNavigate(page, '/dashboard')
 
-    // Focus the first sidebar nav link
+    // Focus the first sidebar nav link — intentionally testing sidebar
     const nav = page.getByRole('navigation', { name: /primary/i })
     const studioLink = nav.getByRole('link', { name: 'Studio' })
 
@@ -87,8 +88,9 @@ test.describe('Keyboard accessibility', () => {
   test('Enter and Space activate table rows', async ({ page }) => {
     await loginAndNavigate(page, '/resources')
 
+    const main = page.locator('main')
     // Focus the first table row
-    const firstRow = page.getByRole('row', { name: /press enter to view details/i }).first()
+    const firstRow = main.getByRole('row', { name: /press enter to view details/i }).first()
     await firstRow.focus()
 
     // Press Enter to navigate to the detail page

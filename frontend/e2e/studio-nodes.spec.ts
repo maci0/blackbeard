@@ -7,7 +7,8 @@ test.describe('Studio Nodes', () => {
   })
 
   test('palette shows all 9 node types', async ({ page }) => {
-    const palette = page.getByLabel('Node palette')
+    const main = page.locator('main')
+    const palette = main.getByLabel('Node palette')
     await expect(palette).toBeVisible()
 
     const nodeTypes = [
@@ -32,55 +33,60 @@ test.describe('Studio Nodes', () => {
   })
 
   test('sticky note has editable text area', async ({ page }) => {
-    const palette = page.getByLabel('Node palette')
+    const main = page.locator('main')
+    const palette = main.getByLabel('Node palette')
     await palette
       .getByRole('button', { name: /add note node/i })
       .click()
 
-    const noteTextarea = page
+    const noteTextarea = main
       .getByRole('textbox', { name: /note/i })
-      .or(page.locator('.react-flow__node-note textarea'))
+      .or(main.locator('.react-flow__node-note textarea'))
     await expect(noteTextarea).toBeVisible()
   })
 
   test('property panel shows for selected node', async ({ page }) => {
-    await page.getByRole('button', { name: /load example crew/i }).click()
-    await expect(page.getByText('Example crew loaded')).toBeVisible()
+    const main = page.locator('main')
+    await main.getByRole('button', { name: /load example crew/i }).click()
+    await expect(main.getByText('Example crew loaded')).toBeVisible()
 
-    const node = page.locator('.react-flow__node').first()
+    const node = main.locator('.react-flow__node').first()
     await node.click()
 
     await expect(
-      page.getByRole('heading', { name: /properties/i }).or(
-        page.getByLabel(/property panel/i),
+      main.locator('h1, h2, h3').filter({ hasText: /properties/i }).or(
+        main.getByLabel(/property panel/i),
       ),
     ).toBeVisible()
   })
 
   test('expression editor appears for condition nodes', async ({ page }) => {
-    const palette = page.getByLabel('Node palette')
+    const main = page.locator('main')
+    const palette = main.getByLabel('Node palette')
     await palette
       .getByRole('button', { name: /add condition node/i })
       .click()
 
-    const conditionNode = page.locator('.react-flow__node-condition').or(
-      page.locator('[data-testid="condition-node"]'),
+    const conditionNode = main.locator('.react-flow__node-condition').or(
+      main.locator('[data-testid="condition-node"]'),
     )
     await conditionNode.click()
 
     await expect(
-      page.getByLabel(/expression/i).or(page.getByText(/expression editor/i)),
+      main.getByLabel(/expression/i).or(main.getByText(/expression editor/i)),
     ).toBeVisible()
   })
 
   test('crew settings button in toolbar', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByRole('button', { name: /crew settings/i }),
+      main.getByRole('button', { name: /crew settings/i }),
     ).toBeVisible()
   })
 
   test('export dropdown in toolbar with export options', async ({ page }) => {
-    const exportBtn = page.getByRole('button', { name: /export/i })
+    const main = page.locator('main')
+    const exportBtn = main.getByRole('button', { name: /export/i })
     await expect(exportBtn).toBeVisible()
     await exportBtn.click()
 

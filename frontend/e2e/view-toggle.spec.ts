@@ -9,7 +9,8 @@ test.describe('View toggle', () => {
   test('Models page has view toggle', async ({ page }) => {
     await page.goto('/models')
 
-    const viewToggle = page.getByRole('radiogroup', { name: /view mode/i })
+    const main = page.locator('main')
+    const viewToggle = main.getByRole('radiogroup', { name: /view mode/i })
     await expect(viewToggle).toBeVisible()
 
     await expect(
@@ -25,7 +26,8 @@ test.describe('View toggle', () => {
   }) => {
     await page.goto('/models')
 
-    const viewToggle = page.getByRole('radiogroup', { name: /view mode/i })
+    const main = page.locator('main')
+    const viewToggle = main.getByRole('radiogroup', { name: /view mode/i })
     const cardRadio = viewToggle.getByRole('radio', { name: /card view/i })
     const listRadio = viewToggle.getByRole('radio', { name: /list view/i })
 
@@ -41,14 +43,16 @@ test.describe('View toggle', () => {
   test('Resources page has view toggle', async ({ page }) => {
     await page.goto('/resources')
 
-    const viewToggle = page.getByRole('radiogroup', { name: /view mode/i })
+    const main = page.locator('main')
+    const viewToggle = main.getByRole('radiogroup', { name: /view mode/i })
     await expect(viewToggle).toBeVisible()
   })
 
   test('view preference persists after reload', async ({ page }) => {
     await page.goto('/models')
 
-    const viewToggle = page.getByRole('radiogroup', { name: /view mode/i })
+    const main = page.locator('main')
+    const viewToggle = main.getByRole('radiogroup', { name: /view mode/i })
     const listRadio = viewToggle.getByRole('radio', { name: /list view/i })
 
     await listRadio.click()
@@ -56,7 +60,8 @@ test.describe('View toggle', () => {
 
     await page.reload()
 
-    const reloadedToggle = page.getByRole('radiogroup', {
+    const reloadedMain = page.locator('main')
+    const reloadedToggle = reloadedMain.getByRole('radiogroup', {
       name: /view mode/i,
     })
     const reloadedListRadio = reloadedToggle.getByRole('radio', {

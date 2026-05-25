@@ -7,28 +7,32 @@ test.describe('Guardrail Playground', () => {
   })
 
   test('guardrail playground page loads', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByRole('heading', { name: /guardrail playground/i }),
+      main.locator('h1, h2, h3').filter({ hasText: /guardrail playground/i }),
     ).toBeVisible()
   })
 
   test('guardrail selector dropdown present', async ({ page }) => {
-    const selector = page.getByLabel(/select guardrail/i).or(
-      page.getByRole('combobox', { name: /guardrail/i }),
+    const main = page.locator('main')
+    const selector = main.getByLabel(/select guardrail/i).or(
+      main.getByRole('combobox', { name: /guardrail/i }),
     )
     await expect(selector).toBeVisible()
   })
 
   test('test input textarea present', async ({ page }) => {
-    const textarea = page.getByLabel(/test input/i).or(
-      page.getByRole('textbox', { name: /input/i }),
+    const main = page.locator('main')
+    const textarea = main.getByLabel(/test input/i).or(
+      main.getByRole('textbox', { name: /input/i }),
     )
     await expect(textarea).toBeVisible()
   })
 
   test('run test button present', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByRole('button', { name: /run test/i }),
+      main.getByRole('button', { name: /run test/i }),
     ).toBeVisible()
   })
 })

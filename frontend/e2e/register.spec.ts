@@ -5,11 +5,11 @@ test.describe('Register page', () => {
     await page.goto('/register')
 
     await expect(
-      page.getByRole('heading', { name: /create your account/i }),
+      page.locator('h1, h2, h3').filter({ hasText: /create your account/i }),
     ).toBeVisible()
     await expect(page.getByLabel(/display name/i)).toBeVisible()
     await expect(page.getByRole('textbox', { name: /email/i })).toBeVisible()
-    await expect(page.getByLabel(/password/i)).toBeVisible()
+    await expect(page.locator('input[type="password"]')).toBeVisible()
     await expect(
       page.getByRole('button', { name: /create account/i }),
     ).toBeVisible()
@@ -28,7 +28,7 @@ test.describe('Register page', () => {
   test('password requirements hint appears when typing', async ({ page }) => {
     await page.goto('/register')
 
-    const passwordInput = page.getByLabel(/password/i)
+    const passwordInput = page.locator('input[type="password"]')
     await passwordInput.fill('abc')
 
     // Should show hint about characters needed
@@ -40,7 +40,7 @@ test.describe('Register page', () => {
   }) => {
     await page.goto('/register')
 
-    const passwordInput = page.getByLabel(/password/i)
+    const passwordInput = page.locator('input[type="password"]')
     await passwordInput.fill('abcdefgh')
 
     // The "more characters needed" hint should not be visible
@@ -50,7 +50,7 @@ test.describe('Register page', () => {
   test('show/hide password toggle works', async ({ page }) => {
     await page.goto('/register')
 
-    const passwordInput = page.getByLabel(/^password/i)
+    const passwordInput = page.locator('input[type="password"]')
     await passwordInput.fill('TestPass1!')
 
     // Initially password is hidden
@@ -59,14 +59,14 @@ test.describe('Register page', () => {
     // Click show password button
     await page.getByRole('button', { name: /show password/i }).click()
 
-    // Password should now be visible
-    await expect(passwordInput).toHaveAttribute('type', 'text')
+    // Password should now be visible (type changes to text)
+    await expect(page.locator('#register-password')).toHaveAttribute('type', 'text')
 
     // Click hide password button
     await page.getByRole('button', { name: /hide password/i }).click()
 
     // Password should be hidden again
-    await expect(passwordInput).toHaveAttribute('type', 'password')
+    await expect(page.locator('#register-password')).toHaveAttribute('type', 'password')
   })
 
   test('submitting empty form shows validation error', async ({ page }) => {

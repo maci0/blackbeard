@@ -7,13 +7,15 @@ test.describe('Resource Creation', () => {
   })
 
   test('resources page has New Resource button', async ({ page }) => {
+    const main = page.locator('main')
     await expect(
-      page.getByRole('button', { name: /new resource/i }),
+      main.getByRole('button', { name: /new resource/i }),
     ).toBeVisible()
   })
 
   test('Paste YAML button opens dialog', async ({ page }) => {
-    await page.getByRole('button', { name: /paste yaml/i }).click()
+    const main = page.locator('main')
+    await main.getByRole('button', { name: /paste yaml/i }).click()
 
     await expect(page.getByRole('dialog')).toBeVisible()
     await expect(
@@ -26,12 +28,14 @@ test.describe('Resource Creation', () => {
   test('New Resource dialog has kind dropdown with all 13 kinds', async ({
     page,
   }) => {
-    await page.getByRole('button', { name: /new resource/i }).click()
+    const main = page.locator('main')
+    await main.getByRole('button', { name: /new resource/i }).click()
 
     await expect(page.getByRole('dialog')).toBeVisible()
 
-    const kindSelect = page.getByLabel(/kind/i).or(
-      page.getByRole('combobox', { name: /kind/i }),
+    const dialog = page.getByRole('dialog')
+    const kindSelect = dialog.getByLabel(/kind/i).or(
+      dialog.getByRole('combobox', { name: /kind/i }),
     )
     await expect(kindSelect).toBeVisible()
 
@@ -65,16 +69,18 @@ test.describe('Resource Creation', () => {
   test('resource creation dialog has name and spec fields', async ({
     page,
   }) => {
-    await page.getByRole('button', { name: /new resource/i }).click()
+    const main = page.locator('main')
+    await main.getByRole('button', { name: /new resource/i }).click()
 
-    await expect(page.getByRole('dialog')).toBeVisible()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
     await expect(
-      page.getByLabel(/name/i).or(
-        page.getByRole('textbox', { name: /name/i }),
+      dialog.getByLabel(/name/i).or(
+        dialog.getByRole('textbox', { name: /name/i }),
       ),
     ).toBeVisible()
     await expect(
-      page.getByLabel(/spec/i).or(page.getByText(/spec/i)),
+      dialog.getByLabel(/spec/i).or(dialog.getByText(/spec/i)),
     ).toBeVisible()
   })
 })
