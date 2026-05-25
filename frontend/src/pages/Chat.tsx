@@ -40,6 +40,8 @@ interface Message {
   id: string
   role: 'system' | 'user' | 'assistant'
   content: string
+  displayContent?: string
+  streaming?: boolean
   tokens?: TokenUsage
   latency_ms?: number
   error?: string
@@ -96,6 +98,7 @@ function TokenBadge({ tokens, latency_ms }: { tokens: TokenUsage; latency_ms: nu
 
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user'
+  const visibleText = message.displayContent ?? message.content
 
   return (
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
@@ -112,14 +115,17 @@ function MessageBubble({ message }: { message: Message }) {
         <p className="text-xs font-medium uppercase tracking-wide opacity-60">
           {isUser ? 'You' : 'Assistant'}
         </p>
-        <div className="mt-1 whitespace-pre-wrap text-sm">{message.content}</div>
+        <div className="mt-1 whitespace-pre-wrap text-sm">
+          {visibleText}
+          {message.streaming && <span className="animate-pulse text-primary">&#9613;</span>}
+        </div>
         {message.error && (
           <div className="mt-2 flex items-center gap-1.5 text-xs text-destructive">
             <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
             {message.error}
           </div>
         )}
-        {message.tokens && message.latency_ms != null && (
+        {message.tokens && message.latency_ms != null && !message.streaming && (
           <TokenBadge tokens={message.tokens} latency_ms={message.latency_ms} />
         )}
       </div>
@@ -144,6 +150,7 @@ export default function Chat() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const streamIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -189,6 +196,12 @@ export default function Chat() {
     autoResizeTextarea()
   }, [input, autoResizeTextarea])
 
+  useEffect(() => {
+    return () => {
+      if (streamIntervalRef.current) clearInterval(streamIntervalRef.current)
+    }
+  }, [])
+
   const handleSend = useCallback(async () => {
     const trimmed = input.trim()
     if (!trimmed || !selectedModel || sending) return
@@ -228,14 +241,41 @@ export default function Chat() {
 
     try {
       const resp = await api.post<ChatResponse>('/api/v1/chat', body)
+      const msgId = crypto.randomUUID()
+      const fullContent = resp.content
+
       const assistantMsg: Message = {
-        id: crypto.randomUUID(),
+        id: msgId,
         role: 'assistant',
-        content: resp.content,
+        content: fullContent,
+        displayContent: '',
+        streaming: true,
         tokens: resp.tokens,
         latency_ms: resp.latency_ms,
       }
       setMessages((prev) => [...prev, assistantMsg])
+      setSending(false)
+
+      let charIndex = 0
+      if (streamIntervalRef.current) clearInterval(streamIntervalRef.current)
+      streamIntervalRef.current = setInterval(() => {
+        charIndex += 3
+        if (charIndex >= fullContent.length) {
+          if (streamIntervalRef.current) clearInterval(streamIntervalRef.current)
+          streamIntervalRef.current = null
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, displayContent: undefined, streaming: false } : m,
+            ),
+          )
+        } else {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, displayContent: fullContent.slice(0, charIndex) } : m,
+            ),
+          )
+        }
+      }, 10)
     } catch (err: unknown) {
       const errorText =
         err instanceof ApiError ? err.message : getErrorMessage(err, 'Request failed')
@@ -246,8 +286,8 @@ export default function Chat() {
         error: errorText,
       }
       setMessages((prev) => [...prev, errorMsg])
-    } finally {
       setSending(false)
+    } finally {
       textareaRef.current?.focus()
     }
   }, [input, selectedModel, sending, systemPrompt, messages, temperature, maxTokens])
@@ -263,7 +303,12 @@ export default function Chat() {
   )
 
   const handleClear = useCallback(() => {
+    if (streamIntervalRef.current) {
+      clearInterval(streamIntervalRef.current)
+      streamIntervalRef.current = null
+    }
     setMessages([])
+    setSending(false)
     textareaRef.current?.focus()
   }, [])
 
@@ -413,7 +458,11 @@ export default function Chat() {
               {sending && (
                 <div className="flex justify-start">
                   <div className="flex items-center gap-2 rounded-lg border bg-card px-4 py-3">
-                    <Spinner size="sm" label="Generating response" />
+                    <div className="flex gap-1" aria-label="Generating response">
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/60" />
+                    </div>
                     <span className="text-sm text-muted-foreground">Thinking...</span>
                   </div>
                 </div>

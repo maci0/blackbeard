@@ -252,6 +252,7 @@ class ExecutionTask(Base):
 
     __table_args__ = (
         UniqueConstraint("execution_id", "order", name="uq_exec_task_execution_order"),
+        Index("ix_exec_task_status", "status"),
         CheckConstraint("tokens_used >= 0", name="ck_exec_task_tokens_nonneg"),
         CheckConstraint("cost_usd >= 0", name="ck_exec_task_cost_nonneg"),
         CheckConstraint('"order" >= 0', name="ck_exec_task_order_nonneg"),

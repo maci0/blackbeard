@@ -397,6 +397,11 @@ async def generate_api_key(
     key for this user is replaced.
     """
     ip = request.client.host if request.client else None
+    # Re-fetch with row lock to prevent concurrent API key mutations.
+    result = await session.execute(
+        select(User).where(User.id == user.id).with_for_update()
+    )
+    user = result.scalar_one()
     had_previous = user.api_key is not None
     new_key = f"bb-{secrets.token_urlsafe(32)}"
     user.api_key = new_key
@@ -447,6 +452,11 @@ async def revoke_api_key(
     Idempotent: returns 204 even if the user has no active key.
     """
     ip = request.client.host if request.client else None
+    # Re-fetch with row lock to prevent concurrent API key mutations.
+    result = await session.execute(
+        select(User).where(User.id == user.id).with_for_update()
+    )
+    user = result.scalar_one()
     user.api_key = None
 
     await log_audit(

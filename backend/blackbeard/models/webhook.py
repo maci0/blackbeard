@@ -51,6 +51,7 @@ class Webhook(Base):
 
     __table_args__ = (
         Index("ix_webhook_active", "active", postgresql_where=text("active IS TRUE")),
+        Index("ix_webhook_created_at", created_at.desc()),
         CheckConstraint("length(url) >= 1", name="ck_webhook_url_nonempty"),
         CheckConstraint("length(secret) >= 1", name="ck_webhook_secret_nonempty"),
         CheckConstraint("jsonb_typeof(events) = 'array'", name="ck_webhook_events_is_array"),

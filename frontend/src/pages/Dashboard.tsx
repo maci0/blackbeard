@@ -10,6 +10,8 @@ import {
   Store,
   ArrowRight,
   DollarSign,
+  BarChart3,
+  TrendingUp,
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useResourceStore } from '@/stores/resourceStore'
@@ -22,6 +24,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { getDuration, formatCost } from '@/lib/formatters'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { PLURAL_TO_KIND } from '@/lib/kinds'
+import { cn } from '@/lib/utils'
 import type { Resource, Execution } from '@/lib/types'
 
 function StatCard({
@@ -236,6 +239,181 @@ function ResourcesByKind({
   )
 }
 
+function parseCost(cost: number | string): number {
+  return typeof cost === 'string' ? parseFloat(cost) || 0 : cost || 0
+}
+
+function SpendByCrew({ executions, loading }: { executions: Execution[]; loading: boolean }) {
+  const crewSpend = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const e of executions) {
+      const cost = parseCost(e.cost_usd)
+      if (cost > 0) {
+        map.set(e.crew_name, (map.get(e.crew_name) ?? 0) + cost)
+      }
+    }
+    return Array.from(map.entries())
+      .map(([name, spend]) => ({ name, spend }))
+      .sort((a, b) => b.spend - a.spend)
+      .slice(0, 10)
+  }, [executions])
+
+  const maxSpend = useMemo(() => Math.max(0.001, ...crewSpend.map((c) => c.spend)), [crewSpend])
+
+  return (
+    <section aria-labelledby="spend-by-crew-heading">
+      <div className="mb-3 flex items-center gap-2">
+        <BarChart3 className="h-4 w-4 text-primary" aria-hidden="true" />
+        <h2 id="spend-by-crew-heading" className="text-base font-semibold">
+          Spend by Crew
+        </h2>
+      </div>
+      <div className="rounded-lg border bg-card p-4 shadow-sm">
+        {loading && crewSpend.length === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <Spinner label="Loading spend data" />
+          </div>
+        ) : crewSpend.length === 0 ? (
+          <div className="py-8 text-center">
+            <DollarSign
+              className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40"
+              aria-hidden="true"
+            />
+            <p className="text-sm text-muted-foreground">No spend data yet</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {crewSpend.map(({ name, spend }) => (
+              <div key={name} className="flex items-center gap-3">
+                <span className="w-28 shrink-0 truncate text-sm font-medium" title={name}>
+                  {name}
+                </span>
+                <div className="flex-1">
+                  <div
+                    className="h-2 overflow-hidden rounded-full bg-muted"
+                    role="meter"
+                    aria-label={`${name}: ${formatCost(spend)}`}
+                    aria-valuenow={spend}
+                    aria-valuemin={0}
+                    aria-valuemax={maxSpend}
+                  >
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all',
+                        spend / maxSpend > 0.75 ? 'bg-amber-500/70' : 'bg-primary/60',
+                      )}
+                      style={{ width: `${(spend / maxSpend) * 100}%` }}
+                    />
+                  </div>
+                </div>
+                <span className="w-16 text-right text-sm tabular-nums text-muted-foreground">
+                  {formatCost(spend)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function SpendOverTime({ executions, loading }: { executions: Execution[]; loading: boolean }) {
+  const dailySpend = useMemo(() => {
+    const now = new Date()
+    const days: Array<{ label: string; date: string; spend: number }> = []
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now)
+      d.setDate(d.getDate() - i)
+      const dateStr = d.toISOString().slice(0, 10)
+      const dayLabel =
+        i === 0
+          ? 'Today'
+          : i === 1
+            ? 'Yesterday'
+            : d.toLocaleDateString(undefined, { weekday: 'short' })
+      days.push({ label: dayLabel, date: dateStr, spend: 0 })
+    }
+
+    for (const e of executions) {
+      if (!e.created_at) continue
+      const eDate = e.created_at.slice(0, 10)
+      const cost = parseCost(e.cost_usd)
+      if (cost > 0) {
+        const day = days.find((d) => d.date === eDate)
+        if (day) day.spend += cost
+      }
+    }
+
+    return days
+  }, [executions])
+
+  const maxDailySpend = useMemo(
+    () => Math.max(0.001, ...dailySpend.map((d) => d.spend)),
+    [dailySpend],
+  )
+
+  const totalWeekSpend = useMemo(
+    () => dailySpend.reduce((sum, d) => sum + d.spend, 0),
+    [dailySpend],
+  )
+
+  return (
+    <section aria-labelledby="spend-over-time-heading">
+      <div className="mb-3 flex items-center gap-2">
+        <TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" />
+        <h2 id="spend-over-time-heading" className="text-base font-semibold">
+          Spend Over Time
+        </h2>
+        {totalWeekSpend > 0 && (
+          <span className="ml-auto text-xs text-muted-foreground">
+            7-day total: {formatCost(totalWeekSpend)}
+          </span>
+        )}
+      </div>
+      <div className="rounded-lg border bg-card p-4 shadow-sm">
+        {loading && totalWeekSpend === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <Spinner label="Loading spend data" />
+          </div>
+        ) : (
+          <div className="flex items-end gap-2" style={{ height: 120 }}>
+            {dailySpend.map(({ label, date, spend }) => (
+              <div key={date} className="flex flex-1 flex-col items-center gap-1">
+                <span
+                  className={cn(
+                    'text-[10px] tabular-nums',
+                    spend > 0 ? 'text-foreground' : 'text-muted-foreground/50',
+                  )}
+                >
+                  {spend > 0 ? formatCost(spend) : ''}
+                </span>
+                <div className="flex w-full flex-1 items-end justify-center">
+                  <div
+                    className={cn(
+                      'w-full max-w-8 rounded-t transition-all',
+                      spend > 0 ? 'bg-primary/60' : 'bg-muted',
+                    )}
+                    style={{
+                      height: spend > 0 ? `${Math.max(4, (spend / maxDailySpend) * 80)}px` : '4px',
+                    }}
+                    role="meter"
+                    aria-label={`${label}: ${formatCost(spend)}`}
+                    aria-valuenow={spend}
+                    aria-valuemin={0}
+                    aria-valuemax={maxDailySpend}
+                  />
+                </div>
+                <span className="text-[10px] text-muted-foreground">{label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function QuickActions() {
   return (
     <section aria-labelledby="quick-actions-heading">
@@ -384,6 +562,11 @@ export default function Dashboard() {
           <div className="lg:col-span-2">
             <ResourcesByKind resources={resources} loading={resourcesLoading} />
           </div>
+        </div>
+
+        <div className="mt-8 grid gap-8 lg:grid-cols-2">
+          <SpendByCrew executions={executions} loading={executionsLoading} />
+          <SpendOverTime executions={executions} loading={executionsLoading} />
         </div>
 
         <div className="mt-8">
