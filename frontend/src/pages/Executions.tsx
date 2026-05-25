@@ -11,6 +11,7 @@ import {
   Coins,
   Hash,
   Cpu,
+  GitCompareArrows,
 } from 'lucide-react'
 import { useDocumentTitle, useNotifications, usePolling } from '@/hooks'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -30,7 +31,16 @@ import { Pagination } from '@/components/ui/Pagination'
 
 const PAGE_SIZE = 25
 
-const TABLE_HEADERS = ['Status', 'Crew', 'Type', 'Tokens', 'Cost', 'Created', 'Duration'] as const
+const TABLE_HEADERS = [
+  '',
+  'Status',
+  'Crew',
+  'Type',
+  'Tokens',
+  'Cost',
+  'Created',
+  'Duration',
+] as const
 
 const STATUS_OPTIONS = ['all', 'running', 'completed', 'failed', 'cancelled', 'queued'] as const
 type StatusFilter = (typeof STATUS_OPTIONS)[number]
@@ -144,6 +154,15 @@ export default function Executions() {
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const crewSearchRef = useRef<HTMLInputElement>(null)
+  const [compareIds, setCompareIds] = useState<string[]>([])
+
+  const toggleCompare = useCallback((id: string) => {
+    setCompareIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id)
+      if (prev.length >= 2) return [prev[1]!, id]
+      return [...prev, id]
+    })
+  }, [])
 
   const activeFilterCount = useMemo(() => {
     let count = 0
@@ -340,6 +359,35 @@ export default function Executions() {
                 Clear filters ({activeFilterCount})
               </button>
             )}
+            <div className="ml-auto flex items-center gap-2">
+              {compareIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCompareIds([])}
+                  aria-label="Clear comparison selection"
+                  className="text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Clear ({compareIds.length})
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={compareIds.length !== 2}
+                onClick={() =>
+                  void navigate(`/executions/compare?a=${compareIds[0]}&b=${compareIds[1]}`)
+                }
+                aria-label="Compare selected executions"
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  compareIds.length === 2
+                    ? 'bg-primary text-primary-foreground hover:opacity-90'
+                    : 'border bg-background text-muted-foreground opacity-50',
+                )}
+              >
+                <GitCompareArrows className="h-3.5 w-3.5" />
+                Compare{compareIds.length > 0 ? ` (${compareIds.length}/2)` : ''}
+              </button>
+            </div>
           </div>
         )}
 
@@ -359,7 +407,14 @@ export default function Executions() {
                 <table className="w-full min-w-[640px] text-sm" aria-label="Executions">
                   <thead className="sticky top-0 z-10">
                     <tr className="border-b bg-muted/60">
-                      {TABLE_HEADERS.map((h) => {
+                      {TABLE_HEADERS.map((h, hi) => {
+                        if (hi === 0) {
+                          return (
+                            <th key="compare" scope="col" className="w-10 px-2 py-3">
+                              <span className="sr-only">Select for comparison</span>
+                            </th>
+                          )
+                        }
                         const fieldMap: Partial<Record<(typeof TABLE_HEADERS)[number], SortField>> =
                           {
                             Status: 'status',
@@ -431,8 +486,21 @@ export default function Executions() {
                           tabIndex={0}
                           role="row"
                           aria-label={`${execution.crew_name} — ${execution.status} — press Enter to view details`}
-                          className="group cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                          className={cn(
+                            'group cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                            compareIds.includes(execution.id) && 'bg-primary/5',
+                          )}
                         >
+                          <td className="px-2 py-3">
+                            <input
+                              type="checkbox"
+                              checked={compareIds.includes(execution.id)}
+                              onChange={() => toggleCompare(execution.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Select ${execution.crew_name} for comparison`}
+                              className="h-4 w-4 rounded border-gray-300 text-primary accent-primary focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                          </td>
                           <td className="px-4 py-3">
                             <StatusBadge status={execution.status} />
                           </td>

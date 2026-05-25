@@ -205,10 +205,8 @@ export class BlackbeardClient {
     params.set("namespace", options?.namespace ?? "default");
     if (options?.label_selector)
       params.set("label_selector", options.label_selector);
-    if (options?.limit !== undefined)
-      params.set("limit", String(options.limit));
-    if (options?.offset !== undefined)
-      params.set("offset", String(options.offset));
+    params.set("limit", String(options?.limit ?? 100));
+    params.set("offset", String(options?.offset ?? 0));
     return this.request<ListResponse<Resource>>(
       "GET",
       `/api/v1/${this.plural(kind)}?${params}`
@@ -366,10 +364,8 @@ export class BlackbeardClient {
     if (options?.crew_name) params.set("crew_name", options.crew_name);
     if (options?.namespace) params.set("namespace", options.namespace);
     if (options?.status) params.set("status", options.status);
-    if (options?.limit !== undefined)
-      params.set("limit", String(options.limit));
-    if (options?.offset !== undefined)
-      params.set("offset", String(options.offset));
+    params.set("limit", String(options?.limit ?? 100));
+    params.set("offset", String(options?.offset ?? 0));
     const qs = params.toString();
     return this.request<ListResponse<Execution>>(
       "GET",
@@ -391,14 +387,11 @@ export class BlackbeardClient {
     options?: { after?: number; limit?: number }
   ): Promise<ExecutionEventsResponse> {
     const params = new URLSearchParams();
-    if (options?.after !== undefined)
-      params.set("after", String(options.after));
-    if (options?.limit !== undefined)
-      params.set("limit", String(options.limit));
-    const qs = params.toString();
+    params.set("after", String(options?.after ?? -1));
+    params.set("limit", String(options?.limit ?? 200));
     return this.request<ExecutionEventsResponse>(
       "GET",
-      `/api/v1/executions/${encodeURIComponent(executionId)}/events${qs ? `?${qs}` : ""}`
+      `/api/v1/executions/${encodeURIComponent(executionId)}/events?${params}`
     );
   }
 

@@ -82,7 +82,7 @@ export function resourceToYaml(resource: Resource): string {
 }
 
 export function parseYaml(yamlStr: string): Record<string, unknown> {
-  const result = yaml.load(yamlStr)
+  const result = yaml.load(yamlStr, { schema: yaml.JSON_SCHEMA })
   if (
     result === null ||
     result === undefined ||

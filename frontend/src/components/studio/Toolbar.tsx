@@ -24,6 +24,7 @@ import { useToastStore } from '@/stores/toastStore'
 import type { RunStatus } from '@/lib/types'
 import { RunStatusBadge } from './RunStatusBadge'
 import { KeyboardShortcuts } from './KeyboardShortcuts'
+import { PresenceAvatars } from '@/components/ui/PresenceAvatars'
 
 export function Toolbar({
   crewName,
@@ -52,6 +53,7 @@ export function Toolbar({
   onCollabToggle,
   collabConnected,
   collabParticipants,
+  presenceUsers,
 }: {
   crewName: string
   onCrewNameChange: (v: string) => void
@@ -79,6 +81,7 @@ export function Toolbar({
   onCollabToggle?: () => void
   collabConnected?: boolean
   collabParticipants?: number
+  presenceUsers?: Array<{ email: string; name: string }>
 }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const toasts = useToastStore()
@@ -392,6 +395,8 @@ export function Toolbar({
             )}
           </div>
         )}
+
+        {presenceUsers && presenceUsers.length > 0 && <PresenceAvatars users={presenceUsers} />}
 
         {/* Keyboard shortcuts */}
         <button

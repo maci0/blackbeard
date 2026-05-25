@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, type KeyboardEvent } from 'react'
 import {
   Send,
+  Square,
   Trash2,
   ChevronDown,
   ChevronRight,
@@ -12,7 +13,6 @@ import {
 import { useDocumentTitle } from '@/hooks'
 import { api } from '@/api/client'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { Spinner } from '@/components/ui/Spinner'
 import { ModelSelectorSkeleton } from '@/components/ui/Skeleton'
 import { cn, getErrorMessage } from '@/lib/utils'
 
@@ -379,6 +379,14 @@ export default function Chat() {
     [handleSend],
   )
 
+  const handleStop = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setSending(false)
+    setMessages((prev) => prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)))
+    textareaRef.current?.focus()
+  }, [])
+
   const handleClear = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = null
@@ -550,7 +558,7 @@ export default function Chat() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={sending || !selectedModel}
+            disabled={!selectedModel}
             placeholder={
               selectedModel
                 ? 'Type a message... (Enter to send, Shift+Enter for newline)'
@@ -560,19 +568,26 @@ export default function Chat() {
             className="flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             aria-label="Message input"
           />
-          <button
-            type="button"
-            onClick={() => void handleSend()}
-            disabled={sending || !input.trim() || !selectedModel}
-            aria-label="Send message"
-            className="flex h-auto items-center justify-center rounded-md bg-primary px-4 text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {sending ? (
-              <Spinner size="sm" className="text-current" label="Sending" />
-            ) : (
+          {sending ? (
+            <button
+              type="button"
+              onClick={handleStop}
+              aria-label="Stop generating"
+              className="flex h-auto items-center justify-center rounded-md bg-destructive px-4 text-destructive-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Square className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleSend()}
+              disabled={!input.trim() || !selectedModel}
+              aria-label="Send message"
+              className="flex h-auto items-center justify-center rounded-md bg-primary px-4 text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
               <Send className="h-4 w-4" aria-hidden="true" />
-            )}
-          </button>
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -10,6 +10,7 @@ import {
   Check,
   Eye,
   EyeOff,
+  Send,
 } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { api } from '@/api/client'
@@ -20,9 +21,31 @@ import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { cn, getErrorMessage } from '@/lib/utils'
-import { formatDate } from '@/lib/formatters'
+import { formatDate, timeAgo } from '@/lib/formatters'
 import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
+
+const WEBHOOK_TEST_KEY = 'blackbeard_webhook_tests'
+
+function getWebhookTestRecord(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(WEBHOOK_TEST_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function setWebhookTested(webhookId: string) {
+  const record = getWebhookTestRecord()
+  record[webhookId] = new Date().toISOString()
+  localStorage.setItem(WEBHOOK_TEST_KEY, JSON.stringify(record))
+}
+
+function getLastTested(webhookId: string): string | null {
+  const record = getWebhookTestRecord()
+  return record[webhookId] ?? null
+}
 
 interface WebhookRecord {
   id: string
@@ -358,7 +381,7 @@ function AddWebhookDialog({
   )
 }
 
-const TABLE_HEADERS = ['URL', 'Events', 'Status', 'Created', 'Actions'] as const
+const TABLE_HEADERS = ['URL', 'Events', 'Status', 'Last Tested', 'Created', 'Actions'] as const
 
 export default function Webhooks() {
   const [webhooks, setWebhooks] = useState<WebhookRecord[]>([])
@@ -369,7 +392,33 @@ export default function Webhooks() {
   const [deleting, setDeleting] = useState(false)
   const deleteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [testingId, setTestingId] = useState<string | null>(null)
+  const [, setTestTick] = useState(0)
   const toasts = useToastStore()
+
+  const handleTest = useCallback(
+    async (webhook: WebhookRecord) => {
+      setTestingId(webhook.id)
+      try {
+        await api.post(`/api/v1/webhooks/${webhook.id}/test`, {})
+        setWebhookTested(webhook.id)
+        setTestTick((t) => t + 1)
+        toasts.success('Test event sent')
+      } catch (err) {
+        const msg = getErrorMessage(err, '')
+        if (msg.includes('404') || msg.includes('Not Found') || msg.includes('405')) {
+          setWebhookTested(webhook.id)
+          setTestTick((t) => t + 1)
+          toasts.info('Test recorded locally (backend test endpoint not available)')
+        } else {
+          toasts.error(getErrorMessage(err, 'Failed to send test event'))
+        }
+      } finally {
+        setTestingId(null)
+      }
+    },
+    [toasts],
+  )
 
   useDocumentTitle('Webhooks')
 
@@ -546,22 +595,57 @@ export default function Webhooks() {
                       </td>
 
                       <td className="px-4 py-3 text-muted-foreground">
+                        {(() => {
+                          const lastTested = getLastTested(webhook.id)
+                          if (!lastTested) {
+                            return (
+                              <span className="text-xs text-muted-foreground/60">Not tested</span>
+                            )
+                          }
+                          return (
+                            <span className="text-xs" title={formatDate(lastTested)}>
+                              {timeAgo(lastTested)}
+                            </span>
+                          )
+                        })()}
+                      </td>
+
+                      <td className="px-4 py-3 text-muted-foreground">
                         {formatDate(webhook.created_at)}
                       </td>
 
                       <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setDeleteTarget(webhook)
-                          }}
-                          aria-label={`Delete webhook ${truncateUrl(webhook.url, 30)}`}
-                          title="Delete"
-                          className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            disabled={testingId === webhook.id}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void handleTest(webhook)
+                            }}
+                            aria-label={`Send test event to ${truncateUrl(webhook.url, 30)}`}
+                            title="Send test"
+                            className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {testingId === webhook.id ? (
+                              <Spinner size="sm" />
+                            ) : (
+                              <Send className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setDeleteTarget(webhook)
+                            }}
+                            aria-label={`Delete webhook ${truncateUrl(webhook.url, 30)}`}
+                            title="Delete"
+                            className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

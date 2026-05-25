@@ -60,8 +60,9 @@ export function ExecutionStatus({ executionId }: ExecutionStatusProps) {
         setExecution(data)
         setError(null)
 
-        if (TERMINAL_STATUSES.has(data.status) && intervalRef.current) {
-          clearInterval(intervalRef.current)
+        if (!TERMINAL_STATUSES.has(data.status)) {
+          intervalRef.current = setTimeout(() => void poll(), POLL_INTERVAL_MS)
+        } else {
           intervalRef.current = null
         }
       } catch (err) {
@@ -71,12 +72,11 @@ export function ExecutionStatus({ executionId }: ExecutionStatusProps) {
     }
 
     void poll()
-    intervalRef.current = setInterval(() => void poll(), POLL_INTERVAL_MS)
 
     return () => {
       active = false
       if (intervalRef.current) {
-        clearInterval(intervalRef.current)
+        clearTimeout(intervalRef.current)
         intervalRef.current = null
       }
     }

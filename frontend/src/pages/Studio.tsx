@@ -5,7 +5,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useStudioStore } from '@/stores/studioStore'
 import { api } from '@/api/client'
 import { capitalize, toResourceName, parseRef, getErrorMessage } from '@/lib/utils'
-import { useCollaboration, useDocumentTitle } from '@/hooks'
+import { useCollaboration, useDocumentTitle, usePresence } from '@/hooks'
 import { API_VERSION, KIND_TO_PLURAL } from '@/lib/kinds'
 import { DATAFLOW_MARKER_END } from '@/components/studio/defaults'
 import Palette, { MobilePalette } from '@/components/studio/Palette'
@@ -195,6 +195,9 @@ function StudioInner() {
     broadcastCursor,
     remoteCursors,
   } = useCollaboration(crewName, collabEnabled)
+
+  const presenceRoomId = crewName ? `studio:${crewName}` : null
+  const { users: presenceUsers, connected: presenceConnected } = usePresence(presenceRoomId)
 
   useDocumentTitle('Studio')
 
@@ -800,6 +803,7 @@ function StudioInner() {
         onCollabToggle={() => setCollabEnabled((v) => !v)}
         collabConnected={collabConnected}
         collabParticipants={collabParticipants}
+        presenceUsers={presenceConnected ? presenceUsers : []}
       />
 
       <div

@@ -88,6 +88,12 @@ function ProviderBadge({ provider }: { provider: string }) {
 /* Model card                                                          */
 /* ------------------------------------------------------------------ */
 
+function formatRateLimit(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}M`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(value % 1_000 === 0 ? 0 : 1)}K`
+  return String(value)
+}
+
 function ModelCard({
   resource,
   onDelete,
@@ -105,6 +111,8 @@ function ModelCard({
     base_url?: string
     parameters?: { temperature?: number; max_tokens?: number }
     vertex?: { project?: string; location?: string }
+    rpm_limit?: number
+    tpm_limit?: number
   }
 
   return (
@@ -233,6 +241,21 @@ function ModelCard({
           <div className="flex items-center justify-between border-t pt-1">
             <span className="text-xs text-muted-foreground">GCP Project</span>
             <span className="max-w-[160px] truncate font-mono text-xs">{spec.vertex.project}</span>
+          </div>
+        )}
+
+        {(spec.rpm_limit || spec.tpm_limit) && (
+          <div className="flex flex-wrap gap-1.5 border-t pt-1">
+            {spec.rpm_limit != null && spec.rpm_limit > 0 && (
+              <span className="inline-flex items-center rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300">
+                {formatRateLimit(spec.rpm_limit)} RPM
+              </span>
+            )}
+            {spec.tpm_limit != null && spec.tpm_limit > 0 && (
+              <span className="inline-flex items-center rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300">
+                {formatRateLimit(spec.tpm_limit)} TPM
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -806,17 +829,24 @@ export default function Models() {
                           >
                             <thead>
                               <tr className="border-b bg-muted/60">
-                                {(['Name', 'Model', 'Base URL', 'Temp', 'Max Tokens'] as const).map(
-                                  (h) => (
-                                    <th
-                                      key={h}
-                                      scope="col"
-                                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-                                    >
-                                      {h}
-                                    </th>
-                                  ),
-                                )}
+                                {(
+                                  [
+                                    'Name',
+                                    'Model',
+                                    'Base URL',
+                                    'Temp',
+                                    'Max Tokens',
+                                    'Rate Limit',
+                                  ] as const
+                                ).map((h) => (
+                                  <th
+                                    key={h}
+                                    scope="col"
+                                    className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                                  >
+                                    {h}
+                                  </th>
+                                ))}
                                 <th
                                   scope="col"
                                   className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground"
@@ -831,6 +861,8 @@ export default function Models() {
                                   model?: string
                                   base_url?: string
                                   parameters?: { temperature?: number; max_tokens?: number }
+                                  rpm_limit?: number
+                                  tpm_limit?: number
                                 }
                                 return (
                                   <tr
@@ -864,6 +896,23 @@ export default function Models() {
                                           ? spec.parameters.max_tokens.toLocaleString()
                                           : '—'}
                                       </span>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <div className="flex flex-wrap gap-1">
+                                        {spec.rpm_limit != null && spec.rpm_limit > 0 && (
+                                          <span className="inline-flex items-center rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300">
+                                            {formatRateLimit(spec.rpm_limit)} RPM
+                                          </span>
+                                        )}
+                                        {spec.tpm_limit != null && spec.tpm_limit > 0 && (
+                                          <span className="inline-flex items-center rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300">
+                                            {formatRateLimit(spec.tpm_limit)} TPM
+                                          </span>
+                                        )}
+                                        {!spec.rpm_limit && !spec.tpm_limit && (
+                                          <span className="text-xs text-muted-foreground">—</span>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                       <div className="flex items-center justify-end gap-1">

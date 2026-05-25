@@ -581,6 +581,13 @@ class ResourceLoader:
             )
             raise LoaderError(msg)
         module_path, attr_name = dotted_path.rsplit(".", 1)
+        if attr_name.startswith("_"):
+            msg = f"Blocked import of private/dunder attribute: {dotted_path}"
+            logger.warning(
+                msg,
+                extra={"event": "callable_import_blocked", "dotted_path": dotted_path},
+            )
+            raise LoaderError(msg)
         try:
             module = importlib.import_module(module_path)
             return getattr(module, attr_name)

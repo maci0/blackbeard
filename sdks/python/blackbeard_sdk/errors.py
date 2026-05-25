@@ -35,6 +35,10 @@ class BlackbeardApiError(Exception):
     def is_server_error(self) -> bool:
         return self.status_code >= 500
 
+    @property
+    def is_network_error(self) -> bool:
+        return self.status_code == 0
+
 
 def raise_for_status(resp: httpx.Response) -> None:
     """Raise ``BlackbeardApiError`` for non-2xx responses."""

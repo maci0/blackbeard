@@ -198,6 +198,7 @@ async def webhook_trigger(
     secret_valid = (
         bool(expected_secret)
         and len(expected_secret) >= 16
+        and len(body.secret) >= 16
         and hmac.compare_digest(body.secret, expected_secret)
     )
     if not secret_valid:

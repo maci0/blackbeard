@@ -11,6 +11,7 @@ import {
   Loader2,
   Upload,
   Trash2,
+  ClipboardPaste,
 } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useShallow } from 'zustand/react/shallow'
@@ -29,6 +30,8 @@ import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
 import { parseYaml } from '@/lib/yaml'
 import { Pagination } from '@/components/ui/Pagination'
+import { ViewToggle } from '@/components/ui/ViewToggle'
+import { useViewPrefsStore } from '@/stores/viewPrefsStore'
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
@@ -81,6 +84,11 @@ export default function Resources() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [pasteYaml, setPasteYaml] = useState('')
+  const [pasteImporting, setPasteImporting] = useState(false)
+  const { getView, setView } = useViewPrefsStore()
+  const viewMode = getView('resources')
 
   useEffect(() => {
     setSelectedIds(new Set())
@@ -145,6 +153,58 @@ export default function Resources() {
     } finally {
       setImporting(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handlePasteImport() {
+    const text = pasteYaml.trim()
+    if (!text) return
+    setPasteImporting(true)
+    try {
+      const docs = text
+        .split(/\n---(?:\n|$)/)
+        .map((d) => d.trim())
+        .filter(Boolean)
+      let imported = 0
+      for (const doc of docs) {
+        const parsed = parseYaml(doc)
+        const kind = typeof parsed.kind === 'string' ? parsed.kind : ''
+        const metadata = parsed.metadata as
+          | { name?: string; namespace?: string; labels?: Record<string, string> }
+          | undefined
+        const name = metadata?.name ?? ''
+        const spec = (parsed.spec ?? {}) as Record<string, unknown>
+        if (!kind || !name) {
+          toast.error(`Skipped document: missing kind or metadata.name`)
+          continue
+        }
+        const apiVersion = typeof parsed.apiVersion === 'string' ? parsed.apiVersion : API_VERSION
+        try {
+          await createResource({
+            apiVersion,
+            kind,
+            metadata: {
+              name,
+              namespace: metadata?.namespace || 'default',
+              labels: metadata?.labels,
+            },
+            spec,
+          })
+          imported++
+        } catch (err) {
+          toast.error(getErrorMessage(err, `Failed to import ${kind} "${name}"`))
+        }
+      }
+      if (imported > 0) {
+        toast.success(`Imported ${imported} resource${imported === 1 ? '' : 's'}`)
+        void fetchAllResources()
+      }
+      setPasteOpen(false)
+      setPasteYaml('')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to parse YAML'))
+    } finally {
+      setPasteImporting(false)
     }
   }
 
@@ -307,6 +367,7 @@ export default function Resources() {
                     if (file) void handleYamlImport(file)
                   }}
                 />
+                <ViewToggle mode={viewMode} onChange={(m) => setView('resources', m)} />
                 <button
                   type="button"
                   onClick={() => void fetchAllResources()}
@@ -334,6 +395,17 @@ export default function Resources() {
                     <Upload className="h-3.5 w-3.5" />
                   )}
                   Import YAML
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPasteYaml('')
+                    setPasteOpen(true)
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ClipboardPaste className="h-3.5 w-3.5" />
+                  Paste YAML
                 </button>
                 <button
                   type="button"
@@ -446,7 +518,6 @@ export default function Resources() {
           )}
         </div>
 
-        {/* Table */}
         {loading && filtered.length === 0 ? (
           <TableSkeleton />
         ) : filtered.length === 0 ? (
@@ -460,6 +531,82 @@ export default function Resources() {
               !(search || kindFilter) ? { label: 'Go to Studio', href: '/studio' } : undefined
             }
           />
+        ) : viewMode === 'cards' ? (
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {paginated.map((resource) => {
+                const cardId = `${resource.kindPlural}/${resource.metadata.name}`
+                const isSelected = selectedIds.has(cardId)
+                return (
+                  <div
+                    key={cardId}
+                    onClick={() =>
+                      void navigate(`/resources/${resource.kindPlural}/${resource.metadata.name}`)
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        void navigate(`/resources/${resource.kindPlural}/${resource.metadata.name}`)
+                      }
+                    }}
+                    tabIndex={0}
+                    role="article"
+                    aria-label={`${resource.kind}: ${resource.metadata.name}`}
+                    className={cn(
+                      'group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      isSelected && 'ring-2 ring-primary',
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'absolute left-2 top-2 z-10',
+                        selectedIds.size > 0 ? 'visible' : 'invisible group-hover:visible',
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          e.stopPropagation()
+                          toggleSelected(cardId)
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Select ${resource.metadata.name}`}
+                        className="h-4 w-4 rounded border-muted-foreground/40 bg-background accent-primary shadow-sm"
+                      />
+                    </div>
+                    <div className="border-b bg-muted/20 px-4 pb-3 pt-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 pl-5">
+                          <p
+                            className="truncate text-sm font-semibold"
+                            title={resource.metadata.name}
+                          >
+                            {resource.metadata.name}
+                          </p>
+                          {showNamespace &&
+                            resource.metadata.namespace &&
+                            resource.metadata.namespace !== 'default' && (
+                              <p className="text-xs text-muted-foreground">
+                                {resource.metadata.namespace}
+                              </p>
+                            )}
+                        </div>
+                        <KindBadge kind={resource.kind} />
+                      </div>
+                    </div>
+                    <div className="flex-1 px-4 py-3">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>v{resource.version}</span>
+                        <span>{formatDate(resource.updated_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          </>
         ) : (
           <>
             <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
@@ -758,6 +905,75 @@ export default function Resources() {
                 </button>
               </div>
             </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root
+        open={pasteOpen}
+        onOpenChange={(v) => {
+          setPasteOpen(v)
+          if (!v) setPasteYaml('')
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:fade-in" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[560px] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <div>
+                <Dialog.Title className="text-lg font-semibold">Paste YAML</Dialog.Title>
+                <Dialog.Description className="mt-0.5 text-sm text-muted-foreground">
+                  Paste one or more YAML resource documents separated by{' '}
+                  <code className="rounded bg-muted px-1 font-mono text-xs">---</code>
+                </Dialog.Description>
+              </div>
+              <Dialog.Close
+                className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Close"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </Dialog.Close>
+            </div>
+
+            <div className="space-y-4 p-5">
+              <textarea
+                value={pasteYaml}
+                onChange={(e) => setPasteYaml(e.target.value)}
+                disabled={pasteImporting}
+                placeholder={
+                  'apiVersion: blackbeard/v1alpha1\nkind: Agent\nmetadata:\n  name: my-agent\nspec:\n  role: researcher\n  goal: Find information\n  backstory: An experienced researcher'
+                }
+                spellCheck={false}
+                autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
+                aria-label="YAML content"
+                className="h-64 w-full resize-y rounded-md border bg-background px-3 py-2.5 font-mono text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              />
+              <div className="flex justify-end gap-3">
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Cancel
+                  </button>
+                </Dialog.Close>
+                <button
+                  type="button"
+                  onClick={() => void handlePasteImport()}
+                  disabled={pasteImporting || !pasteYaml.trim()}
+                  aria-busy={pasteImporting}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {pasteImporting && (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+                  )}
+                  Import
+                </button>
+              </div>
+            </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

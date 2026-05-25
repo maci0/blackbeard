@@ -56,6 +56,7 @@ spec:
       {{- include "blackbeard.selectorLabels" (dict "context" . "component" "postgres") | nindent 6 }}
   policyTypes:
     - Ingress
+    - Egress
   ingress:
     - from:
         - podSelector:
@@ -82,6 +83,7 @@ spec:
       {{- include "blackbeard.selectorLabels" (dict "context" . "component" "valkey") | nindent 6 }}
   policyTypes:
     - Ingress
+    - Egress
   ingress:
     - from:
         - podSelector:

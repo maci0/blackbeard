@@ -15,6 +15,7 @@ const Resources = lazy(() => import('@/pages/Resources'))
 const ResourceDetail = lazy(() => import('@/pages/ResourceDetail'))
 const Executions = lazy(() => import('@/pages/Executions'))
 const ExecutionDetail = lazy(() => import('@/pages/ExecutionDetail'))
+const ExecutionCompare = lazy(() => import('@/pages/ExecutionCompare'))
 const Models = lazy(() => import('@/pages/Models'))
 const Chat = lazy(() => import('@/pages/Chat'))
 const Tools = lazy(() => import('@/pages/Tools'))
@@ -120,6 +121,7 @@ function App() {
                 <Route path="resources" element={<Resources />} />
                 <Route path="resources/:kindPlural/:name" element={<ResourceDetail />} />
                 <Route path="executions" element={<Executions />} />
+                <Route path="executions/compare" element={<ExecutionCompare />} />
                 <Route path="executions/:id" element={<ExecutionDetail />} />
                 <Route path="models" element={<Models />} />
                 <Route path="chat" element={<Chat />} />

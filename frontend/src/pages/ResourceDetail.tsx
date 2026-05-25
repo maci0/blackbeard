@@ -19,13 +19,14 @@ import {
 import { modKey } from '@/lib/platform'
 
 import { CodeBlock } from '@/components/ui/CodeBlock'
+import { PresenceAvatars } from '@/components/ui/PresenceAvatars'
 import { CopyButton } from '@/components/ui/CopyButton'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { useResourceStore } from '@/stores/resourceStore'
 import type { Resource } from '@/lib/types'
 import { api } from '@/api/client'
 import { cn, getErrorMessage } from '@/lib/utils'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle, usePresence } from '@/hooks'
 import { resourceToYaml, parseYaml } from '@/lib/yaml'
 import { formatDate } from '@/lib/formatters'
 import { KindBadge } from '@/components/ui/KindBadge'
@@ -294,6 +295,9 @@ export default function ResourceDetail() {
   const deleteResource = useResourceStore((s) => s.deleteResource)
   const updateResource = useResourceStore((s) => s.updateResource)
   const toasts = useToastStore()
+
+  const presenceRoomId = kindPlural && name ? `resource:${kindPlural}:${name}` : null
+  const { users: presenceUsers, connected: presenceConnected } = usePresence(presenceRoomId)
 
   const [resource, setResource] = useState<Resource | null>(null)
   const [loading, setLoading] = useState(true)
@@ -603,6 +607,9 @@ export default function ResourceDetail() {
             <span className="rounded-full border px-2 py-0.5 text-sm text-muted-foreground">
               v{resource.version}
             </span>
+            {presenceConnected && presenceUsers.length > 0 && (
+              <PresenceAvatars users={presenceUsers} />
+            )}
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {editMode ? (
