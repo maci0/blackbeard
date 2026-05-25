@@ -68,7 +68,7 @@ class CopilotErrorResponse(BaseModel):
         422: {"description": "Validation error (prompt too short/long)"},
         424: {
             "model": CopilotErrorResponse,
-            "description": "No LLMConnection available or LLM call failed",
+            "description": "No LLMConnection available in the specified namespace",
         },
         502: {
             "model": CopilotErrorResponse,

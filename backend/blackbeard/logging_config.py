@@ -107,6 +107,9 @@ _SENSITIVE_KEYS = frozenset(
         "virtual_key",
         "signing_secret",
         "webhook_secret",
+        "ip_address",
+        "client_ip",
+        "remote_addr",
     }
 )
 
@@ -173,7 +176,7 @@ class _JsonFormatter(logging.Formatter):
                 key_lower = key.lower()
                 if key_lower in _SENSITIVE_KEYS or key_lower.endswith(_SENSITIVE_SUFFIXES):
                     log_entry[key] = "[REDACTED]"
-                elif key_lower == "error_message" and isinstance(val, str):
+                elif key_lower.endswith("error_message") and isinstance(val, str):
                     log_entry[key] = scrub_pii(val)
                 else:
                     log_entry[key] = val

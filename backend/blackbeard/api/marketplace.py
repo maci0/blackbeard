@@ -201,6 +201,7 @@ async def _clone_repo(url: str, target: Path) -> None:
     response_model=ImportResponse,
     responses={
         422: {"description": "Invalid URL or YAML parse errors"},
+        503: {"description": "Built-in examples not available on server"},
         504: {"description": "Git clone timed out"},
     },
 )

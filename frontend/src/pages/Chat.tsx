@@ -10,7 +10,7 @@ import {
   Gauge,
 } from 'lucide-react'
 import { useDocumentTitle } from '@/hooks'
-import { api, ApiError } from '@/api/client'
+import { api } from '@/api/client'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { ModelSelectorSkeleton } from '@/components/ui/Skeleton'
@@ -22,13 +22,6 @@ interface TokenUsage {
   total: number
   prompt_time_ms?: number | null
   completion_time_ms?: number | null
-}
-
-interface ChatResponse {
-  model: string
-  content: string
-  tokens: TokenUsage
-  latency_ms: number
 }
 
 interface ModelInfo {
@@ -164,7 +157,6 @@ export default function Chat() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const streamIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -210,9 +202,11 @@ export default function Chat() {
     autoResizeTextarea()
   }, [input, autoResizeTextarea])
 
+  const abortRef = useRef<AbortController | null>(null)
+
   useEffect(() => {
     return () => {
-      if (streamIntervalRef.current) clearInterval(streamIntervalRef.current)
+      abortRef.current?.abort()
     }
   }, [])
 
@@ -253,55 +247,124 @@ export default function Chat() {
       body.max_tokens = tokens
     }
 
+    const msgId = crypto.randomUUID()
+    const assistantMsg: Message = {
+      id: msgId,
+      role: 'assistant',
+      content: '',
+      streaming: true,
+    }
+    setMessages((prev) => [...prev, assistantMsg])
+
+    const controller = new AbortController()
+    abortRef.current = controller
+    let accumulated = ''
+
     try {
-      const resp = await api.post<ChatResponse>('/api/v1/chat', body)
-      const msgId = crypto.randomUUID()
-      const fullContent = resp.content
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      const token = api.getToken()
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const apiKey = api.getApiKey()
+      if (apiKey) headers['X-API-Key'] = apiKey
 
-      const assistantMsg: Message = {
-        id: msgId,
-        role: 'assistant',
-        content: fullContent,
-        displayContent: '',
-        streaming: true,
-        tokens: resp.tokens,
-        latency_ms: resp.latency_ms,
+      const resp = await fetch('/api/v1/chat/stream', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      })
+
+      if (!resp.ok || !resp.body) {
+        const text = await resp.text().catch(() => 'Unknown error')
+        throw new Error(text)
       }
-      setMessages((prev) => [...prev, assistantMsg])
-      setSending(false)
 
-      let charIndex = 0
-      if (streamIntervalRef.current) clearInterval(streamIntervalRef.current)
-      streamIntervalRef.current = setInterval(() => {
-        charIndex += 3
-        if (charIndex >= fullContent.length) {
-          if (streamIntervalRef.current) clearInterval(streamIntervalRef.current)
-          streamIntervalRef.current = null
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId ? { ...m, displayContent: undefined, streaming: false } : m,
-            ),
-          )
-        } else {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId ? { ...m, displayContent: fullContent.slice(0, charIndex) } : m,
-            ),
-          )
+      const reader = resp.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const dataStr = line.slice(6).trim()
+          if (!dataStr) continue
+          try {
+            const event = JSON.parse(dataStr) as {
+              content?: string
+              done?: boolean
+              error?: string
+              tokens?: TokenUsage
+              latency_ms?: number
+              model?: string
+            }
+            if (event.error) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === msgId
+                    ? {
+                        ...m,
+                        content: accumulated || 'Failed to get a response.',
+                        error: event.error,
+                        streaming: false,
+                      }
+                    : m,
+                ),
+              )
+              setSending(false)
+              textareaRef.current?.focus()
+              return
+            }
+            if (event.content) {
+              accumulated += event.content
+              setMessages((prev) =>
+                prev.map((m) => (m.id === msgId ? { ...m, content: accumulated } : m)),
+              )
+            }
+            if (event.done) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === msgId
+                    ? {
+                        ...m,
+                        content: accumulated,
+                        streaming: false,
+                        tokens: event.tokens,
+                        latency_ms: event.latency_ms,
+                      }
+                    : m,
+                ),
+              )
+            }
+          } catch {
+            continue
+          }
         }
-      }, 10)
-    } catch (err: unknown) {
-      const errorText =
-        err instanceof ApiError ? err.message : getErrorMessage(err, 'Request failed')
-      const errorMsg: Message = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: 'Failed to get a response.',
-        error: errorText,
       }
-      setMessages((prev) => [...prev, errorMsg])
-      setSending(false)
+    } catch (err: unknown) {
+      if (controller.signal.aborted) return
+      const errorText = err instanceof Error ? err.message : getErrorMessage(err, 'Request failed')
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId
+            ? {
+                ...m,
+                content: accumulated.length > 0 ? accumulated : 'Failed to get a response.',
+                error: errorText,
+                streaming: false,
+              }
+            : m,
+        ),
+      )
     } finally {
+      setSending(false)
+      abortRef.current = null
       textareaRef.current?.focus()
     }
   }, [input, selectedModel, sending, systemPrompt, messages, temperature, maxTokens])
@@ -317,10 +380,8 @@ export default function Chat() {
   )
 
   const handleClear = useCallback(() => {
-    if (streamIntervalRef.current) {
-      clearInterval(streamIntervalRef.current)
-      streamIntervalRef.current = null
-    }
+    abortRef.current?.abort()
+    abortRef.current = null
     setMessages([])
     setSending(false)
     textareaRef.current?.focus()

@@ -8,12 +8,15 @@ Proxies requests to LiteLLM for:
 
 from __future__ import annotations
 
+import json
 import logging
 import time
+from collections.abc import AsyncGenerator
 from typing import Any, Literal
 
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from blackbeard.auth.dependencies import get_current_user
@@ -232,6 +235,182 @@ async def chat(
         content=content,
         tokens=tokens,
         latency_ms=latency_ms,
+    )
+
+
+class StreamEvent(BaseModel):
+    """A single SSE event in the streaming chat response."""
+
+    content: str = ""
+    done: bool = False
+    error: str | None = None
+    tokens: TokenUsage | None = None
+    latency_ms: int | None = None
+    model: str | None = None
+
+
+@router.post(
+    "/chat/stream",
+    responses={
+        200: {
+            "description": "SSE stream of chat completion tokens",
+            "content": {"text/event-stream": {}},
+        },
+        502: {"description": "LiteLLM proxy unreachable or model error"},
+    },
+)
+async def chat_stream(
+    body: ChatRequest = Body(...),
+    _user: User | None = Depends(get_current_user),
+) -> StreamingResponse:
+    """Stream an ad-hoc chat completion through LiteLLM via SSE.
+
+    Each event is ``data: {"content": "...", "done": false}\\n\\n``.
+    The final event includes ``"done": true`` plus token usage and latency.
+    """
+    payload: dict[str, Any] = {
+        "model": body.model,
+        "messages": [m.model_dump() for m in body.messages],
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+    if body.temperature is not None:
+        payload["temperature"] = body.temperature
+    if body.max_tokens is not None:
+        payload["max_tokens"] = body.max_tokens
+
+    t0 = time.monotonic()
+    request_model = body.model
+
+    async def _event_generator() -> AsyncGenerator[str]:
+        try:
+            client = _get_litellm_client()
+            async with client.stream(
+                "POST",
+                f"{settings.litellm_proxy_url}/chat/completions",
+                json=payload,
+                headers={"X-Request-Id": request_id_var.get("-")},
+            ) as response:
+                if response.status_code != 200:
+                    error_text = ""
+                    async for chunk in response.aiter_text():
+                        error_text += chunk
+                    evt = StreamEvent(
+                        error=error_text[:500],
+                        done=True,
+                        latency_ms=int((time.monotonic() - t0) * 1000),
+                    )
+                    yield f"data: {evt.model_dump_json()}\n\n"
+                    return
+
+                full_content = ""
+                usage: dict[str, Any] = {}
+                async for line in response.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data_str = line[6:]
+                    if data_str.strip() == "[DONE]":
+                        break
+                    try:
+                        chunk_data = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        continue
+
+                    choices = chunk_data.get("choices") or []
+                    if choices:
+                        delta = choices[0].get("delta", {})
+                        content = delta.get("content") or delta.get("reasoning_content") or ""
+                        if content:
+                            full_content += content
+                            evt = StreamEvent(content=content, done=False)
+                            yield f"data: {evt.model_dump_json()}\n\n"
+
+                    if chunk_data.get("usage"):
+                        usage = chunk_data["usage"]
+
+                latency_ms = int((time.monotonic() - t0) * 1000)
+                _, tokens = _extract_content(
+                    {
+                        "usage": usage,
+                        "choices": [{"message": {"content": full_content}}],
+                    }
+                )
+
+                logger.info(
+                    "Chat stream completion: model=%s tokens=%d latency_ms=%d",
+                    request_model,
+                    tokens.total,
+                    latency_ms,
+                    extra={
+                        "event": "chat_stream_completion",
+                        "model": request_model,
+                        "total_tokens": tokens.total,
+                        "prompt_tokens": tokens.prompt,
+                        "completion_tokens": tokens.completion,
+                        "latency_ms": latency_ms,
+                    },
+                )
+                final_evt = StreamEvent(
+                    content="",
+                    done=True,
+                    tokens=tokens,
+                    latency_ms=latency_ms,
+                    model=request_model,
+                )
+                yield f"data: {final_evt.model_dump_json()}\n\n"
+
+        except httpx.TransportError as exc:
+            latency_ms = int((time.monotonic() - t0) * 1000)
+            logger.warning(
+                "LiteLLM stream unreachable: model=%s %s: %s (%.0fms)",
+                request_model,
+                type(exc).__name__,
+                exc,
+                latency_ms,
+                exc_info=True,
+                extra={
+                    "event": "chat_stream_litellm_unreachable",
+                    "model": request_model,
+                    "error_type": type(exc).__name__,
+                    "latency_ms": latency_ms,
+                },
+            )
+            evt = StreamEvent(
+                error="Model proxy is unreachable. Try again later.",
+                done=True,
+                latency_ms=latency_ms,
+            )
+            yield f"data: {evt.model_dump_json()}\n\n"
+        except Exception as exc:
+            latency_ms = int((time.monotonic() - t0) * 1000)
+            logger.error(
+                "Chat stream unexpected error: model=%s %s: %s",
+                request_model,
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+                extra={
+                    "event": "chat_stream_unexpected_error",
+                    "model": request_model,
+                    "error_type": type(exc).__name__,
+                    "latency_ms": latency_ms,
+                },
+            )
+            evt = StreamEvent(
+                error="An unexpected error occurred during streaming.",
+                done=True,
+                latency_ms=latency_ms,
+            )
+            yield f"data: {evt.model_dump_json()}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
