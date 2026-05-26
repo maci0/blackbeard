@@ -147,8 +147,10 @@ async def test_request_id_returned(client):
     response = await client.get("/api/v1/agents", headers=API_KEY_HEADER)
     request_id = response.headers.get("X-Request-Id")
     assert request_id is not None
-    assert len(request_id) > 0
+    assert request_id.strip(), "Request ID must not be blank"
     assert len(request_id) <= 64, "Request ID should not exceed max length"
+    parsed = uuid.UUID(request_id)
+    assert isinstance(parsed, uuid.UUID), "Request ID must be a valid UUID"
 
 
 async def test_client_request_id_echoed(client):

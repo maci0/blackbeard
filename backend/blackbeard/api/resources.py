@@ -204,7 +204,10 @@ async def export_resources(
     return StreamingResponse(
         _generate_yaml(),
         media_type="application/x-yaml",
-        headers={"Cache-Control": "no-store"},
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": "attachment; filename=\"blackbeard-resources.yaml\"",
+        },
     )
 
 

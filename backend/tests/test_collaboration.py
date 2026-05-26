@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import pytest
@@ -127,13 +128,16 @@ class FakeWebSocket:
     """Minimal fake WebSocket for testing broadcast logic."""
 
     def __init__(self, *, fail: bool = False) -> None:
-        self.sent: list[dict] = []
+        self.sent: list[str] = []
         self._fail = fail
 
-    async def send_json(self, data: dict) -> None:
+    async def send_text(self, text: str) -> None:
         if self._fail:
             raise ConnectionError("connection lost")
-        self.sent.append(data)
+        self.sent.append(text)
+
+    async def send_json(self, data: dict) -> None:
+        await self.send_text(json.dumps(data))
 
 
 class TestBroadcast:
@@ -147,8 +151,9 @@ class TestBroadcast:
         msg = {"type": "node_move", "data": {"id": "n1", "x": 10, "y": 20}}
         await _broadcast_local("test-crew", sender, msg)  # type: ignore[arg-type]
 
-        assert msg in other1.sent
-        assert msg in other2.sent
+        expected = json.dumps(msg)
+        assert expected in other1.sent
+        assert expected in other2.sent
         assert len(sender.sent) == 0
 
     @pytest.mark.asyncio

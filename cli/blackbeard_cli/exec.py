@@ -194,6 +194,12 @@ def events(
     event_count = 0
     terminal_status = ""
 
+    if follow and not is_json:
+        console.print(
+            f"[dim]Following events for {execution_id}"
+            f" (Ctrl-C to stop, polling every {interval}s)...[/]\n"
+        )
+
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             while True:
@@ -248,8 +254,11 @@ def events(
             console.print(f"\n[dim]Stopped following ({event_count} event(s)).[/]")
         raise SystemExit(130) from None
 
-    if not is_json and event_count:
-        out.print(f"[dim]{event_count} event(s)[/]")
+    if not is_json:
+        if event_count:
+            out.print(f"[dim]{event_count} event(s)[/]")
+        elif not follow:
+            out.print("[dim]No events found.[/]")
 
     if terminal_status in ("failed", "cancelled"):
         raise SystemExit(1)

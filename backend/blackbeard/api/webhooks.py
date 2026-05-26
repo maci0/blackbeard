@@ -188,7 +188,7 @@ async def list_webhooks(
         .limit(limit)
         .offset(offset)
     )
-    webhooks = list(result.scalars().all())
+    webhooks = result.scalars().all()
     items = [
         WebhookResponse(
             id=str(w.id),

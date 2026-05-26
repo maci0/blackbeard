@@ -103,8 +103,8 @@ function loadCollapsedSections(): Record<string, boolean> {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS_NAV.COLLAPSED_SECTIONS)
     if (raw) return JSON.parse(raw) as Record<string, boolean>
-  } catch {
-    void 0
+  } catch (err) {
+    console.debug('[nav] failed to parse collapsed sections from localStorage:', err)
   }
   return {}
 }

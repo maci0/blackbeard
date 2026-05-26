@@ -13,7 +13,9 @@ export default function Login() {
   const login = useAuthStore((s) => s.login)
   const loading = useAuthStore((s) => s.loading)
   const storeError = useAuthStore((s) => s.error)
-  const redirectTo = (location.state as { from?: string } | null)?.from ?? '/studio'
+  const rawRedirect = (location.state as { from?: string } | null)?.from
+  const redirectTo =
+    rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/studio'
 
   useEffect(() => {
     useAuthStore.setState({ error: null })
@@ -30,7 +32,9 @@ export default function Login() {
     api
       .get<{ oidc_enabled?: boolean }>('/api/v1/config/public')
       .then((d) => setOidcEnabled(d.oidc_enabled === true))
-      .catch(() => {})
+      .catch((err: unknown) => {
+        console.debug('[login] OIDC config fetch failed:', err)
+      })
   }, [])
 
   useEffect(() => {

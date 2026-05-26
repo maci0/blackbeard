@@ -241,7 +241,7 @@ async def test_train_crew_internal_error(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 500
-    assert resp.json()["detail"], "Error response must include non-empty detail"
+    assert isinstance(resp.json()["detail"], str) and len(resp.json()["detail"]) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -302,7 +302,7 @@ async def test_test_crew_internal_error(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 500
-    assert resp.json()["detail"], "Error response must include non-empty detail"
+    assert isinstance(resp.json()["detail"], str) and len(resp.json()["detail"]) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +363,7 @@ async def test_run_flow_internal_error(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 500
-    assert resp.json()["detail"], "Error response must include non-empty detail"
+    assert isinstance(resp.json()["detail"], str) and len(resp.json()["detail"]) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -604,7 +604,7 @@ async def test_cancel_execution_already_terminal(client: AsyncClient):
     ):
         resp = await client.patch(f"/api/v1/executions/{fake_id}/cancel", headers=API_KEY_HEADER)
     assert resp.status_code == 409
-    assert resp.json()["detail"], "Conflict response must include non-empty detail"
+    assert isinstance(resp.json()["detail"], str) and len(resp.json()["detail"]) > 0
 
 
 async def test_cancel_execution_returns_none(client: AsyncClient):
@@ -668,7 +668,7 @@ async def test_hitl_respond_not_found(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 404
-    assert resp.json()["detail"], "404 response must include non-empty detail"
+    assert isinstance(resp.json()["detail"], str) and len(resp.json()["detail"]) > 0
 
 
 async def test_hitl_respond_terminal_status(client: AsyncClient):
@@ -688,7 +688,7 @@ async def test_hitl_respond_terminal_status(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 409
-    assert resp.json()["detail"], "Conflict response must include non-empty detail"
+    assert isinstance(resp.json()["detail"], str) and len(resp.json()["detail"]) > 0
 
 
 # ---------------------------------------------------------------------------

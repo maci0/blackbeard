@@ -44,6 +44,7 @@ from blackbeard.logging_config import request_id_var, safe_log_url
 from blackbeard.models import ExecutionEvent, ExecutionTask, TaskStatus
 from blackbeard.models.execution_schemas import redact_sensitive_values
 from blackbeard.pii import redact_dict as _redact_dict
+from blackbeard.pii import redact_text as _redact_text_fn
 from blackbeard.resources.validator import is_internal_host
 
 # ---------------------------------------------------------------------------
@@ -71,22 +72,21 @@ def _get_otel_tracer() -> Any:
     """Return a shared OpenTelemetry tracer, initializing the provider on first call.
 
     Returns ``None`` when OpenTelemetry is not installed or not configured.
+    Uses lock-always pattern (safe under both GIL and free-threaded Python).
     """
-    global _otel_tracer, _otel_provider
     if not HAS_OTEL:
-        return None
-    if _otel_tracer is not None:
-        return _otel_tracer
-
-    from blackbeard.config import settings
-
-    endpoint = settings.otel_endpoint
-    if not endpoint:
         return None
 
     with _otel_setup_lock:
+        global _otel_tracer, _otel_provider
         if _otel_tracer is not None:
             return _otel_tracer
+
+        from blackbeard.config import settings
+
+        endpoint = settings.otel_endpoint
+        if not endpoint:
+            return None
 
         resource = OTELResource.create({"service.name": "blackbeard"})
         provider = TracerProvider(resource=resource)
@@ -118,11 +118,12 @@ _webhook_executor_lock = threading.Lock()
 
 
 def _get_webhook_executor() -> Any:
-    """Return a shared ThreadPoolExecutor for fire-and-forget webhook delivery."""
-    global _webhook_executor
-    if _webhook_executor is not None:
-        return _webhook_executor
+    """Return a shared ThreadPoolExecutor for fire-and-forget webhook delivery.
+
+    Uses lock-always pattern (safe under both GIL and free-threaded Python).
+    """
     with _webhook_executor_lock:
+        global _webhook_executor
         if _webhook_executor is not None:
             return _webhook_executor
         from concurrent.futures import ThreadPoolExecutor
@@ -170,17 +171,14 @@ _WEBHOOK_CACHE_TTL = 300.0
 
 
 def _get_cached_webhooks(db_url: str) -> list[Any]:
-    """Return active webhooks, cached for 5min to avoid DB hit per event."""
+    """Return active webhooks, cached for 5min to avoid DB hit per event.
+
+    Uses lock-always pattern (safe under both GIL and free-threaded Python).
+    """
     global _webhook_cache_entry
 
-    now = _time.monotonic()
-    entry = _webhook_cache_entry
-    if entry is not None:
-        cache_time, cache = entry
-        if (now - cache_time) < _WEBHOOK_CACHE_TTL:
-            return cache
-
     with _webhook_cache_lock:
+        now = _time.monotonic()
         entry = _webhook_cache_entry
         if entry is not None:
             cache_time, cache = entry
@@ -406,11 +404,10 @@ def _get_sync_session_factory(db_url: str) -> sessionmaker[Session]:
 
     Both are thread-safe and not bound to event loops, so one instance
     can serve all execution listeners.
+    Uses lock-always pattern (safe under both GIL and free-threaded Python).
     """
-    global _sync_engine, _sync_session_factory
-    if _sync_session_factory is not None:
-        return _sync_session_factory
     with _sync_engine_lock:
+        global _sync_engine, _sync_session_factory
         if _sync_session_factory is not None:
             return _sync_session_factory
         sync_url = db_url.replace("postgresql+asyncpg", "postgresql+psycopg").replace(
@@ -453,8 +450,8 @@ def dispose_sync_engine() -> None:
 class BlackbeardExecutionListener(BaseEventListener):
     """Writes CrewAI events to the execution_events table for real-time streaming."""
 
-    _FLUSH_INTERVAL = 0.5  # seconds between buffer flushes
-    _MAX_BUFFER = 20  # flush if buffer reaches this size
+    _FLUSH_INTERVAL = 0.5
+    _MAX_BUFFER = 20
 
     def __init__(
         self,
@@ -463,6 +460,7 @@ class BlackbeardExecutionListener(BaseEventListener):
         pii_config: dict[str, Any] | None = None,
     ) -> None:
         self._execution_id = execution_id
+        self._execution_id_str = str(execution_id)
         self._db_url = db_url
         self._pii_config = pii_config
         self._pii_redact_events = bool(pii_config and pii_config.get("redact_events", True))
@@ -497,7 +495,7 @@ class BlackbeardExecutionListener(BaseEventListener):
         the executor thread's ContextVar, so we re-set it here.
         """
         if request_id_var.get("-") == "-":
-            request_id_var.set(str(self._execution_id))
+            request_id_var.set(self._execution_id_str)
 
     def _schedule_flush(self) -> None:
         """Schedule a deferred flush if one isn't already pending."""
@@ -525,7 +523,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                     len(to_flush),
                     extra={
                         "event": "events_flushed",
-                        "execution_id": str(self._execution_id),
+                        "execution_id": self._execution_id_str,
                         "count": len(to_flush),
                     },
                 )
@@ -540,7 +538,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 exc_info=True,
                 extra={
                     "event": "event_flush_failed",
-                    "execution_id": str(self._execution_id),
+                    "execution_id": self._execution_id_str,
                     "requeued_count": len(to_flush),
                     "requeued_sequences": [e.sequence for e in to_flush],
                     "requeued_event_types": [e.event_type for e in to_flush],
@@ -577,7 +575,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 self._FLUSH_RETRIES,
                 extra={
                     "event": "final_flush_retry",
-                    "execution_id": str(self._execution_id),
+                    "execution_id": self._execution_id_str,
                     "remaining_events": remaining,
                     "attempt": attempt + 1,
                 },
@@ -594,7 +592,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 self._FLUSH_RETRIES,
                 extra={
                     "event": "events_lost",
-                    "execution_id": str(self._execution_id),
+                    "execution_id": self._execution_id_str,
                     "lost_count": lost,
                 },
             )
@@ -610,7 +608,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                     exc_info=True,
                     extra={
                         "event": "otel_span_end_failed",
-                        "execution_id": str(self._execution_id),
+                        "execution_id": self._execution_id_str,
                         "span_key": span_key,
                     },
                 )
@@ -624,7 +622,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                     exc_info=True,
                     extra={
                         "event": "otel_root_span_end_failed",
-                        "execution_id": str(self._execution_id),
+                        "execution_id": self._execution_id_str,
                     },
                 )
         logger.info(
@@ -634,7 +632,7 @@ class BlackbeardExecutionListener(BaseEventListener):
             orphaned,
             extra={
                 "event": "execution_listener_flushed",
-                "execution_id": str(self._execution_id),
+                "execution_id": self._execution_id_str,
                 "total_events": self._seq,
                 "orphaned_spans": orphaned,
             },
@@ -669,15 +667,19 @@ class BlackbeardExecutionListener(BaseEventListener):
         webhook executor, so a slow endpoint cannot block others.
         """
         try:
+            # Fast path: skip payload serialization when no webhooks are registered
+            cached = _webhook_cache_entry
+            if cached is not None and not cached[1]:
+                return
             payload, targets = _prepare_webhook_targets(
                 event_type,
                 data,
-                str(self._execution_id),
+                self._execution_id_str,
                 self._db_url,
             )
             if not targets:
                 return
-            exec_id = str(self._execution_id)
+            exec_id = self._execution_id_str
             executor = _get_webhook_executor()
             for wh in targets:
                 future = executor.submit(
@@ -693,7 +695,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 extra={
                     "event": "webhook_dispatch_skipped",
                     "event_type": event_type,
-                    "execution_id": str(self._execution_id),
+                    "execution_id": self._execution_id_str,
                     "error_type": type(exc).__name__,
                 },
             )
@@ -738,7 +740,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 self._MAX_BUFFER,
                 extra={
                     "event": "event_buffered",
-                    "execution_id": str(self._execution_id),
+                    "execution_id": self._execution_id_str,
                     "event_type": event_type,
                     "sequence": seq,
                     "buffer_size": buffer_size,
@@ -768,9 +770,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 config=self._pii_config,
             )
             if task_output is not None:
-                from blackbeard.pii import redact_text as _redact_text
-
-                task_output = _redact_text(
+                task_output = _redact_text_fn(
                     task_output,
                     entities=self._pii_entities,
                     config=self._pii_config,
@@ -792,8 +792,8 @@ class BlackbeardExecutionListener(BaseEventListener):
                 timestamp=now,
                 data=data,
             )
-            to_flush = list(self._buffer)
-            self._buffer.clear()
+            to_flush = self._buffer
+            self._buffer = []
             to_flush.append(event)
         if timer is not None:
             timer.cancel()
@@ -831,7 +831,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 task_status.value,
                 extra={
                     "event": "event_task_write_failed",
-                    "execution_id": str(self._execution_id),
+                    "execution_id": self._execution_id_str,
                     "event_type": event_type,
                     "task_order": task_order,
                     "expected_task_status": task_status.value,
@@ -854,7 +854,7 @@ class BlackbeardExecutionListener(BaseEventListener):
             span = self._otel_start_span(
                 f"crew.kickoff/{crew_name}",
                 attributes={
-                    "blackbeard.execution_id": str(self._execution_id),
+                    "blackbeard.execution_id": self._execution_id_str,
                     "blackbeard.crew_name": crew_name,
                 },
             )

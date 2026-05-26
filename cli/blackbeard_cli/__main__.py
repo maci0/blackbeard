@@ -1406,18 +1406,29 @@ Examples:
   blackbeard pull https://github.com/org/crew-repo.git
   blackbeard pull ./local-crew-dir
   blackbeard pull https://github.com/org/crew-repo.git -n prod
+  blackbeard pull https://github.com/org/crew-repo.git -y
 """,
 )
 @click.argument("source")
+@click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @json_opt
 @click.pass_context
-def pull(ctx: click.Context, source: str, output_json: bool) -> None:
+def pull(ctx: click.Context, source: str, yes: bool, output_json: bool) -> None:
     """Import resources from a git URL or local directory.
 
     SOURCE is a git HTTPS URL or local directory path containing YAML resource files.
     """
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
+
+    if (
+        not yes
+        and not ctx.obj["json"]
+        and not click.confirm(f"Import resources from '{source}' into {server}?", default=True)
+    ):
+        console.print("[yellow]Aborted.[/]")
+        return
+
     headers = require_auth(ctx)
 
     try:

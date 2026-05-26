@@ -167,11 +167,12 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       const lastSeq = state.events.at(-1)?.sequence ?? -1
       const unique = newEvents.filter((e) => e.sequence > lastSeq)
       if (unique.length === 0) return state
-      let merged = state.events.concat(unique)
-      if (merged.length > MAX_EVENTS) {
-        merged = merged.slice(merged.length - MAX_EVENTS)
+      const total = state.events.length + unique.length
+      if (total <= MAX_EVENTS) {
+        return { events: [...state.events, ...unique] }
       }
-      return { events: merged }
+      const drop = total - MAX_EVENTS
+      return { events: [...state.events.slice(drop), ...unique] }
     })
   },
 

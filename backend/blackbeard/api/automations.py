@@ -39,16 +39,11 @@ class TriggerRequest(BaseModel):
         return self
 
 
-class WebhookTriggerRequest(BaseModel):
+class WebhookTriggerRequest(TriggerRequest):
     """Request body for webhook-triggered automations."""
 
     secret: str = Field(..., min_length=1, max_length=255, description="Webhook secret")
     inputs: dict[str, Any] = Field(default_factory=dict, description="Event payload inputs")
-
-    @model_validator(mode="after")
-    def _validate_input_sizes(self) -> WebhookTriggerRequest:
-        validate_inputs(self.inputs)
-        return self
 
 
 class TriggerResponse(BaseModel):
@@ -235,7 +230,7 @@ async def webhook_trigger(
             "target_kind": target.get("kind"),
             "target_name": target.get("name"),
         },
-        actor_type="webhook",
+        actor_type="system",
         actor_id=f"webhook:{name}",
         ip_address=request.client.host if request.client else None,
     )

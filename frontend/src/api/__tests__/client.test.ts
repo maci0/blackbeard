@@ -147,24 +147,19 @@ describe('ApiClient', () => {
     })
 
     it('throws ApiError with correct status and message on 401', async () => {
-      expect.assertions(5)
       const fetchMock = vi.mocked(globalThis.fetch)
       fetchMock.mockResolvedValueOnce(mockResponse(401, { detail: 'Invalid credentials' }))
 
-      try {
-        await api.get('/api/v1/protected')
-      } catch (err) {
-        expect(err).toBeInstanceOf(ApiError)
-        const apiErr = err as InstanceType<typeof ApiError>
-        expect(apiErr.status).toBe(401)
-        expect(apiErr.message).toBe('Invalid credentials')
-        expect(apiErr.detail).toBe('Invalid credentials')
-        expect(apiErr.requestId).toBeDefined()
-      }
+      const err = await api.get('/api/v1/protected').catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(ApiError)
+      const apiErr = err as InstanceType<typeof ApiError>
+      expect(apiErr.status).toBe(401)
+      expect(apiErr.message).toBe('Invalid credentials')
+      expect(apiErr.detail).toBe('Invalid credentials')
+      expect(apiErr.requestId).toBeDefined()
     })
 
     it('throws ApiError with array detail (validation error)', async () => {
-      expect.assertions(4)
       const fetchMock = vi.mocked(globalThis.fetch)
       const detail = [
         { field: 'name', message: 'Name is required' },
@@ -172,35 +167,26 @@ describe('ApiClient', () => {
       ]
       fetchMock.mockResolvedValueOnce(mockResponse(422, { detail }))
 
-      try {
-        await api.post('/api/v1/agents', {})
-      } catch (err) {
-        expect(err).toBeInstanceOf(ApiError)
-        const apiErr = err as InstanceType<typeof ApiError>
-        expect(apiErr.status).toBe(422)
-        expect(apiErr.message).toBe('Name is required')
-        expect(apiErr.detail).toEqual(detail)
-      }
+      const err = await api.post('/api/v1/agents', {}).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(ApiError)
+      const apiErr = err as InstanceType<typeof ApiError>
+      expect(apiErr.status).toBe(422)
+      expect(apiErr.message).toBe('Name is required')
+      expect(apiErr.detail).toEqual(detail)
     })
 
     it('handles array detail with msg field (FastAPI style)', async () => {
-      expect.assertions(1)
       const fetchMock = vi.mocked(globalThis.fetch)
       const detail = [{ loc: ['body', 'name'], msg: 'field required', type: 'missing' }]
       fetchMock.mockResolvedValueOnce(mockResponse(422, { detail }))
 
-      try {
-        await api.post('/api/v1/agents', {})
-      } catch (err) {
-        const apiErr = err as InstanceType<typeof ApiError>
-        expect(apiErr.message).toBe('field required')
-      }
+      const err = await api.post('/api/v1/agents', {}).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(ApiError)
+      expect((err as InstanceType<typeof ApiError>).message).toBe('field required')
     })
 
     it('falls back to HTTP status code in message when detail is unparseable', async () => {
-      expect.assertions(2)
       const fetchMock = vi.mocked(globalThis.fetch)
-      // Non-JSON error body
       const response = {
         ok: false,
         status: 500,
@@ -210,60 +196,46 @@ describe('ApiClient', () => {
       } as unknown as Response
       fetchMock.mockResolvedValueOnce(response)
 
-      try {
-        await api.get('/api/v1/broken')
-      } catch (err) {
-        const apiErr = err as InstanceType<typeof ApiError>
-        expect(apiErr.status).toBe(500)
-        expect(apiErr.message).toBe('Internal Server Error')
-      }
+      const err = await api.get('/api/v1/broken').catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(ApiError)
+      const apiErr = err as InstanceType<typeof ApiError>
+      expect(apiErr.status).toBe(500)
+      expect(apiErr.message).toBe('Internal Server Error')
     })
 
     it('throws ApiError on network error (TypeError)', async () => {
-      expect.assertions(3)
       const fetchMock = vi.mocked(globalThis.fetch)
       fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
 
-      try {
-        await api.get('/api/v1/test')
-      } catch (err) {
-        expect(err).toBeInstanceOf(ApiError)
-        const apiErr = err as InstanceType<typeof ApiError>
-        expect(apiErr.status).toBe(0)
-        expect(apiErr.message).toContain('Network error')
-      }
+      const err = await api.get('/api/v1/test').catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(ApiError)
+      const apiErr = err as InstanceType<typeof ApiError>
+      expect(apiErr.status).toBe(0)
+      expect(apiErr.message).toContain('Network error')
     })
 
     it('throws ApiError on timeout (DOMException TimeoutError)', async () => {
-      expect.assertions(3)
       const fetchMock = vi.mocked(globalThis.fetch)
       const timeoutError = new DOMException('The operation was aborted.', 'TimeoutError')
       fetchMock.mockRejectedValueOnce(timeoutError)
 
-      try {
-        await api.get('/api/v1/slow')
-      } catch (err) {
-        expect(err).toBeInstanceOf(ApiError)
-        const apiErr = err as InstanceType<typeof ApiError>
-        expect(apiErr.status).toBe(0)
-        expect(apiErr.message).toContain('timed out')
-      }
+      const err = await api.get('/api/v1/slow').catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(ApiError)
+      const apiErr = err as InstanceType<typeof ApiError>
+      expect(apiErr.status).toBe(0)
+      expect(apiErr.message).toContain('timed out')
     })
 
     it('throws ApiError on abort (DOMException AbortError)', async () => {
-      expect.assertions(3)
       const fetchMock = vi.mocked(globalThis.fetch)
       const abortError = new DOMException('The operation was aborted.', 'AbortError')
       fetchMock.mockRejectedValueOnce(abortError)
 
-      try {
-        await api.get('/api/v1/cancelled')
-      } catch (err) {
-        expect(err).toBeInstanceOf(ApiError)
-        const apiErr = err as InstanceType<typeof ApiError>
-        expect(apiErr.status).toBe(0)
-        expect(apiErr.message).toContain('cancelled')
-      }
+      const err = await api.get('/api/v1/cancelled').catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(ApiError)
+      const apiErr = err as InstanceType<typeof ApiError>
+      expect(apiErr.status).toBe(0)
+      expect(apiErr.message).toContain('cancelled')
     })
 
     it('sends Content-Type and body for POST requests', async () => {
@@ -291,7 +263,6 @@ describe('ApiClient', () => {
     })
 
     it('uses server X-Request-Id from error response when available', async () => {
-      expect.assertions(1)
       const fetchMock = vi.mocked(globalThis.fetch)
       const response = {
         ok: false,
@@ -305,12 +276,9 @@ describe('ApiClient', () => {
       } as unknown as Response
       fetchMock.mockResolvedValueOnce(response)
 
-      try {
-        await api.get('/api/v1/test')
-      } catch (err) {
-        const apiErr = err as InstanceType<typeof ApiError>
-        expect(apiErr.requestId).toBe('server-rid-789')
-      }
+      const err = await api.get('/api/v1/test').catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(ApiError)
+      expect((err as InstanceType<typeof ApiError>).requestId).toBe('server-rid-789')
     })
   })
 

@@ -42,6 +42,10 @@ class AuditLog(Base):
         Index("ix_audit_resource_time", "resource_type", "resource_id", timestamp.desc()),
         Index("ix_audit_request_id", "request_id"),
         CheckConstraint("length(actor_type) >= 1", name="ck_audit_actor_type_nonempty"),
+        CheckConstraint(
+            "actor_type IN ('user', 'api_key', 'system')",
+            name="ck_audit_actor_type_valid",
+        ),
         CheckConstraint("length(actor_id) >= 1", name="ck_audit_actor_id_nonempty"),
         CheckConstraint("length(action) >= 1", name="ck_audit_action_nonempty"),
         CheckConstraint(

@@ -19,6 +19,8 @@ spec:
       labels:
         {{- include "blackbeard.labels" . | nindent 8 }}
         {{- include "blackbeard.selectorLabels" (dict "context" . "component" "valkey") | nindent 8 }}
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:

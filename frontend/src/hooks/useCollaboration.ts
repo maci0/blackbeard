@@ -85,8 +85,10 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
 
     function connect() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const token = localStorage.getItem('blackbeard_token') ?? ''
+      const authParam = token ? `?token=${encodeURIComponent(token)}` : ''
       const ws = new WebSocket(
-        `${protocol}//${window.location.host}/api/v1/ws/collab/${encodeURIComponent(crewName)}`,
+        `${protocol}//${window.location.host}/api/v1/ws/collab/${encodeURIComponent(crewName)}${authParam}`,
       )
       wsRef.current = ws
 
@@ -118,8 +120,8 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
         try {
           const msg = JSON.parse(event.data as string) as CollabMessage
           handleIncoming(msg)
-        } catch {
-          // Ignore malformed messages
+        } catch (err) {
+          console.debug('[collab] malformed WebSocket message:', err)
         }
       }
     }
@@ -150,78 +152,65 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
     }
   }, [])
 
+  function applyRemote(fn: () => void) {
+    applyingRemoteRef.current = true
+    try {
+      fn()
+    } finally {
+      applyingRemoteRef.current = false
+    }
+  }
+
   function handleIncoming(msg: CollabMessage) {
     const store = useStudioStore.getState()
 
     switch (msg.type) {
       case 'node_add': {
-        applyingRemoteRef.current = true
-        try {
-          store.addNode(msg.data as unknown as Node)
-        } finally {
-          applyingRemoteRef.current = false
-        }
+        applyRemote(() => store.addNode(msg.data as unknown as Node))
         break
       }
 
       case 'node_move': {
         const { id, position } = msg.data as { id: string; position: { x: number; y: number } }
-        applyingRemoteRef.current = true
-        try {
+        applyRemote(() =>
           useStudioStore.setState((state) => ({
             nodes: state.nodes.map((n) => (n.id === id ? { ...n, position } : n)),
-          }))
-        } finally {
-          applyingRemoteRef.current = false
-        }
+          })),
+        )
         break
       }
 
       case 'node_delete': {
-        applyingRemoteRef.current = true
-        try {
-          store.removeNode(msg.data['id'] as string)
-        } finally {
-          applyingRemoteRef.current = false
-        }
+        applyRemote(() => store.removeNode(msg.data['id'] as string))
         break
       }
 
       case 'node_update': {
-        applyingRemoteRef.current = true
-        try {
+        applyRemote(() =>
           store.updateNodeData(
             msg.data['id'] as string,
             msg.data['data'] as Record<string, unknown>,
-          )
-        } finally {
-          applyingRemoteRef.current = false
-        }
+          ),
+        )
         break
       }
 
       case 'edge_add': {
-        applyingRemoteRef.current = true
-        try {
+        applyRemote(() =>
           useStudioStore.setState((state) => ({
             edges: [...state.edges, msg.data as unknown as Edge],
-          }))
-        } finally {
-          applyingRemoteRef.current = false
-        }
+          })),
+        )
         break
       }
 
       case 'edge_delete': {
-        applyingRemoteRef.current = true
-        try {
+        applyRemote(() => {
           const edgeId = msg.data['id'] as string
           useStudioStore.setState((state) => ({
             edges: state.edges.filter((e) => e.id !== edgeId),
           }))
-        } finally {
-          applyingRemoteRef.current = false
-        }
+        })
         break
       }
 

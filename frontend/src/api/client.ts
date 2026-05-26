@@ -24,6 +24,7 @@ class ApiClient {
   private apiKey: string = ''
   private token: string = ''
   private unauthorizedHandler: (() => void) | null = null
+  private inflightGets = new Map<string, Promise<unknown>>()
 
   setApiKey(key: string) {
     this.apiKey = key
@@ -55,11 +56,9 @@ class ApiClient {
     const { method = 'GET', body, headers = {} } = options
 
     const requestId = crypto.randomUUID()
-    const authHeaders: Record<string, string> = { 'X-Request-Id': requestId }
-    if (this.token) {
-      authHeaders['Authorization'] = `Bearer ${this.token}`
-    } else if (this.apiKey) {
-      authHeaders['X-API-Key'] = this.apiKey
+    const authHeaders: Record<string, string> = {
+      'X-Request-Id': requestId,
+      ...this.getAuthHeaders(),
     }
 
     let response: Response
@@ -130,7 +129,11 @@ class ApiClient {
   }
 
   get<T>(path: string) {
-    return this.request<T>(path)
+    const inflight = this.inflightGets.get(path)
+    if (inflight) return inflight as Promise<T>
+    const promise = this.request<T>(path).finally(() => this.inflightGets.delete(path))
+    this.inflightGets.set(path, promise)
+    return promise
   }
 
   post<T>(path: string, body: unknown) {

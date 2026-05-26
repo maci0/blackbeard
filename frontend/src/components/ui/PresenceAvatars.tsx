@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 
 interface PresenceUser {
-  email: string
+  id: string
   name: string
 }
 
@@ -16,10 +16,10 @@ const COLORS = [
   'bg-orange-500',
 ]
 
-function hashColor(email: string): string {
+function hashColor(id: string): string {
   let hash = 0
-  for (let i = 0; i < email.length; i++) {
-    hash = ((hash << 5) - hash + email.charCodeAt(i)) | 0
+  for (let i = 0; i < id.length; i++) {
+    hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0
   }
   return COLORS[Math.abs(hash) % COLORS.length] ?? COLORS[0]!
 }
@@ -49,12 +49,12 @@ export function PresenceAvatars({
     >
       {visible.map((user) => (
         <div
-          key={user.email}
+          key={user.id}
           className={cn(
             'flex h-7 w-7 items-center justify-center rounded-full border-2 border-background text-[10px] font-bold text-white',
-            hashColor(user.email),
+            hashColor(user.id),
           )}
-          title={`${user.name} (${user.email})`}
+          title={user.name}
           aria-label={user.name}
         >
           {getInitial(user.name)}

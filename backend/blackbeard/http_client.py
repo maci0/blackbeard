@@ -1,6 +1,6 @@
 """Shared lazy-initialized httpx client factories (async + sync).
 
-Eliminates duplicated double-checked locking + shutdown boilerplate across
+Centralizes lock-always initialization + shutdown boilerplate across
 chat, health, executions, and discovery_tools modules.
 """
 
@@ -33,13 +33,10 @@ _DEFAULT_TIMEOUT = 30.0
 def get_client(name: str, **kwargs: Any) -> httpx.AsyncClient:
     """Return a named httpx.AsyncClient, creating it on first call.
 
-    Thread-safe via double-checked locking. kwargs are forwarded to
-    httpx.AsyncClient() on first creation and ignored on subsequent calls.
-    Applies a 30s default timeout if none is specified.
+    Thread-safe via lock-always (safe under both GIL and free-threaded Python).
+    kwargs are forwarded to httpx.AsyncClient() on first creation and ignored
+    on subsequent calls. Applies a 30s default timeout if none is specified.
     """
-    client = _clients.get(name)
-    if client is not None:
-        return client
     with _lock:
         client = _clients.get(name)
         if client is not None:
@@ -58,13 +55,10 @@ def get_client(name: str, **kwargs: Any) -> httpx.AsyncClient:
 def get_sync_client(name: str, **kwargs: Any) -> httpx.Client:
     """Return a named httpx.Client, creating it on first call.
 
-    Thread-safe via double-checked locking. kwargs are forwarded to
-    httpx.Client() on first creation and ignored on subsequent calls.
-    Applies a 30s default timeout if none is specified.
+    Thread-safe via lock-always (safe under both GIL and free-threaded Python).
+    kwargs are forwarded to httpx.Client() on first creation and ignored
+    on subsequent calls. Applies a 30s default timeout if none is specified.
     """
-    client = _sync_clients.get(name)
-    if client is not None:
-        return client
     with _lock:
         client = _sync_clients.get(name)
         if client is not None:
@@ -82,6 +76,10 @@ def get_sync_client(name: str, **kwargs: Any) -> httpx.Client:
 
 def get_litellm_client(name: str, timeout: float = _DEFAULT_TIMEOUT) -> httpx.AsyncClient:
     """Return a shared httpx client pre-configured with LiteLLM Bearer auth."""
+    with _lock:
+        client = _clients.get(name)
+        if client is not None:
+            return client
     from blackbeard.config import settings
 
     key = settings.litellm_master_key.get_secret_value()

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
 interface PresenceUser {
-  email: string
+  id: string
   name: string
 }
 
@@ -46,8 +46,10 @@ export function usePresence(roomId: string | null): UsePresenceReturn {
       if (!mountedRef.current || !roomId) return
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const token = localStorage.getItem('blackbeard_token') ?? ''
+      const authParam = token ? `?token=${encodeURIComponent(token)}` : ''
       const ws = new WebSocket(
-        `${protocol}//${window.location.host}/api/v1/collaboration/rooms/${encodeURIComponent(roomId)}`,
+        `${protocol}//${window.location.host}/api/v1/collaboration/rooms/${encodeURIComponent(roomId)}${authParam}`,
       )
       wsRef.current = ws
 
@@ -57,23 +59,22 @@ export function usePresence(roomId: string | null): UsePresenceReturn {
         reconnectDelayRef.current = INITIAL_RECONNECT_DELAY_MS
 
         const stored = localStorage.getItem('blackbeard_token')
-        let email = 'anonymous'
+        let id = 'anonymous'
         let name = 'Anonymous'
         if (stored) {
           try {
             const payload = JSON.parse(atob(stored.split('.')[1] ?? '{}')) as {
-              email?: string
               sub?: string
               display_name?: string
             }
-            email = payload.email ?? payload.sub ?? 'anonymous'
-            name = payload.display_name ?? email.split('@')[0] ?? 'Anonymous'
+            id = payload.sub ?? 'anonymous'
+            name = payload.display_name ?? 'Anonymous'
           } catch {
             /* ignore malformed tokens */
           }
         }
 
-        ws.send(JSON.stringify({ type: 'join', user: { email, name } }))
+        ws.send(JSON.stringify({ type: 'join', user: { id, name } }))
       }
 
       ws.onmessage = (event: MessageEvent) => {
@@ -86,8 +87,8 @@ export function usePresence(roomId: string | null): UsePresenceReturn {
           if (msg.type === 'presence' && msg.users) {
             setUsers(msg.users)
           }
-        } catch {
-          /* ignore malformed messages */
+        } catch (err) {
+          console.debug('[presence] malformed WebSocket message:', err)
         }
       }
 

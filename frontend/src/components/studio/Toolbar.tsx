@@ -86,7 +86,7 @@ export function Toolbar({
   onCollabToggle?: () => void
   collabConnected?: boolean
   collabParticipants?: number
-  presenceUsers?: Array<{ email: string; name: string }>
+  presenceUsers?: Array<{ id: string; name: string }>
   hasExecResults?: boolean
   onClearExecResults?: () => void
   onCrewSettingsClick: () => void

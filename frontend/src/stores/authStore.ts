@@ -142,7 +142,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       } else {
         set({ token: result.access_token })
       }
-    } catch {
+    } catch (err) {
+      console.debug('[auth] token refresh failed:', getErrorMessage(err, 'unknown'))
       get().logout()
     }
   },

@@ -35,6 +35,7 @@ from blackbeard.logging_config import request_id_var
 from blackbeard.models import (
     TERMINAL_STATUSES,
     Execution,
+    ExecutionEvent,
     ExecutionStatus,
     ExecutionType,
     User,
@@ -51,7 +52,6 @@ from blackbeard.models.execution_schemas import (
     KickoffRequest,
     TestRequest,
     TrainRequest,
-    redact_sensitive_values,
 )
 from blackbeard.rate_limiter import execution_limiter
 
@@ -67,6 +67,10 @@ _HEARTBEAT_JSON: dict[str, str] = {
     s.value: json.dumps({"status": s.value}) for s in ExecutionStatus
 }
 
+_SSE_ERROR_TOO_MANY = json.dumps({"detail": "Too many concurrent SSE streams"})
+_SSE_ERROR_TIMEOUT = json.dumps({"detail": "Stream timeout — execution still running"})
+_SSE_ERROR_INTERNAL = json.dumps({"detail": "Internal stream error"})
+
 # Phase thresholds for progressive poll backoff (shared by SSE + WS).
 _PHASE2_THRESHOLD = 30
 _PHASE3_THRESHOLD = 60
@@ -79,6 +83,18 @@ def _poll_backoff(polls: int) -> int:
     if polls < _PHASE3_THRESHOLD:
         return 3
     return 5
+
+
+def _serialize_event(ev: ExecutionEvent) -> dict[str, object]:
+    """Build a JSON-safe event dict with sequence and timestamp.
+
+    Event data is already redacted by the execution listener before DB storage,
+    so we copy (to avoid mutating the ORM object) but skip re-redaction.
+    """
+    data: dict[str, object] = dict(ev.data) if ev.data else {}
+    data["sequence"] = ev.sequence
+    data["timestamp"] = ev.timestamp.isoformat()
+    return data
 
 
 async def _require_execution(
@@ -388,6 +404,10 @@ async def list_executions(
         default=None,
         description="Filter by execution status",
     ),
+    execution_type: ExecutionType | None = Query(
+        default=None,
+        description="Filter by execution type (kickoff, train, test, flow)",
+    ),
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     session: AsyncSession = Depends(get_session),
@@ -399,6 +419,7 @@ async def list_executions(
         crew_name=crew_name,
         namespace=namespace,
         status=status,
+        execution_type=execution_type,
         limit=limit,
         offset=offset,
         include_tasks=False,
@@ -523,7 +544,7 @@ async def list_execution_events(
                 sequence=e.sequence,
                 event_type=e.event_type,
                 timestamp=e.timestamp,
-                data=redact_sensitive_values(e.data) if e.data else {},
+                data=e.data if e.data else {},
             )
             for e in items
         ],
@@ -745,8 +766,7 @@ async def stream_execution(
     async def event_generator() -> AsyncGenerator[dict[str, str]]:
         async with sse_state.acquire_stream() as acquired:
             if not acquired:
-                msg = json.dumps({"detail": "Too many concurrent SSE streams"})
-                yield {"event": "error", "data": msg}
+                yield {"event": "error", "data": _SSE_ERROR_TOO_MANY}
                 return
             last_status: ExecutionStatus | None = None
             current_status: ExecutionStatus | None = None
@@ -811,13 +831,7 @@ async def stream_execution(
                             for ev in new_events:
                                 yield {
                                     "event": ev.event_type,
-                                    "data": json.dumps(
-                                        {
-                                            "sequence": ev.sequence,
-                                            "timestamp": ev.timestamp.isoformat(),
-                                            **redact_sensitive_values(ev.data),
-                                        }
-                                    ),
+                                    "data": json.dumps(_serialize_event(ev)),
                                 }
                                 last_event_seq = ev.sequence
                         else:
@@ -854,8 +868,7 @@ async def stream_execution(
                             "polls": polls,
                         },
                     )
-                    msg = "Stream timeout — execution still running"
-                    yield {"event": "error", "data": json.dumps({"detail": msg})}
+                    yield {"event": "error", "data": _SSE_ERROR_TIMEOUT}
             except asyncio.CancelledError:
                 logger.info(
                     "SSE stream client disconnected: execution_id=%s polls=%d",
@@ -882,7 +895,7 @@ async def stream_execution(
                         "error_message": str(e)[:500],
                     },
                 )
-                yield {"event": "error", "data": json.dumps({"detail": "Internal stream error"})}
+                yield {"event": "error", "data": _SSE_ERROR_INTERNAL}
 
     return EventSourceResponse(
         event_generator(),
@@ -992,14 +1005,7 @@ async def ws_execution(
                     prev_had_events = len(new_events) > 0
                     for ev in new_events:
                         await websocket.send_json(
-                            {
-                                "event": ev.event_type,
-                                "data": {
-                                    "sequence": ev.sequence,
-                                    "timestamp": ev.timestamp.isoformat(),
-                                    **redact_sensitive_values(ev.data),
-                                },
-                            }
+                            {"event": ev.event_type, "data": _serialize_event(ev)}
                         )
                         last_event_seq = ev.sequence
                 else:

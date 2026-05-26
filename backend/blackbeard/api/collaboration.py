@@ -113,8 +113,12 @@ class ValkeyCollabBackend:
 
     async def publish(self, room: str, message: dict[str, Any]) -> None:
         """Publish a collaboration message to the Valkey channel."""
+        await self.publish_raw(room, json.dumps(message))
+
+    async def publish_raw(self, room: str, text: str) -> None:
+        """Publish a pre-serialized message to the Valkey channel."""
         try:
-            await self._redis.publish(f"collab:{room}", json.dumps(message))
+            await self._redis.publish(f"collab:{room}", text)
         except Exception as exc:
             logger.error(
                 "Valkey publish failed for room %s — other replicas will not receive this message",
@@ -275,22 +279,27 @@ def _get_valkey_backend() -> ValkeyCollabBackend | None:
 async def _broadcast_local(
     room: str,
     sender: WebSocket | None,
-    message: dict[str, Any],
+    message: dict[str, Any] | None = None,
+    *,
+    pre_serialized: str | None = None,
 ) -> None:
     """Send message to all local participants in a room except the sender.
 
     Dead connections are silently removed from the room set.
+    Pre-serializes JSON once to avoid repeated json.dumps per recipient.
+    Pass *pre_serialized* to skip json.dumps when the caller already has the text.
     """
     participants = _rooms.get(room)
     if not participants:
         return
 
+    text = pre_serialized if pre_serialized is not None else json.dumps(message)
     dead: set[WebSocket] = set()
     for ws in list(participants):
         if ws is sender:
             continue
         try:
-            await ws.send_json(message)
+            await ws.send_text(text)
         except Exception as send_err:
             logger.warning(
                 "WebSocket send failed in room %s — marking connection dead",
@@ -335,13 +344,15 @@ async def _broadcast(
 
     Broadcasts locally and, if available, publishes to Valkey for
     cross-replica delivery.  Dead connections are silently removed.
+    Serializes JSON once and reuses for both local fan-out and Valkey publish.
     """
-    await _broadcast_local(room, sender, message)
+    text = json.dumps(message)
+    await _broadcast_local(room, sender, pre_serialized=text)
 
     # Publish to Valkey for other replicas
     backend = _get_valkey_backend()
     if backend is not None:
-        await backend.publish(room, message)
+        await backend.publish_raw(room, text)
 
 
 def validate_ws_auth(token: str, api_key: str) -> bool:
@@ -551,10 +562,14 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
                 remaining = 0
                 room_empty = True
 
-        # Unsubscribe from Valkey when room is empty on this replica
+        # Unsubscribe from Valkey when room is empty on this replica.
+        # Re-check under lock: another WS may have re-created the room
+        # between releasing _rooms_lock above and reaching this point.
         if room_empty:
+            async with _rooms_lock:
+                still_empty = crew_name not in _rooms
             backend = _get_valkey_backend()
-            if backend is not None:
+            if still_empty and backend is not None:
                 await backend.unsubscribe(crew_name)
 
         logger.info(

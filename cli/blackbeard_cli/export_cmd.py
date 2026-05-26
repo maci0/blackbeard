@@ -196,7 +196,7 @@ def export_cmd(
                 k = res.get("kind", "unknown")
                 by_kind.setdefault(k, []).append(res)
             for k, items in sorted(by_kind.items()):
-                plural = KIND_TO_PLURAL.get(k, k.lower() + "s")
+                plural = KIND_TO_PLURAL.get(k, k.lower())
                 file = p / f"{plural}.yaml"
                 file.write_text(_resources_to_yaml(items), encoding="utf-8")
                 console.print(f"  [green]Wrote[/] {file} ({len(items)} {k})")

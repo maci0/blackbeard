@@ -115,16 +115,18 @@ _bg_engine_lock = threading.Lock()
 
 
 def _get_executor() -> ThreadPoolExecutor:
-    """Return the shared executor, creating it on first use (thread-safe)."""
-    global _executor
-    if _executor is None:
-        with _executor_lock:
-            if _executor is None:
-                _executor = ThreadPoolExecutor(
-                    max_workers=settings.max_concurrent_executions,
-                    thread_name_prefix="crew-exec",
-                )
-    return _executor
+    """Return the shared executor, creating it on first use (thread-safe).
+
+    Uses lock-always pattern (safe under both GIL and free-threaded Python).
+    """
+    with _executor_lock:
+        global _executor
+        if _executor is None:
+            _executor = ThreadPoolExecutor(
+                max_workers=settings.max_concurrent_executions,
+                thread_name_prefix="crew-exec",
+            )
+        return _executor
 
 
 def get_pool_status() -> dict[str, object]:
@@ -159,8 +161,7 @@ def get_pool_status() -> dict[str, object]:
 def _get_bg_engine() -> AsyncEngine:
     """Return the shared background engine, creating it on first use (thread-safe).
 
-    Uses a simple lock-always approach instead of double-checked locking,
-    which is safe under both GIL and free-threaded Python.
+    Uses lock-always pattern (safe under both GIL and free-threaded Python).
     """
     with _bg_engine_lock:
         global _bg_engine, _bg_session_factory
@@ -1328,6 +1329,7 @@ async def list_executions(
     crew_name: str | None = None,
     namespace: str | None = None,
     status: ExecutionStatus | None = None,
+    execution_type: ExecutionType | None = None,
     limit: int = 100,
     offset: int = 0,
     include_tasks: bool = False,
@@ -1344,6 +1346,8 @@ async def list_executions(
         filters.append(Execution.crew_namespace == namespace)
     if status:
         filters.append(Execution.status == status)
+    if execution_type:
+        filters.append(Execution.execution_type == execution_type)
 
     query = select(Execution).where(*filters)
 
@@ -1359,6 +1363,7 @@ async def list_executions(
                 Execution.status,
                 Execution.n_iterations,
                 Execution.training_file,
+                Execution.inputs,
                 Execution.error,
                 Execution.total_tokens,
                 Execution.prompt_tokens,

@@ -18,8 +18,10 @@ def test_valid_agent():
         "goal": "Find insights",
         "backstory": "Years of research experience",
     }
-    errors, _ = validate_resource("Agent", spec)
+    errors, refs = validate_resource("Agent", spec)
     assert errors == []
+    assert refs is not None
+    assert len(refs) == 0
 
 
 def test_valid_agent_with_optional_fields():
@@ -34,8 +36,13 @@ def test_valid_agent_with_optional_fields():
         "max_iter": 10,
         "memory": True,
     }
-    errors, _ = validate_resource("Agent", spec)
+    errors, refs = validate_resource("Agent", spec)
     assert errors == []
+    assert refs is not None
+    assert len(refs) == 2
+    raw_values = {r.raw for r in refs}
+    assert "ref:llm-connections/gpt4" in raw_values
+    assert "ref:tools/search" in raw_values
 
 
 def test_agent_missing_required():
@@ -82,8 +89,11 @@ def test_valid_task():
         "expected_output": "A JSON blob of data",
         "agent": "ref:agents/researcher",
     }
-    errors, _ = validate_resource("Task", spec)
+    errors, refs = validate_resource("Task", spec)
     assert errors == []
+    assert refs is not None
+    assert len(refs) == 1
+    assert refs[0].raw == "ref:agents/researcher"
 
 
 def test_task_missing_agent():
@@ -126,8 +136,13 @@ def test_valid_task_with_context():
         "context": ["ref:tasks/gather-data"],
         "async_execution": False,
     }
-    errors, _ = validate_resource("Task", spec)
+    errors, refs = validate_resource("Task", spec)
     assert errors == []
+    assert refs is not None
+    assert len(refs) == 2
+    raw_values = {r.raw for r in refs}
+    assert "ref:agents/writer" in raw_values
+    assert "ref:tasks/gather-data" in raw_values
 
 
 # ---------------------------------------------------------------------------
@@ -141,8 +156,13 @@ def test_valid_crew():
         "agents": ["ref:agents/researcher"],
         "tasks": ["ref:tasks/gather-data"],
     }
-    errors, _ = validate_resource("Crew", spec)
+    errors, refs = validate_resource("Crew", spec)
     assert errors == []
+    assert refs is not None
+    assert len(refs) == 2
+    raw_values = {r.raw for r in refs}
+    assert "ref:agents/researcher" in raw_values
+    assert "ref:tasks/gather-data" in raw_values
 
 
 def test_crew_invalid_process():

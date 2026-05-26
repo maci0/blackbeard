@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -77,6 +77,16 @@ async def list_audit_logs(
         max_length=255,
         description="Filter by resource ID (resource name or UUID)",
     ),
+    start_date: datetime | None = Query(
+        default=None,
+        description=(
+            "Return entries at or after this timestamp (ISO 8601)"
+        ),
+    ),
+    end_date: datetime | None = Query(
+        default=None,
+        description="Return entries before this timestamp (ISO 8601, exclusive upper bound)",
+    ),
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     _current_user: User = Depends(require_permission("list", "AuditLog", require_identity=True)),
@@ -92,6 +102,14 @@ async def list_audit_logs(
         filters.append(AuditLog.resource_type == resource_type)
     if resource_id is not None:
         filters.append(AuditLog.resource_id == resource_id)
+    if start_date is not None:
+        if start_date.tzinfo is None:
+            start_date = start_date.replace(tzinfo=UTC)
+        filters.append(AuditLog.timestamp >= start_date)
+    if end_date is not None:
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=UTC)
+        filters.append(AuditLog.timestamp < end_date)
 
     data_query = (
         select(AuditLog)
@@ -102,7 +120,7 @@ async def list_audit_logs(
         .offset(offset)
     )
     result = await session.execute(data_query)
-    logs = list(result.scalars().all())
+    logs = result.scalars().all()
 
     if len(logs) < limit and (len(logs) > 0 or offset == 0):
         total = offset + len(logs)

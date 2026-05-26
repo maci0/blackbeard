@@ -177,14 +177,21 @@ class Settings(BaseSettings):
         """Reject insecure default secrets in production (debug=False)."""
         if self.debug:
             return self
-        insecure_defaults = {
-            "blackbeard_api_key": "change-me-in-production",
-            "jwt_secret": "change-jwt-secret-in-production!",
-            "litellm_master_key": "sk-litellm-master-key",
+        insecure_defaults: dict[str, tuple[str, ...]] = {
+            "blackbeard_api_key": ("change-me-in-production",),
+            "jwt_secret": (
+                "change-jwt-secret-in-production!",
+                "change-jwt-secret-in-production",
+            ),
+            "litellm_master_key": ("sk-litellm-master-key",),
+            "valkey_url": ("valkey://default:valkey-dev-secret@localhost:6379/0",),
+            "database_url": (
+                "postgresql+asyncpg://blackbeard:blackbeard@localhost:5432/blackbeard",
+            ),
         }
-        for field_name, insecure_value in insecure_defaults.items():
+        for field_name, insecure_values in insecure_defaults.items():
             secret: SecretStr = getattr(self, field_name)
-            if secret.get_secret_value() == insecure_value:
+            if secret.get_secret_value() in insecure_values:
                 raise ValueError(
                     f"{field_name.upper()} is set to the insecure default. "
                     f"Set a strong, unique value via environment variable before running "
