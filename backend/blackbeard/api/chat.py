@@ -17,7 +17,7 @@ from typing import Any, Literal
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.config import settings
@@ -96,6 +96,9 @@ class ChatMessage(BaseModel):
     content: str = Field(max_length=1_000_000)
 
 
+_MAX_TOTAL_MESSAGE_BYTES = 100 * 1024  # 100KB
+
+
 class ChatRequest(BaseModel):
     model: str = Field(
         description="Model name from LiteLLM config",
@@ -106,6 +109,17 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=256)
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     max_tokens: int | None = Field(default=None, ge=1, le=128_000)
+
+    @model_validator(mode="after")
+    def _check_total_message_size(self) -> ChatRequest:
+        total = sum(len(m.content.encode("utf-8")) for m in self.messages)
+        if total > _MAX_TOTAL_MESSAGE_BYTES:
+            msg = (
+                f"Total message content size ({total} bytes) exceeds "
+                f"the {_MAX_TOTAL_MESSAGE_BYTES // 1024}KB limit"
+            )
+            raise ValueError(msg)
+        return self
 
     def to_litellm_payload(self, **extra: Any) -> dict[str, Any]:
         payload: dict[str, Any] = {

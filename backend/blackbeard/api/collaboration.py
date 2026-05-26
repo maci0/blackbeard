@@ -69,6 +69,7 @@ _MAX_MESSAGE_DATA_DEPTH = 5
 _rooms: dict[str, set[WebSocket]] = {}
 _rooms_lock = asyncio.Lock()
 _MAX_ROOMS = 500  # prevent unbounded memory growth from room creation
+_MAX_CONNECTIONS_PER_ROOM = 50
 
 
 def _log_collab_task_exception(task: asyncio.Task[None]) -> None:
@@ -431,6 +432,19 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
                 await websocket.close(code=4429, reason="Too many active rooms")
                 return
             _rooms[crew_name] = set()
+        elif len(_rooms[crew_name]) >= _MAX_CONNECTIONS_PER_ROOM:
+            logger.warning(
+                "Collaboration: room %s full (%d connections), rejecting",
+                crew_name,
+                _MAX_CONNECTIONS_PER_ROOM,
+                extra={
+                    "event": "collab_room_full",
+                    "crew_name": crew_name,
+                    "max_connections": _MAX_CONNECTIONS_PER_ROOM,
+                },
+            )
+            await websocket.close(code=4429, reason="Room is full")
+            return
         _rooms[crew_name].add(websocket)
         participant_count = len(_rooms[crew_name])
 

@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import require_permission
 from blackbeard.models.resource_schemas import ResourceCreate
+from blackbeard.rate_limiter import marketplace_limiter
 from blackbeard.resources import (
     ResourceService,
     ResourceValidationError,
@@ -44,6 +45,7 @@ _EXAMPLES_DIR = _APP_DIR / "examples"
 _MAX_CLONE_TIMEOUT_S = 60
 _MAX_YAML_FILES = 200
 _MAX_YAML_SIZE_BYTES = 256 * 1024
+_MAX_IMPORT_RESOURCES = 500
 
 # Only allow HTTPS URLs (no file://, ssh://, etc.)
 _ALLOWED_URL_SCHEMES = ("https://",)
@@ -212,6 +214,13 @@ async def import_from_url(
     user: User | None = Depends(require_permission("create", "Resource")),
 ) -> ImportResponse:
     """Import resources from a git URL or built-in examples."""
+    key = str(user.id) if user is not None else "__anonymous__"
+    if not marketplace_limiter.check(key):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many marketplace import requests. Try again later.",
+            headers={"Retry-After": "60"},
+        )
     url = body.url.strip()
     imported_names: list[str] = []
     error_details: list[str] = []
@@ -287,6 +296,15 @@ async def import_from_url(
             error_details.extend(parse_errors)
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
+
+    if len(raw_resources) > _MAX_IMPORT_RESOURCES:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Too many resources in import ({len(raw_resources)}). "
+                f"Maximum allowed is {_MAX_IMPORT_RESOURCES} per request."
+            ),
+        )
 
     # Import each resource via the ResourceService
     service = ResourceService(session)

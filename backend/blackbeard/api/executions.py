@@ -53,6 +53,7 @@ from blackbeard.models.execution_schemas import (
     TrainRequest,
     redact_sensitive_values,
 )
+from blackbeard.rate_limiter import execution_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,17 @@ async def _run_executor(
         ) from exc
 
 
+def _check_execution_rate(user: User | None) -> None:
+    """Raise 429 if user exceeds execution rate limit."""
+    key = str(user.id) if user is not None else "__anonymous__"
+    if not execution_limiter.check(key):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many execution requests. Try again later.",
+            headers={"Retry-After": "60"},
+        )
+
+
 router = APIRouter(tags=["executions"])
 
 
@@ -169,6 +181,7 @@ async def kickoff_crew(
     user: User | None = Depends(require_permission("run", "Crew")),
 ) -> ExecutionResponse:
     """Kick off a crew execution. Returns immediately with status=queued."""
+    _check_execution_rate(user)
     execution = await _run_executor(
         _executor_mod.kickoff(session, crew_name, body.inputs, namespace, user=user),
         log_event="kickoff_internal_error",
@@ -218,6 +231,7 @@ async def train_crew_endpoint(
     user: User | None = Depends(require_permission("run", "Crew")),
 ) -> ExecutionResponse:
     """Start a crew training run. Returns immediately with status=queued."""
+    _check_execution_rate(user)
     execution = await _run_executor(
         _executor_mod.train_crew(
             session,
@@ -275,6 +289,7 @@ async def test_crew_endpoint(
     user: User | None = Depends(require_permission("run", "Crew")),
 ) -> ExecutionResponse:
     """Start a crew test run. Returns immediately with status=queued."""
+    _check_execution_rate(user)
     execution = await _run_executor(
         _executor_mod.test_crew(
             session,
@@ -331,6 +346,7 @@ async def run_flow_endpoint(
     user: User | None = Depends(require_permission("run", "Flow")),
 ) -> ExecutionResponse:
     """Run a flow. Returns immediately with status=queued."""
+    _check_execution_rate(user)
     execution = await _run_executor(
         _executor_mod.run_flow(session, flow_name, body.inputs, namespace=namespace, user=user),
         log_event="flow_run_error",
@@ -589,6 +605,7 @@ async def retry_execution(
     original. Only terminal executions (completed, failed, cancelled) can be
     retried. Returns the new execution immediately with status=queued.
     """
+    _check_execution_rate(user)
     original = await _require_execution(session, execution_id)
     if original.status not in TERMINAL_STATUSES:
         raise HTTPException(

@@ -147,14 +147,25 @@ async def client(db_session: AsyncSession):
 
     app.dependency_overrides[get_session] = override_get_session
     # Clear rate-limit state so tests don't accumulate auth failures across runs
-    from blackbeard.rate_limiter import _auth_failures
+    from blackbeard.rate_limiter import (
+        _auth_failures,
+        execution_limiter,
+        marketplace_limiter,
+        mutation_limiter,
+    )
 
     _auth_failures.clear()
+    mutation_limiter._buckets.clear()
+    execution_limiter._buckets.clear()
+    marketplace_limiter._buckets.clear()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
     _auth_failures.clear()
+    mutation_limiter._buckets.clear()
+    execution_limiter._buckets.clear()
+    marketplace_limiter._buckets.clear()
 
 
 # ---------------------------------------------------------------------------

@@ -1,22 +1,33 @@
-"""Per-IP sliding-window auth failure rate limiter.
+"""Rate limiters: per-IP auth failure limiter and per-user mutation limiter.
 
 Tracks authentication failures per client IP and blocks requests that
 exceed the configured threshold within a time window.  Thread-safe for
 use from both async middleware and sync background tasks.
+
+Also provides ``InMemoryRateLimiter`` — a reusable sliding-window counter
+for per-user mutation rate limiting on resource, execution, and marketplace
+endpoints.
 """
 
 from __future__ import annotations
 
 import collections
+import logging
 import threading
 import time
 
 from blackbeard.config import settings
 
+logger = logging.getLogger(__name__)
+
 __all__ = [
+    "InMemoryRateLimiter",
     "_auth_failures",
     "_is_rate_limited_with_count",
+    "execution_limiter",
     "is_rate_limited",
+    "marketplace_limiter",
+    "mutation_limiter",
     "record_auth_failure",
 ]
 
@@ -59,3 +70,61 @@ def record_auth_failure(client_ip: str) -> None:
         _auth_failures[client_ip].append(now)
         while len(_auth_failures) > settings.auth_fail_max_tracked_ips:
             _auth_failures.popitem(last=False)
+
+
+# ---------------------------------------------------------------------------
+# Per-user mutation rate limiter
+# ---------------------------------------------------------------------------
+
+_MAX_TRACKED_KEYS = 10_000
+
+
+class InMemoryRateLimiter:
+    """Sliding-window in-memory rate limiter.
+
+    Thread-safe.  Tracks request timestamps per key (e.g. user ID) and
+    rejects requests that exceed ``max_requests`` within
+    ``window_seconds``.  Stale keys are pruned on every ``check()`` call
+    to prevent unbounded memory growth.
+    """
+
+    def __init__(self, max_requests: int, window_seconds: int) -> None:
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._buckets: collections.OrderedDict[str, collections.deque[float]] = (
+            collections.OrderedDict()
+        )
+        self._lock = threading.Lock()
+
+    def check(self, key: str) -> bool:
+        """Return True if the request is allowed, False if rate limited."""
+        now = time.monotonic()
+        cutoff = now - self.window_seconds
+        with self._lock:
+            bucket = self._buckets.get(key)
+            if bucket is None:
+                bucket = collections.deque(maxlen=self.max_requests + 10)
+                self._buckets[key] = bucket
+            else:
+                self._buckets.move_to_end(key)
+
+            # Prune expired timestamps
+            while bucket and bucket[0] < cutoff:
+                bucket.popleft()
+
+            if len(bucket) >= self.max_requests:
+                return False
+
+            bucket.append(now)
+
+            # Prune oldest keys if tracking too many
+            while len(self._buckets) > _MAX_TRACKED_KEYS:
+                self._buckets.popitem(last=False)
+
+        return True
+
+
+# Pre-configured limiters for mutation endpoints
+mutation_limiter = InMemoryRateLimiter(max_requests=100, window_seconds=60)
+execution_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60)
+marketplace_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=60)

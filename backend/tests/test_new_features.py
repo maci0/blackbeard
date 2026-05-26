@@ -412,6 +412,7 @@ class TestOtelListener:
 
         try:
             import opentelemetry  # noqa: F401
+
             otel_available = True
         except ImportError:
             otel_available = False

@@ -157,51 +157,52 @@ def get_pool_status() -> dict[str, object]:
 
 
 def _get_bg_engine() -> AsyncEngine:
-    """Return the shared background engine, creating it on first use (thread-safe)."""
-    global _bg_engine, _bg_session_factory
-    if _bg_engine is None:
-        with _bg_engine_lock:
-            if _bg_engine is None:
-                from sqlalchemy.ext.asyncio import (
-                    AsyncSession as _AsyncSession,
-                )
-                from sqlalchemy.ext.asyncio import (
-                    async_sessionmaker,
-                    create_async_engine,
-                )
+    """Return the shared background engine, creating it on first use (thread-safe).
 
-                bg_pool_size = max(5, settings.max_concurrent_executions + 2)
-                bg_max_overflow = bg_pool_size * 2
-                engine = create_async_engine(
-                    settings.database_url.get_secret_value(),
-                    echo=False,
-                    pool_size=bg_pool_size,
-                    max_overflow=bg_max_overflow,
-                    pool_pre_ping=True,
-                    pool_timeout=30,
-                    pool_recycle=3600,
-                    connect_args=CONNECT_ARGS,
-                )
-                _bg_session_factory = async_sessionmaker(
-                    engine, class_=_AsyncSession, expire_on_commit=False
-                )
-                instrument_engine(engine.sync_engine, label="bg-exec")
-                # Publish _bg_engine last: the outer check reads this
-                # variable without the lock, so _bg_session_factory must
-                # already be visible when another thread sees _bg_engine
-                # as non-None.
-                _bg_engine = engine
-                logger.info(
-                    "Shared background DB engine created: pool_size=%d max_overflow=%d",
-                    bg_pool_size,
-                    bg_max_overflow,
-                    extra={
-                        "event": "bg_engine_created",
-                        "pool_size": bg_pool_size,
-                        "max_overflow": bg_max_overflow,
-                    },
-                )
-    return _bg_engine
+    Uses a simple lock-always approach instead of double-checked locking,
+    which is safe under both GIL and free-threaded Python.
+    """
+    with _bg_engine_lock:
+        global _bg_engine, _bg_session_factory
+        if _bg_engine is not None:
+            return _bg_engine
+
+        from sqlalchemy.ext.asyncio import (
+            AsyncSession as _AsyncSession,
+        )
+        from sqlalchemy.ext.asyncio import (
+            async_sessionmaker,
+            create_async_engine,
+        )
+
+        bg_pool_size = max(5, settings.max_concurrent_executions + 2)
+        bg_max_overflow = bg_pool_size * 2
+        engine = create_async_engine(
+            settings.database_url.get_secret_value(),
+            echo=False,
+            pool_size=bg_pool_size,
+            max_overflow=bg_max_overflow,
+            pool_pre_ping=True,
+            pool_timeout=30,
+            pool_recycle=3600,
+            connect_args=CONNECT_ARGS,
+        )
+        _bg_session_factory = async_sessionmaker(
+            engine, class_=_AsyncSession, expire_on_commit=False
+        )
+        instrument_engine(engine.sync_engine, label="bg-exec")
+        _bg_engine = engine
+        logger.info(
+            "Shared background DB engine created: pool_size=%d max_overflow=%d",
+            bg_pool_size,
+            bg_max_overflow,
+            extra={
+                "event": "bg_engine_created",
+                "pool_size": bg_pool_size,
+                "max_overflow": bg_max_overflow,
+            },
+        )
+        return _bg_engine
 
 
 def shutdown_executor(wait: bool = False) -> None:

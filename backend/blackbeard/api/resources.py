@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Generator
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import yaml
@@ -23,6 +23,7 @@ from blackbeard.models.resource_schemas import (
     ResourceResponse,
     ResourceUpdate,
 )
+from blackbeard.rate_limiter import mutation_limiter
 from blackbeard.resources import (
     ResourceConflictError,
     ResourceNotFoundError,
@@ -84,6 +85,17 @@ async def _sync_llm_to_litellm(kind: str, name: str, spec: dict[str, Any] | None
         )
 
 
+def _check_mutation_rate(user: User | None) -> None:
+    """Raise 429 if user exceeds mutation rate limit."""
+    key = str(user.id) if user is not None else "__anonymous__"
+    if not mutation_limiter.check(key):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many mutation requests. Try again later.",
+            headers={"Retry-After": "60"},
+        )
+
+
 router = APIRouter(tags=["resources"])
 
 _KIND_PATTERN = "^(" + "|".join(PLURAL_TO_KIND.keys()) + ")$"
@@ -137,6 +149,9 @@ def _resource_to_document(resource: Any) -> dict[str, Any]:
     }
 
 
+_EXPORT_PAGE_SIZE = 200
+
+
 @router.get(
     "/resources/export",
     responses={
@@ -158,27 +173,33 @@ async def export_resources(
 ) -> StreamingResponse:
     """Export all resources as a multi-document YAML stream.
 
+    Streams resources in pages to avoid loading all into memory at once.
     Returns resources separated by ``---`` document markers, suitable for
     piping into ``blackbeard apply -f -`` or storing as a backup file.
     """
     service = ResourceService(session)
-    items, _total = await service.list_resources(
-        namespace=namespace,
-        limit=10_000,
-        offset=0,
-    )
 
-    def _generate_yaml() -> Generator[str]:
-        for resource in items:
-            doc = _resource_to_document(resource)
-            yield yaml.dump(
-                doc,
-                Dumper=_yaml_dumper,
-                default_flow_style=False,
-                allow_unicode=True,
-                sort_keys=False,
-                explicit_start=True,
+    async def _generate_yaml() -> AsyncGenerator[str]:
+        offset = 0
+        while True:
+            items, _total = await service.list_resources(
+                namespace=namespace,
+                limit=_EXPORT_PAGE_SIZE,
+                offset=offset,
             )
+            for resource in items:
+                doc = _resource_to_document(resource)
+                yield yaml.dump(
+                    doc,
+                    Dumper=_yaml_dumper,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    sort_keys=False,
+                    explicit_start=True,
+                )
+            if len(items) < _EXPORT_PAGE_SIZE:
+                break
+            offset += _EXPORT_PAGE_SIZE
 
     return StreamingResponse(
         _generate_yaml(),
@@ -273,6 +294,7 @@ async def create_resource(
     user: User | None = Depends(check_resource_permission),
 ) -> ResourceResponse:
     """Create (or upsert) a resource of a given kind."""
+    _check_mutation_rate(user)
     url_kind = _resolve_kind(kind_plural)
     if data.kind != url_kind:
         raise HTTPException(
@@ -380,6 +402,7 @@ async def update_resource(
     user: User | None = Depends(check_resource_permission),
 ) -> ResourceResponse:
     """Update a resource by kind and name (optimistic locking via version)."""
+    _check_mutation_rate(user)
     kind = _resolve_kind(kind_plural)
 
     if data.metadata is not None:
@@ -474,6 +497,7 @@ async def delete_resource(
     user: User | None = Depends(check_resource_permission),
 ) -> None:
     """Delete a resource by kind and name. Idempotent."""
+    _check_mutation_rate(user)
     kind = _resolve_kind(kind_plural)
     service = ResourceService(session)
     try:
