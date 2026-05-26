@@ -574,7 +574,7 @@ export default function Layout() {
       <aside
         ref={sidebarRef}
         aria-label="Main navigation"
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-card transition-all duration-200 ease-in-out md:static md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col overflow-x-hidden border-r bg-card transition-all duration-200 ease-in-out md:static md:translate-x-0 ${
           collapsed ? 'md:w-14' : 'md:w-60'
         } w-60 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
