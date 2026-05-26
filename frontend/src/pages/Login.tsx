@@ -81,135 +81,133 @@ export default function Login() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-muted/50 px-4">
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-50/80 via-background to-violet-50/60 px-4 dark:from-indigo-950/30 dark:via-background dark:to-violet-950/20">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="mb-8 flex flex-col items-center">
-          <div className="mb-3 flex h-12 w-12 animate-[logo-pulse_2s_ease-in-out] items-center justify-center rounded-xl bg-slate-900 motion-reduce:animate-none dark:border dark:border-slate-700">
-            <Anchor className="h-7 w-7 text-indigo-400" />
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 shadow-lg shadow-indigo-500/20 dark:border dark:border-slate-700 dark:shadow-indigo-400/10">
+            <Anchor className="h-8 w-8 text-indigo-400" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight">Sign in to Blackbeard</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Blackbeard</h1>
           <p className="mt-1 text-sm text-muted-foreground">Agent Management Platform</p>
         </div>
 
-        {error && <ErrorAlert id="login-error" message={error} className="mb-4" />}
+        <div className="rounded-2xl border bg-card/80 p-6 shadow-xl backdrop-blur-sm">
+          {error && <ErrorAlert id="login-error" message={error} className="mb-4" />}
 
-        {/* Form */}
-        <form onSubmit={(e) => void handleSubmit(e)} noValidate className="space-y-4">
-          <fieldset disabled={loading} className="space-y-4">
-            <div>
-              <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium">
-                Email <span className="text-destructive">*</span>
-              </label>
-              <input
-                id="login-email"
-                type="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value)
-                  clearError()
-                }}
-                autoComplete="email"
-                autoFocus
-                required
-                aria-invalid={(emailMissing ? !email.trim() : !!error) || undefined}
-                aria-describedby={
-                  emailMissing && !email.trim()
-                    ? 'login-email-error'
-                    : error
-                      ? 'login-error'
-                      : undefined
-                }
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                placeholder="you@example.com"
-              />
-              {emailMissing && !email.trim() && (
-                <p id="login-email-error" className="mt-1 text-xs text-destructive">
-                  Email is required
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium">
-                Password <span className="text-destructive">*</span>
-              </label>
-              <div className="relative">
+          <form onSubmit={(e) => void handleSubmit(e)} noValidate className="space-y-4">
+            <fieldset disabled={loading} className="space-y-4">
+              <div>
+                <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium">
+                  Email <span className="text-destructive">*</span>
+                </label>
                 <input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
+                  id="login-email"
+                  type="email"
+                  value={email}
                   onChange={(e) => {
-                    setPassword(e.target.value)
+                    setEmail(e.target.value)
                     clearError()
                   }}
-                  autoComplete="current-password"
+                  autoComplete="email"
+                  autoFocus
                   required
-                  aria-invalid={(passwordMissing ? !password.trim() : !!error) || undefined}
+                  aria-invalid={(emailMissing ? !email.trim() : !!error) || undefined}
                   aria-describedby={
-                    passwordMissing && !password.trim()
-                      ? 'login-password-error'
+                    emailMissing && !email.trim()
+                      ? 'login-email-error'
                       : error
                         ? 'login-error'
                         : undefined
                   }
-                  className="w-full rounded-md border bg-background px-3 py-2 pr-10 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                  placeholder="Enter your password"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  placeholder="you@example.com"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-1 top-1/2 flex h-[44px] w-[44px] -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                {emailMissing && !email.trim() && (
+                  <p id="login-email-error" className="mt-1 text-xs text-destructive">
+                    Email is required
+                  </p>
+                )}
               </div>
-              {passwordMissing && !password.trim() && (
-                <p id="login-password-error" className="mt-1 text-xs text-destructive">
-                  Password is required
-                </p>
-              )}
-            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              aria-busy={loading}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? (
-                <Spinner size="sm" className="text-current" />
-              ) : (
-                <LogIn className="h-4 w-4" />
-              )}
-              {loading ? 'Signing in…' : 'Sign in'}
-            </button>
-          </fieldset>
-        </form>
-
-        {/* SSO button */}
-        {oidcEnabled && (
-          <>
-            <div className="relative my-5">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t" />
+              <div>
+                <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium">
+                  Password <span className="text-destructive">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value)
+                      clearError()
+                    }}
+                    autoComplete="current-password"
+                    required
+                    aria-invalid={(passwordMissing ? !password.trim() : !!error) || undefined}
+                    aria-describedby={
+                      passwordMissing && !password.trim()
+                        ? 'login-password-error'
+                        : error
+                          ? 'login-error'
+                          : undefined
+                    }
+                    className="w-full rounded-md border bg-background px-3 py-2 pr-10 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                    placeholder="Enter your password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-1 top-1/2 flex h-[44px] w-[44px] -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {passwordMissing && !password.trim() && (
+                  <p id="login-password-error" className="mt-1 text-xs text-destructive">
+                    Password is required
+                  </p>
+                )}
               </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="bg-background px-2 text-muted-foreground">or</span>
-              </div>
-            </div>
-            <a
-              href="/api/v1/auth/oidc/login"
-              className="flex w-full items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Shield className="h-4 w-4" />
-              Sign in with SSO
-            </a>
-          </>
-        )}
 
-        {/* Register link */}
+              <button
+                type="submit"
+                disabled={loading}
+                aria-busy={loading}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? (
+                  <Spinner size="sm" className="text-current" />
+                ) : (
+                  <LogIn className="h-4 w-4" />
+                )}
+                {loading ? 'Signing in…' : 'Sign in'}
+              </button>
+            </fieldset>
+          </form>
+
+          {oidcEnabled && (
+            <>
+              <div className="relative my-5">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-card px-2 text-muted-foreground">or</span>
+                </div>
+              </div>
+              <a
+                href="/api/v1/auth/oidc/login"
+                className="flex w-full items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Shield className="h-4 w-4" />
+                Sign in with SSO
+              </a>
+            </>
+          )}
+        </div>
+
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Don&apos;t have an account?{' '}
           <Link

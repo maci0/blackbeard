@@ -14,7 +14,10 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
 
   return (
     <div className="page-enter flex flex-col items-center justify-center py-16 text-center">
-      <div aria-hidden="true" className="mb-4 text-muted-foreground/60 [&>svg]:h-12 [&>svg]:w-12">
+      <div
+        aria-hidden="true"
+        className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-muted/50 text-muted-foreground/60 [&>svg]:h-10 [&>svg]:w-10"
+      >
         {icon}
       </div>
       <h2 className="text-base font-medium text-foreground">{title}</h2>

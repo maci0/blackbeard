@@ -34,3 +34,7 @@ export const STORAGE_KEYS = {
   SIDEBAR_COLLAPSED: 'blackbeard_sidebar_collapsed',
   NAMESPACE: 'blackbeard_namespace',
 } as const
+
+export const STORAGE_KEYS_NAV = {
+  COLLAPSED_SECTIONS: 'blackbeard_nav_collapsed_sections',
+} as const

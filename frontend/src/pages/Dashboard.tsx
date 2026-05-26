@@ -27,27 +27,44 @@ import { PLURAL_TO_KIND } from '@/lib/kinds'
 import { cn } from '@/lib/utils'
 import type { Resource, Execution } from '@/lib/types'
 
+const STAT_ACCENT = {
+  blue: 'bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400',
+  green: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400',
+  amber: 'bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400',
+  violet: 'bg-violet-100 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400',
+  rose: 'bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400',
+} as const
+
+type StatAccent = keyof typeof STAT_ACCENT
+
 const StatCard = memo(function StatCard({
   label,
   value,
   icon: Icon,
   loading,
   href,
+  accent = 'blue',
 }: {
   label: string
   value: number | string
   icon: React.ComponentType<{ className?: string }>
   loading: boolean
   href: string
+  accent?: StatAccent
 }) {
   return (
     <Link
       to={href}
-      className="group flex items-center gap-4 rounded-lg border bg-card p-5 shadow-sm transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex items-center gap-4 rounded-lg border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-accent/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       aria-label={`${label}: ${loading ? 'loading' : value}`}
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-        <Icon className="h-5 w-5 text-primary" />
+      <div
+        className={cn(
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
+          STAT_ACCENT[accent],
+        )}
+      >
+        <Icon className="h-5 w-5" />
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm text-muted-foreground">{label}</p>
@@ -138,7 +155,7 @@ const RecentExecutions = memo(function RecentExecutions({
                   tabIndex={0}
                   role="row"
                   aria-label={`${execution.crew_name} - ${execution.status} - press Enter to view`}
-                  className="group cursor-pointer transition-colors hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  className="group cursor-pointer border-l-2 border-l-transparent transition-all duration-150 hover:border-l-primary hover:bg-accent/50 focus-visible:border-l-primary focus-visible:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   <td className="px-4 py-2.5">
                     <StatusBadge status={execution.status} />
@@ -574,6 +591,7 @@ export default function Dashboard() {
             icon={Database}
             loading={resourcesLoading && totalResources === 0}
             href="/resources"
+            accent="blue"
           />
           <StatCard
             label="Active Executions"
@@ -581,6 +599,7 @@ export default function Dashboard() {
             icon={Play}
             loading={executionsLoading && executions.length === 0}
             href="/executions"
+            accent="green"
           />
           <StatCard
             label="LLM Spend"
@@ -588,6 +607,7 @@ export default function Dashboard() {
             icon={DollarSign}
             loading={executionsLoading && executions.length === 0}
             href="/executions"
+            accent="amber"
           />
           <StatCard
             label="Total Models"
@@ -595,6 +615,7 @@ export default function Dashboard() {
             icon={Cpu}
             loading={resourcesLoading && totalResources === 0}
             href="/models"
+            accent="violet"
           />
           <StatCard
             label="Automations"
@@ -602,6 +623,7 @@ export default function Dashboard() {
             icon={Timer}
             loading={resourcesLoading && totalResources === 0}
             href="/automations"
+            accent="rose"
           />
         </div>
 

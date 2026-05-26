@@ -37,7 +37,7 @@ import {
 } from 'lucide-react'
 import { useDarkMode, useHealthCheck } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
-import { cn, STORAGE_KEYS } from '@/lib/utils'
+import { cn, STORAGE_KEYS, STORAGE_KEYS_NAV } from '@/lib/utils'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useNamespaceStore } from '@/stores/namespaceStore'
 import { isMac, modKey } from '@/lib/platform'
@@ -49,23 +49,125 @@ import WelcomeDialog from './onboarding/WelcomeDialog'
 import GuidedTour from './onboarding/GuidedTour'
 import HelpMenu from './onboarding/HelpMenu'
 
-const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/studio', label: 'Studio', icon: PenTool },
-  { to: '/resources', label: 'Resources', icon: Database },
-  { to: '/executions', label: 'Executions', icon: Play },
-  { to: '/models', label: 'Models', icon: Cpu },
-  { to: '/chat', label: 'Chat', icon: MessageSquare },
-  { to: '/tools', label: 'Tools', icon: Wrench },
-  { to: '/knowledge', label: 'Knowledge', icon: BookOpen },
-  { to: '/users', label: 'Users', icon: Users },
-  { to: '/roles', label: 'Roles', icon: Shield },
-  { to: '/audit-logs', label: 'Audit Logs', icon: ScrollText },
-  { to: '/marketplace', label: 'Marketplace', icon: Store },
-  { to: '/automations', label: 'Automations', icon: Timer },
-  { to: '/webhooks', label: 'Webhooks', icon: Webhook },
-  { to: '/settings', label: 'Settings', icon: SettingsIcon },
+type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }> }
+
+const navSections: Array<{ key: string; label: string; items: NavItem[] }> = [
+  {
+    key: 'main',
+    label: 'Main',
+    items: [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { to: '/studio', label: 'Studio', icon: PenTool },
+    ],
+  },
+  {
+    key: 'resources',
+    label: 'Resources',
+    items: [
+      { to: '/resources', label: 'Resources', icon: Database },
+      { to: '/models', label: 'Models', icon: Cpu },
+      { to: '/tools', label: 'Tools', icon: Wrench },
+      { to: '/knowledge', label: 'Knowledge', icon: BookOpen },
+    ],
+  },
+  {
+    key: 'operations',
+    label: 'Operations',
+    items: [
+      { to: '/executions', label: 'Executions', icon: Play },
+      { to: '/chat', label: 'Chat', icon: MessageSquare },
+      { to: '/automations', label: 'Automations', icon: Timer },
+    ],
+  },
+  {
+    key: 'admin',
+    label: 'Admin',
+    items: [
+      { to: '/users', label: 'Users', icon: Users },
+      { to: '/roles', label: 'Roles', icon: Shield },
+      { to: '/audit-logs', label: 'Audit Logs', icon: ScrollText },
+      { to: '/webhooks', label: 'Webhooks', icon: Webhook },
+    ],
+  },
+  {
+    key: 'other',
+    label: 'Other',
+    items: [
+      { to: '/marketplace', label: 'Marketplace', icon: Store },
+      { to: '/settings', label: 'Settings', icon: SettingsIcon },
+    ],
+  },
 ]
+
+function loadCollapsedSections(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS_NAV.COLLAPSED_SECTIONS)
+    if (raw) return JSON.parse(raw) as Record<string, boolean>
+  } catch {
+    void 0
+  }
+  return {}
+}
+
+function NavSection({
+  section,
+  collapsed: sidebarCollapsed,
+  sectionCollapsed,
+  onToggle,
+}: {
+  section: (typeof navSections)[number]
+  collapsed: boolean
+  sectionCollapsed: boolean
+  onToggle: () => void
+}) {
+  return (
+    <div>
+      {!sidebarCollapsed && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex w-full items-center gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors hover:text-muted-foreground"
+        >
+          <ChevronDown
+            className={cn(
+              'h-3 w-3 shrink-0 transition-transform duration-200',
+              sectionCollapsed && '-rotate-90',
+            )}
+          />
+          {section.label}
+        </button>
+      )}
+      {(sidebarCollapsed || !sectionCollapsed) && (
+        <div className="space-y-0.5">
+          {section.items.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              title={sidebarCollapsed ? label : undefined}
+              aria-label={label}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  sidebarCollapsed && 'md:justify-center md:px-0',
+                  isActive
+                    ? 'bg-accent text-foreground ring-2 ring-inset ring-primary/20'
+                    : 'text-muted-foreground hover:translate-x-0.5 hover:bg-accent hover:text-foreground',
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <Icon className={cn('h-4 w-4 shrink-0', isActive && 'text-primary')} />
+                  <span className={sidebarCollapsed ? 'md:sr-only' : ''}>{label}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function BlackbeardLogo({ size = 28 }: { size?: number }) {
   return (
@@ -293,6 +395,16 @@ export default function Layout() {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(STORAGE_KEYS.SIDEBAR_COLLAPSED) === 'true',
   )
+  const [collapsedSections, setCollapsedSections] =
+    useState<Record<string, boolean>>(loadCollapsedSections)
+
+  const toggleSection = useCallback((key: string) => {
+    setCollapsedSections((prev) => {
+      const next = { ...prev, [key]: !prev[key] }
+      localStorage.setItem(STORAGE_KEYS_NAV.COLLAPSED_SECTIONS, JSON.stringify(next))
+      return next
+    })
+  }, [])
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
 
@@ -504,31 +616,16 @@ export default function Layout() {
         <nav
           aria-label="Primary"
           data-tour="sidebar-nav"
-          className={`flex-1 space-y-1 p-2 ${collapsed ? 'md:px-1' : ''}`}
+          className={cn('flex-1 space-y-1 overflow-y-auto p-2', collapsed && 'md:px-1')}
         >
-          {navItems.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              title={collapsed ? label : undefined}
-              aria-label={label}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                  collapsed ? 'md:justify-center md:px-0' : ''
-                } ${
-                  isActive
-                    ? 'bg-accent text-foreground ring-2 ring-inset ring-primary/20'
-                    : 'text-muted-foreground hover:translate-x-0.5 hover:bg-accent hover:text-foreground'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-                  <span className={collapsed ? 'md:sr-only' : ''}>{label}</span>
-                </>
-              )}
-            </NavLink>
+          {navSections.map((section) => (
+            <NavSection
+              key={section.key}
+              section={section}
+              collapsed={collapsed}
+              sectionCollapsed={!!collapsedSections[section.key]}
+              onToggle={() => toggleSection(section.key)}
+            />
           ))}
         </nav>
 

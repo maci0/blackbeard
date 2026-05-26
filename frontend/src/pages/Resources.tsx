@@ -25,7 +25,7 @@ import { TableSkeleton } from '@/components/ui/Skeleton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ApiError } from '@/api/client'
 import { cn, getErrorMessage } from '@/lib/utils'
-import { formatDate } from '@/lib/formatters'
+import { SmartTime } from '@/components/ui/SmartTime'
 import { KIND_TO_PLURAL, API_VERSION } from '@/lib/kinds'
 import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
@@ -581,7 +581,9 @@ export default function Resources() {
                     <div className="flex-1 px-4 py-3">
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>v{resource.version}</span>
-                        <span>{formatDate(resource.updated_at)}</span>
+                        <span>
+                          <SmartTime date={resource.updated_at} />
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -656,7 +658,7 @@ export default function Resources() {
                           role="row"
                           aria-label={`${resource.kind}: ${resource.metadata.name} — press Enter to view details`}
                           className={cn(
-                            'group cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                            'group cursor-pointer border-l-2 border-l-transparent transition-all duration-150 hover:border-l-primary hover:bg-accent/50 focus-visible:border-l-primary focus-visible:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                             selectedIds.has(rowId) && 'bg-primary/5',
                           )}
                         >
@@ -694,7 +696,7 @@ export default function Resources() {
                           )}
                           <td className="px-4 py-3 text-muted-foreground">v{resource.version}</td>
                           <td className="px-4 py-3 text-muted-foreground">
-                            {formatDate(resource.updated_at)}
+                            <SmartTime date={resource.updated_at} />
                           </td>
                           <td className="px-4 py-3">
                             <ChevronRight

@@ -487,7 +487,7 @@ export default function Executions() {
                           role="row"
                           aria-label={`${execution.crew_name} — ${execution.status} — press Enter to view details`}
                           className={cn(
-                            'group cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                            'group cursor-pointer border-l-2 border-l-transparent transition-all duration-150 hover:border-l-primary hover:bg-accent/50 focus-visible:border-l-primary focus-visible:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                             compareIds.includes(execution.id) && 'bg-primary/5',
                           )}
                         >

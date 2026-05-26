@@ -87,7 +87,7 @@ describe('Login', () => {
     it('renders page heading', () => {
       renderLogin()
 
-      expect(screen.getByText('Sign in to Blackbeard')).toBeInTheDocument()
+      expect(screen.getByText('Blackbeard')).toBeInTheDocument()
     })
   })
 
