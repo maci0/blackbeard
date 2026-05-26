@@ -1551,6 +1551,8 @@ async def cleanup_orphaned_keys() -> int:
         stale_list = list(stale.scalars())
 
     async def _delete_one(execution: Execution) -> bool:
+        if execution.litellm_key is None:
+            return False
         try:
             deleted = await key_mgr.delete_key(execution.litellm_key)
             if deleted:

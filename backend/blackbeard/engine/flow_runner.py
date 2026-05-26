@@ -412,6 +412,7 @@ def evaluate_condition(expr: str, context: dict[str, Any]) -> bool:
             left, right = expr.split(op, 1)
             left_val = resolve_dotted(left.strip().strip("'\""), context)
             right_str = right.strip().strip("'\"")
+            right_val: float | str
             try:
                 right_val = float(right_str)
             except ValueError:

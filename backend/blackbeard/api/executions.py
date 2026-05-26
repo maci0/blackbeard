@@ -940,7 +940,7 @@ async def ws_execution(
                             {"event": "error", "data": {"detail": "Execution not found"}}
                         )
                         break
-                    current_status = execution.status
+                    current_status: ExecutionStatus | None = execution.status
                     data = ExecutionResponse.from_db(execution).model_dump(mode="json")
                     await websocket.send_json({"event": "status", "data": data})
                     last_status = current_status
