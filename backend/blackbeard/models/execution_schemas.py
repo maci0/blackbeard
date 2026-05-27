@@ -10,13 +10,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
+from blackbeard.kinds import SAFE_FILENAME
 from blackbeard.logging_config import scrub_pii
 
 if TYPE_CHECKING:
     from blackbeard.models.execution import Execution
 
 __all__ = [
-    "SAFE_FILENAME",
     "ExecutionEventItem",
     "ExecutionEventsResponse",
     "ExecutionListResponse",
@@ -39,20 +39,27 @@ _SAFE_INPUT_KEY = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 _SENSITIVE_INPUT_KEYS = re.compile(
     r"(password|secret|token|credential|api.?key|auth|private.?key|access.?key"
     r"|ssn|social.?security|credit.?card|card.?number|bank.?account|routing.?number"
-    r"|date.?of.?birth|dob|passport|driver.?license|national.?id"
+    r"|date.?of.?birth|dob|birth.?date|birthday|passport|driver.?license|national.?id"
     r"|e.?mail|phone|first.?name|last.?name|full.?name|display.?name|user.?name"
-    r"|username|address|zip.?code|postal.?code)",
+    r"|username|address|zip.?code|postal.?code|ip.?addr)",
     re.IGNORECASE,
 )
 _REDACTED = "[REDACTED]"
 
 
-def redact_sensitive_values(inputs: dict[str, Any]) -> dict[str, Any]:
+_MAX_REDACT_DEPTH = 20
+
+
+def redact_sensitive_values(
+    inputs: dict[str, Any], _depth: int = 0
+) -> dict[str, Any]:
     """Return a copy of inputs with sensitive-looking values redacted (recursively).
 
     Returns the original dict unchanged when no keys match and no nested
     structures need walking — avoids a copy on the common-case flat dict.
     """
+    if _depth >= _MAX_REDACT_DEPTH:
+        return inputs
     needs_copy = False
     for k, v in inputs.items():
         if _SENSITIVE_INPUT_KEYS.search(k) or isinstance(v, (dict, list)):
@@ -65,10 +72,11 @@ def redact_sensitive_values(inputs: dict[str, Any]) -> dict[str, Any]:
         if _SENSITIVE_INPUT_KEYS.search(k):
             redacted[k] = _REDACTED
         elif isinstance(v, dict):
-            redacted[k] = redact_sensitive_values(v)
+            redacted[k] = redact_sensitive_values(v, _depth + 1)
         elif isinstance(v, list):
             redacted[k] = [
-                redact_sensitive_values(item) if isinstance(item, dict) else item for item in v
+                redact_sensitive_values(item, _depth + 1) if isinstance(item, dict) else item
+                for item in v
             ]
         else:
             redacted[k] = v
@@ -117,9 +125,6 @@ class KickoffRequest(BaseModel):
     def _validate_input_sizes(self) -> KickoffRequest:
         validate_inputs(self.inputs)
         return self
-
-
-SAFE_FILENAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
 
 
 class TrainRequest(BaseModel):

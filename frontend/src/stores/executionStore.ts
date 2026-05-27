@@ -199,7 +199,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       set({ spendData: result })
     } catch (err) {
       console.warn('[poll] spend fetch failed:', getErrorMessage(err, 'unknown error'))
-      set({ spendData: null })
     }
   },
 }))

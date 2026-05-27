@@ -136,26 +136,28 @@ from blackbeard.api.chat import _extract_content
 def test_extract_content_standard_response():
     """Standard OpenAI-format response should extract content and token counts."""
     data = {
-        "choices": [{"message": {"content": "Hello!"}}],
+        "choices": [{"message": {"content": "Hello!"}, "finish_reason": "stop"}],
         "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
     }
-    content, tokens = _extract_content(data)
+    content, tokens, finish_reason = _extract_content(data)
     assert content == "Hello!"
     assert tokens == TokenUsage(prompt=5, completion=2, total=7)
+    assert finish_reason == "stop"
 
 
 def test_extract_content_empty_choices():
-    """Empty choices list should return empty content."""
+    """Empty choices list should return empty content and no finish_reason."""
     data = {"choices": [], "usage": {}}
-    content, tokens = _extract_content(data)
+    content, tokens, finish_reason = _extract_content(data)
     assert content == ""
     assert tokens == TokenUsage(prompt=0, completion=0, total=0)
+    assert finish_reason is None
 
 
 def test_extract_content_missing_choices():
     """Missing choices key should return empty content."""
     data = {"usage": {"total_tokens": 5}}
-    content, _tokens = _extract_content(data)
+    content, _tokens, _finish = _extract_content(data)
     assert content == ""
 
 
@@ -165,14 +167,14 @@ def test_extract_content_reasoning_content_fallback():
         "choices": [{"message": {"reasoning_content": "Let me think..."}}],
         "usage": {"total_tokens": 10},
     }
-    content, _tokens = _extract_content(data)
+    content, _tokens, _finish = _extract_content(data)
     assert content == "Let me think..."
 
 
 def test_extract_content_missing_usage():
     """Missing usage key should default token counts to 0."""
     data = {"choices": [{"message": {"content": "Hi"}}]}
-    content, tokens = _extract_content(data)
+    content, tokens, _finish = _extract_content(data)
     assert content == "Hi"
     assert tokens == TokenUsage(prompt=0, completion=0, total=0)
 
@@ -180,7 +182,7 @@ def test_extract_content_missing_usage():
 def test_extract_content_null_content():
     """Null content in message should return empty string."""
     data = {"choices": [{"message": {"content": None}}], "usage": {}}
-    content, _tokens = _extract_content(data)
+    content, _tokens, _finish = _extract_content(data)
     assert content == ""
 
 
@@ -190,7 +192,7 @@ def test_extract_content_prefers_content_over_reasoning():
         "choices": [{"message": {"content": "Final answer", "reasoning_content": "Thinking..."}}],
         "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
     }
-    content, tokens = _extract_content(data)
+    content, tokens, _finish = _extract_content(data)
     assert content == "Final answer"
     assert tokens.total == 8
 
@@ -201,7 +203,7 @@ def test_extract_content_partial_usage_keys():
         "choices": [{"message": {"content": "Hi"}}],
         "usage": {"total_tokens": 10},
     }
-    content, tokens = _extract_content(data)
+    content, tokens, _finish = _extract_content(data)
     assert content == "Hi"
     assert tokens.prompt == 0
     assert tokens.completion == 0
@@ -211,7 +213,7 @@ def test_extract_content_partial_usage_keys():
 def test_extract_content_choice_without_message_key():
     """Choice dict without 'message' key should return empty content."""
     data = {"choices": [{"index": 0, "finish_reason": "stop"}], "usage": {}}
-    content, tokens = _extract_content(data)
+    content, tokens, _finish = _extract_content(data)
     assert content == ""
     assert tokens == TokenUsage(prompt=0, completion=0, total=0)
 

@@ -46,7 +46,6 @@ def test_parse_valid_ref():
 )
 def test_parse_ref_all_kinds(raw, expected_kind):
     ref = parse_ref(raw)
-    assert ref is not None
     assert ref.kind == expected_kind
 
 
@@ -237,14 +236,12 @@ def test_build_adjacency_no_refs():
 
 def test_parse_ref_agent_policy():
     ref = parse_ref("ref:agent-policies/strict")
-    assert ref is not None
     assert ref.kind == ResourceKind.AGENT_POLICY
     assert ref.name == "strict"
 
 
 def test_parse_ref_guardrail():
     ref = parse_ref("ref:guardrails/pii-check")
-    assert ref is not None
     assert ref.kind == ResourceKind.GUARDRAIL
     assert ref.name == "pii-check"
 
@@ -270,14 +267,12 @@ def test_detect_cycles_self_loop():
 
 def test_parse_ref_flow():
     ref = parse_ref("ref:flows/my-flow")
-    assert ref is not None
     assert ref.kind == ResourceKind.FLOW
     assert ref.name == "my-flow"
 
 
 def test_parse_ref_knowledge_source():
     ref = parse_ref("ref:knowledge-sources/my-docs")
-    assert ref is not None
     assert ref.kind == ResourceKind.KNOWLEDGE_SOURCE
     assert ref.name == "my-docs"
 

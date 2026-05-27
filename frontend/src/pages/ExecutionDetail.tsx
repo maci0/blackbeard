@@ -33,6 +33,8 @@ import { getDuration, formatDate, formatCost } from '@/lib/formatters'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { api } from '@/api/client'
 import { CopyButton } from '@/components/ui/CopyButton'
+import { Breadcrumb } from '@/components/ui/Breadcrumb'
+import { DetailSkeleton } from '@/components/ui/Skeleton'
 
 /* ------------------------------------------------------------------ */
 /* Summary card                                                        */
@@ -1049,14 +1051,7 @@ export default function ExecutionDetail() {
 
   /* ---- Loading ---- */
   if (loading && !currentExecution) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <div role="status" className="flex items-center gap-2 text-muted-foreground">
-          <Spinner size="sm" className="text-muted-foreground" />
-          <span className="text-sm">Loading execution…</span>
-        </div>
-      </div>
-    )
+    return <DetailSkeleton />
   }
 
   if (error || !currentExecution) {
@@ -1089,33 +1084,15 @@ export default function ExecutionDetail() {
   return (
     <div className="page-enter flex-1 overflow-auto">
       <div className="mx-auto max-w-4xl p-6">
-        {/* Breadcrumb */}
-        <nav aria-label="Breadcrumb" className="mb-5">
-          <ol className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <li>
-              <Link
-                to="/executions"
-                className="rounded transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                Executions
-              </Link>
-            </li>
-            <li aria-hidden="true" className="text-muted-foreground/40">
-              ›
-            </li>
-            <li>
-              <span className="text-foreground/80">{execution.crew_name}</span>
-            </li>
-            <li aria-hidden="true" className="text-muted-foreground/40">
-              ›
-            </li>
-            <li aria-current="page">
-              <span className="font-medium text-foreground" title={execution.id}>
-                {execution.id.slice(0, 8)}
-              </span>
-            </li>
-          </ol>
-        </nav>
+        <div className="mb-5">
+          <Breadcrumb
+            items={[
+              { label: 'Executions', href: '/executions' },
+              { label: execution.crew_name },
+              { label: execution.id.slice(0, 8) },
+            ]}
+          />
+        </div>
 
         {/* Header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

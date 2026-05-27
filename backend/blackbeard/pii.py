@@ -16,6 +16,14 @@ from typing import Any, ClassVar
 from presidio_analyzer import AnalyzerEngine, EntityRecognizer, RecognizerResult
 from presidio_anonymizer import AnonymizerEngine
 
+__all__ = [
+    "DEFAULT_ENTITIES",
+    "LLMPIIRecognizer",
+    "redact_dict",
+    "redact_text",
+    "reset_engines",
+]
+
 logger = logging.getLogger(__name__)
 
 _analyzer: AnalyzerEngine | None = None
@@ -43,8 +51,8 @@ def _get_analyzer(config: dict[str, Any] | None = None) -> AnalyzerEngine:
     registry so that it participates in every ``analyze()`` call.
     Uses lock-always pattern (safe under both GIL and free-threaded Python).
     """
-    global _analyzer
     with _analyzer_lock:
+        global _analyzer
         if _analyzer is not None:
             return _analyzer
         engine = AnalyzerEngine()
@@ -53,7 +61,7 @@ def _get_analyzer(config: dict[str, Any] | None = None) -> AnalyzerEngine:
             if backend == "litellm":
                 _add_llm_recognizer(engine, config)
         _analyzer = engine
-    return _analyzer
+        return _analyzer
 
 
 def _get_anonymizer() -> AnonymizerEngine:
@@ -61,12 +69,12 @@ def _get_anonymizer() -> AnonymizerEngine:
 
     Uses lock-always pattern (safe under both GIL and free-threaded Python).
     """
-    global _anonymizer
     with _anonymizer_lock:
+        global _anonymizer
         if _anonymizer is not None:
             return _anonymizer
         _anonymizer = AnonymizerEngine()
-    return _anonymizer
+        return _anonymizer
 
 
 def _add_llm_recognizer(
@@ -86,11 +94,6 @@ def _add_llm_recognizer(
         model,
         extra={"event": "llm_pii_recognizer_added", "model": model},
     )
-
-
-# ---------------------------------------------------------------------------
-# LLM-based recognizer
-# ---------------------------------------------------------------------------
 
 
 class LLMPIIRecognizer(EntityRecognizer):
@@ -129,8 +132,6 @@ class LLMPIIRecognizer(EntityRecognizer):
             supported_language="en",
         )
 
-    # EntityRecognizer protocol -------------------------------------------------
-
     def load(self) -> None:
         """Required by EntityRecognizer protocol — nothing to pre-load."""
 
@@ -153,7 +154,8 @@ class LLMPIIRecognizer(EntityRecognizer):
             proxy_url = proxy_url or settings.litellm_proxy_url
             master_key = master_key or settings.litellm_master_key.get_secret_value()
 
-        prompt = self._prompt_prefix + text + "\n</TEXT>"
+        sanitized = text.replace("</TEXT>", "< /TEXT>")
+        prompt = self._prompt_prefix + sanitized + "\n</TEXT>"
 
         try:
             client = get_sync_client("pii-llm", timeout=10)
@@ -225,7 +227,6 @@ class LLMPIIRecognizer(EntityRecognizer):
                 if start < 0 or end < 0 or start >= end or end > text_len:
                     continue
 
-                # Clamp score to [0, 1]
                 try:
                     clamped_score = max(0.0, min(1.0, float(score)))
                 except (TypeError, ValueError):
@@ -259,11 +260,6 @@ class LLMPIIRecognizer(EntityRecognizer):
                 extra={"event": "llm_pii_recognizer_error", "model": self._model},
             )
             raise
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 
 def redact_text(

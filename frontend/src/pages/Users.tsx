@@ -122,9 +122,7 @@ function InviteDialog({
       onOpenChange(false)
       onInvited()
     } catch (err) {
-      const message = getErrorMessage(err, 'Failed to invite user')
-      setError(message)
-      toasts.error(message)
+      setError(getErrorMessage(err, 'Failed to invite user'))
     } finally {
       setSubmitting(false)
     }
@@ -569,7 +567,7 @@ export default function Users() {
                       role="row"
                       aria-label={`${user.email} — press Enter to view details`}
                       className={cn(
-                        'group cursor-pointer transition-colors duration-150 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                        'group cursor-pointer border-l-2 border-l-transparent transition-colors duration-150 hover:border-l-primary hover:bg-accent/50 focus-visible:border-l-primary focus-visible:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                         selectedUser?.id === user.id && 'bg-muted/60',
                       )}
                     >

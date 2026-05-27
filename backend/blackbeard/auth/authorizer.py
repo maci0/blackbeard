@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import collections
-import itertools
 import logging
 import threading
 import time
@@ -20,7 +19,7 @@ logger = logging.getLogger(__name__)
 # OrderedDict gives O(1) FIFO eviction via move_to_end + popitem.
 _cache: collections.OrderedDict[str, tuple[bool, float]] = collections.OrderedDict()
 _cache_lock = threading.Lock()
-_CACHE_TTL_S = 30.0
+_CACHE_TTL_S = 300.0
 _CACHE_MAX_SIZE = 10_000
 
 
@@ -39,6 +38,7 @@ def _get_cached(key: str) -> bool | None:
         if time.monotonic() - ts > _CACHE_TTL_S:
             _cache.pop(key, None)
             return None
+        _cache.move_to_end(key)
         return result
 
 
@@ -46,16 +46,15 @@ def _set_cached(key: str, result: bool) -> None:
     with _cache_lock:
         if len(_cache) >= _CACHE_MAX_SIZE:
             to_evict = _CACHE_MAX_SIZE // 5
-            keys_to_evict = list(itertools.islice(_cache, to_evict))
-            for k in keys_to_evict:
-                del _cache[k]
+            for _ in range(to_evict):
+                _cache.popitem(last=False)
             logger.debug(
                 "Authorization cache eviction: evicted=%d remaining=%d",
-                len(keys_to_evict),
+                to_evict,
                 len(_cache),
                 extra={
                     "event": "authz_cache_eviction",
-                    "evicted": len(keys_to_evict),
+                    "evicted": to_evict,
                     "remaining": len(_cache),
                     "max_size": _CACHE_MAX_SIZE,
                 },

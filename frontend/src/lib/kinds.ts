@@ -24,3 +24,9 @@ export const PLURAL_TO_KIND: Record<string, string> = Object.fromEntries(
 )
 
 export const ALL_PLURALS: string[] = Object.values(KIND_TO_PLURAL)
+
+/** HTML-compatible pattern for valid resource names (no anchors — HTML pattern adds them). */
+export const NAME_PATTERN = '[a-z0-9][a-z0-9\\-]*'
+
+/** Compiled regex for valid resource names. Mirrors backend NAME_PATTERN. */
+export const NAME_RE = /^[a-z0-9][a-z0-9-]*$/

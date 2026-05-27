@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from blackbeard.auth.authorizer import Authorizer
-from blackbeard.auth.jwt import decode_token
+from blackbeard.auth.jwt import decode_access_token
 from blackbeard.config import settings
 from blackbeard.kinds import PLURAL_TO_KIND
 from blackbeard.models import User, get_session
@@ -35,7 +35,7 @@ _METHOD_TO_VERB: dict[str, str] = {
 }
 
 
-def _bearer_401(detail: str) -> HTTPException:
+def bearer_401(detail: str) -> HTTPException:
     return HTTPException(status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"})
 
 
@@ -45,29 +45,23 @@ async def _resolve_bearer_user(token: str, session: AsyncSession) -> User:
     Raises HTTPException(401) on any validation failure.
     """
     try:
-        payload = decode_token(token)
+        payload = decode_access_token(token)
     except pyjwt.ExpiredSignatureError:
         logger.info("JWT expired", extra={"event": "jwt_expired"})
-        raise _bearer_401("Token has expired") from None
+        raise bearer_401("Token has expired") from None
     except pyjwt.InvalidTokenError:
         logger.warning("JWT invalid", extra={"event": "jwt_invalid"})
-        raise _bearer_401("Invalid token") from None
-
-    if payload.get("type") != "access":
-        logger.warning(
-            "JWT wrong type: %s",
-            payload.get("type"),
-            extra={"event": "jwt_wrong_type", "token_type": payload.get("type")},
-        )
-        raise _bearer_401("Invalid token type")
+        raise bearer_401("Invalid token") from None
 
     user_id = payload.get("sub")
     if not user_id:
         logger.warning("JWT missing sub claim", extra={"event": "jwt_missing_sub"})
-        raise _bearer_401("Invalid token payload")
+        raise bearer_401("Invalid token payload")
 
     result = await session.execute(
-        select(User).where(User.id == user_id).options(defer(User.password_hash))
+        select(User)
+        .where(User.id == user_id)
+        .options(defer(User.password_hash), defer(User.api_key))
     )
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
@@ -76,7 +70,7 @@ async def _resolve_bearer_user(token: str, session: AsyncSession) -> User:
             user_id,
             extra={"event": "jwt_user_invalid", "user_id": str(user_id)},
         )
-        raise _bearer_401("User not found or inactive")
+        raise bearer_401("User not found or inactive")
     return user
 
 
@@ -125,7 +119,7 @@ async def require_user(
             "Authentication required but no credentials provided",
             extra={"event": "auth_required_no_credentials"},
         )
-        raise _bearer_401("Authentication required. Provide a Bearer token or user API key.")
+        raise bearer_401("Authentication required. Provide a Bearer token or user API key.")
     return user
 
 
@@ -145,7 +139,7 @@ async def require_jwt_user(
             "JWT-only endpoint called without Bearer token",
             extra={"event": "jwt_only_missing_bearer"},
         )
-        raise _bearer_401("JWT Bearer token required. API key authentication is not accepted.")
+        raise bearer_401("JWT Bearer token required. API key authentication is not accepted.")
 
     return await _resolve_bearer_user(auth_header[7:], session)
 
@@ -196,7 +190,7 @@ def require_permission(
             return user
         # RBAC is on — user identity is mandatory.
         if user is None:
-            raise _bearer_401("Authentication required. Provide a Bearer token or user API key.")
+            raise bearer_401("Authentication required. Provide a Bearer token or user API key.")
         authz = Authorizer(session)
         allowed = await authz.check("User", user.email, verb, resource_kind)
         if not allowed:
@@ -227,7 +221,7 @@ async def check_resource_permission(
 
     # RBAC is on — user identity is mandatory.
     if user is None:
-        raise _bearer_401("Authentication required. Provide a Bearer token or user API key.")
+        raise bearer_401("Authentication required. Provide a Bearer token or user API key.")
 
     verb = _METHOD_TO_VERB.get(request.method, "get")
 

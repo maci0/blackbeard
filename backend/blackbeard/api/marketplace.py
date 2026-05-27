@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import require_permission
 from blackbeard.models.resource_schemas import ResourceCreate
-from blackbeard.rate_limiter import marketplace_limiter
+from blackbeard.rate_limiter import check_rate_limit, marketplace_limiter
 from blackbeard.resources import (
     ResourceService,
     ResourceValidationError,
@@ -81,20 +81,23 @@ def _find_yaml_files(directory: Path) -> list[Path]:
 
     Skips symlinks to prevent symlink-based directory traversal attacks
     where a malicious repo could link to files outside the clone directory.
+    Uses targeted globs instead of walking all files to avoid scanning
+    non-YAML content in large repositories.
     """
     resolved_root = directory.resolve()
-    yaml_suffixes = {".yaml", ".yml"}
     files: list[Path] = []
-    for f in directory.rglob("*"):
-        if f.suffix not in yaml_suffixes:
-            continue
-        if f.is_symlink():
-            continue
-        if not f.resolve().is_relative_to(resolved_root):
-            continue
-        files.append(f)
+    for pattern in ("**/*.yaml", "**/*.yml"):
+        for f in directory.glob(pattern):
+            if f.is_symlink():
+                continue
+            if not f.resolve().is_relative_to(resolved_root):
+                continue
+            files.append(f)
     files.sort()
     return files[:_MAX_YAML_FILES]
+
+
+_MAX_DOCS_PER_FILE = 100
 
 
 def _parse_yaml_resources(yaml_files: list[Path]) -> tuple[list[dict[str, Any]], list[str]]:
@@ -107,8 +110,15 @@ def _parse_yaml_resources(yaml_files: list[Path]) -> tuple[list[dict[str, Any]],
             continue
         try:
             content = filepath.read_text(encoding="utf-8")
-            # Support multi-document YAML files
+            doc_count = 0
             for doc in yaml.load_all(content, Loader=_yaml_loader):
+                doc_count += 1
+                if doc_count > _MAX_DOCS_PER_FILE:
+                    errors.append(
+                        f"Skipped remaining docs in {filepath.name}: "
+                        f"exceeds {_MAX_DOCS_PER_FILE} documents per file"
+                    )
+                    break
                 if not isinstance(doc, dict):
                     continue
                 if "kind" not in doc or "metadata" not in doc:
@@ -203,6 +213,7 @@ async def _clone_repo(url: str, target: Path) -> None:
     response_model=ImportResponse,
     responses={
         422: {"description": "Invalid URL or YAML parse errors"},
+        429: {"description": "Too many marketplace import requests"},
         503: {"description": "Built-in examples not available on server"},
         504: {"description": "Git clone timed out"},
     },
@@ -214,13 +225,9 @@ async def import_from_url(
     user: User | None = Depends(require_permission("create", "Resource")),
 ) -> ImportResponse:
     """Import resources from a git URL or built-in examples."""
-    key = str(user.id) if user is not None else "__anonymous__"
-    if not marketplace_limiter.check(key):
-        raise HTTPException(
-            status_code=429,
-            detail="Too many marketplace import requests. Try again later.",
-            headers={"Retry-After": "60"},
-        )
+    check_rate_limit(
+        marketplace_limiter, user, "Too many marketplace import requests. Try again later."
+    )
     url = body.url.strip()
     imported_names: list[str] = []
     error_details: list[str] = []
@@ -319,6 +326,7 @@ async def import_from_url(
                 kind_str,
                 name_str,
                 exc,
+                exc_info=True,
                 extra={
                     "event": "marketplace_resource_validation_failed",
                     "resource_kind": kind_str,

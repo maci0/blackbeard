@@ -138,6 +138,23 @@ async def db_session():
     await engine.dispose()
 
 
+def _clear_rate_limit_state() -> None:
+    """Reset all rate-limiter state so tests start clean."""
+    from blackbeard.rate_limiter import (
+        _auth_failures,
+        chat_limiter,
+        copilot_limiter,
+        execution_limiter,
+        marketplace_limiter,
+        mutation_limiter,
+        registration_limiter,
+    )
+
+    _auth_failures.clear()
+    for limiter in (mutation_limiter, execution_limiter, marketplace_limiter, copilot_limiter, chat_limiter, registration_limiter):
+        limiter._buckets.clear()
+
+
 @pytest.fixture
 async def client(db_session: AsyncSession):
     """HTTP test client wired to the in-memory SQLite session."""
@@ -146,26 +163,12 @@ async def client(db_session: AsyncSession):
         yield db_session
 
     app.dependency_overrides[get_session] = override_get_session
-    # Clear rate-limit state so tests don't accumulate auth failures across runs
-    from blackbeard.rate_limiter import (
-        _auth_failures,
-        execution_limiter,
-        marketplace_limiter,
-        mutation_limiter,
-    )
-
-    _auth_failures.clear()
-    mutation_limiter._buckets.clear()
-    execution_limiter._buckets.clear()
-    marketplace_limiter._buckets.clear()
+    _clear_rate_limit_state()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
-    _auth_failures.clear()
-    mutation_limiter._buckets.clear()
-    execution_limiter._buckets.clear()
-    marketplace_limiter._buckets.clear()
+    _clear_rate_limit_state()
 
 
 # ---------------------------------------------------------------------------

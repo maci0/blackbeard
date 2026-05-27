@@ -83,6 +83,8 @@ spec:
                 secretKeyRef:
                   name: {{ include "blackbeard.secretsName" . }}
                   key: jwt-secret
+            - name: FORWARDED_ALLOW_IPS
+              value: {{ .Values.api.forwardedAllowIps | default "*" | quote }}
             {{- range $key, $value := .Values.api.env }}
             - name: {{ $key | quote }}
               value: {{ $value | quote }}

@@ -1,4 +1,4 @@
-import type { DragEvent } from 'react'
+import { type DragEvent, useState } from 'react'
 import {
   User,
   ListChecks,
@@ -9,6 +9,7 @@ import {
   Route,
   Columns3,
   StickyNote,
+  Search,
 } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
 import { getDefaultNodeData } from './defaults'
@@ -149,6 +150,7 @@ function PaletteCard({ item }: { item: PaletteItem }) {
       onKeyDown={onKeyDown}
       tabIndex={0}
       role="button"
+      title={item.label}
       aria-label={`Add ${item.label} node to canvas`}
       className={`cursor-grab select-none overflow-hidden rounded-lg border bg-card shadow-sm transition-all duration-150 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing ${item.borderColor}`}
     >
@@ -167,21 +169,36 @@ function PaletteCard({ item }: { item: PaletteItem }) {
 }
 
 export default function Palette() {
+  const [filter, setFilter] = useState('')
+  const filtered = filter
+    ? ITEMS.filter((item) => item.label.toLowerCase().includes(filter.toLowerCase()))
+    : ITEMS
+
   return (
     <aside
       aria-label="Node palette"
       data-tour="palette"
       className="hidden w-[108px] shrink-0 flex-col border-r bg-card sm:flex"
     >
-      <div className="border-b px-3 pb-2 pt-3">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          Palette
-        </p>
+      <div className="border-b px-2 pb-2 pt-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter…"
+            aria-label="Filter palette nodes"
+            className="w-full rounded-md border bg-background py-1 pl-6 pr-1 text-[10px] text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
       </div>
-      <div className="flex flex-col gap-2 p-2 pt-3">
-        {ITEMS.map((item) => (
-          <PaletteCard key={item.type} item={item} />
-        ))}
+      <div className="flex flex-col gap-2 overflow-y-auto p-2 pt-2">
+        {filtered.length > 0 ? (
+          filtered.map((item) => <PaletteCard key={item.type} item={item} />)
+        ) : (
+          <p className="py-4 text-center text-[10px] text-muted-foreground">No matches</p>
+        )}
       </div>
       <div className="p-2 pt-0">
         <p className="text-center text-[10px] leading-tight text-muted-foreground">

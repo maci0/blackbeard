@@ -1,8 +1,8 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
-import { useDocumentTitle } from '@/hooks'
-import { API_VERSION } from '@/lib/kinds'
+import { useDocumentTitle, useDeleteError } from '@/hooks'
+import { API_VERSION, NAME_PATTERN } from '@/lib/kinds'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   BookOpen,
@@ -336,7 +336,7 @@ function AddKnowledgeSourceDialog({
                   placeholder="my-knowledge-source"
                   autoComplete="off"
                   autoFocus
-                  pattern="[a-z0-9][a-z0-9\-]*"
+                  pattern={NAME_PATTERN}
                   title="Lowercase letters, numbers, and hyphens only"
                   aria-describedby="ks-name-hint"
                   className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
@@ -469,14 +469,7 @@ export default function KnowledgeSources() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
-  const deleteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    return () => {
-      if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
-    }
-  }, [])
+  const { deleteError, showDeleteError, clearDeleteError } = useDeleteError()
 
   useDocumentTitle('Knowledge Sources')
 
@@ -524,9 +517,7 @@ export default function KnowledgeSources() {
       toasts.success(`Knowledge source "${name}" deleted`)
     } catch (err) {
       setDeleteTarget(null)
-      setDeleteError(getErrorMessage(err, 'Failed to delete knowledge source'))
-      if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
-      deleteErrorTimerRef.current = setTimeout(() => setDeleteError(null), 8000)
+      showDeleteError(getErrorMessage(err, 'Failed to delete knowledge source'))
     } finally {
       setDeleting(false)
     }
@@ -575,7 +566,7 @@ export default function KnowledgeSources() {
           <ErrorAlert
             message={deleteError}
             actionLabel="Dismiss"
-            onAction={() => setDeleteError(null)}
+            onAction={() => clearDeleteError()}
             ariaLabel="Dismiss error"
             className="mb-4"
           />

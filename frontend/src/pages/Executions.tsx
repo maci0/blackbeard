@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback, useState, useRef } from 'react'
+import { useEffect, useMemo, useCallback, useState, useRef, useDeferredValue } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Play,
@@ -25,7 +25,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
-import { getDuration, formatCost } from '@/lib/formatters'
+import { getDuration, formatCost, parseCost } from '@/lib/formatters'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { Pagination } from '@/components/ui/Pagination'
 
@@ -55,6 +55,12 @@ const TYPE_OPTIONS: Array<{ label: string; value: string }> = [
 
 type SortField = 'created_at' | 'status' | 'crew_name'
 type SortDir = 'asc' | 'desc'
+
+const SORT_FIELD_MAP: Partial<Record<(typeof TABLE_HEADERS)[number], SortField>> = {
+  Status: 'status',
+  Crew: 'crew_name',
+  Created: 'created_at',
+}
 
 function compareExecutions(a: Execution, b: Execution, field: SortField, dir: SortDir): number {
   let cmp = 0
@@ -151,6 +157,7 @@ export default function Executions() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [crewSearch, setCrewSearch] = useState('')
+  const deferredCrewSearch = useDeferredValue(crewSearch)
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const crewSearchRef = useRef<HTMLInputElement>(null)
@@ -195,14 +202,14 @@ export default function Executions() {
     let totalTokens = 0
     for (const e of executions) {
       if (e.status === 'running' || e.status === 'queued') runningQueued++
-      totalCost += typeof e.cost_usd === 'string' ? parseFloat(e.cost_usd) || 0 : e.cost_usd || 0
+      totalCost += parseCost(e.cost_usd)
       totalTokens += e.total_tokens
     }
     return { runningQueued, totalCost, totalTokens }
   }, [executions])
 
   const filtered = useMemo(() => {
-    const searchLower = crewSearch ? crewSearch.toLowerCase() : ''
+    const searchLower = deferredCrewSearch ? deferredCrewSearch.toLowerCase() : ''
     const result = executions.filter((e) => {
       if (statusFilter !== 'all' && e.status !== statusFilter) return false
       if (typeFilter !== 'all' && e.execution_type !== typeFilter) return false
@@ -211,7 +218,7 @@ export default function Executions() {
     })
     result.sort((a, b) => compareExecutions(a, b, sortField, sortDir))
     return result
-  }, [executions, statusFilter, typeFilter, crewSearch, sortField, sortDir])
+  }, [executions, statusFilter, typeFilter, deferredCrewSearch, sortField, sortDir])
 
   return (
     <div className="page-enter flex-1 overflow-auto">
@@ -415,13 +422,7 @@ export default function Executions() {
                             </th>
                           )
                         }
-                        const fieldMap: Partial<Record<(typeof TABLE_HEADERS)[number], SortField>> =
-                          {
-                            Status: 'status',
-                            Crew: 'crew_name',
-                            Created: 'created_at',
-                          }
-                        const field = fieldMap[h]
+                        const field = SORT_FIELD_MAP[h]
                         const isSorted = field && sortField === field
                         return (
                           <th

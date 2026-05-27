@@ -12,6 +12,8 @@ from rich.table import Table
 from blackbeard_cli.helpers import (
     HelpCommand,
     console,
+    extract_items,
+    extract_total,
     handle_http_error,
     handle_request_error,
     json_opt,
@@ -90,7 +92,7 @@ def role_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
         print_json(data)
         return
 
-    items = data if isinstance(data, list) else data.get("items", [])
+    items = extract_items(data)
     if not items:
         out.print("[dim]No roles found.[/]")
         return
@@ -108,7 +110,7 @@ def role_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
         table.add_row(name, desc[:60], str(len(rules)))
 
     out.print(table)
-    total = len(items) if isinstance(data, list) else data.get("total", len(items))
+    total = extract_total(data, items)
     if total > len(items):
         out.print(f"[dim]Showing {len(items)} of {total} (increase --limit to see more)[/]")
     else:
@@ -262,7 +264,7 @@ def rolebinding_list(ctx: click.Context, limit: int, output_json: bool = False) 
         print_json(data)
         return
 
-    items = data if isinstance(data, list) else data.get("items", [])
+    items = extract_items(data)
     if not items:
         out.print("[dim]No role bindings found.[/]")
         return
@@ -281,7 +283,7 @@ def rolebinding_list(ctx: click.Context, limit: int, output_json: bool = False) 
         table.add_row(name, role_name, subj_str or "—")
 
     out.print(table)
-    total = len(items) if isinstance(data, list) else data.get("total", len(items))
+    total = extract_total(data, items)
     if total > len(items):
         out.print(f"[dim]Showing {len(items)} of {total} (increase --limit to see more)[/]")
     else:

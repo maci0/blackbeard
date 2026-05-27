@@ -68,7 +68,7 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **CLI** (`cli/` — separate package `blackbeard-cli`): Standalone package with no server deps (click, httpx, rich, pyyaml, jsonschema only). 28 commands (including 4 groups with subcommands) across 6 modules. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
 
-**Dynamic LiteLLM sync**: When `LLMConnection` resources are created/updated/deleted, the API regenerates LiteLLM config and pushes it via `POST /config/update` — no container restart needed.
+**Dynamic LiteLLM sync**: When `LLMConnection` resources are created/updated/deleted, the API pushes changes to LiteLLM via `POST /model/new`, `/model/update`, and `/model/delete` — no container restart needed.
 
 **RBAC enforcement**: API endpoints use a `require_permission()` FastAPI dependency that checks the authenticated user's roles and role bindings before allowing access. Permissions are checked as `(resource_kind, verb)` pairs.
 

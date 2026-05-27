@@ -140,7 +140,10 @@ async def _check_valkey() -> dict[str, object]:
 
 
 async def _check_litellm() -> dict[str, object]:
-    """Hit LiteLLM /health/liveliness and return status dict."""
+    """Hit LiteLLM /health/liveliness and return status dict.
+
+    Note: "liveliness" is LiteLLM's actual endpoint name (their misspelling).
+    """
     t0 = time.monotonic()
     try:
         client = get_client("health", timeout=3.0)

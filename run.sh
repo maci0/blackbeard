@@ -76,9 +76,10 @@ if [ "$DEBUG_MODE" = "true" ]; then
   echo ""
   echo "  Default login:"
   echo "    Email:    admin@blackbeard.sh"
-  echo "    Password: (set via BLACKBEARD_ADMIN_PASSWORD, default: see deploy/seed.sh)"
+  echo "    Password: (set BLACKBEARD_ADMIN_PASSWORD or see .admin-credentials after seeding)"
   echo ""
-  echo "  (Set BLACKBEARD_ADMIN_PASSWORD to change. Run deploy/seed.sh after startup.)"
+  echo "  Run deploy/seed.sh after startup to create the admin user."
+  echo "  Credentials will be saved to .admin-credentials"
 fi
 echo ""
 

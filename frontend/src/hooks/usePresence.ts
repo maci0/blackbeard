@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { TOKEN_KEY } from '@/stores/authStore'
 
 interface PresenceUser {
   id: string
@@ -46,7 +47,7 @@ export function usePresence(roomId: string | null): UsePresenceReturn {
       if (!mountedRef.current || !roomId) return
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const token = localStorage.getItem('blackbeard_token') ?? ''
+      const token = localStorage.getItem(TOKEN_KEY) ?? ''
       const authParam = token ? `?token=${encodeURIComponent(token)}` : ''
       const ws = new WebSocket(
         `${protocol}//${window.location.host}/api/v1/collaboration/rooms/${encodeURIComponent(roomId)}${authParam}`,
@@ -58,12 +59,11 @@ export function usePresence(roomId: string | null): UsePresenceReturn {
         setConnected(true)
         reconnectDelayRef.current = INITIAL_RECONNECT_DELAY_MS
 
-        const stored = localStorage.getItem('blackbeard_token')
         let id = 'anonymous'
         let name = 'Anonymous'
-        if (stored) {
+        if (token) {
           try {
-            const payload = JSON.parse(atob(stored.split('.')[1] ?? '{}')) as {
+            const payload = JSON.parse(atob(token.split('.')[1] ?? '{}')) as {
               sub?: string
               display_name?: string
             }

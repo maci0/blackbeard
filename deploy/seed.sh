@@ -218,11 +218,22 @@ seed "AgentPolicy/sandboxed" -X POST "$API/api/v1/agent-policies" "${H[@]}" -d '
 # ── Default admin user (DEBUG mode only) ────────────────────────────
 if [ "${DEBUG:-false}" = "true" ]; then
   ADMIN_PASSWORD="${BLACKBEARD_ADMIN_PASSWORD:-$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")}"
+  CREDS_FILE="${BLACKBEARD_CREDS_FILE:-.admin-credentials}"
   echo "  (DEBUG mode: creating default admin user)"
   admin_resp=$(curl -sSf -X POST "$API/api/v1/auth/register" \
     -H "Content-Type: application/json" \
     -d "{\"email\": \"admin@blackbeard.sh\", \"password\": \"${ADMIN_PASSWORD}\", \"display_name\": \"Admin\"}" 2>&1) && \
-    { echo "  + User/admin@blackbeard.sh"; echo "    Admin password (stderr only): $ADMIN_PASSWORD" >&2; } || \
+    {
+      echo "  + User/admin@blackbeard.sh"
+      cat > "$CREDS_FILE" <<CREDS
+# Blackbeard default admin credentials (generated $(date -u +%Y-%m-%dT%H:%M:%SZ))
+# DELETE THIS FILE after first login and change the password.
+email=admin@blackbeard.sh
+password=${ADMIN_PASSWORD}
+CREDS
+      chmod 600 "$CREDS_FILE"
+      echo "  + Credentials saved to $CREDS_FILE (mode 600)"
+    } || \
     echo "  ~ User/admin@blackbeard.sh (already exists or skipped)"
 fi
 

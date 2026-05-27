@@ -155,6 +155,17 @@ def _validate_startup_config() -> None:
             )
         if not settings.oidc_client_id:
             raise _fatal("Refusing to start: OIDC_ISSUER is set but OIDC_CLIENT_ID is missing.")
+        if not settings.oidc_redirect_uri:
+            raise _fatal(
+                "Refusing to start: OIDC_ISSUER is set but OIDC_REDIRECT_URI is missing. "
+                "Set OIDC_REDIRECT_URI to the callback URL "
+                "(e.g. https://your-domain/api/v1/auth/oidc/callback)."
+            )
+        if not settings.oidc_redirect_uri.startswith("https://"):
+            raise _fatal(
+                "Refusing to start: OIDC_REDIRECT_URI must use https:// in production "
+                "(got http://). Set DEBUG=true for local development with http."
+            )
     if not settings.enforce_rbac and not settings.debug:
         logger.warning(
             "SECURITY: ENFORCE_RBAC is False — all authenticated users have full access. "
@@ -171,7 +182,7 @@ def _validate_startup_config() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    """Application lifespan: startup and shutdown."""
+    """Application lifespan: config validation, scheduler, LiteLLM sync, gRPC, cleanup."""
     t0_startup = time.monotonic()
     _validate_startup_config()
     pool = cast("Any", engine.pool)
@@ -209,7 +220,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     )
     recovered = await recover_stale_executions()
 
-    # Start automation scheduler for cron-triggered automations
     from blackbeard.engine.scheduler import AutomationScheduler
 
     scheduler = AutomationScheduler()

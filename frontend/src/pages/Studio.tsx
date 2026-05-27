@@ -155,6 +155,7 @@ function StudioInner() {
   const [executionId, setExecutionId] = useState<string | null>(null)
   const [crews, setCrews] = useState<string[]>([])
   const [crewsLoading, setCrewsLoading] = useState(false)
+  const [crewsFetchError, setCrewsFetchError] = useState(false)
   const [pendingLoadCrew, setPendingLoadCrew] = useState<string | null>(null)
   const [yamlOpen, setYamlOpen] = useState(false)
   const [layouting, setLayouting] = useState(false)
@@ -318,11 +319,13 @@ function StudioInner() {
   /* ── Fetch saved crews for the Load dropdown ── */
   const fetchCrews = useCallback(async () => {
     setCrewsLoading(true)
+    setCrewsFetchError(false)
     try {
       const result = await api.get<{ items: Resource[]; total: number }>('/api/v1/crews')
       setCrews(result.items.map((c) => c.metadata.name))
     } catch {
       setCrews([])
+      setCrewsFetchError(true)
     } finally {
       setCrewsLoading(false)
     }
@@ -892,6 +895,7 @@ function StudioInner() {
         onFetchCrews={() => void fetchCrews()}
         crews={crews}
         crewsLoading={crewsLoading}
+        crewsFetchError={crewsFetchError}
         dirty={dirty}
         status={status}
         statusMessage={statusMessage}

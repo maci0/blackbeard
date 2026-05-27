@@ -64,6 +64,8 @@ spec:
                 secretKeyRef:
                   name: {{ include "blackbeard.secretsName" . }}
                   key: database-password
+            - name: STORE_MODEL_IN_DB
+              value: "True"
             - name: DATABASE_URL
               value: {{ include "blackbeard.litellmDatabaseUrl" . | quote }}
             {{- range $key, $value := .Values.litellm.env }}

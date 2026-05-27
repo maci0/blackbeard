@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator, Awaitable
@@ -24,8 +25,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from blackbeard import sse as sse_state
+from blackbeard.api import RETRY_HEADERS_30
 from blackbeard.audit import audit_from_request, log_audit
-from blackbeard.auth.dependencies import get_current_user, require_permission
+from blackbeard.auth.dependencies import require_permission
 from blackbeard.config import settings
 from blackbeard.engine import ExecutionError, ExecutionNotFoundError
 from blackbeard.engine import executor as _executor_mod
@@ -53,22 +55,17 @@ from blackbeard.models.execution_schemas import (
     TestRequest,
     TrainRequest,
 )
-from blackbeard.rate_limiter import execution_limiter
+from blackbeard.rate_limiter import check_rate_limit, execution_limiter
 
 logger = logging.getLogger(__name__)
 
-# TODO(perf): Replace DB polling with Valkey pub/sub for near-instant
-# delivery with zero DB load per connected client.
 _MAX_STREAM_POLLS = 400
-
-_RETRY_AFTER_30 = {"Retry-After": "30"}
 
 _HEARTBEAT_JSON: dict[str, str] = {
     s.value: json.dumps({"status": s.value}) for s in ExecutionStatus
 }
 
 _SSE_ERROR_TOO_MANY = json.dumps({"detail": "Too many concurrent SSE streams"})
-_SSE_ERROR_TIMEOUT = json.dumps({"detail": "Stream timeout — execution still running"})
 _SSE_ERROR_INTERNAL = json.dumps({"detail": "Internal stream error"})
 
 # Phase thresholds for progressive poll backoff (shared by SSE + WS).
@@ -86,15 +83,91 @@ def _poll_backoff(polls: int) -> int:
 
 
 def _serialize_event(ev: ExecutionEvent) -> dict[str, object]:
-    """Build a JSON-safe event dict with sequence and timestamp.
-
-    Event data is already redacted by the execution listener before DB storage,
-    so we copy (to avoid mutating the ORM object) but skip re-redaction.
-    """
     data: dict[str, object] = dict(ev.data) if ev.data else {}
     data["sequence"] = ev.sequence
     data["timestamp"] = ev.timestamp.isoformat()
     return data
+
+
+class _StreamEvent:
+    """A single event yielded by the shared execution polling loop."""
+
+    __slots__ = ("data", "event_type", "kind")
+
+    def __init__(self, kind: str, data: dict[str, object], event_type: str = "") -> None:
+        self.kind = kind  # "status" | "heartbeat" | "event" | "error" | "timeout"
+        self.data = data
+        self.event_type = event_type  # only set for kind="event"
+
+
+async def _poll_execution(execution_id: UUID) -> AsyncGenerator[_StreamEvent]:
+    """Shared polling loop for SSE and WS execution streams.
+
+    Yields _StreamEvent objects; callers decide how to serialize/send them.
+    """
+    last_status: ExecutionStatus | None = None
+    current_status: ExecutionStatus | None = None
+    last_event_seq = -1
+    prev_had_events = True
+    polls = 0
+
+    while polls < _MAX_STREAM_POLLS:
+        polls += 1
+        async with async_session() as session:
+            if last_status is None:
+                execution = await _executor_mod.get_execution(session, execution_id)
+                if not execution:
+                    yield _StreamEvent("error", {"detail": f"Execution '{execution_id}' not found"})
+                    return
+                current_status = execution.status
+                yield _StreamEvent(
+                    "status",
+                    ExecutionResponse.from_db(execution).model_dump(mode="json"),
+                )
+                last_status = current_status
+            else:
+                current_status = await _executor_mod.get_execution_status(
+                    session, execution_id
+                )
+                if current_status is None:
+                    yield _StreamEvent(
+                        "error", {"detail": f"Execution '{execution_id}' not found"}
+                    )
+                    return
+
+                if current_status != last_status or current_status in TERMINAL_STATUSES:
+                    execution = await _executor_mod.get_execution(session, execution_id)
+                    if execution:
+                        yield _StreamEvent(
+                            "status",
+                            ExecutionResponse.from_db(execution).model_dump(mode="json"),
+                        )
+                    last_status = current_status
+                else:
+                    yield _StreamEvent("heartbeat", {"status": current_status.value})
+
+            skip_events = (
+                not prev_had_events
+                and current_status == last_status
+                and current_status not in TERMINAL_STATUSES
+            )
+            if not skip_events:
+                new_events = await _executor_mod.list_execution_events(
+                    session, execution_id, after=last_event_seq, limit=50
+                )
+                prev_had_events = len(new_events) > 0
+                for ev in new_events:
+                    yield _StreamEvent("event", _serialize_event(ev), event_type=ev.event_type)
+                    last_event_seq = ev.sequence
+            else:
+                prev_had_events = True
+
+            if current_status in TERMINAL_STATUSES:
+                return
+
+        await asyncio.sleep(_poll_backoff(polls))
+
+    yield _StreamEvent("timeout", {"detail": "Stream timeout — execution still running"})
 
 
 async def _require_execution(
@@ -153,15 +226,7 @@ async def _run_executor(
         ) from exc
 
 
-def _check_execution_rate(user: User | None) -> None:
-    """Raise 429 if user exceeds execution rate limit."""
-    key = str(user.id) if user is not None else "__anonymous__"
-    if not execution_limiter.check(key):
-        raise HTTPException(
-            status_code=429,
-            detail="Too many execution requests. Try again later.",
-            headers={"Retry-After": "60"},
-        )
+_EXECUTION_RATE_MSG = "Too many execution requests. Try again later."
 
 
 router = APIRouter(tags=["executions"])
@@ -174,6 +239,7 @@ router = APIRouter(tags=["executions"])
     responses={
         404: {"description": "Crew not found in namespace"},
         422: {"description": "Invalid request body"},
+        429: {"description": "Too many execution requests"},
         500: {"description": "Internal execution error"},
     },
 )
@@ -197,7 +263,7 @@ async def kickoff_crew(
     user: User | None = Depends(require_permission("run", "Crew")),
 ) -> ExecutionResponse:
     """Kick off a crew execution. Returns immediately with status=queued."""
-    _check_execution_rate(user)
+    check_rate_limit(execution_limiter, user, _EXECUTION_RATE_MSG)
     execution = await _run_executor(
         _executor_mod.kickoff(session, crew_name, body.inputs, namespace, user=user),
         log_event="kickoff_internal_error",
@@ -224,6 +290,7 @@ async def kickoff_crew(
     responses={
         404: {"description": "Crew not found in namespace"},
         422: {"description": "Invalid request body"},
+        429: {"description": "Too many execution requests"},
         500: {"description": "Internal execution error"},
     },
 )
@@ -247,7 +314,7 @@ async def train_crew_endpoint(
     user: User | None = Depends(require_permission("run", "Crew")),
 ) -> ExecutionResponse:
     """Start a crew training run. Returns immediately with status=queued."""
-    _check_execution_rate(user)
+    check_rate_limit(execution_limiter, user, _EXECUTION_RATE_MSG)
     execution = await _run_executor(
         _executor_mod.train_crew(
             session,
@@ -282,6 +349,7 @@ async def train_crew_endpoint(
     responses={
         404: {"description": "Crew not found in namespace"},
         422: {"description": "Invalid request body"},
+        429: {"description": "Too many execution requests"},
         500: {"description": "Internal execution error"},
     },
 )
@@ -305,7 +373,7 @@ async def test_crew_endpoint(
     user: User | None = Depends(require_permission("run", "Crew")),
 ) -> ExecutionResponse:
     """Start a crew test run. Returns immediately with status=queued."""
-    _check_execution_rate(user)
+    check_rate_limit(execution_limiter, user, _EXECUTION_RATE_MSG)
     execution = await _run_executor(
         _executor_mod.test_crew(
             session,
@@ -339,6 +407,7 @@ async def test_crew_endpoint(
     responses={
         202: {"description": "Flow execution queued"},
         404: {"description": "Flow not found"},
+        429: {"description": "Too many execution requests"},
         500: {"description": "Internal execution error"},
     },
 )
@@ -362,7 +431,7 @@ async def run_flow_endpoint(
     user: User | None = Depends(require_permission("run", "Flow")),
 ) -> ExecutionResponse:
     """Run a flow. Returns immediately with status=queued."""
-    _check_execution_rate(user)
+    check_rate_limit(execution_limiter, user, _EXECUTION_RATE_MSG)
     execution = await _run_executor(
         _executor_mod.run_flow(session, flow_name, body.inputs, namespace=namespace, user=user),
         log_event="flow_run_error",
@@ -411,7 +480,7 @@ async def list_executions(
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     session: AsyncSession = Depends(get_session),
-    _user: User | None = Depends(get_current_user),
+    _user: User | None = Depends(require_permission("list", "Execution")),
 ) -> ExecutionListResponse:
     """List executions with optional filters."""
     items, total = await _executor_mod.list_executions(
@@ -441,7 +510,7 @@ async def list_executions(
 async def get_execution(
     execution_id: UUID = Path(..., description="Execution UUID"),
     session: AsyncSession = Depends(get_session),
-    _user: User | None = Depends(get_current_user),
+    _user: User | None = Depends(require_permission("get", "Execution")),
 ) -> ExecutionResponse:
     """Get execution details by ID."""
     execution = await _require_execution(session, execution_id)
@@ -459,7 +528,7 @@ async def get_execution(
 async def get_execution_spend(
     execution_id: UUID = Path(..., description="Execution UUID"),
     session: AsyncSession = Depends(get_session),
-    _user: User | None = Depends(get_current_user),
+    _user: User | None = Depends(require_permission("get", "Execution")),
 ) -> Response:
     """Get LiteLLM spend data for an execution's requests."""
     await _require_execution_status(session, execution_id)
@@ -490,7 +559,7 @@ async def get_execution_spend(
         raise HTTPException(
             status_code=502,
             detail=f"Spend service returned status {resp.status_code}",
-            headers=_RETRY_AFTER_30,
+            headers=RETRY_HEADERS_30,
         )
     except HTTPException:
         raise
@@ -510,7 +579,7 @@ async def get_execution_spend(
         raise HTTPException(
             status_code=502,
             detail="Spend service is unavailable. Try again later.",
-            headers=_RETRY_AFTER_30,
+            headers=RETRY_HEADERS_30,
         ) from e
 
 
@@ -527,7 +596,7 @@ async def list_execution_events(
     after: int = Query(default=-1, ge=-1, description="Return events with sequence > after"),
     limit: int = Query(default=200, ge=1, le=1000, description="Max events to return"),
     session: AsyncSession = Depends(get_session),
-    _user: User | None = Depends(get_current_user),
+    _user: User | None = Depends(require_permission("get", "Execution")),
 ) -> ExecutionEventsResponse:
     """List execution events, optionally after a given sequence number."""
     await _require_execution_status(session, execution_id)
@@ -610,6 +679,7 @@ async def respond_to_execution(
         202: {"description": "New execution created from the original's configuration"},
         404: {"description": "Execution not found"},
         409: {"description": "Can only retry terminal executions"},
+        429: {"description": "Too many execution requests"},
         500: {"description": "Internal execution error"},
     },
 )
@@ -626,7 +696,7 @@ async def retry_execution(
     original. Only terminal executions (completed, failed, cancelled) can be
     retried. Returns the new execution immediately with status=queued.
     """
-    _check_execution_rate(user)
+    check_rate_limit(execution_limiter, user, _EXECUTION_RATE_MSG)
     original = await _require_execution(session, execution_id)
     if original.status not in TERMINAL_STATUSES:
         raise HTTPException(
@@ -744,7 +814,7 @@ async def cancel_execution(
 )
 async def stream_execution(
     execution_id: UUID = Path(..., description="Execution UUID"),
-    _user: User | None = Depends(get_current_user),
+    _user: User | None = Depends(require_permission("get", "Execution")),
 ) -> EventSourceResponse:
     """SSE stream of execution status events."""
     async with async_session() as check_session:
@@ -768,129 +838,37 @@ async def stream_execution(
             if not acquired:
                 yield {"event": "error", "data": _SSE_ERROR_TOO_MANY}
                 return
-            last_status: ExecutionStatus | None = None
-            current_status: ExecutionStatus | None = None
-            last_event_seq = -1
-            prev_had_events = True
-            polls = 0
             try:
-                while polls < _MAX_STREAM_POLLS:
-                    polls += 1
-                    async with async_session() as session:
-                        if last_status is None:
-                            execution = await _executor_mod.get_execution(session, execution_id)
-                            if not execution:
-                                msg = f"Execution '{execution_id}' not found"
-                                yield {
-                                    "event": "error",
-                                    "data": json.dumps({"detail": msg}),
-                                }
-                                break
-                            current_status = execution.status
-                            data = ExecutionResponse.from_db(execution).model_dump_json()
-                            yield {"event": "status", "data": data}
-                            last_status = current_status
-                        else:
-                            current_status = await _executor_mod.get_execution_status(
-                                session, execution_id
-                            )
-
-                            if current_status is None:
-                                msg = f"Execution '{execution_id}' not found"
-                                yield {
-                                    "event": "error",
-                                    "data": json.dumps({"detail": msg}),
-                                }
-                                break
-
-                            if current_status != last_status or current_status in TERMINAL_STATUSES:
-                                execution = await _executor_mod.get_execution(session, execution_id)
-                                if execution:
-                                    data = ExecutionResponse.from_db(execution).model_dump_json()
-                                    yield {"event": "status", "data": data}
-                                last_status = current_status
-                            else:
-                                yield {
-                                    "event": "heartbeat",
-                                    "data": _HEARTBEAT_JSON[current_status.value],
-                                }
-
-                        # Skip events query when: status unchanged, non-terminal,
-                        # and previous poll found no new events (saves a DB round
-                        # trip on idle polls).
-                        skip_events = (
-                            not prev_had_events
-                            and current_status == last_status
-                            and current_status not in TERMINAL_STATUSES
-                        )
-                        if not skip_events:
-                            new_events = await _executor_mod.list_execution_events(
-                                session, execution_id, after=last_event_seq, limit=50
-                            )
-                            prev_had_events = len(new_events) > 0
-                            for ev in new_events:
-                                yield {
-                                    "event": ev.event_type,
-                                    "data": json.dumps(_serialize_event(ev)),
-                                }
-                                last_event_seq = ev.sequence
-                        else:
-                            # Force a DB check next poll so we skip at most one consecutive poll.
-                            prev_had_events = True
-
-                        if current_status in TERMINAL_STATUSES:
-                            logger.info(
-                                "SSE stream closed: id=%s status=%s polls=%d active=%d/%d",
-                                execution_id,
-                                current_status.value,
-                                polls,
-                                sse_state.get_active_count() - 1,
-                                settings.max_concurrent_sse,
-                                extra={
-                                    "event": "sse_stream_closed",
-                                    "execution_id": str(execution_id),
-                                    "final_status": current_status.value,
-                                    "polls": polls,
-                                    "remaining_streams": sse_state.get_active_count() - 1,
-                                },
-                            )
-                            break
-
-                    await asyncio.sleep(_poll_backoff(polls))
-                else:
-                    logger.warning(
-                        "SSE stream timeout: execution_id=%s polls=%d",
-                        execution_id,
-                        polls,
-                        extra={
-                            "event": "sse_stream_timeout",
-                            "execution_id": str(execution_id),
-                            "polls": polls,
-                        },
-                    )
-                    yield {"event": "error", "data": _SSE_ERROR_TIMEOUT}
+                async for item in _poll_execution(execution_id):
+                    if item.kind == "event":
+                        yield {"event": item.event_type, "data": json.dumps(item.data)}
+                    elif item.kind == "heartbeat":
+                        yield {
+                            "event": "heartbeat",
+                            "data": _HEARTBEAT_JSON[str(item.data["status"])],
+                        }
+                    elif item.kind in ("error", "timeout"):
+                        yield {"event": "error", "data": json.dumps(item.data)}
+                    else:
+                        yield {"event": item.kind, "data": json.dumps(item.data)}
             except asyncio.CancelledError:
                 logger.info(
-                    "SSE stream client disconnected: execution_id=%s polls=%d",
+                    "SSE stream client disconnected: execution_id=%s",
                     execution_id,
-                    polls,
                     extra={
                         "event": "sse_stream_disconnected",
                         "execution_id": str(execution_id),
-                        "polls": polls,
                     },
                 )
             except Exception as e:
                 logger.error(
-                    "SSE stream error: execution_id=%s polls=%d error=%s",
+                    "SSE stream error: execution_id=%s error=%s",
                     execution_id,
-                    polls,
                     e,
                     exc_info=True,
                     extra={
                         "event": "sse_stream_error",
                         "execution_id": str(execution_id),
-                        "polls": polls,
                         "error_type": type(e).__name__,
                         "error_message": str(e)[:500],
                     },
@@ -954,69 +932,16 @@ async def ws_execution(
         await websocket.close(code=4004, reason="Execution not found")
         return
 
-    last_status: ExecutionStatus | None = None
-    last_event_seq = -1
-    prev_had_events = True
-    polls = 0
-
     try:
-        while polls < _MAX_STREAM_POLLS:
-            polls += 1
-            async with async_session() as session:
-                if last_status is None:
-                    execution = await _executor_mod.get_execution(session, execution_id)
-                    if not execution:
-                        await websocket.send_json(
-                            {"event": "error", "data": {"detail": "Execution not found"}}
-                        )
-                        break
-                    current_status: ExecutionStatus | None = execution.status
-                    data = ExecutionResponse.from_db(execution).model_dump(mode="json")
-                    await websocket.send_json({"event": "status", "data": data})
-                    last_status = current_status
-                else:
-                    current_status = await _executor_mod.get_execution_status(session, execution_id)
-                    if current_status is None:
-                        await websocket.send_json(
-                            {"event": "error", "data": {"detail": "Execution not found"}}
-                        )
-                        break
-
-                    if current_status != last_status or current_status in TERMINAL_STATUSES:
-                        execution = await _executor_mod.get_execution(session, execution_id)
-                        if execution:
-                            data = ExecutionResponse.from_db(execution).model_dump(mode="json")
-                            await websocket.send_json({"event": "status", "data": data})
-                        last_status = current_status
-                    else:
-                        await websocket.send_json(
-                            {"event": "heartbeat", "data": {"status": current_status.value}}
-                        )
-
-                skip_events = (
-                    not prev_had_events
-                    and current_status == last_status
-                    and current_status not in TERMINAL_STATUSES
+        async for item in _poll_execution(execution_id):
+            if item.kind == "event":
+                await websocket.send_json(
+                    {"event": item.event_type, "data": item.data}
                 )
-                if not skip_events:
-                    new_events = await _executor_mod.list_execution_events(
-                        session, execution_id, after=last_event_seq, limit=50
-                    )
-                    prev_had_events = len(new_events) > 0
-                    for ev in new_events:
-                        await websocket.send_json(
-                            {"event": ev.event_type, "data": _serialize_event(ev)}
-                        )
-                        last_event_seq = ev.sequence
-                else:
-                    prev_had_events = True
-
-                if current_status in TERMINAL_STATUSES:
-                    break
-
-            # Progressive backoff: 1s (first 30s) → 3s (30s-2min) → 5s (2min+)
-            await asyncio.sleep(_poll_backoff(polls))
-
+            elif item.kind in ("error", "timeout"):
+                await websocket.send_json({"event": "error", "data": item.data})
+            else:
+                await websocket.send_json({"event": item.kind, "data": item.data})
     except WebSocketDisconnect:
         logger.debug(
             "WS client disconnected: execution_id=%s",
@@ -1036,24 +961,10 @@ async def ws_execution(
                 "error_message": str(e)[:500],
             },
         )
-        try:
+        with contextlib.suppress(Exception):
             await websocket.send_json(
                 {"event": "error", "data": {"detail": "Internal stream error"}}
             )
-        except Exception:
-            logger.debug(
-                "WS error notification send failed: execution_id=%s",
-                execution_id,
-                exc_info=True,
-                extra={"event": "ws_error_send_failed", "execution_id": str(execution_id)},
-            )
     finally:
-        try:
+        with contextlib.suppress(Exception):
             await websocket.close()
-        except Exception:
-            logger.debug(
-                "WS close failed: execution_id=%s",
-                execution_id,
-                exc_info=True,
-                extra={"event": "ws_close_failed", "execution_id": str(execution_id)},
-            )

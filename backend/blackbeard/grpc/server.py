@@ -12,13 +12,14 @@ import json
 import logging
 import time
 from typing import TYPE_CHECKING, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import grpc
 
 from blackbeard import __version__
 from blackbeard.grpc import blackbeard_pb2, blackbeard_pb2_grpc
 from blackbeard.kinds import API_VERSION, KIND_TO_PLURAL, PLURAL_TO_KIND
+from blackbeard.logging_config import request_id_var, user_id_var
 from blackbeard.models import async_session
 from blackbeard.models.resource_schemas import (
     ResourceCreate,
@@ -57,6 +58,9 @@ class LoggingInterceptor(grpc.aio.ServerInterceptor):
         handler_call_details: grpc.HandlerCallDetails,
     ) -> Any:
         method = handler_call_details.method
+        request_id = str(uuid4())
+        request_id_var.set(request_id)
+        user_id_var.set("")
         start = time.monotonic()
         handler = await continuation(handler_call_details)
 
@@ -127,12 +131,11 @@ class AuthInterceptor(grpc.aio.ServerInterceptor):
             token = auth[7:]
             import jwt as pyjwt
 
-            from blackbeard.auth.jwt import decode_token
+            from blackbeard.auth.jwt import decode_access_token
 
             try:
-                payload = decode_token(token)
-                if payload.get("type") != "access":
-                    raise pyjwt.InvalidTokenError("Not an access token")
+                payload = decode_access_token(token)
+                user_id_var.set(payload.get("sub", ""))
                 return await continuation(handler_call_details)
             except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError) as exc:
                 logger.warning(
@@ -147,7 +150,6 @@ class AuthInterceptor(grpc.aio.ServerInterceptor):
                 )
                 return _AbortingHandler()
 
-        # No credentials provided
         logger.warning(
             "gRPC auth failed: no credentials for %s",
             method,

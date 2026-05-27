@@ -571,8 +571,10 @@ class TestWebhookAPI:
         resp = await client.get("/api/v1/webhooks", headers=API_KEY_HEADER)
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data["items"]) >= 2
-        assert "total" in data
+        assert len(data["items"]) == 2, (
+            f"Created 2 webhooks, expected exactly 2 in list, got {len(data['items'])}"
+        )
+        assert data["total"] == 2
         assert "has_more" in data
         # Secrets should not be in list response
         for webhook in data["items"]:
@@ -659,7 +661,10 @@ class TestWebhookDelivery:
 
     def test_deliver_webhooks_handles_no_webhooks(self):
         """Delivery with no webhooks in DB should not raise."""
+        import blackbeard.engine.execution_listener as listener_mod
         from blackbeard.engine.execution_listener import _deliver_webhooks_sync
+
+        listener_mod.invalidate_webhook_cache()
 
         # This will try to load webhooks from DB — mock it
         with patch(
@@ -680,6 +685,8 @@ class TestWebhookDelivery:
                 str(uuid.uuid4()),
                 "sqlite:///test.db",
             )
+
+        listener_mod.invalidate_webhook_cache()
 
     def test_deliver_webhooks_filters_by_event_type(self):
         """Webhooks with event filters should only receive matching events."""
@@ -709,6 +716,7 @@ class TestWebhookDelivery:
         # Save and patch module-level cached factory
         old_factory = listener_mod._sync_session_factory
         listener_mod._sync_session_factory = mock_factory
+        listener_mod.invalidate_webhook_cache()
 
         try:
             with patch("blackbeard.http_client.get_sync_client", return_value=mock_client):
@@ -723,6 +731,7 @@ class TestWebhookDelivery:
             mock_client.post.assert_not_called()
         finally:
             listener_mod._sync_session_factory = old_factory
+            listener_mod.invalidate_webhook_cache()
 
     def test_deliver_webhooks_empty_events_receives_all(self):
         """Webhooks with empty events list should receive all events."""

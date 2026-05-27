@@ -19,6 +19,7 @@ import {
   Settings,
 } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { NAME_PATTERN } from '@/lib/kinds'
 import { toResourceName } from '@/lib/utils'
 import { modKey } from '@/lib/platform'
 import { useStudioStore } from '@/stores/studioStore'
@@ -37,6 +38,7 @@ export function Toolbar({
   onFetchCrews,
   crews,
   crewsLoading,
+  crewsFetchError,
   dirty,
   status,
   statusMessage,
@@ -68,6 +70,7 @@ export function Toolbar({
   onFetchCrews: () => void
   crews: string[]
   crewsLoading?: boolean
+  crewsFetchError?: boolean
   dirty: boolean
   status: RunStatus
   statusMessage: string
@@ -143,7 +146,7 @@ export function Toolbar({
           placeholder="crew-name"
           spellCheck={false}
           autoComplete="off"
-          pattern="[a-z0-9][a-z0-9\-]*"
+          pattern={NAME_PATTERN}
           aria-describedby="crew-name-hint"
           title="Lowercase letters, numbers, and hyphens"
         />
@@ -190,6 +193,10 @@ export function Toolbar({
                 <div className="text-2xs flex items-center gap-2 px-3 py-2.5 text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" />
                   Loading…
+                </div>
+              ) : crewsFetchError ? (
+                <div className="text-2xs px-3 py-2.5 italic text-red-500">
+                  Failed to load crews — check connection
                 </div>
               ) : crews.length === 0 ? (
                 <div className="text-2xs px-3 py-2.5 italic text-muted-foreground">
@@ -251,7 +258,7 @@ export function Toolbar({
           disabled={status === 'saving' || status === 'loading'}
           title={`Save (${modKey}+S)`}
           aria-label={`Save crew${dirty ? ' (unsaved changes)' : ''}`}
-          className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          className="btn-press flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >
           {status === 'saving' ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
@@ -281,7 +288,7 @@ export function Toolbar({
                   ? 'Loading crew…'
                   : 'Run this crew'
           }
-          className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+          className="btn-press flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600"
         >
           {status === 'running' ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />

@@ -61,7 +61,7 @@ export default function Register() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-muted/50 px-4">
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-50/80 via-background to-violet-50/60 px-4 dark:from-indigo-950/30 dark:via-background dark:to-violet-950/20">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center">
@@ -208,7 +208,7 @@ export default function Register() {
               type="submit"
               disabled={loading}
               aria-busy={loading}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-press inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? (
                 <Spinner size="sm" className="text-current" />

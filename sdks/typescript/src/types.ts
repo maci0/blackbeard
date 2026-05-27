@@ -172,6 +172,18 @@ export class BlackbeardApiError extends Error {
     return this.status >= 500;
   }
 
+  get isNotFound(): boolean {
+    return this.status === 404;
+  }
+
+  get isConflict(): boolean {
+    return this.status === 409;
+  }
+
+  get isRateLimited(): boolean {
+    return this.status === 429;
+  }
+
   get isNetworkError(): boolean {
     return this.status === 0;
   }

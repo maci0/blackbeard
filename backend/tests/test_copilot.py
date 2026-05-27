@@ -284,7 +284,6 @@ def llm_connection_resource(db_session):
     return _insert
 
 
-@pytest.mark.asyncio
 async def test_generate_resources_success(db_session, llm_connection_resource):
     await llm_connection_resource()
 
@@ -305,7 +304,6 @@ async def test_generate_resources_success(db_session, llm_connection_resource):
     assert "Generated" in explanation
 
 
-@pytest.mark.asyncio
 async def test_generate_resources_no_llm_connection(db_session):
     with pytest.raises(NoLLMConnectionError, match="No LLMConnection found"):
         await generate_resources(
@@ -316,7 +314,6 @@ async def test_generate_resources_no_llm_connection(db_session):
         )
 
 
-@pytest.mark.asyncio
 async def test_generate_resources_specific_llm_not_found(db_session):
     with pytest.raises(NoLLMConnectionError, match="not found"):
         await generate_resources(
@@ -327,7 +324,6 @@ async def test_generate_resources_specific_llm_not_found(db_session):
         )
 
 
-@pytest.mark.asyncio
 async def test_generate_resources_llm_error(db_session, llm_connection_resource):
     await llm_connection_resource()
 
@@ -344,7 +340,6 @@ async def test_generate_resources_llm_error(db_session, llm_connection_resource)
             )
 
 
-@pytest.mark.asyncio
 async def test_generate_resources_rate_limited(db_session, llm_connection_resource):
     await llm_connection_resource()
 
@@ -361,7 +356,6 @@ async def test_generate_resources_rate_limited(db_session, llm_connection_resour
             )
 
 
-@pytest.mark.asyncio
 async def test_generate_resources_empty_response(db_session, llm_connection_resource):
     await llm_connection_resource()
 
@@ -378,7 +372,6 @@ async def test_generate_resources_empty_response(db_session, llm_connection_reso
             )
 
 
-@pytest.mark.asyncio
 async def test_generate_resources_transport_error(db_session, llm_connection_resource):
     await llm_connection_resource()
 
@@ -395,7 +388,6 @@ async def test_generate_resources_transport_error(db_session, llm_connection_res
             )
 
 
-@pytest.mark.asyncio
 async def test_generate_resources_auto_selects_llm(db_session, llm_connection_resource):
     """When no llm_connection_name is given, uses the first available."""
     await llm_connection_resource(name="my-llm", model="gpt-4")
@@ -418,7 +410,6 @@ async def test_generate_resources_auto_selects_llm(db_session, llm_connection_re
     assert payload["model"] == "ollama/gpt-4"
 
 
-@pytest.mark.asyncio
 async def test_generate_resources_openai_provider(db_session):
     """OpenAI provider should not add prefix."""
     r = make_resource(
@@ -450,7 +441,6 @@ async def test_generate_resources_openai_provider(db_session):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_copilot_endpoint_short_prompt(client):
     """Prompt shorter than 10 chars should return 422."""
     resp = await client.post(
@@ -461,7 +451,6 @@ async def test_copilot_endpoint_short_prompt(client):
     assert resp.status_code == 422
 
 
-@pytest.mark.asyncio
 async def test_copilot_endpoint_no_llm(client):
     """No LLMConnection in DB should return 424."""
     resp = await client.post(
@@ -471,10 +460,9 @@ async def test_copilot_endpoint_no_llm(client):
     )
     assert resp.status_code == 424
     data = resp.json()
-    assert "LLMConnection" in data["detail"]
+    assert "llm connection" in data["detail"].lower()
 
 
-@pytest.mark.asyncio
 async def test_copilot_endpoint_success(client, db_session):
     """Full success path with mocked LLM."""
     # Insert an LLMConnection
@@ -505,7 +493,6 @@ async def test_copilot_endpoint_success(client, db_session):
     assert kinds == {"Agent", "Task", "Crew"}
 
 
-@pytest.mark.asyncio
 async def test_copilot_endpoint_llm_error(client, db_session):
     """LLM returning error should result in 502."""
     r = make_resource(
@@ -529,7 +516,6 @@ async def test_copilot_endpoint_llm_error(client, db_session):
     assert resp.status_code == 502
 
 
-@pytest.mark.asyncio
 async def test_copilot_endpoint_specific_llm(client, db_session):
     """Request with specific llm_connection name."""
     r = make_resource(
@@ -560,7 +546,6 @@ async def test_copilot_endpoint_specific_llm(client, db_session):
     assert payload["model"] == "ollama/mistral"
 
 
-@pytest.mark.asyncio
 async def test_copilot_endpoint_nonexistent_llm(client):
     """Requesting a nonexistent LLMConnection should return 424."""
     resp = await client.post(
@@ -573,4 +558,4 @@ async def test_copilot_endpoint_nonexistent_llm(client):
     )
     assert resp.status_code == 424
     data = resp.json()
-    assert "not found" in data["detail"]
+    assert "llm connection" in data["detail"].lower()

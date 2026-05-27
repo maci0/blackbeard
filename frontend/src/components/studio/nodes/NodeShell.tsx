@@ -23,7 +23,7 @@ const COLOR_CLASSES: Record<
 > = {
   violet: {
     selected:
-      'border-violet-400 shadow-md shadow-violet-100 ring-2 ring-violet-300 ring-offset-1 dark:shadow-violet-950 dark:ring-offset-slate-900',
+      'border-violet-400 ring-2 ring-violet-300 ring-offset-1 shadow-[0_0_15px_rgba(139,92,246,0.25)] dark:shadow-[0_0_15px_rgba(139,92,246,0.15)] dark:ring-offset-slate-900',
     unselected: 'border-slate-200 hover:border-violet-200 hover:shadow-md dark:border-slate-700',
     handle: '!border-violet-400',
     from: 'from-violet-600',
@@ -31,7 +31,7 @@ const COLOR_CLASSES: Record<
   },
   blue: {
     selected:
-      'border-blue-400 shadow-md shadow-blue-100 ring-2 ring-blue-300 ring-offset-1 dark:shadow-blue-950 dark:ring-offset-slate-900',
+      'border-blue-400 ring-2 ring-blue-300 ring-offset-1 shadow-[0_0_15px_rgba(59,130,246,0.25)] dark:shadow-[0_0_15px_rgba(59,130,246,0.15)] dark:ring-offset-slate-900',
     unselected: 'border-slate-200 hover:border-blue-200 hover:shadow-md dark:border-slate-700',
     handle: '!border-blue-400',
     from: 'from-blue-600',
@@ -39,7 +39,7 @@ const COLOR_CLASSES: Record<
   },
   emerald: {
     selected:
-      'border-emerald-400 shadow-md shadow-emerald-100 ring-2 ring-emerald-300 ring-offset-1 dark:shadow-emerald-950 dark:ring-offset-slate-900',
+      'border-emerald-400 ring-2 ring-emerald-300 ring-offset-1 shadow-[0_0_15px_rgba(16,185,129,0.25)] dark:shadow-[0_0_15px_rgba(16,185,129,0.15)] dark:ring-offset-slate-900',
     unselected: 'border-slate-200 hover:border-emerald-200 hover:shadow-md dark:border-slate-700',
     handle: '!border-emerald-400',
     from: 'from-emerald-600',
@@ -47,7 +47,7 @@ const COLOR_CLASSES: Record<
   },
   amber: {
     selected:
-      'border-amber-400 shadow-md shadow-amber-100 ring-2 ring-amber-300 ring-offset-1 dark:shadow-amber-950 dark:ring-offset-slate-900',
+      'border-amber-400 ring-2 ring-amber-300 ring-offset-1 shadow-[0_0_15px_rgba(245,158,11,0.25)] dark:shadow-[0_0_15px_rgba(245,158,11,0.15)] dark:ring-offset-slate-900',
     unselected: 'border-slate-200 hover:border-amber-200 hover:shadow-md dark:border-slate-700',
     handle: '!border-amber-400',
     from: 'from-amber-600',
@@ -55,7 +55,7 @@ const COLOR_CLASSES: Record<
   },
   rose: {
     selected:
-      'border-rose-400 shadow-md shadow-rose-100 ring-2 ring-rose-300 ring-offset-1 dark:shadow-rose-950 dark:ring-offset-slate-900',
+      'border-rose-400 ring-2 ring-rose-300 ring-offset-1 shadow-[0_0_15px_rgba(244,63,94,0.25)] dark:shadow-[0_0_15px_rgba(244,63,94,0.15)] dark:ring-offset-slate-900',
     unselected: 'border-slate-200 hover:border-rose-200 hover:shadow-md dark:border-slate-700',
     handle: '!border-rose-400',
     from: 'from-rose-600',
@@ -63,7 +63,7 @@ const COLOR_CLASSES: Record<
   },
   cyan: {
     selected:
-      'border-cyan-400 shadow-md shadow-cyan-100 ring-2 ring-cyan-300 ring-offset-1 dark:shadow-cyan-950 dark:ring-offset-slate-900',
+      'border-cyan-400 ring-2 ring-cyan-300 ring-offset-1 shadow-[0_0_15px_rgba(6,182,212,0.25)] dark:shadow-[0_0_15px_rgba(6,182,212,0.15)] dark:ring-offset-slate-900',
     unselected: 'border-slate-200 hover:border-cyan-200 hover:shadow-md dark:border-slate-700',
     handle: '!border-cyan-400',
     from: 'from-cyan-600',
@@ -71,7 +71,7 @@ const COLOR_CLASSES: Record<
   },
   purple: {
     selected:
-      'border-purple-400 shadow-md shadow-purple-100 ring-2 ring-purple-300 ring-offset-1 dark:shadow-purple-950 dark:ring-offset-slate-900',
+      'border-purple-400 ring-2 ring-purple-300 ring-offset-1 shadow-[0_0_15px_rgba(168,85,247,0.25)] dark:shadow-[0_0_15px_rgba(168,85,247,0.15)] dark:ring-offset-slate-900',
     unselected: 'border-slate-200 hover:border-purple-200 hover:shadow-md dark:border-slate-700',
     handle: '!border-purple-400',
     from: 'from-purple-600',

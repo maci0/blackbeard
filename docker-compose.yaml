@@ -101,8 +101,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-blackbeard}
       POSTGRES_DB: ${POSTGRES_DB:-blackbeard}
       POSTGRES_INITDB_ARGS: --data-checksums
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - pgdata:/var/lib/postgresql
+      - pgdata:/var/lib/postgresql/data
       - ./deploy/docker/initdb:/docker-entrypoint-initdb.d:ro
     shm_size: 256m
     command:

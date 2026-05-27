@@ -36,6 +36,22 @@
   cursor: default;
 }
 
+/* Connection validation feedback — green for valid, red for invalid */
+.react-flow__handle.connectingto.valid {
+  background: #10b981 !important;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+.react-flow__handle.connectingto:not(.valid) {
+  background: #ef4444 !important;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__handle.connectingto.valid,
+  .react-flow__handle.connectingto:not(.valid) {
+    box-shadow: none;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Controls & MiniMap polish                                           */
 /* ------------------------------------------------------------------ */
@@ -96,6 +112,25 @@
     font-size: 0.6875rem;
     line-height: 1rem;
   }
+
+  .btn-press {
+    @apply active:scale-[0.97] motion-reduce:active:scale-100;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Save-success flash                                                  */
+/* ------------------------------------------------------------------ */
+@keyframes save-flash {
+  0% {
+    background-color: hsl(142 76% 36% / 0.12);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.save-flash {
+  animation: save-flash 0.8s ease-out;
 }
 
 @keyframes logo-pulse {
@@ -129,6 +164,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .page-enter,
+  .save-flash,
   [class*='animate-[logo-pulse'] {
     animation: none;
   }

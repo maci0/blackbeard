@@ -17,11 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from blackbeard.audit import log_audit
-from blackbeard.auth.dependencies import _bearer_401, require_jwt_user, require_user
+from blackbeard.auth.dependencies import bearer_401, require_jwt_user, require_user
 from blackbeard.auth.jwt import create_access_token, create_refresh_token, decode_token
 from blackbeard.auth.passwords import hash_password, verify_password
 from blackbeard.models import User, get_session
 from blackbeard.models.user_schemas import UserResponse, user_response
+from blackbeard.rate_limiter import check_rate_limit_by_ip, registration_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -126,8 +127,11 @@ async def register(
     session: AsyncSession = Depends(get_session),
 ) -> AuthResponse:
     """Register a new user account."""
+    ip = request.client.host if request.client else "unknown"
+    check_rate_limit_by_ip(
+        registration_limiter, ip, "Too many registration attempts. Try again later."
+    )
     email = data.email.lower()
-    ip = request.client.host if request.client else None
 
     hashed = await asyncio.to_thread(hash_password, data.password)
     user = User(
@@ -135,15 +139,15 @@ async def register(
         display_name=data.display_name,
         password_hash=hashed,
     )
-    session.add(user)
     try:
-        await session.flush()
+        async with session.begin_nested():
+            session.add(user)
+            await session.flush()
     except IntegrityError:
-        await session.rollback()
         logger.info(
             "Registration conflict from %s",
-            ip or "unknown",
-            extra={"event": "registration_conflict", "client_ip": ip or "unknown"},
+            ip,
+            extra={"event": "registration_conflict", "client_ip": ip},
         )
         raise HTTPException(
             status_code=409, detail="Registration failed — please try again or log in"
@@ -165,11 +169,11 @@ async def register(
     logger.info(
         "User registered: user_id=%s from %s",
         user.id,
-        ip or "unknown",
+        ip,
         extra={
             "event": "user_registered",
             "user_id": str(user.id),
-            "client_ip": ip or "unknown",
+            "client_ip": ip,
         },
     )
 
@@ -232,7 +236,7 @@ async def login(
             ip_address=ip,
         )
         await session.commit()
-        raise _bearer_401("Invalid email or password")
+        raise bearer_401("Invalid email or password")
 
     assert user is not None  # narrowing: valid=True implies user is not None
     if not user.is_active:
@@ -256,7 +260,7 @@ async def login(
             ip_address=ip,
         )
         await session.commit()
-        raise _bearer_401("Invalid email or password")
+        raise bearer_401("Invalid email or password")
 
     user.last_login_at = datetime.now(UTC)
     await log_audit(
@@ -303,13 +307,13 @@ async def refresh(
             "Refresh token expired",
             extra={"event": "refresh_token_expired"},
         )
-        raise _bearer_401("Refresh token has expired") from None
+        raise bearer_401("Refresh token has expired") from None
     except pyjwt.InvalidTokenError:
         logger.warning(
             "Invalid refresh token",
             extra={"event": "refresh_token_invalid"},
         )
-        raise _bearer_401("Invalid refresh token") from None
+        raise bearer_401("Invalid refresh token") from None
 
     if payload.get("type") != "refresh":
         logger.warning(
@@ -317,7 +321,7 @@ async def refresh(
             payload.get("type"),
             extra={"event": "refresh_token_wrong_type", "token_type": payload.get("type")},
         )
-        raise _bearer_401("Invalid token type")
+        raise bearer_401("Invalid token type")
 
     user_id = payload.get("sub")
     if not user_id:
@@ -325,7 +329,7 @@ async def refresh(
             "Refresh token missing sub claim",
             extra={"event": "refresh_token_missing_sub"},
         )
-        raise _bearer_401("Invalid token payload")
+        raise bearer_401("Invalid token payload")
 
     result = await session.execute(
         select(User)
@@ -339,7 +343,7 @@ async def refresh(
             user_id,
             extra={"event": "refresh_user_invalid", "user_id": str(user_id)},
         )
-        raise _bearer_401("User not found or inactive")
+        raise bearer_401("User not found or inactive")
 
     access_token = create_access_token(str(user.id))
     new_refresh_token = create_refresh_token(str(user.id))

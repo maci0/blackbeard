@@ -4,6 +4,7 @@ export interface Toast {
   id: string
   type: 'success' | 'error' | 'info'
   message: string
+  dismissing?: boolean
 }
 
 interface ToastState {
@@ -29,11 +30,18 @@ const timers = new Map<
   { timeoutId: ReturnType<typeof setTimeout>; remaining: number; startedAt: number }
 >()
 
+function removeToast(id: string) {
+  timers.delete(id)
+  useToastStore.setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
+}
+
 function dismissToast(id: string) {
   const timer = timers.get(id)
   if (timer) clearTimeout(timer.timeoutId)
-  timers.delete(id)
-  useToastStore.setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
+  useToastStore.setState((s) => ({
+    toasts: s.toasts.map((t) => (t.id === id ? { ...t, dismissing: true } : t)),
+  }))
+  setTimeout(() => removeToast(id), 300)
 }
 
 function startTimer(id: string, duration: number) {

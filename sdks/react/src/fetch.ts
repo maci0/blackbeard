@@ -34,7 +34,9 @@ export async function apiFetch<T>(
     })
   } catch (err) {
     if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-      throw new BlackbeardApiError(0, `Request timed out after ${timeout}ms`)
+      const timeoutError = new BlackbeardApiError(0, `Request timed out after ${timeout}ms`)
+      timeoutError.cause = err
+      throw timeoutError
     }
     const networkError = new BlackbeardApiError(
       0,

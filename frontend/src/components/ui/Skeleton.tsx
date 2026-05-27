@@ -118,6 +118,42 @@ export function ModelSelectorSkeleton() {
   )
 }
 
+export function DetailSkeleton() {
+  return (
+    <div role="status" aria-label="Loading details">
+      <div className="mx-auto max-w-4xl p-6">
+        {/* Breadcrumb */}
+        <Skeleton className="mb-5 h-4 w-48" />
+        {/* Title + badges */}
+        <div className="mb-6 flex items-center gap-3">
+          <Skeleton className="h-5 w-16 rounded-full" />
+          <Skeleton className="h-7 w-56" />
+        </div>
+        {/* Info grid */}
+        <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-lg border bg-card p-4">
+              <Skeleton className="mb-2 h-3 w-16" />
+              <Skeleton className="h-5 w-24" />
+            </div>
+          ))}
+        </div>
+        {/* Content */}
+        <div className="space-y-3 rounded-lg border bg-card p-4 shadow-sm">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4">
+              <Skeleton className="h-4 w-1/4" />
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-4 w-1/6" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <span className="sr-only">Loading…</span>
+    </div>
+  )
+}
+
 export function KnowledgeCardSkeleton({ count = 6 }: { count?: number }) {
   return (
     <div role="status" aria-label="Loading knowledge sources">

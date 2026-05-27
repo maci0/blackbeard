@@ -87,7 +87,9 @@ export class BlackbeardClient {
         err instanceof DOMException &&
         (err.name === "TimeoutError" || err.name === "AbortError")
       ) {
-        throw new BlackbeardApiError(0, `Request timed out after ${this.timeout}ms`);
+        const timeoutError = new BlackbeardApiError(0, `Request timed out after ${this.timeout}ms`);
+        timeoutError.cause = err;
+        throw timeoutError;
       }
       const networkError = new BlackbeardApiError(
         0,
@@ -98,9 +100,9 @@ export class BlackbeardClient {
     }
 
     if (!resp.ok) {
-      const errorBody = await resp
+      const errorBody = (await resp
         .json()
-        .catch(() => ({ detail: resp.statusText }));
+        .catch(() => ({ detail: resp.statusText }))) as Record<string, unknown>;
       const detail =
         typeof errorBody.detail === "string" ? errorBody.detail : resp.statusText;
       throw new BlackbeardApiError(resp.status, detail, errorBody);
@@ -273,7 +275,7 @@ export class BlackbeardClient {
           const name = resources[i]!.metadata?.name ?? "?";
           const wrapped = new BlackbeardApiError(
             err.status,
-            `${resources[i]!.kind}/${name}: ${err.detail}`,
+            `[${i}] ${resources[i]!.kind}/${name}: ${err.detail}`,
             err.body,
           );
           wrapped.cause = err;
@@ -458,6 +460,7 @@ export class BlackbeardClient {
     }
   }
 
+  /** Fetch all resources by listing each kind in parallel (13 requests). For a single-request alternative, use {@link exportYaml}. */
   async exportAll(namespace = "default"): Promise<Resource[]> {
     const responses = await Promise.all(
       Object.keys(KIND_PLURALS).map((kind) =>
@@ -467,6 +470,7 @@ export class BlackbeardClient {
     return responses.flatMap((r) => r.items);
   }
 
+  /** Export all resources as a multi-document YAML string via the server's bulk export endpoint (single request). */
   async exportYaml(namespace = "default"): Promise<string> {
     const params = new URLSearchParams({ namespace });
     const resp = await this.rawRequest("GET", `/api/v1/resources/export?${params}`);

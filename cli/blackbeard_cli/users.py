@@ -10,6 +10,8 @@ from rich.table import Table
 from blackbeard_cli.helpers import (
     HelpCommand,
     console,
+    extract_items,
+    extract_total,
     handle_http_error,
     handle_request_error,
     json_opt,
@@ -79,7 +81,7 @@ def user_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
         print_json(data)
         return
 
-    items = data if isinstance(data, list) else data.get("items", [])
+    items = extract_items(data)
     if not items:
         out.print("[dim]No users found.[/]")
         return
@@ -102,7 +104,7 @@ def user_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
         )
 
     out.print(table)
-    total = len(items) if isinstance(data, list) else data.get("total", len(items))
+    total = extract_total(data, items)
     if total > len(items):
         out.print(f"[dim]Showing {len(items)} of {total} (increase --limit to see more)[/]")
     else:
@@ -130,7 +132,7 @@ Examples:
 @click.option(
     "--display-name",
     "display_name",
-    required=True,
+    prompt="Display name",
     metavar="NAME",
     help="Display name shown in the UI",
 )
@@ -235,7 +237,7 @@ def group_list(ctx: click.Context, limit: int, output_json: bool = False) -> Non
         print_json(data)
         return
 
-    items = data if isinstance(data, list) else data.get("items", [])
+    items = extract_items(data)
     if not items:
         out.print("[dim]No groups found.[/]")
         return
@@ -255,7 +257,7 @@ def group_list(ctx: click.Context, limit: int, output_json: bool = False) -> Non
         )
 
     out.print(table)
-    total = len(items) if isinstance(data, list) else data.get("total", len(items))
+    total = extract_total(data, items)
     if total > len(items):
         out.print(f"[dim]Showing {len(items)} of {total} (increase --limit to see more)[/]")
     else:
@@ -317,14 +319,7 @@ Examples:
 )
 @click.argument("group_id")
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
-@click.option(
-    "--json",
-    "-j",
-    "output_json",
-    is_flag=True,
-    default=False,
-    help="Output as JSON for scripting (skips confirmation prompt)",
-)
+@json_opt
 @click.pass_context
 def group_delete(ctx: click.Context, group_id: str, yes: bool, output_json: bool = False) -> None:
     """Delete a group by ID."""
@@ -353,4 +348,4 @@ def group_delete(ctx: click.Context, group_id: str, yes: bool, output_json: bool
         print_json({"deleted": group_id, "status": "deleted"})
         return
 
-    out.print(f"[green]Deleted[/] group [bold]{escape(group_id)}[/]")
+    out.print(f"[green]✓[/] Deleted group [bold]{escape(group_id)}[/]")

@@ -236,7 +236,6 @@ class TestGVisorSandboxExecution:
         with patch("shutil.which", side_effect=_which):
             return GVisorSandbox(container_runtime=runtime)
 
-    @pytest.mark.asyncio
     async def test_execute_success(self):
         sandbox = self._make_sandbox()
 
@@ -250,7 +249,6 @@ class TestGVisorSandboxExecution:
             assert result.stdout == "output"
             assert result.stderr == ""
 
-    @pytest.mark.asyncio
     async def test_execute_with_input(self):
         sandbox = self._make_sandbox()
 
@@ -268,7 +266,6 @@ class TestGVisorSandboxExecution:
             assert result.stdout == "processed"
             mock_proc.communicate.assert_called_once_with(b"test input")
 
-    @pytest.mark.asyncio
     async def test_execute_nonzero_exit(self):
         sandbox = self._make_sandbox()
 
@@ -281,7 +278,6 @@ class TestGVisorSandboxExecution:
             assert result.exit_code == 1
             assert result.stderr == "error msg"
 
-    @pytest.mark.asyncio
     async def test_execute_timeout(self):
         sandbox = self._make_sandbox()
 
@@ -297,7 +293,6 @@ class TestGVisorSandboxExecution:
         ):
             await sandbox.execute("img", ["cmd"], timeout=5)
 
-    @pytest.mark.asyncio
     async def test_execute_runtime_not_found(self):
         sandbox = self._make_sandbox()
 
@@ -310,7 +305,6 @@ class TestGVisorSandboxExecution:
         ):
             await sandbox.execute("img", ["cmd"])
 
-    @pytest.mark.asyncio
     async def test_execute_os_error(self):
         sandbox = self._make_sandbox()
 

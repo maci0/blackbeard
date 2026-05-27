@@ -1,13 +1,21 @@
 """Flow execution: runs multi-step Flow resources sequentially.
 
-Handles step types: crew, function, router, condition, transform.
+Step types: crew, function, router, condition, transform.
+Public helpers: ``evaluate_condition``, ``resolve_dotted``, ``call_hook``.
 """
 
 from __future__ import annotations
 
+import importlib
 import logging
+import math
 import operator
 from typing import Any
+
+from blackbeard.resources import (
+    ALLOWED_CALLABLE_MODULE_PREFIXES,
+    BLOCKED_CALLABLE_MODULES,
+)
 
 __all__ = [
     "call_hook",
@@ -76,6 +84,53 @@ def call_hook(
                 "error_message": str(exc)[:500],
             },
         )
+
+
+def _validate_callable_path(
+    fn_path: str,
+    step_name: str,
+    flow_name: str,
+) -> str | None:
+    """Check fn_path against blocked/allowed module lists.
+
+    Returns an error string if blocked, or ``None`` if the path is allowed.
+    """
+    module_path = fn_path.rsplit(":", 1)[0]
+    top_module = module_path.split(".")[0]
+    if top_module in BLOCKED_CALLABLE_MODULES:
+        logger.warning(
+            "Flow step '%s' blocked: module '%s' is not allowed",
+            step_name,
+            top_module,
+            extra={
+                "event": "flow_step_blocked",
+                "flow_name": flow_name,
+                "step_name": step_name,
+                "blocked_module": top_module,
+            },
+        )
+        return "error: blocked module"
+    if not fn_path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
+        logger.warning(
+            "Flow step '%s' blocked: function_path '%s' not in allowlist",
+            step_name,
+            fn_path,
+            extra={
+                "event": "flow_step_blocked",
+                "flow_name": flow_name,
+                "step_name": step_name,
+                "function_path": fn_path,
+            },
+        )
+        return "error: function not in allowlist"
+    return None
+
+
+def _load_callable(fn_path: str) -> Any:
+    """Import and return the callable referenced by ``module.path:func_name``."""
+    module_path, fn_name = fn_path.rsplit(":", 1)
+    mod = importlib.import_module(module_path)
+    return getattr(mod, fn_name)
 
 
 def run_flow_steps(
@@ -184,45 +239,12 @@ def run_flow_steps(
         elif step_type == "function":
             fn_path = step.get("function_path", "")
             if fn_path and ":" in fn_path:
-                module_path, fn_name = fn_path.rsplit(":", 1)
-                from blackbeard.resources import (
-                    ALLOWED_CALLABLE_MODULE_PREFIXES,
-                    BLOCKED_CALLABLE_MODULES,
-                )
-
-                top_module = module_path.split(".")[0]
-                if top_module in BLOCKED_CALLABLE_MODULES:
-                    logger.warning(
-                        "Flow step '%s' blocked: module '%s' is not allowed",
-                        step_name,
-                        top_module,
-                        extra={
-                            "event": "flow_step_blocked",
-                            "flow_name": flow_name,
-                            "step_name": step_name,
-                            "blocked_module": top_module,
-                        },
-                    )
-                    step_outputs[step_name] = "error: blocked module"
-                elif not fn_path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
-                    logger.warning(
-                        "Flow step '%s' blocked: function_path '%s' not in allowlist",
-                        step_name,
-                        fn_path,
-                        extra={
-                            "event": "flow_step_blocked",
-                            "flow_name": flow_name,
-                            "step_name": step_name,
-                            "function_path": fn_path,
-                        },
-                    )
-                    step_outputs[step_name] = "error: function not in allowlist"
+                block_err = _validate_callable_path(fn_path, step_name, flow_name)
+                if block_err:
+                    step_outputs[step_name] = block_err
                 else:
                     try:
-                        import importlib
-
-                        mod = importlib.import_module(module_path)
-                        fn = getattr(mod, fn_name)
+                        fn = _load_callable(fn_path)
                         step_result = fn({**inputs, **step_outputs})
                         step_outputs[step_name] = step_result
                     except Exception as exc:
@@ -239,15 +261,18 @@ def run_flow_steps(
                                 "error_type": type(exc).__name__,
                             },
                         )
-                        step_outputs[step_name] = f"error: {type(exc).__name__}: {exc}"
+                        step_outputs[step_name] = f"error: {type(exc).__name__}"
 
         elif step_type == "router":
             fn_path = step.get("function_path", "")
             routes = step.get("routes", {})
             if fn_path and ":" in fn_path:
-                fn = ResourceLoader.import_callable(fn_path)
-                if fn:
+                block_err = _validate_callable_path(fn_path, step_name, flow_name)
+                if block_err:
+                    step_outputs[step_name] = block_err
+                else:
                     try:
+                        fn = _load_callable(fn_path)
                         route_key = str(fn({**inputs, **step_outputs}))
                         step_outputs[step_name] = route_key
                         next_step = routes.get(route_key)
@@ -291,7 +316,7 @@ def run_flow_steps(
                                 "error_type": type(exc).__name__,
                             },
                         )
-                        step_outputs[step_name] = f"error: router {type(exc).__name__}: {exc}"
+                        step_outputs[step_name] = f"error: router {type(exc).__name__}"
 
         elif step_type == "condition":
             condition = step.get("condition", "")
@@ -356,6 +381,21 @@ def run_flow_steps(
                     },
                 )
 
+        else:
+            logger.warning(
+                "Flow step '%s' has unknown type '%s' — skipped",
+                step_name,
+                step_type,
+                extra={
+                    "event": "flow_step_unknown_type",
+                    "flow_name": flow_name,
+                    "step_name": step_name,
+                    "step_type": step_type,
+                    "step_index": step_index,
+                },
+            )
+            step_outputs[step_name] = f"error: unknown step type '{step_type}'"
+
     completed_steps = [
         s.get("name", "unnamed") for s in steps if s.get("name", "unnamed") in step_outputs
     ]
@@ -411,6 +451,8 @@ def evaluate_condition(expr: str, context: dict[str, Any]) -> bool:
             right_val: float | str
             try:
                 right_val = float(right_str)
+                if math.isinf(right_val) or math.isnan(right_val):
+                    right_val = right_str
             except ValueError:
                 right_val = right_str
             try:
@@ -443,9 +485,14 @@ def evaluate_condition(expr: str, context: dict[str, Any]) -> bool:
     return bool(val)
 
 
+_MAX_RESOLVE_DEPTH = 20
+
+
 def resolve_dotted(path: str, context: dict[str, Any]) -> Any:
     """Resolve a dotted path like 'outputs.score' against a context dict."""
     parts = path.split(".")
+    if len(parts) > _MAX_RESOLVE_DEPTH:
+        return None
     current: Any = context
     for part in parts:
         if isinstance(current, dict) and part in current:

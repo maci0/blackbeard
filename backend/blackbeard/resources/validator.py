@@ -282,7 +282,7 @@ def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError])
             else:
                 _check_dns_resolution(hostname, field_name, errors)
     except Exception:
-        logger.debug(
+        logger.warning(
             "URL SSRF validation failed for field %s: %s",
             field_name,
             url[:200],
@@ -296,18 +296,17 @@ _DNS_EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
 _DNS_EXECUTOR_LOCK = threading.Lock()
 
 _DNS_CACHE_TTL = 3600  # 1 hour
-_dns_cache: collections.OrderedDict[str, tuple[float, list[str] | str | None]] = (
-    collections.OrderedDict()
-)
+_dns_cache: collections.OrderedDict[str, tuple[float, str | None]] = collections.OrderedDict()
 _dns_cache_lock = threading.Lock()
 
 
 def _get_dns_executor() -> concurrent.futures.ThreadPoolExecutor:
-    """Return a shared executor for DNS resolution."""
-    global _DNS_EXECUTOR
-    if _DNS_EXECUTOR is not None:
-        return _DNS_EXECUTOR
+    """Return a shared executor for DNS resolution.
+
+    Uses lock-always pattern (safe under both GIL and free-threaded Python).
+    """
     with _DNS_EXECUTOR_LOCK:
+        global _DNS_EXECUTOR
         if _DNS_EXECUTOR is not None:
             return _DNS_EXECUTOR
         _DNS_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
@@ -326,8 +325,8 @@ def shutdown_dns_executor() -> None:
         executor.shutdown(wait=False)
 
 
-def _dns_cache_get(hostname: str) -> tuple[bool, list[str] | str | None]:
-    """Return (hit, value) from DNS cache. value is list of IPs, error string, or None."""
+def _dns_cache_get(hostname: str) -> tuple[bool, str | None]:
+    """Return (hit, error_msg). error_msg is None when hostname is safe."""
     with _dns_cache_lock:
         entry = _dns_cache.get(hostname)
         if entry is not None:
@@ -340,49 +339,27 @@ def _dns_cache_get(hostname: str) -> tuple[bool, list[str] | str | None]:
 
 
 _DNS_CACHE_MAX = 2048
+_DNS_INTERNAL_IP_MSG = "URL hostname resolves to an internal/private IP address."
 
 
-def _dns_cache_put(hostname: str, value: list[str] | str | None) -> None:
+def _dns_cache_put(hostname: str, error: str | None) -> None:
+    """Cache DNS validation result. None = safe, str = error message."""
     with _dns_cache_lock:
-        # Evict oldest entries via O(1) popitem instead of O(n) scan
         while len(_dns_cache) >= _DNS_CACHE_MAX:
             _dns_cache.popitem(last=False)
-        _dns_cache[hostname] = (time.monotonic(), value)
+        _dns_cache[hostname] = (time.monotonic(), error)
 
 
 def _check_dns_resolution(hostname: str, field_name: str, errors: list[ValidationError]) -> None:
     """Resolve hostname via DNS and reject if any address is internal.
 
-    Results are cached for 1 hour to avoid repeated blocking DNS lookups
-    for the same hostname across resource create/update calls.
+    Results are cached for 1 hour as pass/fail to avoid repeated blocking
+    DNS lookups and IP re-parsing across resource create/update calls.
     """
-    hit, cached = _dns_cache_get(hostname)
+    hit, cached_error = _dns_cache_get(hostname)
     if hit:
-        if isinstance(cached, str):
-            errors.append(ValidationError(field_name, cached))
-        elif isinstance(cached, list):
-            for addr_str in cached:
-                try:
-                    addr = ipaddress.ip_address(addr_str)
-                    if _is_internal_ip(addr):
-                        errors.append(
-                            ValidationError(
-                                field_name,
-                                "URL hostname resolves to an internal/private IP address.",
-                            )
-                        )
-                        return
-                except ValueError:
-                    logger.debug(
-                        "Cached DNS address %r for %s not parseable as IP",
-                        addr_str,
-                        hostname,
-                        extra={
-                            "event": "dns_cache_parse_error",
-                            "hostname": hostname,
-                            "addr": addr_str,
-                        },
-                    )
+        if cached_error is not None:
+            errors.append(ValidationError(field_name, cached_error))
         return
 
     def _resolve() -> list[tuple[Any, ...]]:
@@ -392,20 +369,13 @@ def _check_dns_resolution(hostname: str, field_name: str, errors: list[Validatio
         pool = _get_dns_executor()
         future = pool.submit(_resolve)
         results = future.result(timeout=2.0)
-        resolved_ips: list[str] = []
         for _family, _type, _proto, _canonname, sockaddr in results:
             addr_str = sockaddr[0]
-            resolved_ips.append(addr_str)
             try:
                 addr = ipaddress.ip_address(addr_str)
                 if _is_internal_ip(addr):
-                    _dns_cache_put(hostname, resolved_ips)
-                    errors.append(
-                        ValidationError(
-                            field_name,
-                            "URL hostname resolves to an internal/private IP address.",
-                        )
-                    )
+                    _dns_cache_put(hostname, _DNS_INTERNAL_IP_MSG)
+                    errors.append(ValidationError(field_name, _DNS_INTERNAL_IP_MSG))
                     return
             except ValueError:
                 logger.debug(
@@ -418,7 +388,7 @@ def _check_dns_resolution(hostname: str, field_name: str, errors: list[Validatio
                         "addr": addr_str,
                     },
                 )
-        _dns_cache_put(hostname, resolved_ips)
+        _dns_cache_put(hostname, None)
     except concurrent.futures.TimeoutError:
         msg = "URL hostname DNS resolution timed out. Verify the hostname is correct."
         _dns_cache_put(hostname, msg)
@@ -604,6 +574,11 @@ BLOCKED_CALLABLE_MODULES = frozenset(
         "multiprocessing",  # arbitrary process spawning
         "pty",  # pseudo-terminal access
         "signal",  # signal manipulation
+        "runpy",  # run_module/run_path execute arbitrary code
+        "ensurepip",  # can install arbitrary packages
+        "pip",  # can install arbitrary packages
+        "zipimport",  # import from arbitrary zip files
+        "webbrowser",  # open arbitrary URLs
     }
 )
 

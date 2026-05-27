@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
 import { toResourceName, parseRef, capitalize, cn } from '../utils'
+import { NAME_RE } from '../kinds'
 
 const NUM_RUNS = 200
 
@@ -21,7 +22,7 @@ describe('fuzz: toResourceName', () => {
         const result = toResourceName(s)
         // The function returns 'unnamed' for fully invalid input,
         // otherwise it must match the resource name pattern.
-        expect(result).toMatch(/^[a-z0-9][a-z0-9-]*$/)
+        expect(result).toMatch(NAME_RE)
       }),
       { numRuns: NUM_RUNS },
     )

@@ -282,7 +282,7 @@ export default function AuditLogs() {
               <option value="">All actions</option>
               {ACTION_OPTIONS.map((a) => (
                 <option key={a} value={a}>
-                  {a}
+                  {ACTION_LABELS[a] ?? a}
                 </option>
               ))}
             </select>
@@ -383,7 +383,7 @@ export default function AuditLogs() {
                     {logs.map((entry) => (
                       <tr
                         key={entry.id}
-                        className="transition-colors duration-150 hover:bg-muted/50"
+                        className="border-l-2 border-l-transparent transition-colors duration-150 hover:border-l-primary hover:bg-accent/50"
                       >
                         <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
                           <SmartTime date={entry.timestamp} />

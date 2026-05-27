@@ -34,6 +34,14 @@ function ToastItem({ toast }: { toast: Toast }) {
     }
   }, [])
 
+  useEffect(() => {
+    const el = ref.current
+    if (toast.dismissing && el) {
+      el.classList.remove('translate-y-0', 'sm:translate-x-0', 'opacity-100')
+      el.classList.add('translate-y-2', 'sm:translate-y-0', 'sm:translate-x-full', 'opacity-0')
+    }
+  }, [toast.dismissing])
+
   return (
     <div
       ref={ref}

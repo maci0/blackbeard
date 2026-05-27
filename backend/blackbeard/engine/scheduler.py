@@ -26,6 +26,7 @@ class AutomationScheduler:
     def __init__(self) -> None:
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._running = False
+        self._reload_lock = asyncio.Lock()
 
     async def start(self) -> None:
         """Load all enabled automations with cron triggers and schedule them."""
@@ -115,13 +116,16 @@ class AutomationScheduler:
 
         Called when Automation resources are created, updated, or deleted
         so that cron schedules stay in sync with the database.
+        Serialized via lock to prevent interleaved stop/start cycles
+        when multiple resource mutations arrive concurrently.
         """
-        logger.info(
-            "Automation scheduler reloading",
-            extra={"event": "scheduler_reloading"},
-        )
-        await self.stop()
-        await self.start()
+        async with self._reload_lock:
+            logger.info(
+                "Automation scheduler reloading",
+                extra={"event": "scheduler_reloading"},
+            )
+            await self.stop()
+            await self.start()
 
     # Minimum interval between cron executions (in seconds).
     # Prevents DoS via ``* * * * *`` (every minute) or sub-minute crons.

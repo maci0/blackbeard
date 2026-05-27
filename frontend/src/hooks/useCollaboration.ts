@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { TOKEN_KEY } from '@/stores/authStore'
 import { useStudioStore } from '@/stores/studioStore'
 import type { RemoteCursor } from '@/components/studio/CursorOverlay'
 import type { Node, Edge } from '@xyflow/react'
@@ -85,7 +86,7 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
 
     function connect() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const token = localStorage.getItem('blackbeard_token') ?? ''
+      const token = localStorage.getItem(TOKEN_KEY) ?? ''
       const authParam = token ? `?token=${encodeURIComponent(token)}` : ''
       const ws = new WebSocket(
         `${protocol}//${window.location.host}/api/v1/ws/collab/${encodeURIComponent(crewName)}${authParam}`,
@@ -112,8 +113,8 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
         }
       }
 
-      ws.onerror = () => {
-        // onclose will fire after onerror, handling reconnection
+      ws.onerror = (ev) => {
+        console.debug('[collab] WebSocket error:', ev)
       }
 
       ws.onmessage = (event: MessageEvent) => {

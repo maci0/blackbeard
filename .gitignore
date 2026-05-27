@@ -27,6 +27,7 @@ Thumbs.db
 .env.local
 .env.*.local
 *.json.key
+.admin-credentials
 
 # Podman/Docker
 *.log

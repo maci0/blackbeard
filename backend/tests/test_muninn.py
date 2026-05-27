@@ -61,7 +61,6 @@ def test_muninn_backend_init_with_token():
         assert backend._token == "secret-token"
 
 
-@pytest.mark.asyncio
 async def test_muninn_backend_store_calls_write():
     """store() should call client.write() with correct parameters."""
     with patch("blackbeard.engine.memory.muninn.HAS_MUNINN", True):
@@ -99,7 +98,6 @@ async def test_muninn_backend_store_calls_write():
         assert engram_id == "engram-123"
 
 
-@pytest.mark.asyncio
 async def test_muninn_backend_store_defaults():
     """store() should use default concept and tags when not provided."""
     with patch("blackbeard.engine.memory.muninn.HAS_MUNINN", True):
@@ -128,7 +126,6 @@ async def test_muninn_backend_store_defaults():
         assert "confidence" not in call_kwargs
 
 
-@pytest.mark.asyncio
 async def test_muninn_backend_recall_calls_activate():
     """recall() should call client.activate() and return structured results."""
     with patch("blackbeard.engine.memory.muninn.HAS_MUNINN", True):

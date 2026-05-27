@@ -93,7 +93,7 @@ function TokenBadge({ tokens, latency_ms }: { tokens: TokenUsage; latency_ms: nu
           <Gauge className="h-3 w-3" aria-hidden="true" />
           {ppSpeed && tgSpeed ? (
             <>
-              pp {ppSpeed} · tg {tgSpeed} tok/s
+              prefill {ppSpeed} · decode {tgSpeed} tok/s
             </>
           ) : (
             <>{totalSpeed} tok/s</>
@@ -145,7 +145,9 @@ function MessageBubble({ message }: { message: Message }) {
         {message.thinking && !message.streaming && <ThinkingBlock text={message.thinking} />}
         <div className="mt-1 whitespace-pre-wrap text-sm">
           {visibleText}
-          {message.streaming && <span className="animate-pulse text-primary">&#9613;</span>}
+          {message.streaming && (
+            <span className="animate-pulse text-primary motion-reduce:animate-none">&#9613;</span>
+          )}
         </div>
         {message.error && (
           <div className="mt-2 flex items-center gap-1.5 text-xs text-destructive">
@@ -378,7 +380,8 @@ export default function Chat() {
                 ),
               )
             }
-          } catch {
+          } catch (parseErr) {
+            console.debug('[chat] unparseable SSE chunk:', dataStr?.slice(0, 200), parseErr)
             continue
           }
         }
@@ -581,10 +584,10 @@ export default function Chat() {
               {sending && (
                 <div className="flex justify-start">
                   <div className="flex items-center gap-2 rounded-lg border bg-card px-4 py-3">
-                    <div className="flex gap-1" aria-label="Generating response">
-                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s]" />
-                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s]" />
-                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/60" />
+                    <div className="flex gap-1" role="status" aria-label="Generating response">
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s] motion-reduce:animate-none" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s] motion-reduce:animate-none" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/60 motion-reduce:animate-none" />
                     </div>
                     <span className="text-sm text-muted-foreground">Thinking...</span>
                   </div>
@@ -610,13 +613,17 @@ export default function Chat() {
             rows={1}
             className="flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             aria-label="Message input"
+            aria-describedby="chat-input-hint"
           />
+          <span id="chat-input-hint" className="sr-only">
+            Press Enter to send, Shift+Enter for a new line
+          </span>
           {sending ? (
             <button
               type="button"
               onClick={handleStop}
               aria-label="Stop generating"
-              className="flex h-auto items-center justify-center rounded-md bg-destructive px-4 text-destructive-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md bg-destructive px-4 text-destructive-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Square className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -626,7 +633,7 @@ export default function Chat() {
               onClick={() => void handleSend()}
               disabled={!input.trim() || !selectedModel}
               aria-label="Send message"
-              className="flex h-auto items-center justify-center rounded-md bg-primary px-4 text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md bg-primary px-4 text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Send className="h-4 w-4" aria-hidden="true" />
             </button>

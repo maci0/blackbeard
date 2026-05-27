@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
@@ -76,12 +77,15 @@ function NotFound() {
 }
 
 function App() {
-  const hydrate = useAuthStore((s) => s.hydrate)
-  const token = useAuthStore((s) => s.token)
-  const fetchMe = useAuthStore((s) => s.fetchMe)
+  const { hydrate, token, fetchMe, setSessionExpired } = useAuthStore(
+    useShallow((s) => ({
+      hydrate: s.hydrate,
+      token: s.token,
+      fetchMe: s.fetchMe,
+      setSessionExpired: s.setSessionExpired,
+    })),
+  )
   const { showOnboarding, dismissOnboarding } = useOnboarding()
-
-  const setSessionExpired = useAuthStore((s) => s.setSessionExpired)
 
   useEffect(() => {
     hydrate()

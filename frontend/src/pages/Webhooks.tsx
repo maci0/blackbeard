@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   Webhook,
   Plus,
@@ -22,7 +22,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { formatDate, timeAgo } from '@/lib/formatters'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle, useDeleteError } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
 
 const WEBHOOK_TEST_KEY = 'blackbeard_webhook_tests'
@@ -116,7 +116,7 @@ function SecretReveal({ secret }: { secret: string }) {
       setCopied(true)
       setTimeout(() => setCopied(false), 3000)
     } catch {
-      console.warn('[Webhooks] Clipboard API unavailable — secret not copied')
+      useToastStore.getState().error('Failed to copy to clipboard')
     }
   }
 
@@ -398,8 +398,7 @@ export default function Webhooks() {
   const [addOpen, setAddOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<WebhookRecord | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const deleteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const { deleteError, showDeleteError, clearDeleteError } = useDeleteError()
   const [testingId, setTestingId] = useState<string | null>(null)
   const [, setTestTick] = useState(0)
   const toasts = useToastStore()
@@ -430,12 +429,6 @@ export default function Webhooks() {
 
   useDocumentTitle('Webhooks')
 
-  useEffect(() => {
-    return () => {
-      if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
-    }
-  }, [])
-
   const fetchWebhooks = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -463,9 +456,7 @@ export default function Webhooks() {
       void fetchWebhooks()
     } catch (err) {
       setDeleteTarget(null)
-      setDeleteError(getErrorMessage(err, 'Failed to delete webhook'))
-      if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
-      deleteErrorTimerRef.current = setTimeout(() => setDeleteError(null), 8000)
+      showDeleteError(getErrorMessage(err, 'Failed to delete webhook'))
     } finally {
       setDeleting(false)
     }
@@ -511,7 +502,7 @@ export default function Webhooks() {
           <ErrorAlert
             message={deleteError}
             actionLabel="Dismiss"
-            onAction={() => setDeleteError(null)}
+            onAction={() => clearDeleteError()}
             ariaLabel="Dismiss error"
             className="mb-4"
           />
@@ -562,7 +553,7 @@ export default function Webhooks() {
                       tabIndex={0}
                       role="row"
                       aria-label={`Webhook ${truncateUrl(webhook.url, 30)} — ${webhook.active ? 'active' : 'inactive'}`}
-                      className="group transition-colors duration-150 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      className="group border-l-2 border-l-transparent transition-colors duration-150 hover:border-l-primary hover:bg-accent/50 focus-visible:border-l-primary focus-visible:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     >
                       <td className="px-4 py-3">
                         <span className="font-mono text-xs font-medium" title={webhook.url}>

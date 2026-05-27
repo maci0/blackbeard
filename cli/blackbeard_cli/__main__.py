@@ -13,6 +13,7 @@ from typing import Any, cast
 import click
 import httpx
 import yaml
+from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.syntax import Syntax
@@ -49,9 +50,9 @@ def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
     if path.is_file():
         files = [path]
     elif path.is_dir():
-        files = sorted(path.rglob("*.yaml")) + sorted(path.rglob("*.yml"))
+        files = sorted([*path.rglob("*.yaml"), *path.rglob("*.yml")])
     else:
-        console.print(f"[red bold]Error:[/] Path not found: [bold]{path}[/]")
+        console.print(f"[red bold]Error:[/] Path not found: [bold]{escape(str(path))}[/]")
         raise SystemExit(2)
 
     resources: list[dict[str, Any]] = []
@@ -66,11 +67,13 @@ def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
                         resources.append(doc)
                     elif "metadata" in doc or "spec" in doc:
                         console.print(
-                            f"[yellow]Warning:[/] {f}: document has"
+                            f"[yellow]Warning:[/] {escape(str(f))}: document has"
                             " 'metadata'/'spec' but no 'kind' — skipped"
                         )
         except yaml.YAMLError as exc:
-            console.print(f"[red bold]Error:[/] Invalid YAML in [bold]{f}[/]: {exc}")
+            console.print(
+                f"[red bold]Error:[/] Invalid YAML in [bold]{escape(str(f))}[/]: {escape(str(exc))}"
+            )
             raise SystemExit(2) from exc
     return resources
 
@@ -239,7 +242,7 @@ def health(ctx: click.Context, ready: bool, output_json: bool) -> None:
         body_preview = response.text[:200] if response.text else "(empty body)"
         console.print(
             f"[red bold]Error:[/] Server returned non-JSON response"
-            f" (HTTP {response.status_code})\n  [dim]{body_preview}[/]"
+            f" (HTTP {response.status_code})\n  [dim]{escape(body_preview)}[/]"
         )
         raise SystemExit(1) from None
 
@@ -301,7 +304,9 @@ def validate(ctx: click.Context, path: str, output_json: bool) -> None:
     resources = load_yaml_resources(Path(path))
 
     if not resources:
-        console.print(f"[red bold]Error:[/] No resource files found in [bold]{path}[/]")
+        console.print(
+            f"[red bold]Error:[/] No resource files found in [bold]{escape(str(path))}[/]"
+        )
         raise SystemExit(2)
 
     per_errors, cycles = validate_resources(resources)
@@ -334,13 +339,15 @@ def validate(ctx: click.Context, path: str, output_json: bool) -> None:
     table.add_column("Issues")
 
     for res in resources:
-        source = res.get("_source_file", "unknown")
-        kind = res.get("kind", "?")
-        name = res.get("metadata", {}).get("name", "?")
+        source = escape(res.get("_source_file", "unknown"))
+        kind = escape(res.get("kind", "?"))
+        name = escape(res.get("metadata", {}).get("name", "?"))
         res_errors = next((errs for r, errs in per_errors if r is res), [])
 
         if res_errors:
-            issues = "\n".join(f"[red]•[/] {e.field}: {e.message}" for e in res_errors)
+            issues = "\n".join(
+                f"[red]•[/] {escape(e.field)}: {escape(e.message)}" for e in res_errors
+            )
             table.add_row("[red]✗[/]", f"{kind}/{name}", source, issues)
         else:
             table.add_row("[green]✓[/]", f"{kind}/{name}", source, "[green]OK[/]")
@@ -390,14 +397,7 @@ Examples:
     help="Validate and show what would be applied, without making changes",
 )
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
-@click.option(
-    "--json",
-    "-j",
-    "output_json",
-    is_flag=True,
-    default=False,
-    help="Output as JSON for scripting (skips confirmation prompt)",
-)
+@json_opt
 @click.pass_context
 def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: bool) -> None:
     """Apply YAML resource files to the server (create or update)."""
@@ -407,7 +407,9 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
     resources = load_yaml_resources(Path(path))
 
     if not resources:
-        console.print(f"[red bold]Error:[/] No resource files found in [bold]{path}[/]")
+        console.print(
+            f"[red bold]Error:[/] No resource files found in [bold]{escape(str(path))}[/]"
+        )
         raise SystemExit(2)
 
     per_errors, cycles = validate_resources(resources)
@@ -415,11 +417,11 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
         if per_errors:
             console.print("[red bold]Validation errors:[/]")
             for res, errs in per_errors:
-                kind = res.get("kind", "?")
-                name = res.get("metadata", {}).get("name", "?")
+                kind = escape(res.get("kind", "?"))
+                name = escape(res.get("metadata", {}).get("name", "?"))
                 console.print(f"  [red]✗[/] {kind}/{name}")
                 for err in errs:
-                    console.print(f"    [dim]•[/] {err.field}: {err.message}")
+                    console.print(f"    [dim]•[/] {escape(err.field)}: {escape(err.message)}")
         if cycles:
             console.print("[red bold]Dependency cycles:[/]")
             for cycle in cycles:
@@ -450,8 +452,8 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
                 )
             )
             for res in resources:
-                kind = res.get("kind", "")
-                name = res.get("metadata", {}).get("name", "?")
+                kind = escape(res.get("kind", ""))
+                name = escape(res.get("metadata", {}).get("name", "?"))
                 out.print(f"  [cyan]→[/] {kind}/{name}: would apply")
         return
 
@@ -565,16 +567,17 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
         table.add_column("Detail")
 
         for r in results:
-            detail = r.get("detail", "")
+            detail = escape(r.get("detail", ""))
             source = r.get("source")
+            resource = escape(r["resource"])
             if r["status"] == "error":
                 if source:
-                    detail = f"{detail} [dim]({source})[/]"
-                table.add_row("[red]✗[/]", r["resource"], f"[red]{detail}[/]")
+                    detail = f"{detail} [dim]({escape(source)})[/]"
+                table.add_row("[red]✗[/]", resource, f"[red]{detail}[/]")
             elif r["status"] == "created":
-                table.add_row("[green]✓[/]", r["resource"], "[green]created[/]")
+                table.add_row("[green]✓[/]", resource, "[green]created[/]")
             else:
-                table.add_row("[blue]↻[/]", r["resource"], "[blue]updated[/]")
+                table.add_row("[blue]↻[/]", resource, "[blue]updated[/]")
 
         out.print(table)
 
@@ -703,22 +706,22 @@ def list_resources_cmd(
 
     params: dict[str, Any] = {"namespace": namespace, "limit": limit}
     if labels:
-        label_parts = []
         for item in labels:
             if "=" not in item:
                 console.print(
-                    f"[red bold]Error:[/] Invalid --label: expected KEY=VALUE, got: {item!r}"
+                    "[red bold]Error:[/] Invalid --label:"
+                    f" expected KEY=VALUE, got: {escape(repr(item))}"
                 )
                 console.print("[dim]Example: --label team=backend[/]")
                 raise SystemExit(2)
             key, _, _ = item.partition("=")
             if not key:
                 console.print(
-                    f"[red bold]Error:[/] Invalid --label: key cannot be empty in {item!r}"
+                    "[red bold]Error:[/] Invalid --label:"
+                    f" key cannot be empty in {escape(repr(item))}"
                 )
                 raise SystemExit(2)
-            label_parts.append(item)
-        params["label_selector"] = ",".join(label_parts)
+        params["label_selector"] = ",".join(labels)
 
     url = f"{server}/api/v1/{plural}"
     headers = require_auth(ctx)
@@ -783,14 +786,7 @@ Examples:
 @click.argument("kind", type=click.Choice(sorted(ALL_KINDS), case_sensitive=False))
 @click.argument("name")
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
-@click.option(
-    "--json",
-    "-j",
-    "output_json",
-    is_flag=True,
-    default=False,
-    help="Output as JSON for scripting (skips confirmation prompt)",
-)
+@json_opt
 @click.pass_context
 def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: bool) -> None:
     """Delete a resource by kind and name.
@@ -951,9 +947,11 @@ def kickoff(
 
 def _validate_pkl_filename(_ctx: click.Context, _param: click.Parameter, value: str) -> str:
     if not value.endswith(".pkl"):
-        raise click.BadParameter("must end with .pkl")
+        raise click.BadParameter("must end with .pkl (e.g. training_data.pkl)")
     if "/" in value or "\\" in value:
-        raise click.BadParameter("must be a plain filename without path separators")
+        raise click.BadParameter(
+            "must be a plain filename without path separators (e.g. training_data.pkl)"
+        )
     return value
 
 
@@ -1407,6 +1405,7 @@ Examples:
   blackbeard pull ./local-crew-dir
   blackbeard pull https://github.com/org/crew-repo.git -n prod
   blackbeard pull https://github.com/org/crew-repo.git -y
+  blackbeard pull https://github.com/org/crew-repo.git --json
 """,
 )
 @click.argument("source")

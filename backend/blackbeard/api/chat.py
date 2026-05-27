@@ -19,17 +19,29 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
+from blackbeard.api import RETRY_HEADERS_30
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.config import settings
 from blackbeard.http_client import get_litellm_client
 from blackbeard.logging_config import request_id_var
 from blackbeard.models import User
+from blackbeard.rate_limiter import chat_limiter, check_rate_limit
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat"])
 
-_RETRY_HEADERS = {"Retry-After": "30"}
+_CHAT_RATE_MSG = "Too many chat requests. Try again later."
+_MODEL_TEST_RATE_MSG = "Too many model test requests. Try again later."
+
+
+def _parse_retry_after(resp: httpx.Response) -> str:
+    raw = resp.headers.get("retry-after", "30")
+    try:
+        return str(max(1, min(int(raw), 3600)))
+    except (ValueError, OverflowError):
+        return "30"
+
 
 _MODEL_NAME_PATTERN = r"^[a-zA-Z0-9._:/@-]+$"
 
@@ -47,11 +59,12 @@ def _get_litellm_client() -> httpx.AsyncClient:
     return get_litellm_client("litellm-chat", timeout=120.0)
 
 
-def _extract_content(data: dict[str, Any]) -> tuple[str, TokenUsage]:
-    """Extract content and usage from a LiteLLM chat completion response."""
+def _extract_content(data: dict[str, Any]) -> tuple[str, TokenUsage, str | None]:
+    """Extract content, usage, and finish_reason from a LiteLLM chat completion response."""
     choices = data.get("choices") or []
     choice = choices[0] if isinstance(choices, list) and choices else {}
     message = choice.get("message", {}) if isinstance(choice, dict) else {}
+    finish_reason = choice.get("finish_reason") if isinstance(choice, dict) else None
     usage = data.get("usage") or {}
     if not isinstance(usage, dict):
         usage = {}
@@ -88,7 +101,7 @@ def _extract_content(data: dict[str, Any]) -> tuple[str, TokenUsage]:
         prompt_time_ms=prompt_time_ms,
         completion_time_ms=completion_time_ms,
     )
-    return content, tokens
+    return content, tokens, finish_reason
 
 
 class ChatMessage(BaseModel):
@@ -137,6 +150,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     model: str
     content: str
+    finish_reason: str | None = None
     tokens: TokenUsage
     latency_ms: int
 
@@ -154,6 +168,7 @@ async def chat(
     _user: User | None = Depends(get_current_user),
 ) -> ChatResponse:
     """Send an ad-hoc chat completion through LiteLLM."""
+    check_rate_limit(chat_limiter, _user, _CHAT_RATE_MSG)
     payload = body.to_litellm_payload()
 
     t0 = time.monotonic()
@@ -183,7 +198,7 @@ async def chat(
         raise HTTPException(
             status_code=502,
             detail="Model proxy is unreachable. Try again later.",
-            headers=_RETRY_HEADERS,
+            headers=RETRY_HEADERS_30,
         ) from e
 
     latency_ms = int((time.monotonic() - t0) * 1000)
@@ -204,16 +219,15 @@ async def chat(
             },
         )
         if resp.status_code == 429:
-            retry_after = resp.headers.get("retry-after", "30")
             raise HTTPException(
                 status_code=429,
                 detail="Model rate limit exceeded. Try again later.",
-                headers={"Retry-After": retry_after},
+                headers={"Retry-After": _parse_retry_after(resp)},
             )
         raise HTTPException(
             status_code=502,
             detail=f"Model request failed with status {resp.status_code}.",
-            headers=_RETRY_HEADERS,
+            headers=RETRY_HEADERS_30,
         )
 
     try:
@@ -236,9 +250,9 @@ async def chat(
         raise HTTPException(
             status_code=502,
             detail="Model proxy returned an unparseable response.",
-            headers=_RETRY_HEADERS,
+            headers=RETRY_HEADERS_30,
         ) from None
-    content, tokens = _extract_content(data)
+    content, tokens, finish_reason = _extract_content(data)
 
     logger.info(
         "Chat completion: model=%s tokens=%d latency_ms=%d",
@@ -257,6 +271,7 @@ async def chat(
     return ChatResponse(
         model=data.get("model", body.model),
         content=content,
+        finish_reason=finish_reason,
         tokens=tokens,
         latency_ms=latency_ms,
     )
@@ -280,6 +295,7 @@ class StreamEvent(BaseModel):
             "description": "SSE stream of chat completion tokens",
             "content": {"text/event-stream": {}},
         },
+        429: {"description": "Too many chat requests"},
         502: {"description": "LiteLLM proxy unreachable or model error"},
     },
 )
@@ -292,6 +308,7 @@ async def chat_stream(
     Each event is ``data: {"content": "...", "done": false}\\n\\n``.
     The final event includes ``"done": true`` plus token usage and latency.
     """
+    check_rate_limit(chat_limiter, _user, _CHAT_RATE_MSG)
     payload = body.to_litellm_payload(
         stream=True,
         stream_options={"include_usage": True},
@@ -313,6 +330,8 @@ async def chat_stream(
                     error_text = ""
                     async for chunk in response.aiter_text():
                         error_text += chunk
+                        if len(error_text) >= 4096:
+                            break
                     logger.warning(
                         "LiteLLM stream error: model=%s status=%d body=%s",
                         request_model,
@@ -336,7 +355,6 @@ async def chat_stream(
                     yield f"data: {evt.model_dump_json()}\n\n"
                     return
 
-                full_content = ""
                 usage: dict[str, Any] = {}
                 async for line in response.aiter_lines():
                     if not line.startswith("data: "):
@@ -347,6 +365,15 @@ async def chat_stream(
                     try:
                         chunk_data = json.loads(data_str)
                     except json.JSONDecodeError:
+                        logger.debug(
+                            "Unparseable SSE chunk in stream: model=%s data=%s",
+                            request_model,
+                            data_str[:200],
+                            extra={
+                                "event": "chat_stream_unparseable_chunk",
+                                "model": request_model,
+                            },
+                        )
                         continue
 
                     choices = chunk_data.get("choices") or []
@@ -354,18 +381,16 @@ async def chat_stream(
                         delta = choices[0].get("delta", {})
                         content = delta.get("content") or delta.get("reasoning_content") or ""
                         if content:
-                            full_content += content
-                            evt = StreamEvent(content=content, done=False)
-                            yield f"data: {evt.model_dump_json()}\n\n"
+                            yield f"data: {json.dumps({'content': content, 'done': False})}\n\n"
 
                     if chunk_data.get("usage"):
                         usage = chunk_data["usage"]
 
                 latency_ms = int((time.monotonic() - t0) * 1000)
-                _, tokens = _extract_content(
+                _, tokens, _ = _extract_content(
                     {
                         "usage": usage,
-                        "choices": [{"message": {"content": full_content}}],
+                        "choices": [{"message": {"content": ""}}],
                     }
                 )
 
@@ -460,6 +485,7 @@ class ModelTestResult(BaseModel):
     response_model=ModelTestResult,
     responses={
         422: {"description": "Invalid model name"},
+        429: {"description": "Too many model test requests"},
     },
 )
 async def test_model(
@@ -477,6 +503,7 @@ async def test_model(
     All requests route through the LiteLLM proxy so budget tracking,
     rate limiting, and audit logging apply even during tests.
     """
+    check_rate_limit(chat_limiter, _user, _MODEL_TEST_RATE_MSG)
     t0 = time.monotonic()
     try:
         client = _get_litellm_client()
@@ -522,7 +549,7 @@ async def test_model(
                 latency_ms=latency_ms,
                 error="Model proxy returned an unparseable response.",
             )
-        content, tokens = _extract_content(data)
+        content, tokens, _ = _extract_content(data)
 
         logger.info(
             "Model test ok: model=%s tokens=%d latency_ms=%d",
@@ -622,16 +649,15 @@ async def list_available_models(
                 },
             )
             if resp.status_code == 429:
-                retry_after = resp.headers.get("retry-after", "30")
                 raise HTTPException(
                     status_code=429,
                     detail="Model proxy rate limit exceeded. Try again later.",
-                    headers={"Retry-After": retry_after},
+                    headers={"Retry-After": _parse_retry_after(resp)},
                 )
             raise HTTPException(
                 status_code=502,
                 detail="Model proxy returned an error. Try again later.",
-                headers=_RETRY_HEADERS,
+                headers=RETRY_HEADERS_30,
             )
 
         try:
@@ -651,7 +677,7 @@ async def list_available_models(
             raise HTTPException(
                 status_code=502,
                 detail="Model proxy returned an unparseable response.",
-                headers=_RETRY_HEADERS,
+                headers=RETRY_HEADERS_30,
             ) from None
         return [
             ModelInfo(
@@ -672,5 +698,5 @@ async def list_available_models(
         raise HTTPException(
             status_code=502,
             detail="Model proxy is unreachable. Try again later.",
-            headers=_RETRY_HEADERS,
+            headers=RETRY_HEADERS_30,
         ) from e

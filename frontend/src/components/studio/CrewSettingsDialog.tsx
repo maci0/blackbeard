@@ -34,15 +34,20 @@ export function CrewSettingsDialog({
   const [localSettings, setLocalSettings] = useState<CrewSettings>(settings)
   const [crews, setCrews] = useState<Resource[]>([])
   const [loading, setLoading] = useState(false)
+  const [fetchError, setFetchError] = useState(false)
 
   useEffect(() => {
     if (open) {
       setLocalSettings(settings)
       setLoading(true)
+      setFetchError(false)
       void api
         .get<{ items: Resource[]; total: number }>('/api/v1/crews')
         .then((result) => setCrews(result.items))
-        .catch(() => setCrews([]))
+        .catch(() => {
+          setCrews([])
+          setFetchError(true)
+        })
         .finally(() => setLoading(false))
     }
   }, [open, settings])
@@ -115,6 +120,10 @@ export function CrewSettingsDialog({
                 </label>
                 {loading ? (
                   <p className="text-xs text-muted-foreground">Loading crews...</p>
+                ) : fetchError ? (
+                  <p className="text-xs text-red-500">
+                    Failed to load crews. Check your connection and reopen this dialog.
+                  </p>
                 ) : crewOptions.length <= 1 ? (
                   <p className="text-xs text-muted-foreground">
                     No other crews available. Save a crew first.

@@ -19,10 +19,10 @@ if TYPE_CHECKING:
 
 from blackbeard.auth.api_key import get_api_key
 from blackbeard.auth.dependencies import SSE_STREAM_RE
-from blackbeard.auth.jwt import decode_token
+from blackbeard.auth.jwt import decode_access_token
 from blackbeard.config import settings
 from blackbeard.logging_config import request_id_var, scrub_pii, user_id_var
-from blackbeard.rate_limiter import _is_rate_limited_with_count, record_auth_failure
+from blackbeard.rate_limiter import is_rate_limited_with_count, record_auth_failure
 
 logger = logging.getLogger(__name__)
 
@@ -63,17 +63,24 @@ _SENSITIVE_QS_PARAMS = frozenset(
         "card_number",
         "date_of_birth",
         "dob",
+        "birthdate",
+        "birthday",
+        "birth_date",
+        "ip_address",
     }
 )
 
 
 def _redact_query_string(query: str) -> str:
-    """Redact sensitive query parameters (e.g. api_key) before logging.
+    """Redact sensitive query parameters before logging.
 
-    Replaces values of known-sensitive parameter names with '[REDACTED]'
-    to prevent credential leakage into structured log output.
+    Parameter names in ``_SENSITIVE_QS_PARAMS`` have their values replaced
+    with '[REDACTED]' to prevent credential/PII leakage into log output.
     """
     if not query:
+        return query
+    query_lower = query.lower()
+    if not any(param in query_lower for param in _SENSITIVE_QS_PARAMS):
         return query
     pairs = parse_qsl(query, keep_blank_values=True)
     if not pairs:
@@ -93,7 +100,7 @@ def _redact_query_string(query: str) -> str:
 
 def _check_rate_limit(request: Request, request_id: str, client_ip: str) -> JSONResponse | None:
     """Return a 429 response if client_ip exceeds the auth failure threshold, else None."""
-    limited, failure_count = _is_rate_limited_with_count(client_ip)
+    limited, failure_count = is_rate_limited_with_count(client_ip)
     if not limited:
         return None
     response = JSONResponse(
@@ -191,9 +198,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
         try:
-            payload = decode_token(token)
-            if payload.get("type") != "access":
-                raise pyjwt.InvalidTokenError("Not an access token")
+            payload = decode_access_token(token)
             user_id_var.set(payload.get("sub", ""))
         except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError) as jwt_exc:
             record_auth_failure(client_ip)

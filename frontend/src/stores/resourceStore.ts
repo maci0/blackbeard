@@ -80,11 +80,14 @@ export const useResourceStore = create<ResourceState>((set, get) => ({
     )
     const updated: Record<string, Resource[]> = {}
     const failedKinds: string[] = []
-    for (const result of results) {
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i]!
       if (result.status === 'fulfilled') {
         updated[result.value.kind] = result.value.items
       } else {
-        failedKinds.push(result.reason instanceof Error ? result.reason.message : 'fetch failed')
+        const kind = ALL_PLURALS[i] ?? 'unknown'
+        const reason = result.reason instanceof Error ? result.reason.message : 'fetch failed'
+        failedKinds.push(`${kind}: ${reason}`)
       }
     }
     set((state) => {

@@ -47,20 +47,16 @@ spec:
             - name: valkey
               containerPort: 6379
               protocol: TCP
-          command:
-            - "valkey-server"
-            - "--requirepass"
-            - "$(VALKEY_PASSWORD)"
-            - "--maxmemory"
-            - {{ .Values.valkey.config.maxmemory | quote }}
-            - "--maxmemory-policy"
-            - {{ .Values.valkey.config.maxmemoryPolicy | quote }}
-            - "--save"
-            - "60 1000"
-            - "--save"
-            - "300 100"
-            - "--dir"
-            - "/data"
+          command: ["sh", "-c"]
+          args:
+            - >-
+              exec valkey-server
+              --requirepass "$VALKEY_PASSWORD"
+              --maxmemory {{ .Values.valkey.config.maxmemory | quote }}
+              --maxmemory-policy {{ .Values.valkey.config.maxmemoryPolicy | quote }}
+              --save "60 1000"
+              --save "300 100"
+              --dir /data
           env:
             - name: VALKEY_PASSWORD
               valueFrom:

@@ -122,13 +122,13 @@ The execution appears in the Executions page. Click it to see per-task status, o
 
 ```bash
 # List all executions
-blackbeard executions
+uv run blackbeard executions
 
 # Get details for a specific execution
-blackbeard status <execution-id>
+uv run blackbeard status <execution-id>
 
 # View execution events (step-by-step log)
-blackbeard events <execution-id>
+uv run blackbeard events <execution-id>
 ```
 
 ### API
@@ -169,15 +169,15 @@ spec:
 Validate and apply it:
 
 ```bash
-blackbeard validate -f my-agent.yaml
-blackbeard apply -f my-agent.yaml
+uv run blackbeard validate -f my-agent.yaml
+uv run blackbeard apply -f my-agent.yaml
 ```
 
 Verify it was created:
 
 ```bash
-blackbeard list Agent
-blackbeard get Agent summarizer
+uv run blackbeard list Agent
+uv run blackbeard get Agent summarizer
 ```
 
 ### Via the Studio UI
@@ -228,13 +228,13 @@ spec:
 Apply all resources (the CLI resolves dependencies automatically):
 
 ```bash
-blackbeard apply -f my-agent.yaml -f tasks/summarize.yaml -f crews/summary-crew.yaml
+uv run blackbeard apply -f my-agent.yaml -f tasks/summarize.yaml -f crews/summary-crew.yaml
 ```
 
 Run it:
 
 ```bash
-blackbeard kickoff summary-crew --input content="Blackbeard is a self-hosted agent management platform..." --wait
+uv run blackbeard kickoff summary-crew --input content="Blackbeard is a self-hosted agent management platform..." --wait
 ```
 
 ---
@@ -278,7 +278,7 @@ Beyond standard execution, Blackbeard supports iterative training and evaluation
 Training runs the crew multiple times and persists learning data for performance improvement.
 
 ```bash
-blackbeard train research-crew --input topic="AI agents" --iterations 3 --wait
+uv run blackbeard train research-crew --input topic="AI agents" --iterations 3 --wait
 ```
 
 ### Test a crew
@@ -286,7 +286,7 @@ blackbeard train research-crew --input topic="AI agents" --iterations 3 --wait
 Test runs evaluate crew performance with metrics, using an LLM judge to score outputs.
 
 ```bash
-blackbeard test-crew research-crew --input topic="AI agents" --iterations 3 --wait
+uv run blackbeard test-crew research-crew --input topic="AI agents" --iterations 3 --wait
 ```
 
 ### From the UI
@@ -301,16 +301,16 @@ Use the `export` command to download resources from the server as YAML files, us
 
 ```bash
 # Export all resources as YAML
-blackbeard export --all > backup.yaml
+uv run blackbeard export --all > backup.yaml
 
 # Export all resources to a directory
-blackbeard export --all -o backup/
+uv run blackbeard export --all -o backup/
 
 # Export a single resource
-blackbeard export Agent researcher
+uv run blackbeard export Agent researcher
 
 # Inspect a single resource as JSON
-blackbeard get Agent researcher --json
+uv run blackbeard get Agent researcher --json
 ```
 
 ---
@@ -326,14 +326,14 @@ The Studio property panel includes a bidirectional YAML editor (Monaco). You can
 ### Create users
 
 ```bash
-blackbeard user invite -e alice@example.com -d "Alice"
+uv run blackbeard user invite -e alice@example.com -d "Alice"
 ```
 
 ### Manage groups
 
 ```bash
-blackbeard group create engineering --description "Engineering team"
-blackbeard group list
+uv run blackbeard group create engineering --description "Engineering team"
+uv run blackbeard group list
 ```
 
 To add or remove group members, use the API:

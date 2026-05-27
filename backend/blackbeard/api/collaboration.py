@@ -15,9 +15,10 @@ import jwt as pyjwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from blackbeard.auth.api_key import get_api_key
-from blackbeard.auth.jwt import decode_token
+from blackbeard.auth.jwt import decode_access_token
 from blackbeard.config import settings
 from blackbeard.kinds import NAME_PATTERN
+from blackbeard.logging_config import log_task_exception
 from blackbeard.models.execution_schemas import exceeds_depth as _exceeds_depth
 from blackbeard.rate_limiter import record_auth_failure
 
@@ -72,22 +73,7 @@ _MAX_ROOMS = 500  # prevent unbounded memory growth from room creation
 _MAX_CONNECTIONS_PER_ROOM = 50
 
 
-def _log_collab_task_exception(task: asyncio.Task[None]) -> None:
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc is not None:
-        logger.error(
-            "Collab background task '%s' failed: %s",
-            task.get_name(),
-            exc,
-            exc_info=exc,
-            extra={
-                "event": "collab_task_failed",
-                "task_name": task.get_name(),
-                "error_type": type(exc).__name__,
-            },
-        )
+_log_collab_task_exception = log_task_exception
 
 
 class ValkeyCollabBackend:
@@ -363,9 +349,8 @@ def validate_ws_auth(token: str, api_key: str) -> bool:
     """
     if token:
         try:
-            payload = decode_token(token)
-            if payload.get("type") == "access":
-                return True
+            decode_access_token(token)
+            return True
         except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError) as exc:
             logger.warning(
                 "Collab WS auth: token validation failed",
@@ -526,12 +511,10 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
             # client from flooding the room.
             if msg_type in _HIGH_FREQ_TYPES:
                 now = time.monotonic()
-                # Prune timestamps outside the window
                 cutoff = now - _RATE_LIMIT_WINDOW_S
                 while _hf_timestamps and _hf_timestamps[0] <= cutoff:
                     _hf_timestamps.popleft()
                 if len(_hf_timestamps) >= _RATE_LIMIT_MAX:
-                    # Silently drop excess messages
                     continue
                 _hf_timestamps.append(now)
 

@@ -364,8 +364,13 @@ spec:
             )
             assert resp.status_code == 200
             data = resp.json()
-            # The good agent should import, the bad one should error
-            assert data["imported"] >= 1
+            # The good agent should import, the bad UnknownKind should error
+            assert data["imported"] == 1, (
+                f"Expected exactly 1 imported (the Agent), got {data['imported']}"
+            )
+            assert data["errors"] >= 1, (
+                f"Expected at least 1 error (the UnknownKind), got {data['errors']}"
+            )
         finally:
             marketplace_mod._EXAMPLES_DIR = original_examples
 
@@ -438,7 +443,7 @@ async def test_copilot_endpoint_transport_error(client: AsyncClient, db_session:
         )
 
     assert resp.status_code == 502
-    assert "unreachable" in resp.json()["detail"].lower()
+    assert "failed" in resp.json()["detail"].lower()
 
 
 async def test_copilot_endpoint_with_namespace(client: AsyncClient, db_session: AsyncSession):

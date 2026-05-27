@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import TYPE_CHECKING, Any, NoReturn
 
 import click
 from rich.console import Console
 from rich.markup import escape
+
+from blackbeard_cli.kinds import NAME_PATTERN
 
 if TYPE_CHECKING:
     import httpx
@@ -62,7 +65,7 @@ def extract_detail(response: httpx.Response) -> str:
                 return detail
             return str(detail)
         return response.text
-    except Exception:
+    except (ValueError, KeyError):
         return response.text
 
 
@@ -112,7 +115,7 @@ def handle_http_error(response: httpx.Response) -> NoReturn:
         body = response.json()
         if isinstance(body, dict) and "request_id" in body:
             console.print(f"[dim]Request ID: {body['request_id']}[/]")
-    except Exception:
+    except (ValueError, KeyError):
         pass
     raise SystemExit(1)
 
@@ -155,10 +158,6 @@ def require_auth(ctx: click.Context) -> dict[str, str]:
 
 def validate_name(name: str) -> None:
     """Exit with code 2 if name doesn't match resource naming rules."""
-    import re
-
-    from blackbeard_cli.kinds import NAME_PATTERN
-
     if not re.fullmatch(NAME_PATTERN, name):
         console.print(
             f"[red bold]Error:[/] Invalid resource name {escape(repr(name))}.\n"
@@ -212,3 +211,13 @@ def parse_key_value_inputs(items: tuple[str, ...], flag_name: str = "--input") -
         except (ValueError, json.JSONDecodeError):
             result[key] = value
     return result
+
+
+def extract_items(data: Any) -> list[Any]:
+    """Normalise a list-or-paginated API response into a plain list."""
+    return data if isinstance(data, list) else data.get("items", [])
+
+
+def extract_total(data: Any, items: list[Any]) -> int:
+    """Return total count from a list-or-paginated API response."""
+    return len(items) if isinstance(data, list) else data.get("total", len(items))

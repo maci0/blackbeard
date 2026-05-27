@@ -265,12 +265,12 @@ def events(
 
 
 def _event_color(event_type: str) -> str:
-    if "started" in event_type:
-        return "blue"
-    if "completed" in event_type or "finished" in event_type:
-        return "green"
     if "error" in event_type or "failed" in event_type:
         return "red"
+    if "completed" in event_type or "finished" in event_type:
+        return "green"
+    if "started" in event_type:
+        return "blue"
     return "dim"
 
 
@@ -306,14 +306,7 @@ Examples:
 )
 @click.argument("execution_id")
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
-@click.option(
-    "--json",
-    "-j",
-    "output_json",
-    is_flag=True,
-    default=False,
-    help="Output as JSON for scripting (skips confirmation prompt)",
-)
+@json_opt
 @click.pass_context
 def cancel(ctx: click.Context, execution_id: str, yes: bool, output_json: bool = False) -> None:
     """Cancel a running execution.
@@ -349,4 +342,4 @@ def cancel(ctx: click.Context, execution_id: str, yes: bool, output_json: bool =
         print_json(data)
         return
 
-    out.print(f"[green]Cancelled[/] execution [bold]{escape(execution_id)}[/]")
+    out.print(f"[green]✓[/] Cancelled execution [bold]{escape(execution_id)}[/]")

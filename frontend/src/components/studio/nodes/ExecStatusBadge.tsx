@@ -30,7 +30,7 @@ export function ExecStatusBadge({ status, output }: ExecStatusBadgeProps) {
         ) : isFailed ? (
           <XCircle className="h-2.5 w-2.5 shrink-0 text-red-500" />
         ) : (
-          <Loader2 className="h-2.5 w-2.5 shrink-0 animate-spin text-amber-500" />
+          <Loader2 className="h-2.5 w-2.5 shrink-0 animate-spin text-amber-500 motion-reduce:animate-none" />
         )}
         <span
           className={cn(

@@ -5,8 +5,8 @@ exceed the configured threshold within a time window.  Thread-safe for
 use from both async middleware and sync background tasks.
 
 Also provides ``InMemoryRateLimiter`` — a reusable sliding-window counter
-for per-user mutation rate limiting on resource, execution, and marketplace
-endpoints.
+for per-user mutation rate limiting on resource, execution, marketplace,
+copilot, and chat endpoints.
 """
 
 from __future__ import annotations
@@ -15,27 +15,37 @@ import collections
 import logging
 import threading
 import time
+from typing import Any
+
+from fastapi import HTTPException
 
 from blackbeard.config import settings
 
 logger = logging.getLogger(__name__)
 
+_ANON_KEY = "__anonymous__"
+_RATE_LIMIT_HEADERS = {"Retry-After": "60"}
+
 __all__ = [
     "InMemoryRateLimiter",
-    "_auth_failures",
-    "_is_rate_limited_with_count",
+    "chat_limiter",
+    "check_rate_limit",
+    "check_rate_limit_by_ip",
+    "copilot_limiter",
     "execution_limiter",
     "is_rate_limited",
+    "is_rate_limited_with_count",
     "marketplace_limiter",
     "mutation_limiter",
     "record_auth_failure",
+    "registration_limiter",
 ]
 
 _auth_failures: collections.OrderedDict[str, collections.deque[float]] = collections.OrderedDict()
 _auth_failures_lock = threading.Lock()
 
 
-def _is_rate_limited_with_count(client_ip: str) -> tuple[bool, int]:
+def is_rate_limited_with_count(client_ip: str) -> tuple[bool, int]:
     """Return (is_limited, failure_count) in a single lock acquisition."""
     now = time.monotonic()
     with _auth_failures_lock:
@@ -53,7 +63,7 @@ def _is_rate_limited_with_count(client_ip: str) -> tuple[bool, int]:
 
 def is_rate_limited(client_ip: str) -> bool:
     """Return True if client_ip has exceeded the auth failure threshold."""
-    limited, _ = _is_rate_limited_with_count(client_ip)
+    limited, _ = is_rate_limited_with_count(client_ip)
     return limited
 
 
@@ -108,7 +118,6 @@ class InMemoryRateLimiter:
             else:
                 self._buckets.move_to_end(key)
 
-            # Prune expired timestamps
             while bucket and bucket[0] < cutoff:
                 bucket.popleft()
 
@@ -117,14 +126,29 @@ class InMemoryRateLimiter:
 
             bucket.append(now)
 
-            # Prune oldest keys if tracking too many
             while len(self._buckets) > _MAX_TRACKED_KEYS:
                 self._buckets.popitem(last=False)
 
         return True
 
 
-# Pre-configured limiters for mutation endpoints
+# Pre-configured limiters for API endpoints
 mutation_limiter = InMemoryRateLimiter(max_requests=100, window_seconds=60)
 execution_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60)
 marketplace_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=60)
+copilot_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60)
+chat_limiter = InMemoryRateLimiter(max_requests=30, window_seconds=60)
+registration_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=3600)
+
+
+def check_rate_limit(limiter: InMemoryRateLimiter, user: Any, detail: str) -> None:
+    """Raise HTTP 429 if *user* exceeds *limiter*'s rate limit."""
+    key = str(user.id) if user is not None else _ANON_KEY
+    if not limiter.check(key):
+        raise HTTPException(status_code=429, detail=detail, headers=_RATE_LIMIT_HEADERS)
+
+
+def check_rate_limit_by_ip(limiter: InMemoryRateLimiter, ip: str, detail: str) -> None:
+    """Raise HTTP 429 if *ip* exceeds *limiter*'s rate limit."""
+    if not limiter.check(ip):
+        raise HTTPException(status_code=429, detail=detail, headers=_RATE_LIMIT_HEADERS)

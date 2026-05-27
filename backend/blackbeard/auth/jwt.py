@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -15,13 +16,19 @@ _ISSUER = "blackbeard"
 _AUDIENCE = "blackbeard"
 
 _jwt_secret: str | None = None
+_jwt_secret_lock = threading.Lock()
 
 
 def _get_secret() -> str:
-    global _jwt_secret
-    if _jwt_secret is None:
-        _jwt_secret = settings.jwt_secret.get_secret_value()
-    return _jwt_secret
+    """Return the JWT secret, loading from settings on first call.
+
+    Uses lock-always pattern (safe under both GIL and free-threaded Python).
+    """
+    with _jwt_secret_lock:
+        global _jwt_secret
+        if _jwt_secret is None:
+            _jwt_secret = settings.jwt_secret.get_secret_value()
+        return _jwt_secret
 
 
 def _create_token(token_type: str, expires_delta: timedelta, **extra: Any) -> str:
@@ -73,3 +80,14 @@ def decode_token(token: str) -> dict[str, Any]:
         audience=_AUDIENCE,
         options={"require": ["exp", "iat", "nbf", "iss", "sub", "aud", "type", "jti"]},
     )
+
+
+def decode_access_token(token: str) -> dict[str, Any]:
+    """Decode a JWT token and verify it is an access token.
+
+    Raises jwt.InvalidTokenError if the token type is not ``"access"``.
+    """
+    payload = decode_token(token)
+    if payload.get("type") != "access":
+        raise jwt.InvalidTokenError("Not an access token")
+    return payload

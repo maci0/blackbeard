@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -126,7 +127,8 @@ function NavSection({
         <button
           type="button"
           onClick={onToggle}
-          className="flex w-full items-center gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors hover:text-muted-foreground"
+          aria-expanded={!sectionCollapsed}
+          className="flex w-full items-center gap-1 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors hover:text-muted-foreground"
         >
           <ChevronDown
             className={cn(
@@ -137,34 +139,41 @@ function NavSection({
           {section.label}
         </button>
       )}
-      {(sidebarCollapsed || !sectionCollapsed) && (
-        <div className="space-y-0.5">
-          {section.items.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              title={sidebarCollapsed ? label : undefined}
-              aria-label={label}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  sidebarCollapsed && 'md:justify-center md:px-0',
-                  isActive
-                    ? 'bg-accent text-foreground ring-2 ring-inset ring-primary/20'
-                    : 'text-muted-foreground hover:translate-x-0.5 hover:bg-accent hover:text-foreground',
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <Icon className={cn('h-4 w-4 shrink-0', isActive && 'text-primary')} />
-                  <span className={sidebarCollapsed ? 'md:sr-only' : ''}>{label}</span>
-                </>
-              )}
-            </NavLink>
-          ))}
+      <div
+        className={cn(
+          'grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none',
+          sidebarCollapsed || !sectionCollapsed ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+        )}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="space-y-0.5">
+            {section.items.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                title={sidebarCollapsed ? label : undefined}
+                aria-label={label}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    sidebarCollapsed && 'md:justify-center md:px-0',
+                    isActive
+                      ? 'bg-accent text-foreground ring-2 ring-inset ring-primary/20'
+                      : 'text-muted-foreground hover:translate-x-0.5 hover:bg-accent hover:text-foreground',
+                  )
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <Icon className={cn('h-4 w-4 shrink-0', isActive && 'text-primary')} />
+                    <span className={sidebarCollapsed ? 'md:sr-only' : ''}>{label}</span>
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -195,12 +204,17 @@ function UserInitials({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' 
 }
 
 function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
-  const current = useNamespaceStore((s) => s.current)
-  const namespaces = useNamespaceStore((s) => s.namespaces)
-  const loading = useNamespaceStore((s) => s.loading)
-  const setCurrent = useNamespaceStore((s) => s.setCurrent)
-  const fetchNamespaces = useNamespaceStore((s) => s.fetchNamespaces)
-  const createNamespace = useNamespaceStore((s) => s.createNamespace)
+  const { current, namespaces, loading, setCurrent, fetchNamespaces, createNamespace } =
+    useNamespaceStore(
+      useShallow((s) => ({
+        current: s.current,
+        namespaces: s.namespaces,
+        loading: s.loading,
+        setCurrent: s.setCurrent,
+        fetchNamespaces: s.fetchNamespaces,
+        createNamespace: s.createNamespace,
+      })),
+    )
   const toast = useToastStore()
   const navigate = useNavigate()
 
@@ -288,7 +302,7 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
           <div className="max-h-48 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
               </div>
             ) : (
               namespaces.map((ns) => (
@@ -299,7 +313,7 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
                     setCurrent(ns)
                     setOpen(false)
                   }}
-                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent ${
+                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                     ns === current ? 'bg-primary/10 font-medium text-primary' : ''
                   }`}
                 >
@@ -340,7 +354,11 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
                   disabled={submitting || !newName.trim()}
                   className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  {submitting ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Add'}
+                  {submitting ? (
+                    <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" />
+                  ) : (
+                    'Add'
+                  )}
                 </button>
               </div>
             ) : (
@@ -348,7 +366,7 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
                 <button
                   type="button"
                   onClick={() => setCreating(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  className="flex items-center gap-2 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   <Plus className="h-3 w-3" />
                   Create namespace
@@ -359,7 +377,7 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
                     setOpen(false)
                     void navigate('/resources?kind=namespaces')
                   }}
-                  className="flex items-center gap-2 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  className="flex items-center gap-2 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   <SettingsIcon className="h-3 w-3" />
                   Manage namespaces
@@ -378,11 +396,14 @@ export default function Layout() {
   const location = useLocation()
   const { preference, cycle } = useDarkMode()
   const { status: apiHealth, lastChecked: apiLastChecked } = useHealthCheck()
-  const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
-  const unreadCount = useNotificationStore((s) => s.unreadCount)
-  const notifications = useNotificationStore((s) => s.notifications)
-  const markAllRead = useNotificationStore((s) => s.markAllRead)
+  const { user, logout } = useAuthStore(useShallow((s) => ({ user: s.user, logout: s.logout })))
+  const { unreadCount, notifications, markAllRead } = useNotificationStore(
+    useShallow((s) => ({
+      unreadCount: s.unreadCount,
+      notifications: s.notifications,
+      markAllRead: s.markAllRead,
+    })),
+  )
 
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false)
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false)
@@ -725,6 +746,7 @@ export default function Layout() {
                     ? `${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}`
                     : 'No unread notifications'
                 }
+                aria-expanded={notifOpen}
                 title="Notifications"
                 className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
@@ -736,14 +758,18 @@ export default function Layout() {
                 )}
               </button>
               {notifOpen && (
-                <div className="absolute bottom-full left-0 z-50 mb-2 w-72 overflow-hidden rounded-lg border bg-card shadow-lg">
+                <div
+                  role="region"
+                  aria-label="Notifications"
+                  className="absolute bottom-full left-0 z-50 mb-2 w-72 overflow-hidden rounded-lg border bg-card shadow-lg"
+                >
                   <div className="flex items-center justify-between border-b px-3 py-2">
                     <span className="text-xs font-semibold">Notifications</span>
                     {unreadCount > 0 && (
                       <button
                         type="button"
                         onClick={() => markAllRead()}
-                        className="flex items-center gap-1 text-[10px] text-primary hover:underline"
+                        className="flex items-center gap-1 text-[10px] text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <Check className="h-3 w-3" />
                         Mark all read
@@ -756,18 +782,17 @@ export default function Layout() {
                         No notifications yet
                       </p>
                     ) : (
-                      notifications.map((n) => (
-                        <div
-                          key={n.id}
-                          className={`border-b px-3 py-2 last:border-b-0 ${!n.read ? 'bg-primary/5' : ''}`}
-                        >
-                          <p className="text-xs font-medium">{n.title}</p>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground">{n.body}</p>
-                          <p className="mt-1 text-[10px] text-muted-foreground/60">
-                            {n.time.toLocaleTimeString()}
-                          </p>
-                        </div>
-                      ))
+                      <ul role="list" className="divide-y divide-border">
+                        {notifications.map((n) => (
+                          <li key={n.id} className={`px-3 py-2 ${!n.read ? 'bg-primary/5' : ''}`}>
+                            <p className="text-xs font-medium">{n.title}</p>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">{n.body}</p>
+                            <p className="mt-1 text-[10px] text-muted-foreground/60">
+                              {n.time.toLocaleTimeString()}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
                     )}
                   </div>
                 </div>
@@ -820,7 +845,10 @@ export default function Layout() {
         inert={sidebarOpen || undefined}
       >
         {apiHealth === 'disconnected' && (
-          <div className="flex flex-1 items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div
+            role="alert"
+            className="flex flex-1 items-center justify-center bg-background/80 backdrop-blur-sm"
+          >
             <div className="text-center">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
                 <AlertTriangle className="h-6 w-6 text-destructive" />

@@ -12,10 +12,15 @@ import logging
 import re
 import sys
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse, urlunparse
+
+if TYPE_CHECKING:
+    import asyncio
 
 __all__ = [
     "configure_logging",
+    "log_task_exception",
     "request_id_var",
     "safe_log_url",
     "scrub_pii",
@@ -102,14 +107,15 @@ _SENSITIVE_KEYS = frozenset(
         "credit_card",
         "card_number",
         "date_of_birth",
+        "birthdate",
+        "birthday",
+        "birth_date",
         "bank_account",
         "litellm_key",
         "virtual_key",
         "signing_secret",
         "webhook_secret",
         "ip_address",
-        "client_ip",
-        "remote_addr",
     }
 )
 
@@ -123,6 +129,27 @@ _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 def scrub_pii(text: str) -> str:
     """Replace email-like patterns in exception messages to prevent PII leakage."""
     return _EMAIL_RE.sub("[EMAIL]", text)
+
+
+def log_task_exception(task: asyncio.Task[None]) -> None:
+    """Callback for fire-and-forget asyncio tasks that logs exceptions silently swallowed."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        _logger = logging.getLogger(__name__)
+        _logger.error(
+            "Background task '%s' failed: %s",
+            task.get_name(),
+            exc,
+            exc_info=exc,
+            extra={
+                "event": "background_task_failed",
+                "task_name": task.get_name(),
+                "error_type": type(exc).__name__,
+                "error_message": str(exc)[:500],
+            },
+        )
 
 
 def safe_log_url(url: str) -> str:

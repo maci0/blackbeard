@@ -117,6 +117,8 @@ export default function Settings() {
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.status === 404) {
           setKeyStatus('none')
+        } else {
+          console.error('[Settings] Failed to check API key status:', err)
         }
       })
       .finally(() => setKeyLoading(false))
@@ -213,14 +215,17 @@ export default function Settings() {
             Override the API base URL if the backend runs on a different host. Leave empty to use
             the default (same origin via proxy).
           </p>
+          <label htmlFor="settings-api-base" className="sr-only">
+            API base URL
+          </label>
           <div className="flex gap-2">
             <input
+              id="settings-api-base"
               type="url"
               value={apiBase}
               onChange={(e) => setApiBase(e.target.value)}
               placeholder="http://localhost:8000 (default)"
               className="flex-1 rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="API base URL"
             />
             <button
               type="button"
@@ -375,7 +380,8 @@ export default function Settings() {
                 className="flex items-center gap-1 text-xs text-primary hover:underline"
                 title="Open API health endpoint"
               >
-                /api/v1/health <ExternalLink className="h-3 w-3" />
+                /api/v1/health <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                <span className="sr-only">(opens in new tab)</span>
               </a>
             </div>
             <div className="flex items-center justify-between">
@@ -387,7 +393,8 @@ export default function Settings() {
                 className="flex items-center gap-1 text-xs text-primary hover:underline"
                 title="Open LiteLLM dashboard"
               >
-                :4000/ui <ExternalLink className="h-3 w-3" />
+                :4000/ui <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                <span className="sr-only">(opens in new tab)</span>
               </a>
             </div>
             <div className="flex items-center justify-between">
@@ -399,7 +406,8 @@ export default function Settings() {
                 className="flex items-center gap-1 text-xs text-primary hover:underline"
                 title="Open API documentation"
               >
-                /api/v1/docs <ExternalLink className="h-3 w-3" />
+                /api/v1/docs <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                <span className="sr-only">(opens in new tab)</span>
               </a>
             </div>
           </div>

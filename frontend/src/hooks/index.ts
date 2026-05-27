@@ -1,5 +1,6 @@
 export { useCollaboration } from './useCollaboration'
 export { useDarkMode } from './useDarkMode'
+export { useDeleteError } from './useDeleteError'
 export { useHealthCheck } from './useHealthCheck'
 export type { ThemePreference } from './useDarkMode'
 export { useDocumentTitle } from './useDocumentTitle'

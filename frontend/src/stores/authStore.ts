@@ -52,7 +52,7 @@ try {
   _initialRefresh = localStorage.getItem(REFRESH_KEY)
   if (_initialToken) api.setToken(_initialToken)
 } catch {
-  // localStorage unavailable (SSR or test environment)
+  // localStorage unavailable (test env, private browsing, or storage disabled)
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({

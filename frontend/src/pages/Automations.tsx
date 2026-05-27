@@ -291,6 +291,7 @@ function CreateAutomationDialog({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
+                  aria-required="true"
                   autoFocus
                   autoComplete="off"
                   spellCheck={false}
@@ -331,6 +332,7 @@ function CreateAutomationDialog({
                     value={targetName}
                     onChange={(e) => setTargetName(e.target.value)}
                     required
+                    aria-required="true"
                     autoComplete="off"
                     spellCheck={false}
                     className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -490,7 +492,7 @@ function WebhookDetails({ url, secret }: { url?: string; secret?: string }) {
       setCopied(true)
       setTimeout(() => setCopied(false), 3000)
     } catch {
-      // clipboard API not available
+      useToastStore.getState().error('Failed to copy to clipboard')
     }
   }, [])
 
@@ -510,6 +512,7 @@ function WebhookDetails({ url, secret }: { url?: string; secret?: string }) {
             {url}
           </code>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation()
               void copyToClipboard(url, setCopiedUrl)
@@ -534,6 +537,7 @@ function WebhookDetails({ url, secret }: { url?: string; secret?: string }) {
             {secret}
           </code>
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation()
               void copyToClipboard(secret, setCopiedSecret)
@@ -802,7 +806,7 @@ export default function Automations() {
                     return (
                       <tr
                         key={automation.id}
-                        className="group transition-colors duration-150 hover:bg-muted/50"
+                        className="group border-l-2 border-l-transparent transition-colors duration-150 hover:border-l-primary hover:bg-accent/50"
                       >
                         {/* Name */}
                         <td className="px-4 py-3 font-medium">{automation.name}</td>
@@ -866,6 +870,7 @@ export default function Automations() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 void handleTrigger(automation.name)
@@ -883,6 +888,7 @@ export default function Automations() {
                               )}
                             </button>
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 setDeleteTarget(automation)

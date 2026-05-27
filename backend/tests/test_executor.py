@@ -852,17 +852,23 @@ async def test_list_executions_pagination(client: AsyncClient):
     # Fetch page 1 (limit 2)
     response = await client.get("/api/v1/executions?limit=2&offset=0", headers=API_KEY_HEADER)
     assert response.status_code == 200
-    data = response.json()
-    assert len(data["items"]) == 2
-    assert data["total"] == 3
-    assert data["has_more"] is True
+    page1 = response.json()
+    assert len(page1["items"]) == 2
+    assert page1["total"] == 3
+    assert page1["has_more"] is True
 
     # Fetch page 2
     response = await client.get("/api/v1/executions?limit=2&offset=2", headers=API_KEY_HEADER)
     assert response.status_code == 200
-    data = response.json()
-    assert len(data["items"]) == 1
-    assert data["has_more"] is False
+    page2 = response.json()
+    assert len(page2["items"]) == 1
+    assert page2["has_more"] is False
+
+    # Pages must not overlap
+    page1_ids = {item["id"] for item in page1["items"]}
+    page2_ids = {item["id"] for item in page2["items"]}
+    assert page1_ids.isdisjoint(page2_ids), "Pagination pages must not contain duplicate IDs"
+    assert len(page1_ids | page2_ids) == 3, "All 3 executions should appear across pages"
 
 
 # ---------------------------------------------------------------------------

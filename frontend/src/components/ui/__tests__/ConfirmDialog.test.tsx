@@ -84,14 +84,14 @@ describe('ConfirmDialog', () => {
       render(<ConfirmDialog {...defaultProps} confirmVariant="destructive" confirmLabel="Delete" />)
 
       const confirmBtn = screen.getByText('Delete').closest('button')
-      expect(confirmBtn).toHaveClass('bg-red-600')
+      expect(confirmBtn).toHaveClass('bg-destructive')
     })
 
     it('does not apply red styling for default variant', () => {
       render(<ConfirmDialog {...defaultProps} />)
 
       const confirmBtn = screen.getByText('Confirm').closest('button')
-      expect(confirmBtn).not.toHaveClass('bg-red-600')
+      expect(confirmBtn).not.toHaveClass('bg-destructive')
       expect(confirmBtn).toHaveClass('bg-primary')
     })
   })

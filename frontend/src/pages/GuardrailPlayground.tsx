@@ -320,6 +320,7 @@ export default function GuardrailPlayground() {
           <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" aria-hidden="true" />
           <p className="font-medium">{error}</p>
           <button
+            type="button"
             onClick={() => void fetchGuardrails()}
             className="mt-4 rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -428,6 +429,7 @@ export default function GuardrailPlayground() {
               onClick={() =>
                 setTestInput('Contact me at john.doe@example.com or call 555-123-4567')
               }
+              aria-label="Load PII sample into test input"
               className="rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               PII sample
@@ -435,6 +437,7 @@ export default function GuardrailPlayground() {
             <button
               type="button"
               onClick={() => setTestInput('My SSN is 123-45-6789 and card is 4111 1111 1111 1111')}
+              aria-label="Load sensitive data sample into test input"
               className="rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Sensitive data
@@ -442,6 +445,7 @@ export default function GuardrailPlayground() {
             <button
               type="button"
               onClick={() => setTestInput('This is a clean message with no sensitive information.')}
+              aria-label="Load clean text sample into test input"
               className="rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Clean text
@@ -452,7 +456,9 @@ export default function GuardrailPlayground() {
         <div>
           <p className="mb-1.5 text-sm font-semibold text-foreground">Results</p>
           {testResult ? (
-            <ResultPanel result={testResult} />
+            <div role="status" aria-live="polite">
+              <ResultPanel result={testResult} />
+            </div>
           ) : (
             <div className="flex h-48 items-center justify-center rounded-lg border border-dashed bg-muted/20">
               <p className="text-sm text-muted-foreground">

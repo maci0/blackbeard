@@ -71,7 +71,10 @@ async def test_docs_no_auth(client):
     assert response.status_code == 200, (
         f"OpenAPI docs returned unexpected status {response.status_code}"
     )
-    assert len(response.content) > 0, "Docs response should have content"
+    assert len(response.content) > 100, "Docs page should contain substantial HTML content"
+    assert b"swagger" in response.content.lower() or b"openapi" in response.content.lower(), (
+        "Docs page should contain Swagger/OpenAPI content"
+    )
 
 
 async def test_error_no_secret_leak(client):
@@ -101,7 +104,7 @@ async def test_redoc_no_auth(client):
     """ReDoc docs should not require auth."""
     response = await client.get("/redoc", follow_redirects=True)
     assert response.status_code == 200
-    assert len(response.content) > 0, "ReDoc response should have content"
+    assert len(response.content) > 100, "ReDoc page should contain substantial HTML content"
 
 
 async def test_openapi_json_no_auth(client):
@@ -146,8 +149,7 @@ async def test_request_id_returned(client):
     """Every response should include an X-Request-Id header."""
     response = await client.get("/api/v1/agents", headers=API_KEY_HEADER)
     request_id = response.headers.get("X-Request-Id")
-    assert request_id is not None
-    assert request_id.strip(), "Request ID must not be blank"
+    assert request_id, "X-Request-Id header must be present and non-empty"
     assert len(request_id) <= 64, "Request ID should not exceed max length"
     parsed = uuid.UUID(request_id)
     assert isinstance(parsed, uuid.UUID), "Request ID must be a valid UUID"
@@ -242,14 +244,18 @@ async def test_request_id_on_401(client):
     """401 responses should include X-Request-Id for log correlation."""
     response = await client.get("/api/v1/agents")
     assert response.status_code == 401
-    assert response.headers.get("X-Request-Id") is not None
+    request_id = response.headers.get("X-Request-Id")
+    assert request_id, "401 response must include X-Request-Id"
+    uuid.UUID(request_id)
 
 
 async def test_request_id_on_404(client):
     """404 responses should include X-Request-Id for log correlation."""
     response = await client.get("/api/v1/agents/nonexistent", headers=API_KEY_HEADER)
     assert response.status_code == 404
-    assert response.headers.get("X-Request-Id") is not None
+    request_id = response.headers.get("X-Request-Id")
+    assert request_id, "404 response must include X-Request-Id"
+    uuid.UUID(request_id)
 
 
 # ---------------------------------------------------------------------------

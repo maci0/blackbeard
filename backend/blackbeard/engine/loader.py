@@ -25,9 +25,9 @@ from crewai import LLM, Agent, Crew, Process, Task
 
 from blackbeard.config import settings
 from blackbeard.engine.policy import AgentPolicy, resolve_policy
+from blackbeard.kinds import SAFE_FILENAME as _SAFE_FILENAME
 from blackbeard.kinds import ResourceKind
 from blackbeard.litellm import apply_model_params, apply_vertex_params
-from blackbeard.models.execution_schemas import SAFE_FILENAME as _SAFE_FILENAME
 from blackbeard.resources import (
     ALLOWED_CALLABLE_MODULE_PREFIXES,
     ALLOWED_TOOL_MODULE_PREFIXES,
@@ -74,10 +74,16 @@ def _check_path_safety(path: str, context: str) -> None:
 
 
 _MAX_CONFIG_VALUE_LEN = 10_000
+_MAX_CONFIG_ENTRIES = 50
 
 
 def _validate_tool_config(config: dict[str, Any], tool_name: str) -> None:
     """Reject tool config values containing path traversal, sensitive paths, or excessive size."""
+    if len(config) > _MAX_CONFIG_ENTRIES:
+        raise LoaderError(
+            f"Tool '{tool_name}' config has {len(config)} entries "
+            f"(max {_MAX_CONFIG_ENTRIES})"
+        )
     for key, val in config.items():
         if not isinstance(val, str):
             continue
@@ -206,7 +212,11 @@ class ResourceLoader:
         return llm
 
     def _build_knowledge_source(self, ref_or_name: str) -> Any:
-        """Build a CrewAI knowledge source from a KnowledgeSource resource ref."""
+        """Build a CrewAI knowledge source from a KnowledgeSource resource ref.
+
+        Supported types: text, pdf, csv, json, string (see ``_KS_TYPE_MAP``).
+        Returns ``None`` with a warning on unsupported types or build failures.
+        """
         try:
             resource = self._resolve_ref(ref_or_name)
             if resource.kind != ResourceKind.KNOWLEDGE_SOURCE:
@@ -454,18 +464,14 @@ class ResourceLoader:
                 agent_kwargs["tools"] = tools
 
         # --- Policy enforcement ---
-        # Resolve the effective policy for this agent and apply constraints
-        # before the CrewAI Agent is constructed.
         if self._policies:
             policy = resolve_policy(spec, policies=self._policies)
-            # Tool filtering: remove tools not permitted by policy
             if "tools" in agent_kwargs:
                 agent_kwargs["tools"] = self._filter_tools_by_policy(
                     agent_kwargs["tools"], policy, resource.name
                 )
                 if not agent_kwargs["tools"]:
                     del agent_kwargs["tools"]
-            # Delegation enforcement: policy can override allow_delegation
             if policy.delegation_allowed is not None and not policy.delegation_allowed:
                 if agent_kwargs.get("allow_delegation"):
                     logger.info(

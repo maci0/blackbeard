@@ -30,13 +30,15 @@ import { useResourceStore } from '@/stores/resourceStore'
 import type { Resource, Execution } from '@/lib/types'
 import { api } from '@/api/client'
 import { cn, getErrorMessage } from '@/lib/utils'
-import { useDocumentTitle, usePresence } from '@/hooks'
+import { useDocumentTitle, usePresence, useDeleteError } from '@/hooks'
 import { resourceToYaml, parseYaml } from '@/lib/yaml'
-import { formatDate, getDuration, formatCost } from '@/lib/formatters'
+import { formatDate, getDuration, formatCost, parseCost } from '@/lib/formatters'
 import { KindBadge } from '@/components/ui/KindBadge'
 import { PLURAL_TO_KIND } from '@/lib/kinds'
 import { extractRefs } from '@/lib/refs'
 import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Breadcrumb } from '@/components/ui/Breadcrumb'
+import { DetailSkeleton } from '@/components/ui/Skeleton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { RunDialog, type RunParams } from '@/components/studio/RunDialog'
 import { Spinner } from '@/components/ui/Spinner'
@@ -353,8 +355,7 @@ function RunsTab({ crewName }: { crewName: string }) {
 
     let totalCost = 0
     for (const e of executions) {
-      const c = typeof e.cost_usd === 'string' ? parseFloat(e.cost_usd) : (e.cost_usd ?? 0)
-      if (!isNaN(c)) totalCost += c
+      totalCost += parseCost(e.cost_usd)
     }
 
     return { total, successRate, avgDuration, totalCost }
@@ -420,7 +421,10 @@ function RunsTab({ crewName }: { crewName: string }) {
             </thead>
             <tbody className="divide-y divide-border">
               {executions.map((exec) => (
-                <tr key={exec.id} className="transition-colors hover:bg-accent/50">
+                <tr
+                  key={exec.id}
+                  className="border-l-2 border-l-transparent transition-colors hover:border-l-primary hover:bg-accent/50"
+                >
                   <td className="px-4 py-2.5">
                     <Link
                       to={`/executions/${exec.id}`}
@@ -476,19 +480,12 @@ export default function ResourceDetail() {
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const { deleteError, showDeleteError, clearDeleteError } = useDeleteError()
   const [activeTab, setActiveTab] = useState('spec')
   const [showRunDialog, setShowRunDialog] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
   const [runLoading, setRunLoading] = useState(false)
   const yamlEditorRef = useRef<HTMLTextAreaElement>(null)
-  const deleteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    return () => {
-      if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
-    }
-  }, [])
 
   const loadResource = useCallback(async () => {
     setLoading(true)
@@ -598,18 +595,16 @@ export default function ResourceDetail() {
 
   const handleDelete = async () => {
     setDeleting(true)
-    setDeleteError(null)
+    clearDeleteError()
     try {
       await deleteResource(kindPlural, name)
       toasts.success(`Resource "${name}" deleted`)
       void navigate('/resources')
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to delete resource')
-      setDeleteError(message)
+      showDeleteError(message)
       toasts.error(message)
       setDeleteOpen(false)
-      if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
-      deleteErrorTimerRef.current = setTimeout(() => setDeleteError(null), 8000)
     } finally {
       setDeleting(false)
     }
@@ -702,14 +697,7 @@ export default function ResourceDetail() {
 
   /* ---- Loading / error states ---- */
   if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <div role="status" className="flex items-center gap-2 text-muted-foreground">
-          <Spinner size="md" className="text-muted-foreground" />
-          <span className="text-sm">Loading resource…</span>
-        </div>
-      </div>
-    )
+    return <DetailSkeleton />
   }
 
   if (error || !resource) {
@@ -740,36 +728,18 @@ export default function ResourceDetail() {
   return (
     <div className="page-enter flex-1 overflow-auto">
       <div className="mx-auto max-w-4xl p-6">
-        {/* Breadcrumb */}
-        <nav aria-label="Breadcrumb" className="mb-5">
-          <ol className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <li>
-              <Link
-                to="/resources"
-                className="rounded transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                Resources
-              </Link>
-            </li>
-            <li aria-hidden="true" className="text-muted-foreground/40">
-              ›
-            </li>
-            <li>
-              <Link
-                to={`/resources?kind=${kindPlural}`}
-                className="rounded transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {PLURAL_TO_KIND[kindPlural] ?? kindPlural}
-              </Link>
-            </li>
-            <li aria-hidden="true" className="text-muted-foreground/40">
-              ›
-            </li>
-            <li aria-current="page">
-              <span className="font-medium text-foreground">{resource.metadata.name}</span>
-            </li>
-          </ol>
-        </nav>
+        <div className="mb-5">
+          <Breadcrumb
+            items={[
+              { label: 'Resources', href: '/resources' },
+              {
+                label: PLURAL_TO_KIND[kindPlural] ?? kindPlural,
+                href: `/resources?kind=${kindPlural}`,
+              },
+              { label: resource.metadata.name },
+            ]}
+          />
+        </div>
 
         {/* Header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -947,7 +917,7 @@ export default function ResourceDetail() {
           <ErrorAlert
             message={deleteError}
             actionLabel="Dismiss"
-            onAction={() => setDeleteError(null)}
+            onAction={() => clearDeleteError()}
             ariaLabel="Dismiss delete error"
             className="mb-4"
           />
@@ -1065,7 +1035,7 @@ export default function ResourceDetail() {
         onOpenChange={(v) => {
           if (!v) {
             setDeleteOpen(false)
-            setDeleteError(null)
+            clearDeleteError()
           }
         }}
         title="Delete resource"

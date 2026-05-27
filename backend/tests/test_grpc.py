@@ -6,6 +6,7 @@ import json
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import grpc
 import pytest
 
 from blackbeard.grpc.server import (
@@ -21,19 +22,16 @@ from blackbeard.grpc.server import (
 def test_resource_to_proto():
     """_resource_to_proto converts a Resource ORM object to proto."""
     from blackbeard.kinds import ResourceKind
+    from tests.conftest import make_resource
 
-    resource = MagicMock()
-    resource.id = "test-id-123"
-    resource.kind = ResourceKind.AGENT
-    resource.name = "test-agent"
-    resource.namespace = "default"
-    resource.spec = {"role": "tester", "goal": "test", "backstory": "test"}
+    resource = make_resource(
+        ResourceKind.AGENT,
+        "test-agent",
+        {"role": "tester", "goal": "test", "backstory": "test"},
+    )
     resource.version = 1
-    resource.created_at = None
-    resource.updated_at = None
 
     proto = _resource_to_proto(resource)
-    assert proto.id == "test-id-123"
     assert proto.kind == "Agent"
     assert proto.name == "test-agent"
     assert proto.namespace == "default"
@@ -43,29 +41,24 @@ def test_resource_to_proto():
 
 def test_execution_to_proto():
     """_execution_to_proto converts an Execution ORM object to proto."""
-    from blackbeard.models.execution import ExecutionStatus, ExecutionType
+    from tests.conftest import _make_execution
 
-    execution = MagicMock()
-    execution.id = "exec-id-456"
-    execution.crew_name = "test-crew"
-    execution.crew_namespace = "default"
-    execution.status = ExecutionStatus.QUEUED
-    execution.execution_type = ExecutionType.KICKOFF
-    execution.inputs = {"key": "val"}
-    execution.outputs = None
-    execution.error = None
-    execution.total_tokens = 100
-    execution.created_at = None
-    execution.started_at = None
-    execution.completed_at = None
+    execution = _make_execution(
+        crew_name="test-crew",
+        status="queued",
+        execution_type="kickoff",
+        inputs={"key": "val"},
+        total_tokens=100,
+    )
 
     proto = _execution_to_proto(execution)
-    assert proto.id == "exec-id-456"
+    assert proto.id == str(execution.id)
     assert proto.crew_name == "test-crew"
     assert proto.status == "queued"
     assert proto.execution_type == "kickoff"
     assert json.loads(proto.inputs_json)["key"] == "val"
     assert proto.total_tokens == 100
+    assert proto.created_at != "", "Real datetime should serialize to non-empty ISO string"
 
 
 # ── Servicer unit tests ──────────────────────────────────────────────
@@ -119,9 +112,9 @@ async def test_grpc_list_resources(servicer, db_session):
 
         response = await servicer.ListResources(request, context)
 
-    assert response.total >= 1
-    names = [item.name for item in response.items]
-    assert "grpc-agent" in names
+    assert response.total == 1
+    assert len(response.items) == 1
+    assert response.items[0].name == "grpc-agent"
 
 
 async def test_grpc_get_resource(servicer, db_session):
@@ -179,6 +172,10 @@ async def test_grpc_get_resource_not_found(servicer, db_session):
         await servicer.GetResource(request, context)
 
     context.abort.assert_called_once()
+    abort_args = context.abort.call_args[0]
+    assert abort_args[0] == grpc.StatusCode.NOT_FOUND, (
+        f"Expected NOT_FOUND status code, got {abort_args[0]}"
+    )
 
 
 async def test_grpc_delete_resource(servicer, db_session):
@@ -263,11 +260,13 @@ async def test_grpc_create_resource(servicer, db_session):
 
 
 async def test_grpc_server_start_stop():
-    """gRPC server can start and stop."""
+    """gRPC server can start and stop without error."""
+    from grpc.aio import Server
+
     from blackbeard.grpc.server import start_grpc_server
 
     server = await start_grpc_server(port=0)  # port 0 = ephemeral
-    assert server is not None
+    assert isinstance(server, Server)
     await server.stop(grace=0)
 
 
@@ -445,8 +444,10 @@ async def test_auth_interceptor_rejects_expired_jwt(auth_interceptor):
 
 async def test_grpc_server_starts_with_auth_interceptor():
     """gRPC server should start with the AuthInterceptor installed."""
+    from grpc.aio import Server
+
     from blackbeard.grpc.server import start_grpc_server
 
     server = await start_grpc_server(port=0)
-    assert server is not None
+    assert isinstance(server, Server)
     await server.stop(grace=0)

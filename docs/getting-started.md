@@ -41,7 +41,7 @@ Wait ~2 minutes for all containers to become healthy before proceeding (the API 
 
 ## 2. Open the UI
 
-Navigate to **http://localhost:3000** in your browser. The home page opens the Studio visual editor where you can build and manage crews.
+Navigate to **http://localhost:3000** in your browser. The home page is the Dashboard, showing execution metrics, resource counts, and recent activity. The platform is running but has no resources yet, so the dashboard will be empty.
 
 ---
 
@@ -94,11 +94,11 @@ You can switch between the form view and a bidirectional YAML editor (Monaco) in
 
 ```bash
 # Run a crew, passing inputs as key=value pairs
-blackbeard kickoff research-crew --input topic="The future of agentic AI"
+uv run blackbeard kickoff research-crew --input topic="The future of agentic AI"
 
 # Poll execution status
-blackbeard status <execution-id>
-blackbeard status <execution-id> --watch  # poll until terminal state
+uv run blackbeard status <execution-id>
+uv run blackbeard status <execution-id> --watch  # poll until terminal state
 ```
 
 ### Kick off via UI
@@ -114,7 +114,7 @@ Open a crew in the Studio or navigate to the Crew resource detail page and click
 - **Add guardrails** — Attach `Guardrail` resources to tasks to validate or filter outputs using a Python function, an LLM judge, or JSON schema validation
 - **Build flows** — Create `Flow` resources to chain multiple crews into multi-step pipelines
 - **Import from the Marketplace** — Use the `/marketplace` page or API to import crews from git repos or the built-in starter
-- **Train and test crews** — Use `blackbeard train` and `blackbeard test-crew` for iterative improvement and evaluation
+- **Train and test crews** — Use `uv run blackbeard train` and `uv run blackbeard test-crew` for iterative improvement and evaluation
 - **Set up webhooks** — Register webhook URLs for execution event delivery with HMAC-SHA256 signing
 - **Install the Python SDK** — See [`sdks/python/README.md`](../sdks/python/README.md) for programmatic access
 - **Embed with the React SDK** — See [`sdks/react/`](../sdks/react/) for React components (`CrewViewer`, `CrewRunner`, `ExecutionStatus`)

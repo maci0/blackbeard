@@ -40,6 +40,14 @@ class BlackbeardApiError(Exception):
         return self.status_code == 404
 
     @property
+    def is_conflict(self) -> bool:
+        return self.status_code == 409
+
+    @property
+    def is_rate_limited(self) -> bool:
+        return self.status_code == 429
+
+    @property
     def is_network_error(self) -> bool:
         return self.status_code == 0
 

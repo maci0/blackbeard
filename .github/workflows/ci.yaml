@@ -205,7 +205,7 @@ jobs:
 
       - name: Lint Helm chart
         run: >
-          helm lint deploy/helm/blackbeard/
+          helm lint deploy/helm/blackbeard/ --strict
           --set auth.apiKey=lint-test
           --set auth.jwtSecret=lint-test
           --set auth.litellmMasterKey=lint-test
@@ -295,3 +295,16 @@ jobs:
           tags: blackbeard-ui:${{ github.sha }}
           cache-from: type=gha,scope=ui
           cache-to: type=gha,mode=max,scope=ui
+
+  ci-gate:
+    if: always()
+    needs: [backend, cli, sdk-python, sdk-typescript, sdk-react, helm-lint, frontend, docker-api, docker-ui]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: All jobs passed
+        if: ${{ !(contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
+        run: echo "All CI jobs passed"
+      - name: Some jobs failed
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1

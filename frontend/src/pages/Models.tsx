@@ -1,8 +1,8 @@
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
-import { useDocumentTitle } from '@/hooks'
-import { API_VERSION } from '@/lib/kinds'
+import { useDocumentTitle, useDeleteError } from '@/hooks'
+import { API_VERSION, NAME_PATTERN } from '@/lib/kinds'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   Plus,
@@ -386,7 +386,7 @@ function AddModelDialog({
                   placeholder="my-gpt4-connection"
                   autoComplete="off"
                   autoFocus
-                  pattern="[a-z0-9][a-z0-9\-]*"
+                  pattern={NAME_PATTERN}
                   title="Lowercase letters, numbers, and hyphens only (must start with a letter or number)"
                   aria-describedby="model-name-hint"
                   className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
@@ -573,10 +573,9 @@ export default function Models() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const { deleteError, showDeleteError, clearDeleteError } = useDeleteError()
   const [testingModels, setTestingModels] = useState<Set<string>>(new Set())
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  const deleteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const toggleCollapsed = (provider: string) => {
     setCollapsed((prev) => {
@@ -605,12 +604,6 @@ export default function Models() {
     }
     return result
   }, [models])
-
-  useEffect(() => {
-    return () => {
-      if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
-    }
-  }, [])
 
   const handleTestModel = async (resource: Resource) => {
     const name = resource.metadata.name
@@ -695,9 +688,7 @@ export default function Models() {
       toasts.success(`Connection "${name}" deleted`)
     } catch (err) {
       setDeleteTarget(null)
-      setDeleteError(getErrorMessage(err, 'Failed to delete connection'))
-      if (deleteErrorTimerRef.current) clearTimeout(deleteErrorTimerRef.current)
-      deleteErrorTimerRef.current = setTimeout(() => setDeleteError(null), 8000)
+      showDeleteError(getErrorMessage(err, 'Failed to delete connection'))
     } finally {
       setDeleting(false)
     }
@@ -749,7 +740,7 @@ export default function Models() {
           <ErrorAlert
             message={deleteError}
             actionLabel="Dismiss"
-            onAction={() => setDeleteError(null)}
+            onAction={() => clearDeleteError()}
             ariaLabel="Dismiss error"
             className="mb-4"
           />

@@ -154,33 +154,33 @@ The CLI is a standalone package with no backend dependencies.
 cd cli && uv sync
 
 # Authenticate
-blackbeard login                                     # store JWT credentials
-blackbeard whoami                                    # check current identity
+uv run blackbeard login                                     # store JWT credentials
+uv run blackbeard whoami                                    # check current identity
 
 # Resources
-blackbeard validate -f examples/research-crew/       # offline validation
-blackbeard apply -f examples/research-crew/          # create/update resources
-blackbeard list Agent                                # list all agents
-blackbeard get Crew research-crew                    # inspect a resource
-blackbeard delete Agent my-agent                     # remove a resource
-blackbeard export --all                              # export all resources as YAML
+uv run blackbeard validate -f examples/research-crew/       # offline validation
+uv run blackbeard apply -f examples/research-crew/          # create/update resources
+uv run blackbeard list Agent                                # list all agents
+uv run blackbeard get Crew research-crew                    # inspect a resource
+uv run blackbeard delete Agent my-agent                     # remove a resource
+uv run blackbeard export --all                              # export all resources as YAML
 
 # Executions
-blackbeard kickoff research-crew --input topic="AI"  # run a crew
-blackbeard kickoff research-crew --wait              # run and wait for completion
-blackbeard train research-crew --iterations 3        # train a crew
-blackbeard test-crew research-crew --iterations 3    # test a crew
-blackbeard status <execution-id> --watch             # watch execution progress
-blackbeard cancel <execution-id>                     # cancel a running execution
-blackbeard executions                                # list all executions
+uv run blackbeard kickoff research-crew --input topic="AI"  # run a crew
+uv run blackbeard kickoff research-crew --wait              # run and wait for completion
+uv run blackbeard train research-crew --iterations 3        # train a crew
+uv run blackbeard test-crew research-crew --iterations 3    # test a crew
+uv run blackbeard status <execution-id> --watch             # watch execution progress
+uv run blackbeard cancel <execution-id>                     # cancel a running execution
+uv run blackbeard executions                                # list all executions
 
 # Marketplace
-blackbeard pull https://github.com/org/crew-repo.git # import from git
+uv run blackbeard pull https://github.com/org/crew-repo.git # import from git
 
 # Users & RBAC
-blackbeard user list                                 # list users
-blackbeard role list                                 # list roles
-blackbeard rolebinding create ...                    # bind roles to subjects
+uv run blackbeard user list                                 # list users
+uv run blackbeard role list                                 # list roles
+uv run blackbeard rolebinding create ...                    # bind roles to subjects
 ```
 
 All commands support `--json` for scripting and `--server` / `--api-key` / `--namespace` overrides.

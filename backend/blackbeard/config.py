@@ -112,9 +112,10 @@ class Settings(BaseSettings):
     def _validate_database_url(cls, v: SecretStr) -> SecretStr:
         url = v.get_secret_value()
         if not url.startswith("postgresql+asyncpg://"):
+            got = url.split("://")[0] + "://" if "://" in url else "<no scheme>"
             raise ValueError(
                 f"DATABASE_URL must use the 'postgresql+asyncpg://' scheme "
-                f"(got {url.split('://')[0] + '://' if '://' in url else url!r}). "
+                f"(got {got}). "
                 f"Example: postgresql+asyncpg://user:pass@host:5432/dbname"
             )
         return v
@@ -144,9 +145,10 @@ class Settings(BaseSettings):
     def _validate_valkey_url(cls, v: SecretStr) -> SecretStr:
         url = v.get_secret_value()
         if not url.startswith(("valkey://", "redis://", "rediss://")):
+            got = url.split("://")[0] + "://" if "://" in url else "<no scheme>"
             raise ValueError(
                 f"VALKEY_URL must use 'valkey://', 'redis://', or 'rediss://' scheme "
-                f"(got {url.split('://')[0] + '://' if '://' in url else url!r})"
+                f"(got {got})"
             )
         return v
 
@@ -184,10 +186,6 @@ class Settings(BaseSettings):
                 "change-jwt-secret-in-production",
             ),
             "litellm_master_key": ("sk-litellm-master-key",),
-            "valkey_url": ("valkey://default:valkey-dev-secret@localhost:6379/0",),
-            "database_url": (
-                "postgresql+asyncpg://blackbeard:blackbeard@localhost:5432/blackbeard",
-            ),
         }
         for field_name, insecure_values in insecure_defaults.items():
             secret: SecretStr = getattr(self, field_name)
@@ -197,6 +195,22 @@ class Settings(BaseSettings):
                     f"Set a strong, unique value via environment variable before running "
                     f"in production (DEBUG=false)."
                 )
+        # URL-based secrets: check for insecure password patterns regardless of
+        # hostname (exact-URL matching misses Docker hostnames like @postgres).
+        db_url = self.database_url.get_secret_value()
+        if "blackbeard:blackbeard@" in db_url:
+            raise ValueError(
+                "DATABASE_URL contains the insecure default password 'blackbeard'. "
+                "Set a strong, unique database password via environment variable "
+                "before running in production (DEBUG=false)."
+            )
+        vk_url = self.valkey_url.get_secret_value()
+        if ":valkey-dev-secret@" in vk_url:
+            raise ValueError(
+                "VALKEY_URL contains the insecure default password 'valkey-dev-secret'. "
+                "Set a strong, unique Valkey password via environment variable "
+                "before running in production (DEBUG=false)."
+            )
         if "*" in self.cors_origins:
             raise ValueError(
                 "CORS_ORIGINS contains wildcard '*' which is not allowed in production "

@@ -20,7 +20,7 @@ from blackbeard.engine import executor as _executor_mod
 from blackbeard.kinds import NAME_PATTERN
 from blackbeard.models import User, get_session
 from blackbeard.models.execution_schemas import ExecutionResponse, validate_inputs
-from blackbeard.rate_limiter import record_auth_failure
+from blackbeard.rate_limiter import check_rate_limit, execution_limiter, record_auth_failure
 from blackbeard.resources import ResourceNotFoundError, ResourceService
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class TriggerRequest(BaseModel):
 class WebhookTriggerRequest(TriggerRequest):
     """Request body for webhook-triggered automations."""
 
-    secret: str = Field(..., min_length=1, max_length=255, description="Webhook secret")
+    secret: str = Field(..., min_length=16, max_length=255, description="Webhook secret")
     inputs: dict[str, Any] = Field(default_factory=dict, description="Event payload inputs")
 
 
@@ -68,6 +68,9 @@ async def _get_automation_spec(
     return dict(resource.spec or {})
 
 
+_TRIGGER_RATE_MSG = "Too many trigger requests. Try again later."
+
+
 @router.post(
     "/automations/{name}/trigger",
     response_model=TriggerResponse,
@@ -75,6 +78,7 @@ async def _get_automation_spec(
     responses={
         404: {"description": "Automation not found"},
         409: {"description": "Automation is disabled"},
+        429: {"description": "Too many trigger requests"},
         500: {"description": "Trigger execution failed"},
     },
 )
@@ -98,6 +102,7 @@ async def trigger_automation(
     user: User | None = Depends(require_permission("run", "Automation")),
 ) -> TriggerResponse:
     """Manually trigger an automation via API."""
+    check_rate_limit(execution_limiter, user, _TRIGGER_RATE_MSG)
     spec = await _get_automation_spec(session, name, namespace)
 
     if not spec.get("enabled", True):

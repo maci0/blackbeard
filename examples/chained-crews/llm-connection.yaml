@@ -1,0 +1,11 @@
+apiVersion: blackbeard/v1
+kind: LLMConnection
+metadata:
+  name: default-llm
+  namespace: default
+spec:
+  provider: ollama
+  model: qwen3.6
+  parameters:
+    temperature: 0.3
+    max_tokens: 4096

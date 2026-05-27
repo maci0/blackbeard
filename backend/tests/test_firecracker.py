@@ -275,7 +275,6 @@ class TestFirecrackerSandboxExecution:
             rootfs_path="/opt/rootfs.ext4",
         )
 
-    @pytest.mark.asyncio
     async def test_execute_success(self):
         sandbox = self._make_sandbox()
 
@@ -289,7 +288,6 @@ class TestFirecrackerSandboxExecution:
             assert result.stdout == "output"
             assert result.stderr == ""
 
-    @pytest.mark.asyncio
     async def test_execute_with_input(self):
         sandbox = self._make_sandbox()
 
@@ -303,7 +301,6 @@ class TestFirecrackerSandboxExecution:
             assert result.stdout == "processed"
             mock_proc.communicate.assert_called_once_with(b"test input")
 
-    @pytest.mark.asyncio
     async def test_execute_nonzero_exit(self):
         sandbox = self._make_sandbox()
 
@@ -316,7 +313,6 @@ class TestFirecrackerSandboxExecution:
             assert result.exit_code == 1
             assert result.stderr == "error msg"
 
-    @pytest.mark.asyncio
     async def test_execute_timeout(self):
         sandbox = self._make_sandbox()
 
@@ -332,7 +328,6 @@ class TestFirecrackerSandboxExecution:
         ):
             await sandbox.execute("sleep 999", timeout=10)
 
-    @pytest.mark.asyncio
     async def test_execute_default_timeout_60s(self):
         sandbox = self._make_sandbox()
 
@@ -348,7 +343,6 @@ class TestFirecrackerSandboxExecution:
         ):
             await sandbox.execute("sleep 999")
 
-    @pytest.mark.asyncio
     async def test_execute_binary_not_found(self):
         sandbox = self._make_sandbox()
 
@@ -361,7 +355,6 @@ class TestFirecrackerSandboxExecution:
         ):
             await sandbox.execute("echo hello")
 
-    @pytest.mark.asyncio
     async def test_execute_os_error(self):
         sandbox = self._make_sandbox()
 
@@ -374,13 +367,11 @@ class TestFirecrackerSandboxExecution:
         ):
             await sandbox.execute("echo hello")
 
-    @pytest.mark.asyncio
     async def test_execute_config_error_when_unconfigured(self):
         sandbox = FirecrackerSandbox(kernel_path="", rootfs_path="")
         with pytest.raises(FirecrackerConfigError):
             await sandbox.execute("echo hello")
 
-    @pytest.mark.asyncio
     async def test_execute_passes_correct_args_to_subprocess(self):
         sandbox = self._make_sandbox()
 
@@ -400,7 +391,6 @@ class TestFirecrackerSandboxExecution:
             assert "--config-file" in args_list
             assert "--no-api" in args_list
 
-    @pytest.mark.asyncio
     async def test_execute_with_vcpu_and_memory_overrides(self):
         sandbox = self._make_sandbox()
 
@@ -416,7 +406,6 @@ class TestFirecrackerSandboxExecution:
             )
             assert result.exit_code == 0
 
-    @pytest.mark.asyncio
     async def test_execute_with_env_vars(self):
         sandbox = self._make_sandbox()
 
@@ -431,7 +420,6 @@ class TestFirecrackerSandboxExecution:
             )
             assert result.exit_code == 0
 
-    @pytest.mark.asyncio
     async def test_execute_cleans_up_temp_files(self):
         """Temp config and socket dir are removed after execution."""
         sandbox = self._make_sandbox()

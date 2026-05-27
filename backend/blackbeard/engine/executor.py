@@ -45,7 +45,7 @@ from blackbeard.engine.flow_runner import call_hook
 from blackbeard.engine.flow_runner import run_flow_steps as _run_flow_steps
 from blackbeard.engine.loader import ResourceLoader
 from blackbeard.kinds import ResourceKind
-from blackbeard.logging_config import request_id_var
+from blackbeard.logging_config import log_task_exception, request_id_var
 from blackbeard.models import (
     TERMINAL_STATUSES,
     Execution,
@@ -58,6 +58,7 @@ from blackbeard.models import (
     async_session,
 )
 from blackbeard.models.database import CONNECT_ARGS, instrument_engine
+from blackbeard.models.execution_schemas import redact_sensitive_values
 from blackbeard.resources import parse_ref
 
 if TYPE_CHECKING:
@@ -131,7 +132,8 @@ def _get_executor() -> ThreadPoolExecutor:
 
 def get_pool_status() -> dict[str, object]:
     """Return executor thread pool stats for health/diagnostics."""
-    executor = _executor
+    with _executor_lock:
+        executor = _executor
     if executor is None:
         max_workers = settings.max_concurrent_executions
         return {
@@ -233,7 +235,7 @@ def shutdown_executor(wait: bool = False) -> None:
             loop = None
         if loop and loop.is_running():
             task = loop.create_task(bg.dispose())
-            task.add_done_callback(_log_task_exception)
+            task.add_done_callback(log_task_exception)
         else:
             _loop = asyncio.new_event_loop()
             try:
@@ -256,48 +258,26 @@ class ExecutionNotFoundError(ExecutionError):
     """Raised when the crew or execution cannot be found."""
 
 
-def _log_task_exception(task: asyncio.Task[None]) -> None:
-    """Log exceptions from fire-and-forget asyncio tasks that would otherwise be silent."""
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc is not None:
-        logger.error(
-            "Background task failed: %s",
-            exc,
-            exc_info=exc,
-            extra={
-                "event": "background_task_failed",
-                "error_type": type(exc).__name__,
-                "error_message": str(exc)[:500],
-                "task_name": task.get_name(),
-            },
-        )
-
-
 async def _load_crew_resources(
     session: AsyncSession,
     crew_name: str,
     namespace: str = "default",
     target_kind: str = "Crew",
 ) -> dict[str, Resource]:
-    """Load crew-relevant resources from the namespace (capped at 500).
+    """Load crew-relevant resources from the namespace.
 
     Loads by namespace+kind filter rather than resolving refs recursively.
     Returns a dict keyed by 'Kind/name' for the ResourceLoader.
+    Silently truncates at ``_NAMESPACE_RESOURCE_LIMIT`` (500) with a warning.
 
-    Args:
-        session: Database session.
-        crew_name: Name of the root resource (crew or flow).
-        namespace: Resource namespace.
-        target_kind: Kind of the root resource (``"Crew"`` or ``"Flow"``).
+    Raises:
+        ExecutionNotFoundError: If the target crew/flow is not in the namespace.
     """
     result = await session.execute(
         select(Resource)
         .where(Resource.namespace == namespace)
         .where(Resource.kind.in_(_CREW_RELEVANT_KINDS))
-        .options(defer(Resource.raw_yaml), defer(Resource.labels))
-        .order_by(Resource.kind, Resource.name)
+        .options(load_only(Resource.kind, Resource.name, Resource.namespace, Resource.spec))
         .limit(_NAMESPACE_RESOURCE_LIMIT + 1)
     )
 
@@ -410,7 +390,7 @@ async def _submit_execution(
         crew_namespace=namespace,
         execution_type=execution_type,
         status=ExecutionStatus.QUEUED,
-        inputs=inputs,
+        inputs=redact_sensitive_values(inputs) if inputs else {},
         n_iterations=n_iterations,
         training_file=training_file,
         initiated_by=user.id if user is not None else None,
@@ -478,6 +458,8 @@ async def _submit_execution(
     )
 
     def _on_thread_error(fut: asyncio.Future[None]) -> None:
+        if fut.cancelled():
+            return
         exc = fut.exception()
         if exc is not None:
             logger.error(
@@ -495,7 +477,7 @@ async def _submit_execution(
             )
             error_msg = _sanitize_error(str(exc))
             task = loop.create_task(_mark_failed_async(execution_id, error_msg))
-            task.add_done_callback(_log_task_exception)
+            task.add_done_callback(log_task_exception)
 
     future.add_done_callback(_on_thread_error)
 
@@ -689,7 +671,6 @@ def _snapshot_crew_resources(
                 ref = parse_ref(ref_str)
                 if ref:
                     _collect(f"{ref.kind.value}/{ref.name}", depth + 1)
-        # Flow steps reference crews
         for step in spec.get("steps", []):
             crew_ref = step.get("crew") if isinstance(step, dict) else None
             if crew_ref and isinstance(crew_ref, str):
@@ -789,7 +770,6 @@ def _resolve_eval_llm(
     crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
     crew_spec = crew_snap.get("spec", {})
 
-    # Prefer manager_llm
     manager_ref = crew_spec.get("manager_llm")
     if manager_ref:
         try:
@@ -807,7 +787,6 @@ def _resolve_eval_llm(
                 },
             )
 
-    # Fall back to first agent's LLM
     for agent_ref in crew_spec.get("agents", []):
         ref = parse_ref(agent_ref)
         if not ref:
@@ -832,7 +811,6 @@ def _resolve_eval_llm(
                 )
                 continue
 
-    # Last resort: use a reasonable default
     logger.info(
         "No eval LLM resolved for crew '%s' — falling back to gpt-4o",
         crew_name,
@@ -944,7 +922,7 @@ async def _run_crew_async(
                         },
                     )
                     virtual_api_key = key_info["key"]
-                    virtual_key = virtual_api_key  # for cleanup in finally
+                    virtual_key = virtual_api_key
 
                     execution = await _get_execution_for_update(session, execution_id)
                     if execution:
@@ -1417,9 +1395,8 @@ async def record_hitl_response(
     """Record a human-in-the-loop response as an execution event.
 
     The response is stored as an ``hitl_response`` event that the execution
-    listener or CrewAI human_input callback can pick up. For MVP, the
-    frontend polls for ``hitl_request`` events and submits responses via
-    this function.
+    listener or CrewAI human_input callback can pick up. The frontend polls
+    for ``hitl_request`` events and submits responses via this function.
     """
     event_data: dict[str, Any] = {"response": response}
     if feedback is not None:
@@ -1434,7 +1411,8 @@ async def record_hitl_response(
                 ExecutionEvent.execution_id == execution_id
             )
         )
-        max_seq = result.scalar() or -1
+        max_seq_val = result.scalar()
+        max_seq = max_seq_val if max_seq_val is not None else -1
         next_seq = max_seq + 1
 
         event = ExecutionEvent(

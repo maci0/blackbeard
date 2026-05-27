@@ -20,7 +20,6 @@ def test_valid_agent():
     }
     errors, refs = validate_resource("Agent", spec)
     assert errors == []
-    assert refs is not None
     assert len(refs) == 0
 
 
@@ -38,7 +37,6 @@ def test_valid_agent_with_optional_fields():
     }
     errors, refs = validate_resource("Agent", spec)
     assert errors == []
-    assert refs is not None
     assert len(refs) == 2
     raw_values = {r.raw for r in refs}
     assert "ref:llm-connections/gpt4" in raw_values
@@ -91,7 +89,6 @@ def test_valid_task():
     }
     errors, refs = validate_resource("Task", spec)
     assert errors == []
-    assert refs is not None
     assert len(refs) == 1
     assert refs[0].raw == "ref:agents/researcher"
 
@@ -138,7 +135,6 @@ def test_valid_task_with_context():
     }
     errors, refs = validate_resource("Task", spec)
     assert errors == []
-    assert refs is not None
     assert len(refs) == 2
     raw_values = {r.raw for r in refs}
     assert "ref:agents/writer" in raw_values
@@ -158,7 +154,6 @@ def test_valid_crew():
     }
     errors, refs = validate_resource("Crew", spec)
     assert errors == []
-    assert refs is not None
     assert len(refs) == 2
     raw_values = {r.raw for r in refs}
     assert "ref:agents/researcher" in raw_values
@@ -688,7 +683,6 @@ def test_validate_resource_returns_refs():
     }
     errors, refs = validate_resource("Task", spec)
     assert errors == []
-    assert refs is not None
     assert len(refs) == 2
     raw_values = {r.raw for r in refs}
     assert "ref:agents/researcher" in raw_values
@@ -700,5 +694,4 @@ def test_validate_resource_no_refs():
     spec = {"role": "R", "goal": "G", "backstory": "B"}
     errors, refs = validate_resource("Agent", spec)
     assert errors == []
-    assert refs is not None
     assert len(refs) == 0

@@ -141,7 +141,6 @@ class FakeWebSocket:
 
 
 class TestBroadcast:
-    @pytest.mark.asyncio
     async def test_broadcast_sends_to_others(self) -> None:
         sender = FakeWebSocket()
         other1 = FakeWebSocket()
@@ -156,7 +155,6 @@ class TestBroadcast:
         assert expected in other2.sent
         assert len(sender.sent) == 0
 
-    @pytest.mark.asyncio
     async def test_broadcast_skips_sender(self) -> None:
         sender = FakeWebSocket()
         _rooms["test-crew"] = {sender}  # type: ignore[arg-type]
@@ -165,7 +163,6 @@ class TestBroadcast:
 
         assert len(sender.sent) == 0
 
-    @pytest.mark.asyncio
     async def test_broadcast_removes_dead_connections(self) -> None:
         sender = FakeWebSocket()
         dead = FakeWebSocket(fail=True)
@@ -179,7 +176,6 @@ class TestBroadcast:
         assert alive in _rooms["test-crew"]  # type: ignore[operator]
         assert sender in _rooms["test-crew"]  # type: ignore[operator]
 
-    @pytest.mark.asyncio
     async def test_broadcast_empty_room(self) -> None:
         sender = FakeWebSocket()
         # Room doesn't exist — should not raise
@@ -304,16 +300,27 @@ def test_different_crews_are_isolated() -> None:
     ):
         ws_alpha.receive_json()  # room_state
 
-        with tc.websocket_connect(f"/api/v1/ws/collab/crew-beta{_auth_qs()}") as ws_beta:
-            ws_beta.receive_json()  # room_state
+        with tc.websocket_connect(f"/api/v1/ws/collab/crew-beta{_auth_qs()}") as ws_beta1:
+            ws_beta1.receive_json()  # room_state
 
-            # Send message in crew-alpha
-            ws_alpha.send_json({"type": "node_add", "data": {"id": "alpha-node"}})
+            # Add a second client to crew-beta so we can verify it only gets
+            # messages from its own room.
+            with tc.websocket_connect(f"/api/v1/ws/collab/crew-beta{_auth_qs()}") as ws_beta2:
+                ws_beta2.receive_json()  # room_state
+                ws_beta1.receive_json()  # participant_joined
 
-            # Verify that each room has exactly 1 participant, proving isolation.
-            stats = get_room_stats()
-            assert stats.get("crew-alpha") == 1
-            assert stats.get("crew-beta") == 1
+                # Send message in crew-alpha
+                ws_alpha.send_json({"type": "node_add", "data": {"id": "alpha-node"}})
+
+                # Send message in crew-beta — ws_beta2 should receive this
+                ws_beta1.send_json({"type": "node_move", "data": {"id": "beta-node"}})
+                received = ws_beta2.receive_json()
+                assert received["type"] == "node_move"
+                assert received["data"]["id"] == "beta-node"
+
+            # After ws_beta2 disconnects, ws_beta1 gets participant_left
+            left_msg = ws_beta1.receive_json()
+            assert left_msg["type"] == "participant_left"
 
 
 def test_disconnect_updates_participant_count() -> None:

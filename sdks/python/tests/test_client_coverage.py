@@ -474,3 +474,60 @@ class TestKindPluralEdge:
         """Kind lookup is case-sensitive."""
         with pytest.raises(ValueError):
             _kind_plural("agent")  # lowercase should fail
+
+
+# -- Transport error wrapping -------------------------------------------------
+
+
+class TestTransportErrorWrapping:
+    """_send wraps httpx transport errors in BlackbeardApiError(status_code=0)."""
+
+    def test_connect_error(self) -> None:
+        """Connection refused becomes BlackbeardApiError with is_network_error."""
+
+        class FailTransport(httpx.BaseTransport):
+            def handle_request(self, request: httpx.Request) -> httpx.Response:
+                raise httpx.ConnectError("Connection refused")
+
+        client = BlackbeardClient(
+            base_url="http://test:8000", transport=FailTransport()
+        )
+        with pytest.raises(BlackbeardApiError) as exc_info:
+            client.health()
+        assert exc_info.value.status_code == 0
+        assert exc_info.value.is_network_error
+        assert "Connection refused" in exc_info.value.detail
+        client.close()
+
+    def test_timeout_error(self) -> None:
+        """httpx timeout becomes BlackbeardApiError with is_network_error."""
+
+        class TimeoutTransport(httpx.BaseTransport):
+            def handle_request(self, request: httpx.Request) -> httpx.Response:
+                raise httpx.ReadTimeout("Read timed out")
+
+        client = BlackbeardClient(
+            base_url="http://test:8000", transport=TimeoutTransport()
+        )
+        with pytest.raises(BlackbeardApiError) as exc_info:
+            client.list("Agent")
+        assert exc_info.value.status_code == 0
+        assert exc_info.value.is_network_error
+        assert "timed out" in exc_info.value.detail.lower()
+        client.close()
+
+    def test_transport_error_preserves_cause(self) -> None:
+        """Original httpx exception is preserved as __cause__."""
+        original = httpx.ConnectError("refused")
+
+        class FailTransport(httpx.BaseTransport):
+            def handle_request(self, request: httpx.Request) -> httpx.Response:
+                raise original
+
+        client = BlackbeardClient(
+            base_url="http://test:8000", transport=FailTransport()
+        )
+        with pytest.raises(BlackbeardApiError) as exc_info:
+            client.health()
+        assert exc_info.value.__cause__ is original
+        client.close()

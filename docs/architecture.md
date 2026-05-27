@@ -216,7 +216,7 @@ The API server manages LiteLLM's configuration and uses it as a proxy for all LL
 - **`litellm/key_manager.py`** -- Creates and deletes per-execution virtual keys for budget enforcement
 - **`litellm/helpers.py`** -- Utility functions for model name resolution
 
-**Dynamic model sync:** When `LLMConnection` resources are created, updated, or deleted, the API server regenerates the LiteLLM configuration and pushes it via `POST /config/update`. This means model changes take effect without restarting the LiteLLM container.
+**Dynamic model sync:** When `LLMConnection` resources are created, updated, or deleted, the API server pushes changes to LiteLLM via `POST /model/new`, `/model/update`, and `/model/delete`. This means model changes take effect without restarting the LiteLLM container.
 
 LiteLLM's own data (spend tracking, virtual keys) is stored in a separate `litellm` database within the same PostgreSQL instance.
 

@@ -78,7 +78,9 @@ export function CrewRunner({ crewName, namespace, onComplete }: CrewRunnerProps)
               pollTimerRef.current = setTimeout(() => void poll(), 3000)
             }
           } catch {
-            // Stop polling on error — ExecutionStatus component handles display
+            if (activeRef.current) {
+              pollTimerRef.current = setTimeout(() => void poll(), 3000)
+            }
           }
         }
         pollTimerRef.current = setTimeout(() => void poll(), 3000)

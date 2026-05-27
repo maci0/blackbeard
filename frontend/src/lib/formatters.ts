@@ -15,20 +15,26 @@ export function timeAgo(dateStr: string | null | undefined): string {
   return formatDate(dateStr)
 }
 
+const _dateFmt = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+const _dateFmtYear = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
   const d = new Date(dateStr)
-  const now = new Date()
-  const options: Intl.DateTimeFormatOptions = {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }
-  if (d.getFullYear() !== now.getFullYear()) {
-    options.year = 'numeric'
-  }
-  return d.toLocaleString(undefined, options)
+  if (isNaN(d.getTime())) return '—'
+  const fmt = d.getFullYear() !== new Date().getFullYear() ? _dateFmtYear : _dateFmt
+  return fmt.format(d)
 }
 
 export function getDuration(
@@ -46,6 +52,11 @@ export function getDuration(
   const hrs = Math.floor(min / 60)
   const remMin = min % 60
   return `${hrs}h ${remMin}m`
+}
+
+export function parseCost(cost: number | string | null | undefined): number {
+  const n = typeof cost === 'string' ? parseFloat(cost) : cost
+  return n != null && !isNaN(n) ? n : 0
 }
 
 export function formatCost(cost: number | string | null | undefined): string {

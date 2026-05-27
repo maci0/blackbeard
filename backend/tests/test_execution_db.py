@@ -110,7 +110,6 @@ async def test_get_execution_existing(db_session: AsyncSession):
     await db_session.commit()
 
     result = await get_execution(db_session, e.id)
-    assert result is not None
     assert result.id == e.id
     assert result.crew_name == "test-crew"
     assert result.tasks == []  # No tasks added
@@ -335,7 +334,6 @@ async def test_cancel_queued_execution(db_session: AsyncSession):
     await db_session.commit()
 
     result = await cancel_execution(db_session, e.id)
-    assert result is not None
     assert result.status == ExecutionStatus.CANCELLED
     assert result.completed_at is not None
 
@@ -350,7 +348,6 @@ async def test_cancel_running_execution(db_session: AsyncSession):
     await db_session.commit()
 
     result = await cancel_execution(db_session, e.id)
-    assert result is not None
     assert result.status == ExecutionStatus.CANCELLED
 
 
@@ -392,7 +389,6 @@ async def test_cancel_with_tasks_marks_tasks_failed(db_session: AsyncSession):
     await db_session.commit()
 
     result = await cancel_execution(db_session, e.id)
-    assert result is not None
     assert result.status == ExecutionStatus.CANCELLED
     # Tasks should be marked as failed
     for t in result.tasks:

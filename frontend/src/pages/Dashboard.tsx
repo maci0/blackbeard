@@ -6,7 +6,7 @@ import {
   Cpu,
   Timer,
   ChevronRight,
-  LayoutDashboard,
+  PenTool,
   Store,
   ArrowRight,
   DollarSign,
@@ -21,7 +21,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { KindBadge } from '@/components/ui/KindBadge'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { getDuration, formatCost } from '@/lib/formatters'
+import { getDuration, formatCost, parseCost } from '@/lib/formatters'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { PLURAL_TO_KIND } from '@/lib/kinds'
 import { cn } from '@/lib/utils'
@@ -275,10 +275,6 @@ const ResourcesByKind = memo(function ResourcesByKind({
   )
 })
 
-function parseCost(cost: number | string): number {
-  return typeof cost === 'string' ? parseFloat(cost) || 0 : cost || 0
-}
-
 const SpendByCrew = memo(function SpendByCrew({
   executions,
   loading,
@@ -435,7 +431,7 @@ const SpendOverTime = memo(function SpendOverTime({
                 <Skeleton className="h-3 w-8" />
                 <div className="flex w-full flex-1 items-end justify-center">
                   <div
-                    className="w-full max-w-8 animate-pulse rounded-t bg-muted/60"
+                    className="w-full max-w-8 animate-pulse rounded-t bg-muted/60 motion-reduce:animate-none"
                     style={{ height: `${h}px` }}
                   />
                 </div>
@@ -492,7 +488,7 @@ function QuickActions() {
           to="/studio"
           className="flex items-center gap-3 rounded-lg border bg-card p-4 shadow-sm transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <LayoutDashboard className="h-5 w-5 text-primary" aria-hidden="true" />
+          <PenTool className="h-5 w-5 text-primary" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium">Open Studio</p>
             <p className="text-xs text-muted-foreground">Visual graph editor</p>
@@ -572,7 +568,7 @@ export default function Dashboard() {
     let spend = 0
     for (const e of executions) {
       if (e.status === 'running' || e.status === 'queued') active++
-      spend += typeof e.cost_usd === 'string' ? parseFloat(e.cost_usd) || 0 : e.cost_usd || 0
+      spend += parseCost(e.cost_usd)
     }
     return { activeExecutions: active, totalSpend: spend }
   }, [executions])

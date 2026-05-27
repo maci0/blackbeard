@@ -672,22 +672,26 @@ function RouterForm({
         {entries.map(([condition, target], idx) => (
           <div key={idx} className="space-y-1 rounded-md border border-border bg-muted/20 p-2">
             <div>
-              <span className="text-[10px] font-medium text-muted-foreground">Condition</span>
-              <ExpressionEditor
-                value={condition}
-                onChange={(v) => updateRouteKey(condition, v)}
-                placeholder="state.status == 'approved'"
-              />
+              <label className="text-[10px] font-medium text-muted-foreground">
+                Condition
+                <ExpressionEditor
+                  value={condition}
+                  onChange={(v) => updateRouteKey(condition, v)}
+                  placeholder="state.status == 'approved'"
+                />
+              </label>
             </div>
             <div>
-              <span className="text-[10px] font-medium text-muted-foreground">Target step</span>
-              <input
-                type="text"
-                className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                value={target}
-                placeholder="target"
-                onChange={(e) => updateRouteValue(condition, e.target.value)}
-              />
+              <label className="text-[10px] font-medium text-muted-foreground">
+                Target step
+                <input
+                  type="text"
+                  className="mt-0.5 w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={target}
+                  placeholder="target"
+                  onChange={(e) => updateRouteValue(condition, e.target.value)}
+                />
+              </label>
             </div>
             <div className="flex justify-end">
               <button

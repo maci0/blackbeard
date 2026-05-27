@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -301,8 +300,8 @@ class TestLLMPIIRecognizer:
         mock_client.post.return_value = mock_response
 
         with patch("blackbeard.http_client.get_sync_client", return_value=mock_client):
-            with pytest.raises((ValueError, json.JSONDecodeError)):
-                recognizer.analyze("some text", entities=["PERSON"])
+            results = recognizer.analyze("some text", entities=["PERSON"])
+            assert results == []
 
 
 # ---------------------------------------------------------------------------

@@ -253,7 +253,6 @@ def _validate_and_filter(docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         # or empty strings after sanitization.
         final_name = doc["metadata"].get("name", "")
         if not final_name or not re.match(r"^[a-z0-9][a-z0-9\-]*$", final_name):
-            # Fallback to a safe auto-generated name
             doc["metadata"]["name"] = f"{kind.lower()}-{len(validated)}"
 
         # Truncate overly long names (max 255 chars per NAME_PATTERN usage)

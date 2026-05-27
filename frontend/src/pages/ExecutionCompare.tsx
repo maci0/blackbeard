@@ -18,7 +18,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { Spinner } from '@/components/ui/Spinner'
 import { cn, getErrorMessage } from '@/lib/utils'
-import { getDuration, formatCost } from '@/lib/formatters'
+import { getDuration, formatCost, parseCost } from '@/lib/formatters'
 import type { Execution, ExecutionTask } from '@/lib/types'
 
 function MetricCard({
@@ -239,16 +239,8 @@ export default function ExecutionCompare() {
     return result
   }, [execA, execB])
 
-  const costA = execA
-    ? typeof execA.cost_usd === 'string'
-      ? parseFloat(execA.cost_usd) || 0
-      : execA.cost_usd || 0
-    : 0
-  const costB = execB
-    ? typeof execB.cost_usd === 'string'
-      ? parseFloat(execB.cost_usd) || 0
-      : execB.cost_usd || 0
-    : 0
+  const costA = execA ? parseCost(execA.cost_usd) : 0
+  const costB = execB ? parseCost(execB.cost_usd) : 0
   const costDiffPct = costA !== 0 ? Math.abs((costB - costA) / costA) * 100 : 0
   const costDiffSignificant = costDiffPct > 10
 

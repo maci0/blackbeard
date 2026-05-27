@@ -1,4 +1,4 @@
-"""CLI export command — dump resources as YAML."""
+"""CLI export command — dump resources as YAML or JSON."""
 
 from __future__ import annotations
 
@@ -9,10 +9,12 @@ from typing import Any
 import click
 import httpx
 import yaml
+from rich.markup import escape
 
 from blackbeard_cli.helpers import (
     HelpCommand,
     console,
+    extract_items,
     handle_http_error,
     handle_request_error,
     json_opt,
@@ -84,8 +86,7 @@ def _fetch_resources(
         handle_http_error(resp)
 
     data = resp.json()
-    items = data if isinstance(data, list) else data.get("items", [])
-    return [_strip_server_fields(item) for item in items]
+    return [_strip_server_fields(item) for item in extract_items(data)]
 
 
 def _resources_to_yaml(resources: list[dict[str, Any]]) -> str:
@@ -105,6 +106,7 @@ Examples:
   blackbeard export Agent                     # all agents
   blackbeard export --all                     # everything
   blackbeard export --all -o backup/          # to directory
+  blackbeard export Agent --json              # JSON output
 """,
 )
 @click.argument(
@@ -180,7 +182,7 @@ def export_cmd(
                 json.dumps(resources, indent=2, default=str, ensure_ascii=False) + "\n",
                 encoding="utf-8",
             )
-            console.print(f"[green]Wrote[/] {p} ({len(resources)} resource(s), JSON)")
+            console.print(f"[green]Wrote[/] {escape(str(p))} ({len(resources)} resource(s), JSON)")
         else:
             print_json(resources)
         return
@@ -199,12 +201,12 @@ def export_cmd(
                 plural = KIND_TO_PLURAL.get(k, k.lower())
                 file = p / f"{plural}.yaml"
                 file.write_text(_resources_to_yaml(items), encoding="utf-8")
-                console.print(f"  [green]Wrote[/] {file} ({len(items)} {k})")
-            console.print(f"[dim]{len(resources)} resource(s) exported to {p}[/]")
+                console.print(f"  [green]Wrote[/] {escape(str(file))} ({len(items)} {escape(k)})")
+            console.print(f"[dim]{len(resources)} resource(s) exported to {escape(str(p))}[/]")
         else:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(yaml_str, encoding="utf-8")
-            console.print(f"[green]Wrote[/] {p} ({len(resources)} resource(s))")
+            console.print(f"[green]Wrote[/] {escape(str(p))} ({len(resources)} resource(s))")
     else:
         out.print(yaml_str, end="", highlight=False)
         console.print(f"[dim]{len(resources)} resource(s) exported[/]")

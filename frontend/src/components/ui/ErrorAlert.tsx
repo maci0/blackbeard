@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function ErrorAlert({
@@ -6,6 +6,7 @@ export function ErrorAlert({
   message,
   actionLabel = 'Retry',
   onAction,
+  onDismiss,
   ariaLabel,
   className,
 }: {
@@ -13,6 +14,7 @@ export function ErrorAlert({
   message: string
   actionLabel?: string
   onAction?: () => void
+  onDismiss?: () => void
   ariaLabel?: string
   className?: string
 }) {
@@ -30,16 +32,28 @@ export function ErrorAlert({
         <span className="sr-only">Error: </span>
         {message}
       </span>
-      {onAction && (
-        <button
-          type="button"
-          onClick={onAction}
-          className="flex h-[44px] shrink-0 items-center rounded px-3 text-xs font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={ariaLabel ?? actionLabel}
-        >
-          {actionLabel}
-        </button>
-      )}
+      <span className="flex shrink-0 items-center gap-1">
+        {onAction && (
+          <button
+            type="button"
+            onClick={onAction}
+            className="flex h-[44px] shrink-0 items-center rounded px-3 text-xs font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={ariaLabel ?? actionLabel}
+          >
+            {actionLabel}
+          </button>
+        )}
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-destructive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Dismiss error"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </span>
     </div>
   )
 }

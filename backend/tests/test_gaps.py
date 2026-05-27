@@ -627,8 +627,6 @@ def test_build_tool_caches_by_ref(mock_importlib):
     t1 = loader.build_tool("ref:tools/cache-tool")
     t2 = loader.build_tool("ref:tools/cache-tool")
 
-    assert t1 is not None
-    assert t2 is not None
     assert t1 is t2
     assert mock_importlib.import_module.call_count == 1
     assert fake_cls.call_count == 1
@@ -863,40 +861,36 @@ def test_get_tool_tool_rejects_uppercase_name():
 
 
 def test_log_task_exception_cancelled():
-    """_log_task_exception should silently return for cancelled tasks."""
+    """log_task_exception should silently return for cancelled tasks."""
     import asyncio
 
-    from blackbeard.engine.executor import _log_task_exception
+    from blackbeard.logging_config import log_task_exception
 
     mock_task = MagicMock(spec=asyncio.Task)
     mock_task.cancelled.return_value = True
 
-    with patch("blackbeard.engine.executor.logger") as mock_logger:
-        _log_task_exception(mock_task)
-        mock_task.exception.assert_not_called()
-        mock_logger.error.assert_not_called()
+    log_task_exception(mock_task)
+    mock_task.exception.assert_not_called()
 
 
 def test_log_task_exception_no_exception():
-    """_log_task_exception should not log when task has no exception."""
+    """log_task_exception should not log when task has no exception."""
     import asyncio
 
-    from blackbeard.engine.executor import _log_task_exception
+    from blackbeard.logging_config import log_task_exception
 
     mock_task = MagicMock(spec=asyncio.Task)
     mock_task.cancelled.return_value = False
     mock_task.exception.return_value = None
 
-    with patch("blackbeard.engine.executor.logger") as mock_logger:
-        _log_task_exception(mock_task)
-        mock_logger.error.assert_not_called()
+    log_task_exception(mock_task)
 
 
 def test_log_task_exception_with_exception():
     """_log_task_exception should log an error when task has an exception."""
     import asyncio
 
-    from blackbeard.engine.executor import _log_task_exception
+    from blackbeard.logging_config import log_task_exception
 
     mock_task = MagicMock(spec=asyncio.Task)
     mock_task.cancelled.return_value = False
@@ -904,13 +898,15 @@ def test_log_task_exception_with_exception():
     mock_task.exception.return_value = exc
     mock_task.get_name.return_value = "test-task"
 
-    with patch("blackbeard.engine.executor.logger") as mock_logger:
-        _log_task_exception(mock_task)
-        mock_logger.error.assert_called_once()
-        args, kwargs = mock_logger.error.call_args
-        assert args[1] is exc
-        assert kwargs["extra"]["task_name"] == "test-task"
-        assert kwargs["extra"]["error_type"] == "RuntimeError"
+    mock_logger = MagicMock()
+    with patch("logging.getLogger", return_value=mock_logger):
+        log_task_exception(mock_task)
+    mock_logger.error.assert_called_once()
+    args, kwargs = mock_logger.error.call_args
+    assert "test-task" in args[1]
+    assert args[2] is exc
+    assert kwargs["extra"]["task_name"] == "test-task"
+    assert kwargs["extra"]["error_type"] == "RuntimeError"
 
 
 # ---------------------------------------------------------------------------

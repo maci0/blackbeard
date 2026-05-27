@@ -13,9 +13,11 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.audit import audit_from_request, log_audit
+from blackbeard.auth.authorizer import clear_cache as _clear_authz_cache
 from blackbeard.auth.dependencies import check_resource_permission, get_current_user
 from blackbeard.kinds import API_VERSION, NAME_PATTERN, PLURAL_TO_KIND, ResourceKind
 from blackbeard.litellm import model_sync
+from blackbeard.logging_config import log_task_exception
 from blackbeard.models import User, get_session
 from blackbeard.models.resource_schemas import (
     ResourceCreate,
@@ -23,7 +25,7 @@ from blackbeard.models.resource_schemas import (
     ResourceResponse,
     ResourceUpdate,
 )
-from blackbeard.rate_limiter import mutation_limiter
+from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
 from blackbeard.resources import (
     ResourceConflictError,
     ResourceNotFoundError,
@@ -38,37 +40,23 @@ _yaml_dumper: Any = getattr(yaml, "CSafeDumper", yaml.SafeDumper)
 _background_tasks: set[asyncio.Task[None]] = set()
 
 
-def _log_bg_task_exception(task: asyncio.Task[None]) -> None:
+def _discard_and_log(task: asyncio.Task[None]) -> None:
     _background_tasks.discard(task)
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc is not None:
-        logger.error(
-            "Background task %s failed: %s",
-            task.get_name(),
-            exc,
-            exc_info=exc,
-            extra={
-                "event": "background_task_failed",
-                "task_name": task.get_name(),
-                "error_type": type(exc).__name__,
-                "error_message": str(exc)[:500],
-            },
-        )
+    log_task_exception(task)
 
 
 def _fire_and_forget(coro: Any) -> None:
     task = asyncio.create_task(coro)
     _background_tasks.add(task)
-    task.add_done_callback(_log_bg_task_exception)
+    task.add_done_callback(_discard_and_log)
 
 
 _LLM_KIND = "LLMConnection"
+_AUTHZ_CACHE_KINDS = frozenset({ResourceKind.ROLE.value, ResourceKind.ROLE_BINDING.value})
 
 
 async def _sync_llm_to_litellm(kind: str, name: str, spec: dict[str, Any] | None) -> None:
-    """Push LLMConnection changes to LiteLLM proxy. Fire-and-forget."""
+    """Push LLMConnection changes to LiteLLM proxy (errors logged, not raised)."""
     if kind != _LLM_KIND:
         return
     try:
@@ -85,15 +73,7 @@ async def _sync_llm_to_litellm(kind: str, name: str, spec: dict[str, Any] | None
         )
 
 
-def _check_mutation_rate(user: User | None) -> None:
-    """Raise 429 if user exceeds mutation rate limit."""
-    key = str(user.id) if user is not None else "__anonymous__"
-    if not mutation_limiter.check(key):
-        raise HTTPException(
-            status_code=429,
-            detail="Too many mutation requests. Try again later.",
-            headers={"Retry-After": "60"},
-        )
+_MUTATION_RATE_MSG = "Too many mutation requests. Try again later."
 
 
 router = APIRouter(tags=["resources"])
@@ -138,6 +118,13 @@ def _resolve_kind(kind_plural: str) -> str:
 
 def _resource_to_document(resource: Any) -> dict[str, Any]:
     """Convert a Resource ORM object to a YAML-serializable document."""
+    spec = resource.spec
+    if resource.kind.value == "Automation" and spec:
+        spec = dict(spec)
+        trigger = spec.get("trigger")
+        if isinstance(trigger, dict) and "webhook_secret" in trigger:
+            trigger = {**trigger, "webhook_secret": "**REDACTED**"}  # nosec B105
+            spec["trigger"] = trigger
     return {
         "apiVersion": API_VERSION,
         "kind": resource.kind.value,
@@ -145,7 +132,7 @@ def _resource_to_document(resource: Any) -> dict[str, Any]:
             "name": resource.name,
             "namespace": resource.namespace,
         },
-        "spec": resource.spec,
+        "spec": spec,
     }
 
 
@@ -286,6 +273,7 @@ async def list_resources(
     responses={
         200: {"description": "Resource updated (upsert)", "model": ResourceResponse},
         422: {"description": "Validation error or kind mismatch between URL and body"},
+        429: {"description": "Too many mutation requests"},
     },
 )
 async def create_resource(
@@ -297,7 +285,7 @@ async def create_resource(
     user: User | None = Depends(check_resource_permission),
 ) -> ResourceResponse:
     """Create (or upsert) a resource of a given kind."""
-    _check_mutation_rate(user)
+    check_rate_limit(mutation_limiter, user, _MUTATION_RATE_MSG)
     url_kind = _resolve_kind(kind_plural)
     if data.kind != url_kind:
         raise HTTPException(
@@ -341,6 +329,8 @@ async def create_resource(
         response.status_code = 200
     _fire_and_forget(_maybe_reload_scheduler(request, url_kind))
     _fire_and_forget(_sync_llm_to_litellm(url_kind, data.metadata.name, data.spec))
+    if url_kind in _AUTHZ_CACHE_KINDS:
+        _clear_authz_cache()
     return ResourceResponse.from_db(resource)
 
 
@@ -383,6 +373,7 @@ async def get_resource(
         404: {"description": "Resource not found"},
         409: {"description": "Version conflict (optimistic locking)"},
         422: {"description": "Validation error or name/namespace mismatch"},
+        429: {"description": "Too many mutation requests"},
     },
 )
 async def update_resource(
@@ -405,7 +396,7 @@ async def update_resource(
     user: User | None = Depends(check_resource_permission),
 ) -> ResourceResponse:
     """Update a resource by kind and name (optimistic locking via version)."""
-    _check_mutation_rate(user)
+    check_rate_limit(mutation_limiter, user, _MUTATION_RATE_MSG)
     kind = _resolve_kind(kind_plural)
 
     if data.metadata is not None:
@@ -473,13 +464,18 @@ async def update_resource(
         ) from exc
     _fire_and_forget(_maybe_reload_scheduler(request, kind))
     _fire_and_forget(_sync_llm_to_litellm(kind, name, resource.spec))
+    if kind in _AUTHZ_CACHE_KINDS:
+        _clear_authz_cache()
     return ResourceResponse.from_db(resource)
 
 
 @router.delete(
     "/{kind_plural}/{name}",
     status_code=204,
-    responses={204: {"description": "Resource deleted (or did not exist — idempotent)"}},
+    responses={
+        204: {"description": "Resource deleted (or did not exist — idempotent)"},
+        429: {"description": "Too many mutation requests"},
+    },
 )
 async def delete_resource(
     request: Request,
@@ -500,7 +496,7 @@ async def delete_resource(
     user: User | None = Depends(check_resource_permission),
 ) -> None:
     """Delete a resource by kind and name. Idempotent."""
-    _check_mutation_rate(user)
+    check_rate_limit(mutation_limiter, user, _MUTATION_RATE_MSG)
     kind = _resolve_kind(kind_plural)
     service = ResourceService(session)
     try:
@@ -529,3 +525,5 @@ async def delete_resource(
     else:
         _fire_and_forget(_maybe_reload_scheduler(request, kind))
         _fire_and_forget(_sync_llm_to_litellm(kind, name, None))
+        if kind in _AUTHZ_CACHE_KINDS:
+            _clear_authz_cache()

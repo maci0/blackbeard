@@ -8,15 +8,14 @@ from urllib.parse import quote
 
 import httpx
 
-from blackbeard_sdk.errors import raise_for_status
-
 TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
 
 
 class ExecutionMixin:
     """Execution lifecycle methods mixed into BlackbeardClient."""
 
-    _http: httpx.Client
+    def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        raise NotImplementedError
 
     def kickoff(
         self,
@@ -34,13 +33,12 @@ class ExecutionMixin:
         Returns:
             Execution dict with status=queued.
         """
-        resp = self._http.post(
+        return self._send(
+            "POST",
             f"/api/v1/crews/{quote(crew_name, safe='')}/kickoff",
             params={"namespace": namespace},
             json={"inputs": inputs or {}},
-        )
-        raise_for_status(resp)
-        return resp.json()
+        ).json()
 
     def train(
         self,
@@ -62,7 +60,8 @@ class ExecutionMixin:
         Returns:
             Execution dict with status=queued.
         """
-        resp = self._http.post(
+        return self._send(
+            "POST",
             f"/api/v1/crews/{quote(crew_name, safe='')}/train",
             params={"namespace": namespace},
             json={
@@ -70,9 +69,7 @@ class ExecutionMixin:
                 "n_iterations": n_iterations,
                 "filename": filename,
             },
-        )
-        raise_for_status(resp)
-        return resp.json()
+        ).json()
 
     def test(
         self,
@@ -92,16 +89,15 @@ class ExecutionMixin:
         Returns:
             Execution dict with status=queued.
         """
-        resp = self._http.post(
+        return self._send(
+            "POST",
             f"/api/v1/crews/{quote(crew_name, safe='')}/test",
             params={"namespace": namespace},
             json={
                 "inputs": inputs or {},
                 "n_iterations": n_iterations,
             },
-        )
-        raise_for_status(resp)
-        return resp.json()
+        ).json()
 
     def run_flow(
         self,
@@ -119,13 +115,12 @@ class ExecutionMixin:
         Returns:
             Execution dict with status=queued.
         """
-        resp = self._http.post(
+        return self._send(
+            "POST",
             f"/api/v1/flows/{quote(flow_name, safe='')}/run",
             params={"namespace": namespace},
             json={"inputs": inputs or {}},
-        )
-        raise_for_status(resp)
-        return resp.json()
+        ).json()
 
     def get_execution(self, execution_id: str) -> dict[str, Any]:
         """Get execution details by ID.
@@ -136,9 +131,9 @@ class ExecutionMixin:
         Returns:
             Execution dict.
         """
-        resp = self._http.get(f"/api/v1/executions/{quote(execution_id, safe='')}")
-        raise_for_status(resp)
-        return resp.json()
+        return self._send(
+            "GET", f"/api/v1/executions/{quote(execution_id, safe='')}"
+        ).json()
 
     def list_executions(
         self,
@@ -168,9 +163,9 @@ class ExecutionMixin:
             params["namespace"] = namespace
         if status:
             params["status"] = status
-        resp = self._http.get("/api/v1/executions", params=params)
-        raise_for_status(resp)
-        return resp.json()["items"]
+        return self._send(
+            "GET", "/api/v1/executions", params=params
+        ).json()["items"]
 
     def cancel(self, execution_id: str) -> dict[str, Any]:
         """Cancel a queued or running execution.
@@ -181,11 +176,10 @@ class ExecutionMixin:
         Returns:
             Updated execution dict.
         """
-        resp = self._http.patch(
-            f"/api/v1/executions/{quote(execution_id, safe='')}/cancel"
-        )
-        raise_for_status(resp)
-        return resp.json()
+        return self._send(
+            "PATCH",
+            f"/api/v1/executions/{quote(execution_id, safe='')}/cancel",
+        ).json()
 
     def get_execution_spend(self, execution_id: str) -> list[dict[str, Any]]:
         """Get LiteLLM spend data for an execution.
@@ -196,11 +190,10 @@ class ExecutionMixin:
         Returns:
             List of spend records from LiteLLM.
         """
-        resp = self._http.get(
-            f"/api/v1/executions/{quote(execution_id, safe='')}/spend"
-        )
-        raise_for_status(resp)
-        return resp.json()
+        return self._send(
+            "GET",
+            f"/api/v1/executions/{quote(execution_id, safe='')}/spend",
+        ).json()
 
     def get_execution_events(
         self,
@@ -219,12 +212,11 @@ class ExecutionMixin:
         Returns:
             Dict with events list, next_sequence, and has_more.
         """
-        resp = self._http.get(
+        return self._send(
+            "GET",
             f"/api/v1/executions/{quote(execution_id, safe='')}/events",
             params={"after": after, "limit": limit},
-        )
-        raise_for_status(resp)
-        return resp.json()
+        ).json()
 
     def respond(
         self,
@@ -245,12 +237,11 @@ class ExecutionMixin:
         body: dict[str, str] = {"response": response}
         if feedback is not None:
             body["feedback"] = feedback
-        resp = self._http.post(
+        return self._send(
+            "POST",
             f"/api/v1/executions/{quote(execution_id, safe='')}/respond",
             json=body,
-        )
-        raise_for_status(resp)
-        return resp.json()
+        ).json()
 
     def retry(self, execution_id: str) -> dict[str, Any]:
         """Retry a terminal execution.
@@ -264,11 +255,10 @@ class ExecutionMixin:
         Returns:
             New execution dict with status=queued.
         """
-        resp = self._http.post(
-            f"/api/v1/executions/{quote(execution_id, safe='')}/retry"
-        )
-        raise_for_status(resp)
-        return resp.json()
+        return self._send(
+            "POST",
+            f"/api/v1/executions/{quote(execution_id, safe='')}/retry",
+        ).json()
 
     def wait(
         self,

@@ -196,7 +196,6 @@ def _get_cached_webhooks(db_url: str) -> list[Any]:
                     sync_select(Webhook).where(Webhook.active.is_(True)).limit(1000)
                 )
                 cached = list(result.scalars())
-                # Detach from session so they can be used outside
                 session.expunge_all()
         except Exception as exc:
             if entry is not None:
@@ -667,8 +666,10 @@ class BlackbeardExecutionListener(BaseEventListener):
         webhook executor, so a slow endpoint cannot block others.
         """
         try:
-            # Fast path: skip payload serialization when no webhooks are registered
-            cached = _webhook_cache_entry
+            # Fast path: skip payload serialization when no webhooks are registered.
+            # Read under lock for free-threaded Python safety.
+            with _webhook_cache_lock:
+                cached = _webhook_cache_entry
             if cached is not None and not cached[1]:
                 return
             payload, targets = _prepare_webhook_targets(
@@ -775,14 +776,20 @@ class BlackbeardExecutionListener(BaseEventListener):
                     entities=self._pii_entities,
                     config=self._pii_config,
                 )
-        # Collect buffered events + new event atomically under lock, then
-        # commit everything in one transaction.  Prevents out-of-order
-        # delivery when a concurrent buffer flush fails but the task event
-        # write succeeds (the SSE consumer would skip the failed events).
-        now = datetime.now(UTC)
+        # Cancel any pending flush timer and wait for an in-flight flush
+        # to complete BEFORE draining the buffer.  This ensures that if the
+        # timer's _flush_buffer failed and re-queued events, those events
+        # are back in the buffer when we drain it below — preventing the
+        # SSE consumer from skipping lower-sequence events.
         with self._lock:
             timer = self._flush_timer
             self._flush_timer = None
+        if timer is not None:
+            timer.cancel()
+            timer.join(timeout=5.0)
+
+        now = datetime.now(UTC)
+        with self._lock:
             seq = self._seq
             self._seq += 1
             event = ExecutionEvent(
@@ -795,8 +802,6 @@ class BlackbeardExecutionListener(BaseEventListener):
             to_flush = self._buffer
             self._buffer = []
             to_flush.append(event)
-        if timer is not None:
-            timer.cancel()
         try:
             with self._session_factory() as session:
                 session.add_all(to_flush)

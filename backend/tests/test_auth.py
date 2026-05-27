@@ -592,7 +592,7 @@ async def test_remove_group_member(client: AsyncClient):
 
 
 async def test_remove_group_member_not_a_member(client: AsyncClient):
-    """Removing a user who is not a member returns 404."""
+    """Removing a user who is not a member returns 204 (idempotent)."""
     data = await _register_user(client)
     headers = _bearer(data["access_token"])
 
@@ -606,7 +606,7 @@ async def test_remove_group_member_not_a_member(client: AsyncClient):
         f"/api/v1/groups/{group_id}/members/{data['user']['id']}",
         headers=headers,
     )
-    assert resp.status_code == 404
+    assert resp.status_code == 204
 
 
 async def test_list_group_members_nonexistent_group(client: AsyncClient):

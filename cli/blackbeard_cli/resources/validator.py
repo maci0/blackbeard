@@ -527,6 +527,11 @@ BLOCKED_CALLABLE_MODULES = frozenset(
         "multiprocessing",  # arbitrary process spawning
         "pty",  # pseudo-terminal access
         "signal",  # signal manipulation
+        "runpy",  # run_module/run_path execute arbitrary code
+        "ensurepip",  # can install arbitrary packages
+        "pip",  # can install arbitrary packages
+        "zipimport",  # import from arbitrary zip files
+        "webbrowser",  # open arbitrary URLs
     }
 )
 
@@ -538,7 +543,6 @@ def _validate_function_path(
     func_path = spec.get("function_path")
     if not func_path or not isinstance(func_path, str):
         return
-    # Check for blocked top-level modules
     top_module = func_path.split(".")[0].split(":")[0]
     if top_module in BLOCKED_CALLABLE_MODULES:
         errors.append(

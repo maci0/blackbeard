@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Generator
 from typing import Any
 
 import httpx
@@ -52,9 +53,11 @@ def transport() -> MockTransport:
 
 
 @pytest.fixture
-def client(transport: MockTransport) -> BlackbeardClient:
-    return BlackbeardClient(
+def client(transport: MockTransport) -> Generator[BlackbeardClient, None, None]:
+    c = BlackbeardClient(
         base_url="http://test:8000",
         api_key="test-key",
         transport=transport,
     )
+    yield c
+    c.close()

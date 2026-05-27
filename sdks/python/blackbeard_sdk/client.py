@@ -90,15 +90,31 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
 
         self._http = httpx.Client(**kwargs)
 
+    def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        """Send an HTTP request, wrapping transport errors in BlackbeardApiError.
+
+        All mixin methods should use this instead of calling ``self._http``
+        directly so that network failures, timeouts, and HTTP errors are
+        reported through a single, consistent error type.
+        """
+        try:
+            resp = self._http.request(method, url, **kwargs)
+        except httpx.TimeoutException as exc:
+            raise BlackbeardApiError(0, f"Request timed out: {exc}") from exc
+        except httpx.TransportError as exc:
+            raise BlackbeardApiError(
+                0, str(exc) or "Network request failed"
+            ) from exc
+        raise_for_status(resp)
+        return resp
+
     def health(self) -> dict[str, Any]:
         """Check API liveness.
 
         Returns:
             Health response dict with status, service, version, uptime_s.
         """
-        resp = self._http.get("/api/v1/health")
-        raise_for_status(resp)
-        return resp.json()
+        return self._send("GET", "/api/v1/health").json()
 
     def readiness(self) -> dict[str, Any]:
         """Check API readiness (database, Valkey, LiteLLM connectivity).
@@ -106,9 +122,7 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
         Returns:
             Readiness response dict with component checks.
         """
-        resp = self._http.get("/api/v1/health/ready")
-        raise_for_status(resp)
-        return resp.json()
+        return self._send("GET", "/api/v1/health/ready").json()
 
     def close(self) -> None:
         """Close the underlying HTTP client."""

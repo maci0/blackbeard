@@ -362,11 +362,11 @@ async def create_group(
 ) -> GroupResponse:
     """Create a new group."""
     group = Group(name=data.name, description=data.description)
-    session.add(group)
     try:
-        await session.flush()
+        async with session.begin_nested():
+            session.add(group)
+            await session.flush()
     except IntegrityError:
-        await session.rollback()
         logger.info(
             "Group create conflict: %s",
             data.name,
@@ -597,11 +597,11 @@ async def add_group_member(
         raise HTTPException(status_code=404, detail="User not found")
 
     membership = GroupMember(group_id=group_id, user_id=target_user_id)
-    session.add(membership)
     try:
-        await session.flush()
+        async with session.begin_nested():
+            session.add(membership)
+            await session.flush()
     except IntegrityError:
-        await session.rollback()
         raise HTTPException(
             status_code=409, detail="User is already a member of the group"
         ) from None
@@ -638,8 +638,9 @@ async def add_group_member(
     "/groups/{group_id}/members/{user_id}",
     status_code=204,
     responses={
+        204: {"description": "Membership removed (or did not exist — idempotent)"},
         401: {"description": "Authentication required"},
-        404: {"description": "Group or membership not found"},
+        404: {"description": "Group not found"},
     },
 )
 async def remove_group_member(
@@ -649,18 +650,30 @@ async def remove_group_member(
     current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    """Remove a user from a group."""
+    """Remove a user from a group. Idempotent."""
     group = await _require_group(session, group_id)
 
     result = await session.execute(
-        select(GroupMember).where(
+        select(GroupMember)
+        .where(
             GroupMember.group_id == group_id,
             GroupMember.user_id == user_id,
         )
+        .with_for_update()
     )
     membership = result.scalar_one_or_none()
     if membership is None:
-        raise HTTPException(status_code=404, detail="User is not a member of the group")
+        logger.debug(
+            "Remove member no-op: user %s not in group %s",
+            user_id,
+            group_id,
+            extra={
+                "event": "group_member_remove_noop",
+                "group_id": str(group_id),
+                "target_user_id": str(user_id),
+            },
+        )
+        return
 
     await session.delete(membership)
     await log_audit(

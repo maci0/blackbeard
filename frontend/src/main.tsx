@@ -15,6 +15,7 @@ if (import.meta.env.VITE_API_KEY) {
 
 window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
   console.error('[Unhandled Rejection]', event.reason)
+  event.preventDefault()
 })
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

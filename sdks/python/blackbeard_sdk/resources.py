@@ -7,7 +7,9 @@ from urllib.parse import quote
 
 import httpx
 
-from blackbeard_sdk.errors import BlackbeardApiError, raise_for_status
+from blackbeard_sdk.errors import BlackbeardApiError
+
+_DictList = list[dict[str, Any]]
 
 # Canonical kind-to-plural mapping matching backend/blackbeard/kinds.py
 KIND_TO_PLURAL: dict[str, str] = {
@@ -44,7 +46,8 @@ def _kind_plural(kind: str) -> str:
 class ResourceMixin:
     """Resource CRUD methods mixed into BlackbeardClient."""
 
-    _http: httpx.Client
+    def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        raise NotImplementedError
 
     def list(
         self,
@@ -76,9 +79,7 @@ class ResourceMixin:
         }
         if label_selector:
             params["label_selector"] = label_selector
-        resp = self._http.get(f"/api/v1/{plural}", params=params)
-        raise_for_status(resp)
-        return resp.json()["items"]
+        return self._send("GET", f"/api/v1/{plural}", params=params).json()["items"]
 
     def get(self, kind: str, name: str, namespace: str = "default") -> dict[str, Any]:
         """Get a single resource by kind and name.
@@ -92,12 +93,11 @@ class ResourceMixin:
             Resource dict.
         """
         plural = _kind_plural(kind)
-        resp = self._http.get(
+        return self._send(
+            "GET",
             f"/api/v1/{plural}/{quote(name, safe='')}",
             params={"namespace": namespace},
-        )
-        raise_for_status(resp)
-        return resp.json()
+        ).json()
 
     def create(self, resource: dict[str, Any]) -> dict[str, Any]:
         """Create (or upsert) a resource.
@@ -115,9 +115,7 @@ class ResourceMixin:
         if not kind:
             raise ValueError("Resource dict must contain a 'kind' key")
         plural = _kind_plural(kind)
-        resp = self._http.post(f"/api/v1/{plural}", json=resource)
-        raise_for_status(resp)
-        return resp.json()
+        return self._send("POST", f"/api/v1/{plural}", json=resource).json()
 
     def update(
         self,
@@ -139,13 +137,12 @@ class ResourceMixin:
             Updated resource dict.
         """
         plural = _kind_plural(kind)
-        resp = self._http.put(
+        return self._send(
+            "PUT",
             f"/api/v1/{plural}/{quote(name, safe='')}",
             params={"namespace": namespace},
             json=resource,
-        )
-        raise_for_status(resp)
-        return resp.json()
+        ).json()
 
     def delete(self, kind: str, name: str, namespace: str = "default") -> None:
         """Delete a resource by kind and name. Idempotent.
@@ -156,13 +153,13 @@ class ResourceMixin:
             namespace: Resource namespace.
         """
         plural = _kind_plural(kind)
-        resp = self._http.delete(
+        self._send(
+            "DELETE",
             f"/api/v1/{plural}/{quote(name, safe='')}",
             params={"namespace": namespace},
         )
-        raise_for_status(resp)
 
-    def apply(self, resources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def apply(self, resources: _DictList) -> _DictList:
         """Create or update multiple resources (sequential upsert).
 
         Each resource is sent as a POST (which the API treats as upsert).
@@ -184,7 +181,7 @@ class ResourceMixin:
                 name = resource.get("metadata", {}).get("name", "?")
                 raise BlackbeardApiError(
                     exc.status_code,
-                    f"{kind}/{name}: {exc.detail}",
+                    f"[{i}] {kind}/{name}: {exc.detail}",
                     exc.body,
                 ) from exc
         return results
@@ -202,9 +199,8 @@ class ResourceMixin:
         Returns:
             Multi-document YAML string.
         """
-        resp = self._http.get(
+        return self._send(
+            "GET",
             "/api/v1/resources/export",
             params={"namespace": namespace},
-        )
-        raise_for_status(resp)
-        return resp.text
+        ).text

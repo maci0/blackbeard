@@ -383,7 +383,6 @@ class TestContainerSandboxExecution:
         with patch("shutil.which", return_value=f"/usr/bin/{runtime}"):
             return ContainerSandbox(runtime=runtime)
 
-    @pytest.mark.asyncio
     async def test_execute_success(self):
         sandbox = self._make_sandbox()
 
@@ -397,7 +396,6 @@ class TestContainerSandboxExecution:
             assert result.stdout == "output"
             assert result.stderr == ""
 
-    @pytest.mark.asyncio
     async def test_execute_with_input(self):
         sandbox = self._make_sandbox()
 
@@ -416,7 +414,6 @@ class TestContainerSandboxExecution:
             # Verify input was encoded and passed
             mock_proc.communicate.assert_called_once_with(b"test input")
 
-    @pytest.mark.asyncio
     async def test_execute_nonzero_exit(self):
         sandbox = self._make_sandbox()
 
@@ -429,7 +426,6 @@ class TestContainerSandboxExecution:
             assert result.exit_code == 1
             assert result.stderr == "error msg"
 
-    @pytest.mark.asyncio
     async def test_execute_timeout(self):
         sandbox = self._make_sandbox()
 
@@ -445,7 +441,6 @@ class TestContainerSandboxExecution:
         ):
             await sandbox.execute("img", ["cmd"], timeout=5)
 
-    @pytest.mark.asyncio
     async def test_execute_runtime_not_found(self):
         sandbox = self._make_sandbox()
 
@@ -608,7 +603,6 @@ class TestMicroVMSandboxExecution:
         with patch("shutil.which", side_effect=lambda cmd: f"/usr/bin/{cmd}"):
             return MicroVMSandbox(container_runtime=runtime)
 
-    @pytest.mark.asyncio
     async def test_execute_success(self):
         sandbox = self._make_sandbox()
 
@@ -622,7 +616,6 @@ class TestMicroVMSandboxExecution:
             assert result.stdout == "output"
             assert result.stderr == ""
 
-    @pytest.mark.asyncio
     async def test_execute_with_input(self):
         sandbox = self._make_sandbox()
 
@@ -640,7 +633,6 @@ class TestMicroVMSandboxExecution:
             assert result.stdout == "processed"
             mock_proc.communicate.assert_called_once_with(b"test input")
 
-    @pytest.mark.asyncio
     async def test_execute_nonzero_exit(self):
         sandbox = self._make_sandbox()
 
@@ -653,7 +645,6 @@ class TestMicroVMSandboxExecution:
             assert result.exit_code == 1
             assert result.stderr == "error msg"
 
-    @pytest.mark.asyncio
     async def test_execute_timeout(self):
         sandbox = self._make_sandbox()
 
@@ -669,7 +660,6 @@ class TestMicroVMSandboxExecution:
         ):
             await sandbox.execute("img", ["cmd"], timeout=10)
 
-    @pytest.mark.asyncio
     async def test_execute_default_timeout_60s(self):
         """MicroVM default timeout is 60s (higher than container tier)."""
         sandbox = self._make_sandbox()
@@ -686,7 +676,6 @@ class TestMicroVMSandboxExecution:
         ):
             await sandbox.execute("img", ["cmd"])
 
-    @pytest.mark.asyncio
     async def test_execute_runtime_not_found(self):
         sandbox = self._make_sandbox()
 

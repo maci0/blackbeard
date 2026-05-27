@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback, useDeferredValue } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Database,
@@ -26,7 +26,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ApiError } from '@/api/client'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { SmartTime } from '@/components/ui/SmartTime'
-import { KIND_TO_PLURAL, API_VERSION } from '@/lib/kinds'
+import { KIND_TO_PLURAL, API_VERSION, NAME_RE } from '@/lib/kinds'
 import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
 import { parseYaml } from '@/lib/yaml'
@@ -46,8 +46,6 @@ const FILTER_OPTIONS = [
 const KIND_ENTRIES = Object.entries(KIND_TO_PLURAL)
 
 const PAGE_SIZE = 25
-
-const NAME_RE = /^[a-z0-9][a-z0-9-]*$/
 
 /* ------------------------------------------------------------------ */
 /* Page                                                                */
@@ -69,6 +67,7 @@ export default function Resources() {
   const toast = useToastStore()
   const [kindFilter, setKindFilter] = useState('')
   const [search, setSearch] = useState('')
+  const deferredSearch = useDeferredValue(search)
   const [page, setPage] = useState(1)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -268,14 +267,14 @@ export default function Resources() {
   const filtered = useMemo(() => {
     return allResources.filter((r) => {
       if (kindFilter && r.kindPlural !== kindFilter) return false
-      if (search) {
-        const q = search.toLowerCase()
+      if (deferredSearch) {
+        const q = deferredSearch.toLowerCase()
         if (!r.metadata.name.toLowerCase().includes(q) && !r.kind.toLowerCase().includes(q))
           return false
       }
       return true
     })
-  }, [allResources, kindFilter, search])
+  }, [allResources, kindFilter, deferredSearch])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated = useMemo(() => {
@@ -404,7 +403,7 @@ export default function Resources() {
                 <button
                   type="button"
                   onClick={() => void navigate('/studio')}
-                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="btn-press inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Create in Studio
                 </button>
@@ -787,6 +786,8 @@ export default function Resources() {
                   <input
                     id="new-resource-name"
                     type="text"
+                    required
+                    aria-required="true"
                     value={newName}
                     onChange={(e) => {
                       setNewName(e.target.value)
@@ -881,7 +882,7 @@ export default function Resources() {
                   type="submit"
                   disabled={submitting}
                   aria-busy={submitting}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  className="btn-press inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {submitting && (
                     <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
@@ -950,7 +951,7 @@ export default function Resources() {
                   onClick={() => void handlePasteImport()}
                   disabled={pasteImporting || !pasteYaml.trim()}
                   aria-busy={pasteImporting}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  className="btn-press inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {pasteImporting && (
                     <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />

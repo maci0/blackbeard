@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { useToastStore } from '../toastStore'
 
+const EXIT_ANIMATION_MS = 300
+
 describe('toastStore', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -70,7 +72,7 @@ describe('toastStore', () => {
   })
 
   describe('dismiss', () => {
-    it('removes a toast by ID', () => {
+    it('marks toast as dismissing then removes after animation', () => {
       useToastStore.getState().success('Keep me')
       useToastStore.getState().error('Remove me')
 
@@ -80,6 +82,13 @@ describe('toastStore', () => {
       const toRemove = toasts[1]!
       useToastStore.getState().dismiss(toRemove.id)
 
+      // Immediately: toast marked as dismissing but still present
+      const afterDismiss = useToastStore.getState().toasts
+      expect(afterDismiss).toHaveLength(2)
+      expect(afterDismiss[1]?.dismissing).toBe(true)
+
+      // After animation delay: toast removed
+      vi.advanceTimersByTime(EXIT_ANIMATION_MS)
       const remaining = useToastStore.getState().toasts
       expect(remaining).toHaveLength(1)
       expect(remaining[0]?.message).toBe('Keep me')
@@ -89,13 +98,14 @@ describe('toastStore', () => {
       useToastStore.getState().success('Stay')
 
       useToastStore.getState().dismiss('nonexistent-id')
+      vi.advanceTimersByTime(EXIT_ANIMATION_MS)
 
       expect(useToastStore.getState().toasts).toHaveLength(1)
     })
   })
 
   describe('auto-dismiss', () => {
-    it('auto-dismisses success toast after 5 seconds', () => {
+    it('auto-dismisses success toast after 5 seconds + exit animation', () => {
       useToastStore.getState().success('Temporary')
 
       expect(useToastStore.getState().toasts).toHaveLength(1)
@@ -103,27 +113,38 @@ describe('toastStore', () => {
       vi.advanceTimersByTime(4999)
       expect(useToastStore.getState().toasts).toHaveLength(1)
 
+      // Timer fires at 5000ms, sets dismissing=true
       vi.advanceTimersByTime(1)
+      expect(useToastStore.getState().toasts[0]?.dismissing).toBe(true)
+
+      // Removed after exit animation
+      vi.advanceTimersByTime(EXIT_ANIMATION_MS)
       expect(useToastStore.getState().toasts).toHaveLength(0)
     })
 
-    it('auto-dismisses error toast after 15 seconds', () => {
+    it('auto-dismisses error toast after 15 seconds + exit animation', () => {
       useToastStore.getState().error('Error toast')
 
       vi.advanceTimersByTime(14999)
       expect(useToastStore.getState().toasts).toHaveLength(1)
 
       vi.advanceTimersByTime(1)
+      expect(useToastStore.getState().toasts[0]?.dismissing).toBe(true)
+
+      vi.advanceTimersByTime(EXIT_ANIMATION_MS)
       expect(useToastStore.getState().toasts).toHaveLength(0)
     })
 
-    it('auto-dismisses info toast after 7 seconds', () => {
+    it('auto-dismisses info toast after 7 seconds + exit animation', () => {
       useToastStore.getState().info('Info toast')
 
       vi.advanceTimersByTime(6999)
       expect(useToastStore.getState().toasts).toHaveLength(1)
 
       vi.advanceTimersByTime(1)
+      expect(useToastStore.getState().toasts[0]?.dismissing).toBe(true)
+
+      vi.advanceTimersByTime(EXIT_ANIMATION_MS)
       expect(useToastStore.getState().toasts).toHaveLength(0)
     })
   })
@@ -156,7 +177,12 @@ describe('toastStore', () => {
       vi.advanceTimersByTime(2999)
       expect(useToastStore.getState().toasts).toHaveLength(1)
 
+      // Timer fires, sets dismissing
       vi.advanceTimersByTime(1)
+      expect(useToastStore.getState().toasts[0]?.dismissing).toBe(true)
+
+      // Removed after exit animation
+      vi.advanceTimersByTime(EXIT_ANIMATION_MS)
       expect(useToastStore.getState().toasts).toHaveLength(0)
     })
   })

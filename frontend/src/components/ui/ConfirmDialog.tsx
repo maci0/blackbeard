@@ -29,7 +29,7 @@ export function ConfirmDialog({
 
   const btnClass =
     confirmVariant === 'destructive'
-      ? 'bg-red-600 text-white hover:bg-red-700'
+      ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
       : 'bg-primary text-primary-foreground hover:opacity-90'
 
   const handleConfirm = async () => {
@@ -71,7 +71,7 @@ export function ConfirmDialog({
               onClick={() => void handleConfirm()}
               disabled={busy}
               aria-busy={busy}
-              className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${btnClass}`}
+              className={`btn-press inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${btnClass}`}
             >
               {busy && <Spinner size="sm" className="text-current" />}
               {confirmLabel}

@@ -6,8 +6,6 @@ from typing import Any
 
 import httpx
 
-from blackbeard_sdk.errors import raise_for_status
-
 
 class AuthMixin:
     """Authentication methods mixed into BlackbeardClient."""
@@ -16,6 +14,9 @@ class AuthMixin:
     _token: str | None
     _api_key: str | None
 
+    def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        raise NotImplementedError
+
     def login(self, email: str, password: str) -> dict[str, Any]:
         """Authenticate with email and password.
 
@@ -23,12 +24,11 @@ class AuthMixin:
         token_type, and user profile. The client automatically stores the
         access token for subsequent requests.
         """
-        resp = self._http.post(
+        data: dict[str, Any] = self._send(
+            "POST",
             "/api/v1/auth/login",
             json={"email": email, "password": password},
-        )
-        raise_for_status(resp)
-        data: dict[str, Any] = resp.json()
+        ).json()
         self._set_bearer_token(data["access_token"])
         return data
 
@@ -38,16 +38,15 @@ class AuthMixin:
         Returns an AuthResponse dict. The client automatically stores the
         access token for subsequent requests.
         """
-        resp = self._http.post(
+        data: dict[str, Any] = self._send(
+            "POST",
             "/api/v1/auth/register",
             json={
                 "email": email,
                 "password": password,
                 "display_name": display_name,
             },
-        )
-        raise_for_status(resp)
-        data: dict[str, Any] = resp.json()
+        ).json()
         self._set_bearer_token(data["access_token"])
         return data
 
@@ -57,12 +56,11 @@ class AuthMixin:
         Returns a TokenResponse dict. The client automatically updates
         the stored access token.
         """
-        resp = self._http.post(
+        data: dict[str, Any] = self._send(
+            "POST",
             "/api/v1/auth/refresh",
             json={"refresh_token": refresh_token},
-        )
-        raise_for_status(resp)
-        data: dict[str, Any] = resp.json()
+        ).json()
         self._set_bearer_token(data["access_token"])
         return data
 
@@ -75,9 +73,7 @@ class AuthMixin:
 
     def whoami(self) -> dict[str, Any]:
         """Get the currently authenticated user's profile."""
-        resp = self._http.get("/api/v1/auth/me")
-        raise_for_status(resp)
-        return resp.json()
+        return self._send("GET", "/api/v1/auth/me").json()
 
     def generate_api_key(self) -> dict[str, Any]:
         """Generate or rotate the current user's API key.
@@ -88,14 +84,11 @@ class AuthMixin:
         Returns:
             Dict with ``api_key`` containing the new ``bb-`` prefixed key.
         """
-        resp = self._http.post("/api/v1/auth/api-key")
-        raise_for_status(resp)
-        return resp.json()
+        return self._send("POST", "/api/v1/auth/api-key").json()
 
     def revoke_api_key(self) -> None:
         """Revoke the current user's API key. Idempotent.
 
         Requires JWT Bearer authentication (not API key auth).
         """
-        resp = self._http.delete("/api/v1/auth/api-key")
-        raise_for_status(resp)
+        self._send("DELETE", "/api/v1/auth/api-key")

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from blackbeard.api import RETRY_HEADERS_30
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.engine.copilot import (
     CopilotError,
@@ -17,6 +18,7 @@ from blackbeard.engine.copilot import (
 )
 from blackbeard.kinds import NAME_PATTERN
 from blackbeard.models import User, get_session
+from blackbeard.rate_limiter import check_rate_limit, copilot_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +72,7 @@ class CopilotErrorResponse(BaseModel):
             "model": CopilotErrorResponse,
             "description": "No LLMConnection available in the specified namespace",
         },
+        429: {"description": "Too many copilot requests"},
         502: {
             "model": CopilotErrorResponse,
             "description": "LiteLLM proxy unreachable or model error",
@@ -87,6 +90,8 @@ async def generate_crew(
     llm_connection is specified, uses the first available LLMConnection
     in the given namespace.
     """
+    check_rate_limit(copilot_limiter, user, "Too many copilot requests. Try again later.")
+
     logger.info(
         "Copilot request: prompt_len=%d llm=%s ns=%s user=%s",
         len(body.prompt),
@@ -110,12 +115,16 @@ async def generate_crew(
             session=session,
         )
     except NoLLMConnectionError as e:
-        logger.info(
+        logger.warning(
             "Copilot no LLMConnection: %s",
             e,
+            exc_info=True,
             extra={"event": "copilot_no_llm"},
         )
-        raise HTTPException(status_code=424, detail=str(e)) from e
+        raise HTTPException(
+            status_code=424,
+            detail="No LLM connection available in the specified namespace.",
+        ) from e
     except CopilotError as e:
         logger.warning(
             "Copilot error: %s",
@@ -123,9 +132,13 @@ async def generate_crew(
             exc_info=True,
             extra={
                 "event": "copilot_error",
-                "error": str(e),
+                "error": str(e)[:500],
             },
         )
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        raise HTTPException(
+            status_code=502,
+            detail="Resource generation failed. Check server logs for details.",
+            headers=RETRY_HEADERS_30,
+        ) from e
 
     return CopilotResponse(resources=resources, explanation=explanation)

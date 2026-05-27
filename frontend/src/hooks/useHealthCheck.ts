@@ -27,8 +27,9 @@ export function useHealthCheck(): HealthCheckResult {
       if (!activeRef.current) return
       setStatus(data.status === 'ok' ? 'connected' : 'degraded')
       setLastChecked(new Date())
-    } catch {
+    } catch (err) {
       if (!activeRef.current) return
+      console.debug('[health] check failed:', err)
       setStatus('disconnected')
       setLastChecked(new Date())
     }

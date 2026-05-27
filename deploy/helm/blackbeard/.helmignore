@@ -1,5 +1,13 @@
 .git/
 .gitignore
 *.md
+*.tgz
 .DS_Store
 .claude/
+ci/
+tests/
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

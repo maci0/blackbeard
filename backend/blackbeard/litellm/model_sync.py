@@ -132,7 +132,13 @@ async def add_model(name: str, spec: dict[str, Any]) -> bool:
 async def update_model(name: str, spec: dict[str, Any]) -> None:
     """Update a model on LiteLLM proxy (delete + re-add)."""
     await delete_model(name)
-    await add_model(name, spec)
+    if not await add_model(name, spec):
+        logger.error(
+            "LiteLLM update_model: re-add failed after delete for %s — "
+            "model may be missing until next sync",
+            name,
+            extra={"event": "litellm_update_readd_failed", "model_name": name},
+        )
 
 
 async def delete_model(name: str) -> bool:
@@ -186,8 +192,25 @@ async def sync_all(llm_connections: list[dict[str, Any]]) -> int:
     results = await asyncio.gather(
         *(add_model(name, spec) for name, spec in tasks), return_exceptions=True
     )
-    synced = sum(1 for r in results if r is True)
-    failed = len(results) - synced
+    synced = 0
+    failed = 0
+    for (name, _spec), result in zip(tasks, results, strict=True):
+        if result is True:
+            synced += 1
+        else:
+            failed += 1
+            if isinstance(result, BaseException):
+                logger.error(
+                    "LiteLLM sync unexpected error for model %s: %s",
+                    name,
+                    result,
+                    exc_info=result,
+                    extra={
+                        "event": "litellm_sync_model_exception",
+                        "model_name": name,
+                        "error_type": type(result).__name__,
+                    },
+                )
     logger.info(
         "LiteLLM full sync: %d models synced, %d failed",
         synced,
