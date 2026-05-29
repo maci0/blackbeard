@@ -206,7 +206,7 @@ export class BlackbeardClient {
     }
   ): Promise<ListResponse<Resource>> {
     const params = new URLSearchParams();
-    params.set("project", options?.namespace ?? "default");
+    params.set("project", options?.project ?? "default");
     if (options?.label_selector)
       params.set("label_selector", options.label_selector);
     params.set("limit", String(options?.limit ?? 100));
@@ -223,7 +223,7 @@ export class BlackbeardClient {
     project?: string
   ): Promise<Resource> {
     const params = new URLSearchParams({
-      project: namespace ?? "default",
+      project: project ?? "default",
     });
     return this.request<Resource>(
       "GET",
@@ -246,7 +246,7 @@ export class BlackbeardClient {
     project?: string
   ): Promise<Resource> {
     const params = new URLSearchParams({
-      project: namespace ?? "default",
+      project: project ?? "default",
     });
     return this.request<Resource>(
       "PUT",
@@ -257,7 +257,7 @@ export class BlackbeardClient {
 
   async delete(kind: string, name: string, project?: string): Promise<void> {
     const params = new URLSearchParams({
-      project: namespace ?? "default",
+      project: project ?? "default",
     });
     await this.request<void>(
       "DELETE",
@@ -295,7 +295,7 @@ export class BlackbeardClient {
     project?: string
   ): Promise<Execution> {
     const params = new URLSearchParams({
-      project: namespace ?? "default",
+      project: project ?? "default",
     });
     return this.request<Execution>(
       "POST",
@@ -314,7 +314,7 @@ export class BlackbeardClient {
     }
   ): Promise<Execution> {
     const params = new URLSearchParams({
-      project: options?.namespace ?? "default",
+      project: options?.project ?? "default",
     });
     return this.request<Execution>(
       "POST",
@@ -336,7 +336,7 @@ export class BlackbeardClient {
     }
   ): Promise<Execution> {
     const params = new URLSearchParams({
-      project: options?.namespace ?? "default",
+      project: options?.project ?? "default",
     });
     return this.request<Execution>(
       "POST",
@@ -354,7 +354,7 @@ export class BlackbeardClient {
     project?: string
   ): Promise<Execution> {
     const params = new URLSearchParams({
-      project: namespace ?? "default",
+      project: project ?? "default",
     });
     return this.request<Execution>(
       "POST",
@@ -379,7 +379,7 @@ export class BlackbeardClient {
   }): Promise<ListResponse<Execution>> {
     const params = new URLSearchParams();
     if (options?.crew_name) params.set("crew_name", options.crew_name);
-    if (options?.namespace) params.set("project", options.namespace);
+    if (options?.project) params.set("project", options.project);
     if (options?.status) params.set("status", options.status);
     params.set("limit", String(options?.limit ?? 100));
     params.set("offset", String(options?.offset ?? 0));
@@ -461,18 +461,18 @@ export class BlackbeardClient {
   }
 
   /** Fetch all resources by listing each kind in parallel (13 requests). For a single-request alternative, use {@link exportYaml}. */
-  async exportAll(namespace = "default"): Promise<Resource[]> {
+  async exportAll(project = "default"): Promise<Resource[]> {
     const responses = await Promise.all(
       Object.keys(KIND_PLURALS).map((kind) =>
-        this.list(kind, { namespace, limit: 1000 })
+        this.list(kind, { project, limit: 1000 })
       )
     );
     return responses.flatMap((r) => r.items);
   }
 
   /** Export all resources as a multi-document YAML string via the server's bulk export endpoint (single request). */
-  async exportYaml(namespace = "default"): Promise<string> {
-    const params = new URLSearchParams({ namespace });
+  async exportYaml(project = "default"): Promise<string> {
+    const params = new URLSearchParams({ project });
     const resp = await this.rawRequest("GET", `/api/v1/resources/export?${params}`);
     return resp.text();
   }

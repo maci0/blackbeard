@@ -252,7 +252,6 @@ class ExecutionTask(Base):
 
     __table_args__ = (
         UniqueConstraint("execution_id", "order", name="uq_exec_task_execution_order"),
-        Index("ix_exec_task_execution_order", "execution_id", "order"),
         Index("ix_exec_task_status", "status"),
         CheckConstraint("tokens_used >= 0", name="ck_exec_task_tokens_nonneg"),
         CheckConstraint("cost_usd >= 0", name="ck_exec_task_cost_nonneg"),
@@ -347,7 +346,6 @@ class ExecutionEvent(Base):
 
     __table_args__ = (
         UniqueConstraint("execution_id", "sequence", name="uq_exec_event_execution_seq"),
-        Index("ix_exec_event_execution_seq", "execution_id", "sequence"),
         CheckConstraint("sequence >= 0", name="ck_event_seq_nonneg"),
         CheckConstraint("length(event_type) >= 1", name="ck_event_type_nonempty"),
     )

@@ -31,6 +31,7 @@ const Webhooks = lazy(() => import('@/pages/Webhooks'))
 const AuditLogs = lazy(() => import('@/pages/AuditLogs'))
 const Settings = lazy(() => import('@/pages/Settings'))
 const GuardrailPlayground = lazy(() => import('@/pages/GuardrailPlayground'))
+const Credentials = lazy(() => import('@/pages/Credentials'))
 
 const PUBLIC_PATHS = new Set(['/login', '/register'])
 
@@ -137,6 +138,7 @@ function App() {
                 <Route path="automations" element={<Automations />} />
                 <Route path="webhooks" element={<Webhooks />} />
                 <Route path="audit-logs" element={<AuditLogs />} />
+                <Route path="credentials" element={<Credentials />} />
                 <Route path="guardrails/playground" element={<GuardrailPlayground />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="*" element={<NotFound />} />

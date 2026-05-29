@@ -435,7 +435,6 @@ async def test_list_executions_filter_by_status(client: AsyncClient):
     ):
         resp = await client.get("/api/v1/executions?status=running", headers=API_KEY_HEADER)
     assert resp.status_code == 200
-    assert captured_kwargs.get("status") is not None
     assert captured_kwargs["status"].value == "running"
 
 

@@ -17,16 +17,17 @@ if TYPE_CHECKING:
     from fastapi import Request, Response
     from starlette.middleware.base import RequestResponseEndpoint
 
+from blackbeard.audit import get_client_ip
 from blackbeard.auth.api_key import get_api_key
 from blackbeard.auth.dependencies import SSE_STREAM_RE
 from blackbeard.auth.jwt import decode_access_token
 from blackbeard.config import settings
-from blackbeard.logging_config import request_id_var, scrub_pii, user_id_var
+from blackbeard.logging_config import anonymize_ip, request_id_var, scrub_pii, user_id_var
 from blackbeard.rate_limiter import is_rate_limited_with_count, record_auth_failure
 
 logger = logging.getLogger(__name__)
 
-_HEALTH_PATHS = {"/api/v1/health", "/api/v1/health/ready"}
+_HEALTH_PATHS = {"/api/v1/health", "/api/v1/health/ready", "/.well-known/agent-card.json"}
 _DOCS_PATHS = {"/docs", "/openapi.json", "/redoc"}
 _AUTH_PATHS = {"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh"}
 _OIDC_PATHS = {"/api/v1/auth/oidc/login", "/api/v1/auth/oidc/callback", "/api/v1/config/public"}
@@ -67,6 +68,9 @@ _SENSITIVE_QS_PARAMS = frozenset(
         "birthday",
         "birth_date",
         "ip_address",
+        "authorization",
+        "bearer",
+        "jwt",
     }
 )
 
@@ -116,7 +120,7 @@ def _check_rate_limit(request: Request, request_id: str, client_ip: str) -> JSON
         "Auth rate limited: %s %s from %s (failures=%d)",
         request.method,
         request.url.path,
-        client_ip,
+        anonymize_ip(client_ip),
         failure_count,
         extra={
             "event": "auth_rate_limited",
@@ -145,7 +149,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     user_id_var.set("")
     start = time.monotonic()
     path = request.url.path
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request) or "unknown"
 
     if path in PUBLIC_PATHS:
         if path in _AUTH_PATHS:
@@ -208,7 +212,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
                 "JWT auth failed: %s %s from %s reason=%s (%.0fms)",
                 request.method,
                 path,
-                client_ip,
+                anonymize_ip(client_ip),
                 jwt_reason,
                 duration_ms,
                 extra={
@@ -261,7 +265,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
             "Auth failed: %s %s from %s (%.0fms)",
             request.method,
             path,
-            client_ip,
+            anonymize_ip(client_ip),
             duration_ms,
             extra={
                 "event": "auth_failure",
@@ -299,7 +303,7 @@ def _log_request(request: Request, response: Response, start: float) -> None:
     if not logger.isEnabledFor(level):
         return
 
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request) or "unknown"
     user_agent = request.headers.get("User-Agent", "")
     content_length = request.headers.get("content-length")
     resp_content_length = response.headers.get("content-length")
@@ -487,7 +491,8 @@ async def validation_exception_handler(_request: Request, exc: Exception) -> JSO
     from fastapi.encoders import jsonable_encoder
 
     rid = request_id_var.get("-")
-    errors: object = exc.errors() if callable(getattr(exc, "errors", None)) else []
+    errors_fn = getattr(exc, "errors", None)
+    errors: object = errors_fn() if callable(errors_fn) else []
     error_count = len(errors) if isinstance(errors, list) else 0
     logger.info(
         "Validation error: %s %s fields=%d",

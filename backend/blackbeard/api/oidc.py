@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
-from blackbeard.audit import log_audit
+from blackbeard.audit import get_client_ip, log_audit
 from blackbeard.auth.jwt import create_access_token, create_refresh_token
 from blackbeard.auth.passwords import hash_password
 from blackbeard.config import settings
@@ -81,7 +81,7 @@ async def oidc_login(request: Request) -> RedirectResponse:
     """Redirect to OIDC provider's authorization endpoint."""
     oauth = await _ensure_oauth()
     redirect_uri = settings.oidc_redirect_uri or str(request.url_for("oidc_callback"))
-    return await oauth.provider.authorize_redirect(request, redirect_uri)
+    return await oauth.provider.authorize_redirect(request, redirect_uri)  # type: ignore[no-any-return]
 
 
 @router.get("/callback", name="oidc_callback")
@@ -158,7 +158,7 @@ async def oidc_callback(
 
     user = await _find_or_create_user(session, email, userinfo)
 
-    ip = request.client.host if request.client else None
+    ip = get_client_ip(request)
     await log_audit(
         session,
         action="oidc_login",

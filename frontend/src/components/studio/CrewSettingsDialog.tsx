@@ -44,7 +44,8 @@ export function CrewSettingsDialog({
       void api
         .get<{ items: Resource[]; total: number }>('/api/v1/crews')
         .then((result) => setCrews(result.items))
-        .catch(() => {
+        .catch((err: unknown) => {
+          console.warn('[crew-settings] failed to fetch crews:', err)
           setCrews([])
           setFetchError(true)
         })

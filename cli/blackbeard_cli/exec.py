@@ -96,9 +96,9 @@ def executions_list(
         msg = "No executions found"
         filters = []
         if crew:
-            filters.append(f"crew={crew}")
+            filters.append(f"crew={escape(crew)}")
         if status_filter:
-            filters.append(f"status={status_filter}")
+            filters.append(f"status={escape(status_filter)}")
         if filters:
             msg += f" matching {', '.join(filters)}"
         out.print(f"[dim]{msg}.[/]")

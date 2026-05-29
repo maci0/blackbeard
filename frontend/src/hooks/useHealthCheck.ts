@@ -29,7 +29,7 @@ export function useHealthCheck(): HealthCheckResult {
       setLastChecked(new Date())
     } catch (err) {
       if (!activeRef.current) return
-      console.debug('[health] check failed:', err)
+      console.warn('[health] check failed:', err)
       setStatus('disconnected')
       setLastChecked(new Date())
     }

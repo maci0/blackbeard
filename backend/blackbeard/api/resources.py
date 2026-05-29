@@ -21,14 +21,13 @@ from blackbeard.auth.dependencies import check_resource_permission, get_current_
 from blackbeard.kinds import API_VERSION, NAME_PATTERN, PLURAL_TO_KIND, ResourceKind
 from blackbeard.litellm import model_sync
 from blackbeard.logging_config import log_task_exception
-from blackbeard.models import User, get_session
+from blackbeard.models import ResourceVersion, User, get_session
 from blackbeard.models.resource_schemas import (
     ResourceCreate,
     ResourceListResponse,
     ResourceResponse,
     ResourceUpdate,
 )
-from blackbeard.models.resource_version import ResourceVersion
 from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
 from blackbeard.resources import (
     ResourceConflictError,
@@ -94,7 +93,7 @@ async def _save_version_snapshot(
         changed_by=user.email if user else None,
     )
     session.add(snapshot)
-    await session.commit()
+    await session.flush()
 
 
 class _VersionSummary(BaseModel):
@@ -355,8 +354,8 @@ async def create_resource(
             resource_id=data.metadata.name,
             **audit_from_request(request, user),
         )
-        await session.commit()
         await _save_version_snapshot(session, resource, user)
+        await session.commit()
     except ResourceValidationError as exc:
         logger.warning(
             "Resource validation failed: %s/%s project=%s",
@@ -480,8 +479,8 @@ async def update_resource(
             resource_id=name,
             **audit_from_request(request, user),
         )
-        await session.commit()
         await _save_version_snapshot(session, resource, user)
+        await session.commit()
     except ResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ResourceConflictError as exc:
@@ -772,8 +771,8 @@ async def rollback_resource(
         detail={"rollback_to_version": body.version, "new_version": resource.version},
         **audit_from_request(request, user),
     )
-    await session.commit()
     await _save_version_snapshot(session, resource, user)
+    await session.commit()
 
     _fire_and_forget(_maybe_reload_scheduler(request, kind))
     _fire_and_forget(_sync_llm_to_litellm(kind, name, resource.spec))

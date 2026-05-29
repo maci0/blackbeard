@@ -15,6 +15,14 @@ Provide configurable safety mechanisms that validate, filter, and redact agent o
 
 **Implemented (post-MVP):** Namespace-level guardrails — Namespace resources support a `spec.guardrails` array of guardrail refs. At execution time, namespace guardrails are prepended to task-level guardrails (namespace guardrails run first). Configured via Namespace resource YAML or UI.
 
+**Implemented (post-MVP):** PII compliance presets — Guardrail and AgentPolicy PII configs support a `preset` field with values `hipaa`, `gdpr`, `pci-dss`, `ccpa`, or `custom`. Each preset maps to a curated set of Presidio entity types per the relevant compliance standard:
+- **HIPAA**: PERSON, DATE_TIME, US_SSN, PHONE_NUMBER, EMAIL_ADDRESS, LOCATION, IP_ADDRESS, MEDICAL_LICENSE, US_DRIVER_LICENSE (9 entities)
+- **GDPR**: PERSON, EMAIL_ADDRESS, PHONE_NUMBER, LOCATION, IP_ADDRESS, DATE_TIME, IBAN_CODE, NRP (8 entities)
+- **PCI-DSS**: CREDIT_CARD, IBAN_CODE, US_BANK_NUMBER, PERSON (4 entities)
+- **CCPA**: PERSON, EMAIL_ADDRESS, PHONE_NUMBER, LOCATION, IP_ADDRESS, US_SSN, US_DRIVER_LICENSE, CREDIT_CARD (8 entities)
+- **Custom**: user selects individual entities from a 13-entity master list
+Selecting a preset auto-populates the entity list. Custom entity additions are merged on top. Toggling individual entities switches preset to "custom". Studio PIINode displays preset badge + action badge + entity tags. `resolve_pii_entities()` in `pii.py` handles resolution at runtime.
+
 **Deferred to post-MVP:** Hallucination detection, crew-level guardrails, composite guardrail chains.
 
 ---

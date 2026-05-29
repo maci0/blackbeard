@@ -313,8 +313,8 @@ Examples:
     "--scope-namespace",
     "scope_ns",
     default=None,
-    metavar="NS",
-    help="Restrict binding to this namespace (separate from global -n)",
+    metavar="PROJECT",
+    help="Restrict binding to this project (separate from global -n)",
 )
 @json_opt
 @click.pass_context

@@ -35,6 +35,7 @@ import {
   Loader2,
   AlertTriangle,
   Keyboard,
+  KeyRound,
 } from 'lucide-react'
 import { useDarkMode, useHealthCheck } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
@@ -88,6 +89,7 @@ const navSections: Array<{ key: string; label: string; items: NavItem[] }> = [
       { to: '/roles', label: 'Roles', icon: Shield },
       { to: '/audit-logs', label: 'Audit Logs', icon: ScrollText },
       { to: '/webhooks', label: 'Webhooks', icon: Webhook },
+      { to: '/credentials', label: 'Credentials', icon: KeyRound },
     ],
   },
   {

@@ -114,7 +114,7 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
       }
 
       ws.onerror = (ev) => {
-        console.debug('[collab] WebSocket error:', ev)
+        console.warn('[collab] WebSocket error:', ev)
       }
 
       ws.onmessage = (event: MessageEvent) => {
@@ -122,7 +122,7 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
           const msg = JSON.parse(event.data as string) as CollabMessage
           handleIncoming(msg)
         } catch (err) {
-          console.debug('[collab] malformed WebSocket message:', err)
+          console.warn('[collab] malformed WebSocket message:', err)
         }
       }
     }

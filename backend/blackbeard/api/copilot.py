@@ -44,7 +44,7 @@ class CopilotRequest(BaseModel):
         default="default",
         pattern=NAME_PATTERN,
         max_length=255,
-        description="Namespace to look up the LLMConnection in",
+        description="Project for the LLMConnection",
     )
 
 

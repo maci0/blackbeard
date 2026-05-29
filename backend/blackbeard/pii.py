@@ -18,10 +18,12 @@ from presidio_anonymizer import AnonymizerEngine
 
 __all__ = [
     "DEFAULT_ENTITIES",
+    "PII_PRESETS",
     "LLMPIIRecognizer",
     "redact_dict",
     "redact_text",
     "reset_engines",
+    "resolve_pii_entities",
 ]
 
 logger = logging.getLogger(__name__)
@@ -42,6 +44,66 @@ DEFAULT_ENTITIES: list[str] = [
     "IBAN_CODE",
     "LOCATION",
 ]
+
+PII_PRESETS: dict[str, list[str]] = {
+    "hipaa": [
+        "PERSON",
+        "DATE_TIME",
+        "US_SSN",
+        "PHONE_NUMBER",
+        "EMAIL_ADDRESS",
+        "LOCATION",
+        "IP_ADDRESS",
+        "MEDICAL_LICENSE",
+        "US_DRIVER_LICENSE",
+    ],
+    "gdpr": [
+        "PERSON",
+        "EMAIL_ADDRESS",
+        "PHONE_NUMBER",
+        "LOCATION",
+        "IP_ADDRESS",
+        "DATE_TIME",
+        "IBAN_CODE",
+        "NRP",
+    ],
+    "pci-dss": [
+        "CREDIT_CARD",
+        "IBAN_CODE",
+        "US_BANK_NUMBER",
+        "PERSON",
+    ],
+    "ccpa": [
+        "PERSON",
+        "EMAIL_ADDRESS",
+        "PHONE_NUMBER",
+        "LOCATION",
+        "IP_ADDRESS",
+        "US_SSN",
+        "US_DRIVER_LICENSE",
+        "CREDIT_CARD",
+    ],
+}
+
+
+def resolve_pii_entities(
+    preset: str | None = None,
+    entities: list[str] | None = None,
+) -> list[str]:
+    """Resolve PII entities from a preset name and/or explicit list.
+
+    If a preset is specified, its entities are used as the base.
+    Explicit entities are merged on top (union).
+    If neither is provided, returns DEFAULT_ENTITIES.
+    """
+    result: set[str] = set()
+    if preset and preset in PII_PRESETS:
+        result.update(PII_PRESETS[preset])
+    if entities:
+        result.update(entities)
+    if not result:
+        return list(DEFAULT_ENTITIES)
+    return sorted(result)
 
 
 def _get_analyzer(config: dict[str, Any] | None = None) -> AnalyzerEngine:
@@ -73,7 +135,7 @@ def _get_anonymizer() -> AnonymizerEngine:
         global _anonymizer
         if _anonymizer is not None:
             return _anonymizer
-        _anonymizer = AnonymizerEngine()
+        _anonymizer = AnonymizerEngine()  # type: ignore[no-untyped-call]
         return _anonymizer
 
 
@@ -289,7 +351,7 @@ def redact_text(
     if not results:
         return text
 
-    anonymized = anonymizer.anonymize(text=text, analyzer_results=results)
+    anonymized = anonymizer.anonymize(text=text, analyzer_results=results)  # type: ignore[arg-type]
     return anonymized.text
 
 

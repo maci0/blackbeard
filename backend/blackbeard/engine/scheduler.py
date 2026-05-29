@@ -12,7 +12,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from croniter import croniter
+from croniter import croniter  # type: ignore[import-untyped]
 
 from blackbeard.kinds import ResourceKind
 from blackbeard.models import Resource, async_session

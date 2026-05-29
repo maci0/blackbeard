@@ -378,6 +378,11 @@ AGENT_POLICY_SCHEMA = {
                     "default": "default",
                 },
                 "model": {"type": "string", "maxLength": 255},
+                "preset": {
+                    "type": "string",
+                    "enum": ["hipaa", "gdpr", "pci-dss", "ccpa", "custom"],
+                    "default": "custom",
+                },
                 "entities": {
                     "type": "array",
                     "items": {"type": "string", "maxLength": 50},
@@ -407,6 +412,11 @@ GUARDRAIL_SCHEMA = {
         "llm": {"type": "string", "maxLength": 500},
         "json_schema": {"type": "object", "maxProperties": 200},
         "on_fail": {"type": "string", "enum": ["reject", "warn", "log"], "default": "reject"},
+        "pii_preset": {
+            "type": "string",
+            "enum": ["hipaa", "gdpr", "pci-dss", "ccpa", "custom"],
+            "default": "custom",
+        },
         "pii_entities": {
             "type": "array",
             "items": {"type": "string", "maxLength": 50},

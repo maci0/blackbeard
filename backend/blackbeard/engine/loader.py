@@ -508,7 +508,7 @@ class ResourceLoader:
             agent_kwargs["memory"] = memory_spec
         elif isinstance(memory_spec, dict):
             if memory_spec.get("enabled", True):
-                from crewai.memory.unified_memory import MemoryConfig
+                from crewai.memory.unified_memory import MemoryConfig  # type: ignore[attr-defined]
 
                 cfg_kwargs = {}
                 for key in ("recency_weight", "semantic_weight", "importance_weight"):

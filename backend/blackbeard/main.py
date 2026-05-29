@@ -19,12 +19,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
 from blackbeard import __version__
+from blackbeard.api.a2a import router as a2a_router
 from blackbeard.api.audit import router as audit_router
 from blackbeard.api.auth import router as auth_router
 from blackbeard.api.automations import router as automations_router
 from blackbeard.api.chat import router as chat_router
 from blackbeard.api.collaboration import router as collaboration_router
 from blackbeard.api.copilot import router as copilot_router
+from blackbeard.api.credentials import router as credentials_router
 from blackbeard.api.executions import router as executions_router
 from blackbeard.api.health import router as health_router
 from blackbeard.api.health import shutdown_health_clients
@@ -51,6 +53,9 @@ from blackbeard.models.database import async_session, engine
 
 configure_logging(debug=settings.debug, log_level=settings.log_level)
 logger = logging.getLogger(__name__)
+
+
+_MIN_SECRET_LENGTH = 16
 
 
 def _validate_startup_config() -> None:
@@ -86,9 +91,10 @@ def _validate_startup_config() -> None:
             file=sys.stderr,
             flush=True,
         )
-    elif len(api_key) < 16:
+    elif len(api_key) < _MIN_SECRET_LENGTH:
         raise _fatal(
-            "Refusing to start: BLACKBEARD_API_KEY is too short (minimum 16 characters). "
+            f"Refusing to start: BLACKBEARD_API_KEY is too short "
+            f"(minimum {_MIN_SECRET_LENGTH} characters). "
             'Generate a strong key with: python -c "import secrets; '
             'print(secrets.token_urlsafe(32))"'
         )
@@ -108,9 +114,10 @@ def _validate_startup_config() -> None:
                     "or set DEBUG=true for local development."
                 )
             logger.warning(warn_msg, extra={"event": event})
-        elif len(value) < 16:
+        elif len(value) < _MIN_SECRET_LENGTH:
             raise _fatal(
-                f"Refusing to start: {env_var} is too short (minimum 16 characters). "
+                f"Refusing to start: {env_var} is too short "
+                f"(minimum {_MIN_SECRET_LENGTH} characters). "
                 'Generate a strong key with: python -c "import secrets; '
                 'print(secrets.token_urlsafe(32))"'
             )
@@ -410,6 +417,8 @@ app.include_router(webhooks_router, prefix="/api/v1")
 app.include_router(automations_router, prefix="/api/v1")
 app.include_router(collaboration_router, prefix="/api/v1")
 app.include_router(copilot_router, prefix="/api/v1")
+app.include_router(credentials_router, prefix="/api/v1")
+app.include_router(a2a_router)
 
 if settings.oidc_issuer:
     from blackbeard.api.oidc import router as oidc_router

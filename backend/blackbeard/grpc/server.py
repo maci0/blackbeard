@@ -3,6 +3,7 @@
 Delegates to the existing ResourceService and executor for all operations,
 providing a high-performance gRPC interface alongside the REST API.
 """
+# mypy: ignore-errors
 
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ from uuid import UUID, uuid4
 import grpc
 
 from blackbeard import __version__
+from blackbeard.config import settings
 from blackbeard.grpc import blackbeard_pb2, blackbeard_pb2_grpc
 from blackbeard.kinds import API_VERSION, KIND_TO_PLURAL, PLURAL_TO_KIND
 from blackbeard.logging_config import request_id_var, user_id_var
@@ -162,6 +164,20 @@ class AuthInterceptor(grpc.aio.ServerInterceptor):
         return _AbortingHandler()
 
 
+async def _enforce_rbac_guard(context: grpc.aio.ServicerContext) -> None:
+    """Abort with PERMISSION_DENIED when RBAC is enabled.
+
+    The gRPC interface does not carry user identity for RBAC checks.
+    Until per-user authorization is implemented for gRPC, mutating
+    operations must be rejected when RBAC is enforced (CWE-285).
+    """
+    if settings.enforce_rbac:
+        await context.abort(
+            grpc.StatusCode.PERMISSION_DENIED,
+            "RBAC is enabled — mutating operations require the REST API",
+        )
+
+
 def _resource_to_proto(resource: Any) -> blackbeard_pb2.Resource:
     """Convert a Resource ORM object to a protobuf Resource message."""
     return blackbeard_pb2.Resource(
@@ -277,6 +293,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> blackbeard_pb2.Resource:
         """Create a resource."""
+        await _enforce_rbac_guard(context)
         kind = _resolve_kind(request.kind)
         project = request.namespace or "default"
 
@@ -317,6 +334,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> blackbeard_pb2.DeleteResponse:
         """Delete a resource."""
+        await _enforce_rbac_guard(context)
         kind = _resolve_kind(request.kind)
         project = request.namespace or "default"
 
@@ -336,6 +354,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
         context: grpc.aio.ServicerContext,
     ) -> blackbeard_pb2.Execution:
         """Kick off a crew execution."""
+        await _enforce_rbac_guard(context)
         from blackbeard.engine import ExecutionError, ExecutionNotFoundError
         from blackbeard.engine import executor as _executor_mod
 

@@ -28,8 +28,8 @@ class ResourceNotFoundError(Exception):
     def __init__(self, kind: str, name: str, project: str = "default") -> None:
         self.kind = kind
         self.name = name
-        self.namespace = namespace
-        super().__init__(f"{kind}/{name} not found in namespace '{namespace}'")
+        self.project = project
+        super().__init__(f"{kind}/{name} not found in project '{project}'")
 
 
 class ResourceConflictError(Exception):

@@ -140,6 +140,7 @@ function InviteDialog({
 
           {error && (
             <div
+              id="invite-error"
               role="alert"
               aria-live="assertive"
               className="mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -149,40 +150,45 @@ function InviteDialog({
           )}
 
           <form onSubmit={(e) => void handleSubmit(e)} className="mt-4 space-y-4">
-            <div>
-              <label htmlFor="invite-email" className="mb-1.5 block text-sm font-medium">
-                Email address <span className="text-destructive">*</span>
-              </label>
-              <input
-                id="invite-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoFocus
-                autoComplete="email"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder="user@example.com"
-              />
-            </div>
+            <fieldset disabled={submitting} className="space-y-4">
+              <div>
+                <label htmlFor="invite-email" className="mb-1.5 block text-sm font-medium">
+                  Email address <span className="text-destructive">*</span>
+                </label>
+                <input
+                  id="invite-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  aria-required="true"
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? 'invite-error' : undefined}
+                  autoFocus
+                  autoComplete="email"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  placeholder="user@example.com"
+                />
+              </div>
 
-            <div>
-              <label htmlFor="invite-role" className="mb-1.5 block text-sm font-medium">
-                Role
-              </label>
-              <select
-                id="invite-role"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {ROLE_OPTIONS.map((r) => (
-                  <option key={r} value={r} className="capitalize">
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </div>
+              <div>
+                <label htmlFor="invite-role" className="mb-1.5 block text-sm font-medium">
+                  Role
+                </label>
+                <select
+                  id="invite-role"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {ROLE_OPTIONS.map((r) => (
+                    <option key={r} value={r} className="capitalize">
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </fieldset>
 
             <div className="flex justify-end gap-3 pt-2">
               <Dialog.Close asChild>
@@ -529,6 +535,17 @@ export default function Users() {
             icon={<UsersIcon />}
             title={search ? 'No users match your search' : 'No users yet'}
             description={search ? 'Try a different search term' : 'Invite users to get started'}
+            action={
+              search
+                ? {
+                    label: 'Clear search',
+                    onClick: () => {
+                      setSearch('')
+                      searchRef.current?.focus()
+                    },
+                  }
+                : { label: 'Invite User', onClick: () => setInviteOpen(true) }
+            }
           />
         ) : (
           <div className="overflow-hidden rounded-lg border bg-card shadow-sm">

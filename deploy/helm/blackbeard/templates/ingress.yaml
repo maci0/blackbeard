@@ -28,6 +28,13 @@ spec:
                 name: {{ include "blackbeard.fullname" . }}-api
                 port:
                   name: http
+          - path: /.well-known
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "blackbeard.fullname" . }}-api
+                port:
+                  name: http
           - path: /
             pathType: Prefix
             backend:

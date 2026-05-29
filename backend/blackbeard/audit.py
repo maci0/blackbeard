@@ -7,10 +7,11 @@ Audit entries are append-only and stored in the audit_logs table.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 __all__ = [
     "audit_from_request",
+    "get_client_ip",
     "log_audit",
 ]
 
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
     from blackbeard.models.user import User
 
 from blackbeard.logging_config import request_id_var
-from blackbeard.models.audit import AuditLog
+from blackbeard.models import AuditLog
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ async def log_audit(
     actor_email: str | None = None,
     resource_type: str | None = None,
     resource_id: str | None = None,
-    detail: dict | None = None,
+    detail: dict[str, Any] | None = None,
     request_id: str | None = None,
     ip_address: str | None = None,
 ) -> AuditLog:
@@ -79,7 +80,12 @@ async def log_audit(
     return entry
 
 
-def audit_from_request(request: Request, user: User | None) -> dict:
+def get_client_ip(request: Request) -> str | None:
+    """Extract client IP from a request, returning None when unavailable."""
+    return request.client.host if request.client else None
+
+
+def audit_from_request(request: Request, user: User | None) -> dict[str, Any]:
     """Extract audit context from a FastAPI request.
 
     Returns a dict of keyword arguments suitable for passing to
@@ -89,5 +95,5 @@ def audit_from_request(request: Request, user: User | None) -> dict:
         "actor_type": "user" if user else "api_key",
         "actor_id": str(user.id) if user else "api_key",
         "actor_email": user.email if user else None,
-        "ip_address": request.client.host if request.client else None,
+        "ip_address": get_client_ip(request),
     }

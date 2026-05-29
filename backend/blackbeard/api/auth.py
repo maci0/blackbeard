@@ -16,10 +16,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
-from blackbeard.audit import log_audit
+from blackbeard.audit import get_client_ip, log_audit
 from blackbeard.auth.dependencies import bearer_401, require_jwt_user, require_user
 from blackbeard.auth.jwt import create_access_token, create_refresh_token, decode_token
 from blackbeard.auth.passwords import hash_password, verify_password
+from blackbeard.logging_config import anonymize_ip
 from blackbeard.models import User, get_session
 from blackbeard.models.user_schemas import UserResponse, user_response
 from blackbeard.rate_limiter import check_rate_limit_by_ip, registration_limiter
@@ -127,7 +128,7 @@ async def register(
     session: AsyncSession = Depends(get_session),
 ) -> AuthResponse:
     """Register a new user account."""
-    ip = request.client.host if request.client else "unknown"
+    ip = get_client_ip(request) or "unknown"
     check_rate_limit_by_ip(
         registration_limiter, ip, "Too many registration attempts. Try again later."
     )
@@ -146,7 +147,7 @@ async def register(
     except IntegrityError:
         logger.info(
             "Registration conflict from %s",
-            ip,
+            anonymize_ip(ip),
             extra={"event": "registration_conflict", "client_ip": ip},
         )
         raise HTTPException(
@@ -169,7 +170,7 @@ async def register(
     logger.info(
         "User registered: user_id=%s from %s",
         user.id,
-        ip,
+        anonymize_ip(ip),
         extra={
             "event": "user_registered",
             "user_id": str(user.id),
@@ -197,7 +198,7 @@ async def login(
 ) -> AuthResponse:
     """Authenticate with email and password."""
     email = data.email.lower()
-    ip = request.client.host if request.client else None
+    ip = get_client_ip(request)
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
@@ -221,7 +222,7 @@ async def login(
     if not valid:
         logger.warning(
             "Login failed from %s",
-            ip or "unknown",
+            anonymize_ip(ip),
             extra={
                 "event": "login_failed",
                 "client_ip": ip or "unknown",
@@ -243,7 +244,7 @@ async def login(
         logger.warning(
             "Login blocked (deactivated): user_id=%s from %s",
             user.id,
-            ip or "unknown",
+            anonymize_ip(ip),
             extra={
                 "event": "login_blocked_deactivated",
                 "user_id": str(user.id),
@@ -279,7 +280,7 @@ async def login(
     logger.info(
         "User logged in: user_id=%s from %s",
         user.id,
-        ip or "unknown",
+        anonymize_ip(ip),
         extra={
             "event": "user_login",
             "user_id": str(user.id),
@@ -397,7 +398,7 @@ async def generate_api_key(
     Returns a new API key with ``bb-`` prefix.  Any previously issued
     key for this user is replaced.
     """
-    ip = request.client.host if request.client else None
+    ip = get_client_ip(request)
     # Re-fetch with row lock to prevent concurrent API key mutations.
     result = await session.execute(select(User).where(User.id == user.id).with_for_update())
     user = result.scalar_one()
@@ -421,7 +422,7 @@ async def generate_api_key(
         "API key %s for user_id=%s from %s",
         "rotated" if had_previous else "generated",
         user.id,
-        ip or "unknown",
+        anonymize_ip(ip),
         extra={
             "event": action,
             "user_id": str(user.id),
@@ -450,7 +451,7 @@ async def revoke_api_key(
     Requires JWT Bearer authentication (API key auth is not accepted).
     Idempotent: returns 204 even if the user has no active key.
     """
-    ip = request.client.host if request.client else None
+    ip = get_client_ip(request)
     # Re-fetch with row lock to prevent concurrent API key mutations.
     result = await session.execute(select(User).where(User.id == user.id).with_for_update())
     user = result.scalar_one()
@@ -471,7 +472,7 @@ async def revoke_api_key(
     logger.info(
         "API key revoked for user_id=%s from %s",
         user.id,
-        ip or "unknown",
+        anonymize_ip(ip),
         extra={
             "event": "api_key_revoked",
             "user_id": str(user.id),

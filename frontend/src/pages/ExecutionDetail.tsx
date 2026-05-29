@@ -291,14 +291,20 @@ const TaskTimeline = memo(function TaskTimeline({
 const EVENT_COLORS: Record<string, string> = {
   crew_started: 'text-white',
   crew_completed: 'text-white',
+  crew_failed: 'text-red-400',
   task_started: 'text-blue-400',
   task_completed: 'text-blue-400',
+  task_failed: 'text-red-400',
+  agent_started: 'text-violet-300',
+  agent_completed: 'text-violet-300',
   tool_started: 'text-emerald-400',
   tool_finished: 'text-emerald-400',
+  tool_call: 'text-emerald-300',
   llm_started: 'text-violet-400',
   llm_completed: 'text-violet-400',
   hitl_request: 'text-yellow-400',
   hitl_response: 'text-yellow-400',
+  cost_alert: 'text-amber-400',
 }
 
 const eventTimeFmt = new Intl.DateTimeFormat(undefined, {

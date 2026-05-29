@@ -284,7 +284,7 @@ async def _load_crew_resources(
     rows = list(result.scalars())
     if len(rows) > _NAMESPACE_RESOURCE_LIMIT:
         logger.warning(
-            "Namespace '%s' has >%d resources; some refs may not resolve",
+            "Project '%s' has >%d resources; some refs may not resolve",
             project,
             _NAMESPACE_RESOURCE_LIMIT,
             extra={

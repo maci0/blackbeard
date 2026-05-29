@@ -71,7 +71,7 @@ seed "Namespace/default" -X POST "$API/api/v1/namespaces" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
   "kind": "Namespace",
   "metadata": {"name": "default"},
-  "spec": {"description": "Default namespace"}
+  "spec": {"description": "Default project"}
 }'
 
 # ── RBAC Roles ──────────────────────────────────────────────────────
@@ -217,7 +217,7 @@ seed "AgentPolicy/sandboxed" -X POST "$API/api/v1/agent-policies" "${H[@]}" -d '
 
 # ── Default admin user (DEBUG mode only) ────────────────────────────
 if [ "${DEBUG:-false}" = "true" ]; then
-  ADMIN_PASSWORD="${BLACKBEARD_ADMIN_PASSWORD:-$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")}"
+  ADMIN_PASSWORD="${BLACKBEARD_ADMIN_PASSWORD:-$(python3 -c "import secrets; print(secrets.token_urlsafe(16))" 2>/dev/null || openssl rand -base64 16)}"
   CREDS_FILE="${BLACKBEARD_CREDS_FILE:-.admin-credentials}"
   echo "  (DEBUG mode: creating default admin user)"
   admin_resp=$(curl -sSf -X POST "$API/api/v1/auth/register" \

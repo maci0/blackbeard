@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     import asyncio
 
 __all__ = [
+    "anonymize_ip",
     "configure_logging",
     "log_task_exception",
     "request_id_var",
@@ -116,6 +117,7 @@ _SENSITIVE_KEYS = frozenset(
         "signing_secret",
         "webhook_secret",
         "ip_address",
+        "client_ip",
     }
 )
 
@@ -129,6 +131,25 @@ _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 def scrub_pii(text: str) -> str:
     """Replace email-like patterns in exception messages to prevent PII leakage."""
     return _EMAIL_RE.sub("[EMAIL]", text)
+
+
+def anonymize_ip(ip: str | None) -> str:
+    """Mask the host portion of an IP address for privacy-safe logging.
+
+    IPv4: masks the last octet (``192.168.1.42`` → ``192.168.1.x``).
+    IPv6: masks the last 80 bits (``2001:db8::1`` → ``2001:db8:x:x:x:x:x:x``).
+    Raw IP is stored only in the audit_logs table where retention is controlled.
+    """
+    if not ip:
+        return "unknown"
+    if ":" in ip:
+        parts = ip.split(":")
+        keep = min(3, len(parts))
+        return ":".join(parts[:keep]) + ":" + ":".join("x" for _ in parts[keep:])
+    parts = ip.split(".")
+    if len(parts) == 4:
+        return f"{parts[0]}.{parts[1]}.{parts[2]}.x"
+    return ip
 
 
 def log_task_exception(task: asyncio.Task[None]) -> None:

@@ -365,7 +365,7 @@ All options live on the root `blackbeard` group and are available to every subco
 |------|---------|---------|-------------|
 | `--server` | `BLACKBEARD_SERVER` | `http://localhost:8000` | API server URL |
 | `--api-key` | `BLACKBEARD_API_KEY` | *(required for server commands)* | API authentication key |
-| `-n, --namespace` | `BLACKBEARD_NAMESPACE` | `default` | Resource namespace |
+| `-n, --project` | `BLACKBEARD_PROJECT` | `default` | Resource project |
 | `--json` | — | `false` | Output structured JSON instead of Rich tables/panels |
 | `--version` | — | — | Show version and exit |
 

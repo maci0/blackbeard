@@ -58,7 +58,7 @@ export function CrewRunner({ crewName, namespace, onComplete }: CrewRunnerProps)
       const ns = namespace ?? 'default'
       const result = await apiFetch<{ id: string }>(
         config,
-        `/api/v1/crews/${encodeURIComponent(crewName)}/kickoff?namespace=${encodeURIComponent(ns)}`,
+        `/api/v1/crews/${encodeURIComponent(crewName)}/kickoff?project=${encodeURIComponent(ns)}`,
         { method: 'POST', body: { inputs: parsedInputs } },
       )
       setExecutionId(result.id)

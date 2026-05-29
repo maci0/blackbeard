@@ -28,7 +28,7 @@ class ExecutionMixin:
         Args:
             crew_name: Name of the crew to execute.
             inputs: Key-value inputs passed to the crew.
-            namespace: Namespace containing the crew.
+            project: Project containing the crew.
 
         Returns:
             Execution dict with status=queued.
@@ -36,7 +36,7 @@ class ExecutionMixin:
         return self._send(
             "POST",
             f"/api/v1/crews/{quote(crew_name, safe='')}/kickoff",
-            params={"project": namespace},
+            params={"project": project},
             json={"inputs": inputs or {}},
         ).json()
 
@@ -55,7 +55,7 @@ class ExecutionMixin:
             inputs: Key-value inputs passed to the crew.
             n_iterations: Number of training iterations (1-100).
             filename: Filename for training data output (must end with .pkl).
-            namespace: Namespace containing the crew.
+            project: Project containing the crew.
 
         Returns:
             Execution dict with status=queued.
@@ -63,7 +63,7 @@ class ExecutionMixin:
         return self._send(
             "POST",
             f"/api/v1/crews/{quote(crew_name, safe='')}/train",
-            params={"project": namespace},
+            params={"project": project},
             json={
                 "inputs": inputs or {},
                 "n_iterations": n_iterations,
@@ -84,7 +84,7 @@ class ExecutionMixin:
             crew_name: Name of the crew to test.
             inputs: Key-value inputs passed to the crew.
             n_iterations: Number of test iterations (1-100).
-            namespace: Namespace containing the crew.
+            project: Project containing the crew.
 
         Returns:
             Execution dict with status=queued.
@@ -92,7 +92,7 @@ class ExecutionMixin:
         return self._send(
             "POST",
             f"/api/v1/crews/{quote(crew_name, safe='')}/test",
-            params={"project": namespace},
+            params={"project": project},
             json={
                 "inputs": inputs or {},
                 "n_iterations": n_iterations,
@@ -110,7 +110,7 @@ class ExecutionMixin:
         Args:
             flow_name: Name of the flow to run.
             inputs: Key-value inputs passed to the flow.
-            namespace: Namespace containing the flow.
+            project: Project containing the flow.
 
         Returns:
             Execution dict with status=queued.
@@ -118,7 +118,7 @@ class ExecutionMixin:
         return self._send(
             "POST",
             f"/api/v1/flows/{quote(flow_name, safe='')}/run",
-            params={"project": namespace},
+            params={"project": project},
             json={"inputs": inputs or {}},
         ).json()
 
@@ -148,7 +148,7 @@ class ExecutionMixin:
 
         Args:
             crew_name: Filter by crew name.
-            namespace: Filter by namespace.
+            project: Filter by project.
             status: Filter by execution status.
             limit: Maximum number of results (1-1000).
             offset: Number of results to skip.
@@ -159,8 +159,8 @@ class ExecutionMixin:
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         if crew_name:
             params["crew_name"] = crew_name
-        if namespace:
-            params["project"] = namespace
+        if project:
+            params["project"] = project
         if status:
             params["status"] = status
         return self._send(
@@ -246,7 +246,7 @@ class ExecutionMixin:
     def retry(self, execution_id: str) -> dict[str, Any]:
         """Retry a terminal execution.
 
-        Creates a new execution with the same crew, namespace, and inputs.
+        Creates a new execution with the same crew, project, and inputs.
         Only works on completed, failed, or cancelled executions.
 
         Args:

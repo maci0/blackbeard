@@ -6,7 +6,15 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,8 +45,11 @@ class ResourceVersion(Base):
 
     __table_args__ = (
         UniqueConstraint("resource_id", "version", name="uq_resource_version"),
-        Index("ix_resource_versions_resource_id", "resource_id"),
-        Index("ix_resource_versions_resource_version", "resource_id", "version"),
+        CheckConstraint("version >= 1", name="ck_resource_version_version_positive"),
+        CheckConstraint(
+            "changed_by IS NULL OR length(changed_by) >= 1",
+            name="ck_resource_version_changed_by_nonempty",
+        ),
     )
 
     def __repr__(self) -> str:

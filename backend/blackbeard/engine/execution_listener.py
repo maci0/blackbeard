@@ -45,7 +45,7 @@ from blackbeard.models import ExecutionEvent, ExecutionTask, TaskStatus
 from blackbeard.models.execution_schemas import redact_sensitive_values
 from blackbeard.pii import redact_dict as _redact_dict
 from blackbeard.pii import redact_text as _redact_text_fn
-from blackbeard.resources.validator import is_internal_host
+from blackbeard.resources import is_internal_host
 
 # ---------------------------------------------------------------------------
 # Optional OpenTelemetry integration
@@ -846,7 +846,7 @@ class BlackbeardExecutionListener(BaseEventListener):
             )
 
     def setup_listeners(self, crewai_event_bus: Any) -> None:
-        @crewai_event_bus.on(CrewKickoffStartedEvent)
+        @crewai_event_bus.on(CrewKickoffStartedEvent)  # type: ignore[untyped-decorator]
         def on_crew_started(source: Any, event: CrewKickoffStartedEvent) -> None:
             crew_name = event.crew_name or "unknown"
             raw_inputs = event.inputs or {}
@@ -867,7 +867,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 with self._lock:
                     self._otel_root_span = span
 
-        @crewai_event_bus.on(CrewKickoffCompletedEvent)
+        @crewai_event_bus.on(CrewKickoffCompletedEvent)  # type: ignore[untyped-decorator]
         def on_crew_completed(source: Any, event: CrewKickoffCompletedEvent) -> None:
             data = {"total_tokens": event.total_tokens}
             self._write_event("crew_completed", data)
@@ -879,7 +879,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 root_span.set_attribute("blackbeard.total_tokens", event.total_tokens or 0)
                 root_span.end()
 
-        @crewai_event_bus.on(TaskStartedEvent)
+        @crewai_event_bus.on(TaskStartedEvent)  # type: ignore[untyped-decorator]
         def on_task_started(source: Any, event: TaskStartedEvent) -> None:
             task_name = event.task_name or "unknown"
             data = {
@@ -909,7 +909,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 with self._lock:
                     self._otel_active_spans[f"task/{task_name}"] = span
 
-        @crewai_event_bus.on(TaskCompletedEvent)
+        @crewai_event_bus.on(TaskCompletedEvent)  # type: ignore[untyped-decorator]
         def on_task_completed(source: Any, event: TaskCompletedEvent) -> None:
             task_name = event.task_name or "unknown"
             output = str(event.output) if event.output else None
@@ -932,7 +932,7 @@ class BlackbeardExecutionListener(BaseEventListener):
             # OTEL: end task span
             self._otel_end_span(f"task/{task_name}")
 
-        @crewai_event_bus.on(ToolUsageStartedEvent)
+        @crewai_event_bus.on(ToolUsageStartedEvent)  # type: ignore[untyped-decorator]
         def on_tool_started(source: Any, event: ToolUsageStartedEvent) -> None:
             raw_args = event.tool_args
             if isinstance(raw_args, dict):
@@ -955,7 +955,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 with self._lock:
                     self._otel_active_spans[f"tool/{event.tool_name}"] = span
 
-        @crewai_event_bus.on(ToolUsageFinishedEvent)
+        @crewai_event_bus.on(ToolUsageFinishedEvent)  # type: ignore[untyped-decorator]
         def on_tool_finished(source: Any, event: ToolUsageFinishedEvent) -> None:
             duration_ms = None
             started = getattr(event, "started_at", None)
@@ -980,7 +980,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 attributes=otel_attrs,
             )
 
-        @crewai_event_bus.on(LLMCallStartedEvent)
+        @crewai_event_bus.on(LLMCallStartedEvent)  # type: ignore[untyped-decorator]
         def on_llm_started(source: Any, event: LLMCallStartedEvent) -> None:
             data = {
                 "model": event.model,
@@ -999,7 +999,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 with self._lock:
                     self._otel_active_spans[f"llm/{event.model or 'unknown'}"] = span
 
-        @crewai_event_bus.on(LLMCallCompletedEvent)
+        @crewai_event_bus.on(LLMCallCompletedEvent)  # type: ignore[untyped-decorator]
         def on_llm_completed(source: Any, event: LLMCallCompletedEvent) -> None:
             usage = event.usage or {}
             response_preview = str(event.response)[:200] if event.response else None

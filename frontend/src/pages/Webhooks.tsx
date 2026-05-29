@@ -298,6 +298,8 @@ function AddWebhookDialog({
                   id="webhook-url"
                   required
                   aria-required="true"
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? 'webhook-url-error' : undefined}
                   type="url"
                   value={url}
                   onChange={(e) => {
@@ -354,6 +356,7 @@ function AddWebhookDialog({
 
             {error && (
               <div
+                id="webhook-url-error"
                 role="alert"
                 aria-live="assertive"
                 className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"

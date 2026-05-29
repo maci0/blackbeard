@@ -35,7 +35,7 @@ export default function Login() {
       .get<{ oidc_enabled?: boolean }>('/api/v1/config/public')
       .then((d) => setOidcEnabled(d.oidc_enabled === true))
       .catch((err: unknown) => {
-        console.debug('[login] OIDC config fetch failed:', err)
+        console.warn('[login] OIDC config fetch failed:', err)
       })
   }, [])
 

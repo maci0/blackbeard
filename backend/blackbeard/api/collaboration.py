@@ -90,7 +90,7 @@ class ValkeyCollabBackend:
 
         from blackbeard.config import settings
 
-        self._redis: aioredis.Redis = aioredis.from_url(
+        self._redis: aioredis.Redis = aioredis.from_url(  # type: ignore[no-untyped-call]
             settings.valkey_url.get_secret_value(),
             decode_responses=True,
         )

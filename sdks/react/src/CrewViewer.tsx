@@ -53,7 +53,7 @@ export function CrewViewer({ crewName, namespace }: CrewViewerProps) {
       setError(null)
       try {
         const ns = namespace ?? 'default'
-        const nsParam = `namespace=${encodeURIComponent(ns)}`
+        const nsParam = `project=${encodeURIComponent(ns)}`
         const crew = await apiFetch<Resource>(config, `/api/v1/crews/${encodeURIComponent(crewName)}?${nsParam}`)
         const agentNames = ((crew.spec.agents as string[] | undefined) ?? []).map(parseRef)
         const taskNames = ((crew.spec.tasks as string[] | undefined) ?? []).map(parseRef)

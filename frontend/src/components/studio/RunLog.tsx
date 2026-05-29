@@ -105,45 +105,37 @@ export function RunLog({ events, open, onToggle, onClear, executionStatus }: Run
       )}
     >
       {/* Header bar */}
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex h-8 shrink-0 items-center gap-2 border-b px-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-      >
-        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-        <span>Run Log</span>
+      <div className="flex h-8 shrink-0 items-center border-b">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex flex-1 items-center gap-2 px-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          aria-expanded={open}
+          aria-label={open ? 'Collapse run log' : 'Expand run log'}
+        >
+          {open ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+          <span>Run Log</span>
+          {events.length > 0 && (
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold">
+              {events.length}
+            </span>
+          )}
+          {isRunning && (
+            <Loader2 className="h-3 w-3 animate-spin text-blue-500 motion-reduce:animate-none" />
+          )}
+        </button>
         {events.length > 0 && (
-          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold">
-            {events.length}
-          </span>
-        )}
-        {isRunning && (
-          <Loader2 className="h-3 w-3 animate-spin text-blue-500 motion-reduce:animate-none" />
-        )}
-        <span className="flex-1" />
-        {events.length > 0 && (
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={(e) => {
-              e.stopPropagation()
-              onClear()
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                e.stopPropagation()
-                onClear()
-              }
-            }}
-            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          <button
+            type="button"
+            onClick={onClear}
+            className="mr-2 flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Clear log"
           >
             <Trash2 className="h-2.5 w-2.5" />
             Clear
-          </span>
+          </button>
         )}
-      </button>
+      </div>
 
       {/* Log entries */}
       {open && (

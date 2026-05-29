@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from blackbeard.audit import audit_from_request, log_audit
+from blackbeard.audit import audit_from_request, get_client_ip, log_audit
 from blackbeard.auth.dependencies import require_permission
 from blackbeard.engine import ExecutionError, ExecutionNotFoundError
 from blackbeard.engine import executor as _executor_mod
@@ -96,7 +96,7 @@ async def trigger_automation(
         default="default",
         pattern=NAME_PATTERN,
         max_length=255,
-        description="Namespace",
+        description="Project",
     ),
     session: AsyncSession = Depends(get_session),
     user: User | None = Depends(require_permission("run", "Automation")),
@@ -177,7 +177,7 @@ async def webhook_trigger(
         default="default",
         pattern=NAME_PATTERN,
         max_length=255,
-        description="Namespace",
+        description="Project",
     ),
     session: AsyncSession = Depends(get_session),
 ) -> TriggerResponse:
@@ -202,7 +202,7 @@ async def webhook_trigger(
         and hmac.compare_digest(body.secret, expected_secret)
     )
     if not secret_valid:
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_client_ip(request) or "unknown"
         record_auth_failure(client_ip)
         logger.warning(
             "Webhook auth failed for automation '%s'",
@@ -237,7 +237,7 @@ async def webhook_trigger(
         },
         actor_type="system",
         actor_id=f"webhook:{name}",
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await session.commit()
 

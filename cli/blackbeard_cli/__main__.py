@@ -167,11 +167,11 @@ Common workflows:
     "--project",
     "-n",
     default="default",
-    envvar="BLACKBEARD_NAMESPACE",
+    envvar="BLACKBEARD_PROJECT",
     show_default=True,
     show_envvar=True,
     metavar="NAME",
-    help="Resource namespace",
+    help="Resource project",
 )
 @click.option(
     "--timeout",
@@ -198,7 +198,7 @@ def cli(
     ctx.ensure_object(dict)
     ctx.obj["server"] = server.rstrip("/")
     ctx.obj["api_key"] = api_key
-    ctx.obj["project"] = namespace
+    ctx.obj["project"] = project
     ctx.obj["timeout"] = float(timeout)
     ctx.obj["json"] = output_json
 
@@ -743,9 +743,9 @@ def list_resources_cmd(
 
     items = data.get("items", [])
     if not items:
-        msg = f"No {kind} resources found in namespace '{namespace}'"
+        msg = f"No {kind} resources found in project '{escape(namespace)}'"
         if labels:
-            msg += f" with labels: {', '.join(labels)}"
+            msg += f" with labels: {', '.join(escape(lbl) for lbl in labels)}"
         out.print(f"[dim]{msg}.[/]")
         return
 
@@ -805,7 +805,7 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: boo
         not yes
         and not ctx.obj["json"]
         and not click.confirm(
-            f"Delete {kind}/{name} in namespace '{namespace}' on {server}?", default=False
+            f"Delete {kind}/{name} in project '{namespace}' on {server}?", default=False
         )
     ):
         console.print("[yellow]Aborted.[/]")
@@ -827,7 +827,7 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: boo
         print_json({"deleted": f"{kind}/{name}", "project": namespace, "status": "deleted"})
         return
 
-    out.print(f"[green]✓[/] Deleted [bold]{kind}/{name}[/] from namespace '{namespace}'")
+    out.print(f"[green]✓[/] Deleted [bold]{kind}/{name}[/] from project '{escape(namespace)}'")
 
 
 @cli.command(

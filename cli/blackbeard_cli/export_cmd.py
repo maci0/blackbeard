@@ -69,7 +69,7 @@ def _fetch_resources(
 
     params: dict[str, Any] = {"limit": 1000}
     if project:
-        params["project"] = namespace
+        params["project"] = project
 
     try:
         resp = client.get(f"{server}/api/v1/{plural}", headers=headers, params=params)
@@ -224,7 +224,7 @@ def _export_all(
     with console.status("Exporting resources...") as status:
         for i, kind in enumerate(kinds, 1):
             status.update(f"Fetching {kind} ({i}/{len(kinds)})...")
-            resources = _fetch_resources(client, server, headers, kind, namespace, lenient=True)
+            resources = _fetch_resources(client, server, headers, kind, project, lenient=True)
             all_resources.extend(resources)
     return all_resources
 
@@ -245,7 +245,7 @@ def _export_single(
 
     params: dict[str, Any] = {}
     if project:
-        params["project"] = namespace
+        params["project"] = project
 
     try:
         resp = client.get(f"{server}/api/v1/{plural}/{name}", headers=headers, params=params)

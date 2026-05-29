@@ -141,13 +141,20 @@ function CreateCredentialDialog({
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) resetForm()
+        onOpenChange(v)
+      }}
+    >
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:fade-in" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
           <Dialog.Title className="text-lg font-semibold">Add Credential</Dialog.Title>
           <Dialog.Description className="mt-1 text-sm text-muted-foreground">
-            Store a secret securely. Values are encrypted at rest and never returned in full.
+            Store a secret for use by tools and integrations. Values are masked and never returned
+            in full.
           </Dialog.Description>
 
           <button
@@ -435,6 +442,7 @@ export default function Credentials() {
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 placeholder="Filter credentials…"
+                aria-label="Filter credentials by name or type"
                 className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </div>

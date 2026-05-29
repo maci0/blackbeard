@@ -473,7 +473,54 @@ function FlowStepForm({
   )
 }
 
-const PII_ENTITIES = [
+const PII_PRESETS: Record<string, { label: string; entities: string[] }> = {
+  hipaa: {
+    label: 'HIPAA',
+    entities: [
+      'PERSON',
+      'DATE_TIME',
+      'US_SSN',
+      'PHONE_NUMBER',
+      'EMAIL_ADDRESS',
+      'LOCATION',
+      'IP_ADDRESS',
+      'MEDICAL_LICENSE',
+      'US_DRIVER_LICENSE',
+    ],
+  },
+  gdpr: {
+    label: 'GDPR',
+    entities: [
+      'PERSON',
+      'EMAIL_ADDRESS',
+      'PHONE_NUMBER',
+      'LOCATION',
+      'IP_ADDRESS',
+      'DATE_TIME',
+      'IBAN_CODE',
+      'NRP',
+    ],
+  },
+  'pci-dss': {
+    label: 'PCI-DSS',
+    entities: ['CREDIT_CARD', 'IBAN_CODE', 'US_BANK_NUMBER', 'PERSON'],
+  },
+  ccpa: {
+    label: 'CCPA',
+    entities: [
+      'PERSON',
+      'EMAIL_ADDRESS',
+      'PHONE_NUMBER',
+      'LOCATION',
+      'IP_ADDRESS',
+      'US_SSN',
+      'US_DRIVER_LICENSE',
+      'CREDIT_CARD',
+    ],
+  },
+}
+
+const ALL_PII_ENTITIES = [
   'PERSON',
   'EMAIL_ADDRESS',
   'PHONE_NUMBER',
@@ -482,6 +529,11 @@ const PII_ENTITIES = [
   'IP_ADDRESS',
   'LOCATION',
   'DATE_TIME',
+  'IBAN_CODE',
+  'US_BANK_NUMBER',
+  'US_DRIVER_LICENSE',
+  'MEDICAL_LICENSE',
+  'NRP',
 ] as const
 
 function PIIForm({
@@ -492,13 +544,40 @@ function PIIForm({
   onChange: (field: string, value: unknown) => void
 }) {
   const entities = (data['entities'] as string[] | undefined) ?? []
+  const preset = (data['preset'] as string | undefined) ?? 'custom'
   const backend = str(data, 'backend') || 'default'
+
+  const handlePresetChange = (newPreset: string) => {
+    onChange('preset', newPreset)
+    if (newPreset !== 'custom' && PII_PRESETS[newPreset]) {
+      onChange('entities', PII_PRESETS[newPreset]!.entities)
+    }
+  }
 
   return (
     <div className="space-y-3">
+      <FieldGroup label="Compliance Preset">
+        <SelectInput
+          value={preset}
+          onChange={handlePresetChange}
+          options={[
+            { label: 'Custom', value: 'custom' },
+            { label: 'HIPAA', value: 'hipaa' },
+            { label: 'GDPR', value: 'gdpr' },
+            { label: 'PCI-DSS', value: 'pci-dss' },
+            { label: 'CCPA', value: 'ccpa' },
+          ]}
+        />
+        {preset !== 'custom' && PII_PRESETS[preset] && (
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {PII_PRESETS[preset]!.entities.length} entities selected by{' '}
+            {PII_PRESETS[preset]!.label} standard
+          </p>
+        )}
+      </FieldGroup>
       <FieldGroup label="Entities">
         <div className="space-y-1">
-          {PII_ENTITIES.map((entity) => (
+          {ALL_PII_ENTITIES.map((entity) => (
             <CheckboxInput
               key={entity}
               label={entity.replace(/_/g, ' ')}
@@ -506,6 +585,7 @@ function PIIForm({
               onChange={(checked) => {
                 const next = checked ? [...entities, entity] : entities.filter((e) => e !== entity)
                 onChange('entities', next)
+                onChange('preset', 'custom')
               }}
             />
           ))}

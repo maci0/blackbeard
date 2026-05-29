@@ -41,7 +41,10 @@ _SENSITIVE_INPUT_KEYS = re.compile(
     r"|ssn|social.?security|credit.?card|card.?number|bank.?account|routing.?number"
     r"|date.?of.?birth|dob|birth.?date|birthday|passport|driver.?license|national.?id"
     r"|e.?mail|phone|first.?name|last.?name|full.?name|display.?name|user.?name"
-    r"|username|address|zip.?code|postal.?code|ip.?addr)",
+    r"|username|address|zip.?code|postal.?code|ip.?addr"
+    r"|nationality|ethnicity|race|gender|sex"
+    r"|medical|diagnosis|health.?record|insurance.?number|biometric"
+    r"|tax.?id|tin|salary|income|wage)",
     re.IGNORECASE,
 )
 _REDACTED = "[REDACTED]"
@@ -346,5 +349,10 @@ class ExecutionEventsResponse(BaseModel):
     """Response for listing execution events."""
 
     events: list[ExecutionEventItem]
-    next_sequence: int
+    next_sequence: int = Field(
+        description=(
+            "Sequence number of the last returned event."
+            " Pass as 'after' to fetch the next page."
+        ),
+    )
     has_more: bool = False

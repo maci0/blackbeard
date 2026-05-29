@@ -63,7 +63,7 @@ class ResourceMixin:
         Args:
             kind: Resource kind (e.g. "Agent", "Task", "Crew") or plural
                   (e.g. "agents").
-            namespace: Namespace to filter by.
+            project: Project to filter by.
             label_selector: Comma-separated label filters (e.g. "env=prod,team=ml").
             limit: Maximum number of results (1-1000).
             offset: Number of results to skip.
@@ -73,7 +73,7 @@ class ResourceMixin:
         """
         plural = _kind_plural(kind)
         params: dict[str, Any] = {
-            "project": namespace,
+            "project": project,
             "limit": limit,
             "offset": offset,
         }
@@ -87,7 +87,7 @@ class ResourceMixin:
         Args:
             kind: Resource kind or plural.
             name: Resource name.
-            namespace: Resource namespace.
+            project: Resource project.
 
         Returns:
             Resource dict.
@@ -96,7 +96,7 @@ class ResourceMixin:
         return self._send(
             "GET",
             f"/api/v1/{plural}/{quote(name, safe='')}",
-            params={"project": namespace},
+            params={"project": project},
         ).json()
 
     def create(self, resource: dict[str, Any]) -> dict[str, Any]:
@@ -131,7 +131,7 @@ class ResourceMixin:
             name: Resource name.
             resource: Updated resource fields (must include version for
                       optimistic locking).
-            namespace: Resource namespace.
+            project: Resource project.
 
         Returns:
             Updated resource dict.
@@ -140,7 +140,7 @@ class ResourceMixin:
         return self._send(
             "PUT",
             f"/api/v1/{plural}/{quote(name, safe='')}",
-            params={"project": namespace},
+            params={"project": project},
             json=resource,
         ).json()
 
@@ -150,13 +150,13 @@ class ResourceMixin:
         Args:
             kind: Resource kind or plural.
             name: Resource name.
-            namespace: Resource namespace.
+            project: Resource project.
         """
         plural = _kind_plural(kind)
         self._send(
             "DELETE",
             f"/api/v1/{plural}/{quote(name, safe='')}",
-            params={"project": namespace},
+            params={"project": project},
         )
 
     def apply(self, resources: _DictList) -> _DictList:
@@ -187,14 +187,14 @@ class ResourceMixin:
         return results
 
     def export_all(self, project: str = "default") -> str:
-        """Export all resources in a namespace as a YAML string.
+        """Export all resources in a project as a YAML string.
 
         Uses the server's bulk export endpoint (single request) and returns
         a multi-document YAML string.  To re-import, parse with
         ``yaml.safe_load_all()`` and pass the resulting list to ``apply()``.
 
         Args:
-            namespace: Namespace to export.
+            project: Project to export.
 
         Returns:
             Multi-document YAML string.
@@ -202,5 +202,5 @@ class ResourceMixin:
         return self._send(
             "GET",
             "/api/v1/resources/export",
-            params={"project": namespace},
+            params={"project": project},
         ).text

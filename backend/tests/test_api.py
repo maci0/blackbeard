@@ -103,7 +103,7 @@ async def test_create_agent(client: AsyncClient):
     assert "id" in data
     import uuid as _uuid
 
-    assert _uuid.UUID(data["id"]), "id must be a valid UUID"
+    _uuid.UUID(data["id"])  # raises ValueError if not a valid UUID
     assert data["kind"] == "Agent"
     assert data["metadata"]["name"] == "researcher"
     assert data["metadata"]["project"] == "default"

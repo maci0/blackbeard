@@ -107,7 +107,7 @@ async def _smart_total(
     if len(items) < limit and (len(items) > 0 or offset == 0):
         return offset + len(items)
     result = await session.execute(count_stmt)
-    return result.scalar_one()
+    return int(result.scalar_one())
 
 
 def group_response(group: Group) -> GroupResponse:
@@ -164,7 +164,7 @@ async def list_users(
     """List users with pagination (requires authentication)."""
     result = await session.execute(
         select(User)
-        .options(defer(User.password_hash), defer(User.api_key))
+        .options(defer(User.password_hash), defer(User.api_key), defer(User.last_login_at))
         .order_by(User.created_at)
         .limit(limit)
         .offset(offset)
@@ -199,7 +199,7 @@ async def get_user(
     result = await session.execute(
         select(User)
         .where(User.id == user_id)
-        .options(defer(User.password_hash), defer(User.api_key))
+        .options(defer(User.password_hash), defer(User.api_key), defer(User.last_login_at))
     )
     user = result.scalar_one_or_none()
     if user is None:
@@ -229,7 +229,7 @@ async def update_user(
     result = await session.execute(
         select(User)
         .where(User.id == user_id)
-        .options(defer(User.password_hash), defer(User.api_key))
+        .options(defer(User.password_hash), defer(User.api_key), defer(User.last_login_at))
         .with_for_update()
     )
     user = result.scalar_one_or_none()
@@ -541,7 +541,7 @@ async def list_group_members(
         select(User)
         .join(GroupMember, GroupMember.user_id == User.id)
         .where(GroupMember.group_id == group_id)
-        .options(defer(User.password_hash), defer(User.api_key))
+        .options(defer(User.password_hash), defer(User.api_key), defer(User.last_login_at))
         .order_by(User.email)
         .limit(limit)
         .offset(offset)
@@ -590,7 +590,7 @@ async def add_group_member(
     user_result = await session.execute(
         select(User)
         .where(User.id == target_user_id)
-        .options(defer(User.password_hash), defer(User.api_key))
+        .options(defer(User.password_hash), defer(User.api_key), defer(User.last_login_at))
     )
     target_user = user_result.scalar_one_or_none()
     if target_user is None or not target_user.is_active:

@@ -18,7 +18,7 @@ from blackbeard.config import settings
 from blackbeard.http_client import get_litellm_client
 from blackbeard.kinds import API_VERSION, ResourceKind
 from blackbeard.logging_config import request_id_var
-from blackbeard.resources.validator import validate_resource
+from blackbeard.resources import validate_resource
 
 logger = logging.getLogger(__name__)
 

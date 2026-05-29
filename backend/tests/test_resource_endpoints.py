@@ -18,7 +18,7 @@ from tests.conftest import API_KEY_HEADER, _agent_payload
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(reason="SQLite lacks JSON filtering; passes on PostgreSQL", strict=False)
+@pytest.mark.skip(reason="SQLite lacks JSON filtering; passes on PostgreSQL")
 async def test_list_with_label_selector(client: AsyncClient):
     """GET /agents?label_selector=env=prod filters by label."""
     # Create agent with labels
@@ -136,7 +136,7 @@ async def test_update_with_project_mismatch(client: AsyncClient):
 # ---------------------------------------------------------------------------
 
 
-async def test_unknown_kind_404_on_get(client: AsyncClient):
+async def test_unknown_kind_returns_422(client: AsyncClient):
     """GET /api/v1/unknownkind should return 422 (pattern doesn't match)."""
     resp = await client.get("/api/v1/unknownkind", headers=API_KEY_HEADER)
     assert resp.status_code == 422
@@ -157,11 +157,18 @@ async def test_create_and_list_tool(client: AsyncClient):
     }
     r = await client.post("/api/v1/tools", json=payload, headers=API_KEY_HEADER)
     assert r.status_code == 201
+    data = r.json()
+    assert data["kind"] == "Tool"
+    assert data["spec"]["type"] == "builtin"
+    assert data["spec"]["description"] == "Search the web"
+    assert data["version"] == 1
 
     resp = await client.get("/api/v1/tools", headers=API_KEY_HEADER)
     assert resp.status_code == 200
     assert resp.json()["total"] == 1
-    assert resp.json()["items"][0]["metadata"]["name"] == "web-search"
+    item = resp.json()["items"][0]
+    assert item["metadata"]["name"] == "web-search"
+    assert item["spec"]["type"] == "builtin"
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +177,7 @@ async def test_create_and_list_tool(client: AsyncClient):
 
 
 async def test_create_guardrail(client: AsyncClient):
-    """Create a Guardrail resource."""
+    """Create a Guardrail resource and verify stored spec."""
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "Guardrail",
@@ -183,7 +190,12 @@ async def test_create_guardrail(client: AsyncClient):
     }
     r = await client.post("/api/v1/guardrails", json=payload, headers=API_KEY_HEADER)
     assert r.status_code == 201
-    assert r.json()["kind"] == "Guardrail"
+    data = r.json()
+    assert data["kind"] == "Guardrail"
+    assert data["metadata"]["name"] == "no-pii"
+    assert data["spec"]["type"] == "function"
+    assert data["spec"]["function_path"] == "blackbeard.guardrails.check_pii"
+    assert data["version"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +204,7 @@ async def test_create_guardrail(client: AsyncClient):
 
 
 async def test_create_knowledge_source(client: AsyncClient):
-    """Create a KnowledgeSource resource."""
+    """Create a KnowledgeSource resource and verify stored spec."""
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "KnowledgeSource",
@@ -203,7 +215,11 @@ async def test_create_knowledge_source(client: AsyncClient):
     }
     r = await client.post("/api/v1/knowledge-sources", json=payload, headers=API_KEY_HEADER)
     assert r.status_code == 201
-    assert r.json()["kind"] == "KnowledgeSource"
+    data = r.json()
+    assert data["kind"] == "KnowledgeSource"
+    assert data["metadata"]["name"] == "docs-db"
+    assert data["spec"]["type"] == "text"
+    assert data["version"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +228,7 @@ async def test_create_knowledge_source(client: AsyncClient):
 
 
 async def test_create_agent_policy(client: AsyncClient):
-    """Create an AgentPolicy resource."""
+    """Create an AgentPolicy resource and verify stored spec."""
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "AgentPolicy",
@@ -226,4 +242,9 @@ async def test_create_agent_policy(client: AsyncClient):
     }
     r = await client.post("/api/v1/agent-policies", json=payload, headers=API_KEY_HEADER)
     assert r.status_code == 201
-    assert r.json()["kind"] == "AgentPolicy"
+    data = r.json()
+    assert data["kind"] == "AgentPolicy"
+    assert data["metadata"]["name"] == "budget-policy"
+    assert data["spec"]["budget"]["max_tokens"] == 10000
+    assert data["spec"]["budget"]["max_usd"] == 5.0
+    assert data["version"] == 1
