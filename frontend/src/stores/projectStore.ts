@@ -3,28 +3,28 @@ import { api } from '@/api/client'
 import type { Resource } from '@/lib/types'
 import { STORAGE_KEYS } from '@/lib/utils'
 
-interface NamespaceState {
+interface ProjectState {
   current: string
-  namespaces: string[]
+  projects: string[]
   loading: boolean
   error: string | null
   setCurrent: (ns: string) => void
-  fetchNamespaces: () => Promise<void>
-  createNamespace: (name: string) => Promise<void>
+  fetchProjects: () => Promise<void>
+  createProject: (name: string) => Promise<void>
 }
 
-export const useNamespaceStore = create<NamespaceState>((set, get) => ({
-  current: localStorage.getItem(STORAGE_KEYS.NAMESPACE) ?? 'default',
-  namespaces: ['default'],
+export const useProjectStore = create<ProjectState>((set, get) => ({
+  current: localStorage.getItem(STORAGE_KEYS.PROJECT) ?? 'default',
+  projects: ['default'],
   loading: false,
   error: null,
 
   setCurrent: (ns: string) => {
-    localStorage.setItem(STORAGE_KEYS.NAMESPACE, ns)
+    localStorage.setItem(STORAGE_KEYS.PROJECT, ns)
     set({ current: ns })
   },
 
-  fetchNamespaces: async () => {
+  fetchProjects: async () => {
     if (get().loading) return
     set({ loading: true, error: null })
     try {
@@ -33,23 +33,23 @@ export const useNamespaceStore = create<NamespaceState>((set, get) => ({
       if (!names.includes('default')) {
         names.unshift('default')
       }
-      set({ namespaces: names, loading: false })
+      set({ projects: names, loading: false })
     } catch {
-      set({ loading: false, error: 'Failed to load namespaces' })
+      set({ loading: false, error: 'Failed to load projects' })
     }
   },
 
-  createNamespace: async (name: string) => {
+  createProject: async (name: string) => {
     await api.post<Resource>('/api/v1/namespaces', {
       apiVersion: 'blackbeard/v1',
       kind: 'Namespace',
-      metadata: { name, namespace: 'default' },
+      metadata: { name, project: 'default' },
       spec: {},
     })
-    const names = [...get().namespaces]
+    const names = [...get().projects]
     if (!names.includes(name)) {
       names.push(name)
     }
-    set({ namespaces: names })
+    set({ projects: names })
   },
 }))

@@ -408,7 +408,7 @@ def test_sanitize_error_exactly_500_chars_not_truncated():
 
 def test_sanitize_error_safe_prefix_passthrough():
     """Errors starting with safe prefixes should be returned as-is."""
-    msg = "Crew 'my-crew' not found in namespace 'default'"
+    msg = "Crew 'my-crew' not found in project 'default'"
     assert _sanitize_error(msg) == msg
 
 
@@ -642,7 +642,7 @@ def test_build_principal_chain_without_user():
         "Agent/researcher": {
             "kind": "Agent",
             "name": "researcher",
-            "namespace": "default",
+            "project": "default",
             "spec": {"role": "R", "goal": "G", "backstory": "B"},
         },
     }
@@ -662,7 +662,7 @@ def test_build_principal_chain_with_custom_service_account():
         "Agent/deployer": {
             "kind": "Agent",
             "name": "deployer",
-            "namespace": "default",
+            "project": "default",
             "spec": {
                 "role": "R",
                 "goal": "G",
@@ -692,7 +692,7 @@ def test_build_principal_chain_with_user():
         "Agent/researcher": {
             "kind": "Agent",
             "name": "researcher",
-            "namespace": "default",
+            "project": "default",
             "spec": {"role": "R", "goal": "G", "backstory": "B"},
         },
     }
@@ -714,19 +714,19 @@ def test_build_principal_chain_skips_non_agent_resources():
         "Crew/my-crew": {
             "kind": "Crew",
             "name": "my-crew",
-            "namespace": "default",
+            "project": "default",
             "spec": {"process": "sequential", "agents": [], "tasks": []},
         },
         "Agent/worker": {
             "kind": "Agent",
             "name": "worker",
-            "namespace": "default",
+            "project": "default",
             "spec": {"role": "R", "goal": "G", "backstory": "B"},
         },
         "Task/do-stuff": {
             "kind": "Task",
             "name": "do-stuff",
-            "namespace": "default",
+            "project": "default",
             "spec": {
                 "description": "D",
                 "expected_output": "E",
@@ -740,7 +740,7 @@ def test_build_principal_chain_skips_non_agent_resources():
 
 
 def test_snapshot_resource_captures_essentials():
-    """_snapshot_resource should capture kind/name/namespace/spec only."""
+    """_snapshot_resource should capture kind/name/project/spec only."""
     from blackbeard.engine.executor import _snapshot_resource
     from blackbeard.kinds import ResourceKind
     from blackbeard.models.resource import Resource
@@ -748,7 +748,7 @@ def test_snapshot_resource_captures_essentials():
     r = Resource()
     r.kind = ResourceKind.AGENT
     r.name = "test-agent"
-    r.namespace = "default"
+    r.project = "default"
     r.spec = {"role": "R", "goal": "G", "backstory": "B"}
     r.raw_yaml = "should-not-appear"
     r.labels = {"env": "test"}
@@ -757,7 +757,7 @@ def test_snapshot_resource_captures_essentials():
     assert snap == {
         "kind": "Agent",
         "name": "test-agent",
-        "namespace": "default",
+        "project": "default",
         "spec": {"role": "R", "goal": "G", "backstory": "B"},
     }
     assert "raw_yaml" not in snap
@@ -773,7 +773,7 @@ def test_snapshot_resource_none_spec():
     r = Resource()
     r.kind = ResourceKind.TOOL
     r.name = "empty-tool"
-    r.namespace = "default"
+    r.project = "default"
     r.spec = None
 
     snap = _snapshot_resource(r)
@@ -790,7 +790,7 @@ def test_snapshot_resource_spec_is_copy():
     r = Resource()
     r.kind = ResourceKind.AGENT
     r.name = "ag"
-    r.namespace = "default"
+    r.project = "default"
     r.spec = original_spec
 
     snap = _snapshot_resource(r)
@@ -891,7 +891,7 @@ async def test_execution_response_has_required_fields(client: AsyncClient):
     required_fields = {
         "id",
         "crew_name",
-        "crew_namespace",
+        "crew_project",
         "status",
         "inputs",
         "total_tokens",
@@ -913,7 +913,7 @@ async def test_execution_response_has_required_fields(client: AsyncClient):
     if isinstance(data["cost_usd"], str):
         parsed = float(data["cost_usd"])
         assert parsed >= 0, f"cost_usd must be non-negative, got {parsed}"
-    assert data["crew_namespace"] == "default"
+    assert data["crew_project"] == "default"
     assert data["total_tokens"] == 0
     assert data["prompt_tokens"] == 0
     assert data["completion_tokens"] == 0

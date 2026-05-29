@@ -34,12 +34,12 @@ def test_muninn_backend_init_defaults():
         backend = MuninnMemoryBackend(
             url="http://muninn:8475",
             agent_name="researcher",
-            namespace="prod",
+            project="prod",
         )
         assert backend._url == "http://muninn:8475"
         assert backend._agent_name == "researcher"
-        assert backend._namespace == "prod"
-        assert backend._vault == "prod"  # defaults to namespace
+        assert backend._project == "prod"
+        assert backend._vault == "prod"  # defaults to project
         assert backend._token is None
 
 
@@ -69,7 +69,7 @@ async def test_muninn_backend_store_calls_write():
         backend = MuninnMemoryBackend(
             url="http://test:8475",
             agent_name="researcher",
-            namespace="default",
+            project="default",
         )
 
         mock_result = MagicMock()
@@ -106,7 +106,7 @@ async def test_muninn_backend_store_defaults():
         backend = MuninnMemoryBackend(
             url="http://test:8475",
             agent_name="my-agent",
-            namespace="ns1",
+            project="ns1",
         )
 
         mock_result = MagicMock()
@@ -134,7 +134,7 @@ async def test_muninn_backend_recall_calls_activate():
         backend = MuninnMemoryBackend(
             url="http://test:8475",
             agent_name="researcher",
-            namespace="default",
+            project="default",
         )
 
         mock_activation = MagicMock()
@@ -182,7 +182,7 @@ def test_muninn_backend_search_sync():
         backend = MuninnMemoryBackend(
             url="http://test:8475",
             agent_name="researcher",
-            namespace="default",
+            project="default",
         )
 
         expected = [{"content": "result", "concept": "c", "score": 0.9}]
@@ -328,7 +328,7 @@ def test_build_crew_muninndb_memory_creates_backend(
         call_args = mock_build.call_args
         assert call_args[0][0]["provider"] == "muninndb"
         assert call_args[0][0]["muninndb_url"] == "http://muninn:8475"
-        assert call_args[0][1] == "default"  # namespace
+        assert call_args[0][1] == "default"  # project
 
 
 @patch("blackbeard.engine.loader.LLM")
@@ -380,12 +380,12 @@ def test_build_muninndb_backend_method():
                 "muninndb_url": "http://custom:9999",
                 "muninndb_vault": "my-vault",
             },
-            namespace="prod",
+            project="prod",
         )
 
     assert backend._url == "http://custom:9999"
     assert backend._vault == "my-vault"
-    assert backend._namespace == "prod"
+    assert backend._project == "prod"
 
 
 def test_build_muninndb_backend_defaults():
@@ -395,10 +395,10 @@ def test_build_muninndb_backend_defaults():
     with patch("blackbeard.engine.memory.muninn.HAS_MUNINN", True):
         backend = loader._build_muninndb_backend(
             {"provider": "muninndb"},
-            namespace="default",
+            project="default",
         )
 
-    assert backend._vault == "default"  # defaults to namespace
+    assert backend._vault == "default"  # defaults to project
 
 
 def test_build_muninndb_backend_import_error():
@@ -411,7 +411,7 @@ def test_build_muninndb_backend_import_error():
     ):
         loader._build_muninndb_backend(
             {"provider": "muninndb"},
-            namespace="default",
+            project="default",
         )
 
 
@@ -426,7 +426,7 @@ def test_build_muninndb_backend_token_from_env(monkeypatch):
                 "provider": "muninndb",
                 "muninndb_token_env": "MUNINN_SECRET_TOKEN",
             },
-            namespace="default",
+            project="default",
         )
 
     assert backend._token == "my-secret"

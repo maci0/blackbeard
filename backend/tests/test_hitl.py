@@ -174,7 +174,7 @@ async def test_hitl_response_sequence_starts_at_zero(db_session):
 
     execution = Execution(
         crew_name="test-crew",
-        crew_namespace="default",
+        crew_project="default",
         status=ExecutionStatus.RUNNING,
         started_at=datetime.now(UTC),
         inputs={},
@@ -205,7 +205,7 @@ async def test_record_hitl_response_event_type(db_session):
     # Create an execution in the DB
     execution = Execution(
         crew_name="test-crew",
-        crew_namespace="default",
+        crew_project="default",
         status=ExecutionStatus.RUNNING,
         started_at=datetime.now(UTC),
         inputs={},
@@ -237,7 +237,7 @@ async def test_record_hitl_response_without_feedback(db_session):
 
     execution = Execution(
         crew_name="test-crew",
-        crew_namespace="default",
+        crew_project="default",
         status=ExecutionStatus.RUNNING,
         started_at=datetime.now(UTC),
         inputs={},

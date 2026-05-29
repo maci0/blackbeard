@@ -213,25 +213,25 @@ class TestResourceEdgeCases:
         transport.queue(
             _mock_response(200, {"kind": "Agent", "metadata": {"name": "test"}})
         )
-        client.get("Agent", "test", namespace="prod")
+        client.get("Agent", "test", project="prod")
         req = transport.requests[0]
-        assert "namespace=prod" in str(req.url)
+        assert "project=prod" in str(req.url)
 
     def test_update_with_custom_namespace(
         self, client: BlackbeardClient, transport: MockTransport
     ) -> None:
         transport.queue(_mock_response(200, {"kind": "Agent", "version": 2}))
-        client.update("Agent", "test", {"spec": {}, "version": 1}, namespace="staging")
+        client.update("Agent", "test", {"spec": {}, "version": 1}, project="staging")
         req = transport.requests[0]
-        assert "namespace=staging" in str(req.url)
+        assert "project=staging" in str(req.url)
 
     def test_delete_with_custom_namespace(
         self, client: BlackbeardClient, transport: MockTransport
     ) -> None:
         transport.queue(_mock_response(204))
-        client.delete("Agent", "test", namespace="prod")
+        client.delete("Agent", "test", project="prod")
         req = transport.requests[0]
-        assert "namespace=prod" in str(req.url)
+        assert "project=prod" in str(req.url)
 
     def test_apply_empty_list(
         self, client: BlackbeardClient, transport: MockTransport
@@ -258,9 +258,9 @@ class TestExecutionEdgeCases:
         self, client: BlackbeardClient, transport: MockTransport
     ) -> None:
         transport.queue(_mock_response(202, {"id": "exec-x", "status": "queued"}))
-        client.kickoff("my-crew", namespace="prod")
+        client.kickoff("my-crew", project="prod")
         req = transport.requests[0]
-        assert "namespace=prod" in str(req.url)
+        assert "project=prod" in str(req.url)
 
     def test_train_with_custom_filename(
         self, client: BlackbeardClient, transport: MockTransport
@@ -313,7 +313,7 @@ class TestExecutionEdgeCases:
         )
         items = client.list_executions(
             crew_name="my-crew",
-            namespace="prod",
+            project="prod",
             status="completed",
             limit=50,
             offset=10,
@@ -322,7 +322,7 @@ class TestExecutionEdgeCases:
         req = transport.requests[0]
         url_str = str(req.url)
         assert "crew_name=my-crew" in url_str
-        assert "namespace=prod" in url_str
+        assert "project=prod" in url_str
         assert "status=completed" in url_str
         assert "limit=50" in url_str
         assert "offset=10" in url_str
@@ -449,9 +449,9 @@ class TestExportAll:
                 headers={"content-type": "application/x-yaml"},
             )
         )
-        client.export_all(namespace="staging")
+        client.export_all(project="staging")
         assert len(transport.requests) == 1
-        assert "namespace=staging" in str(transport.requests[0].url)
+        assert "project=staging" in str(transport.requests[0].url)
 
 
 # -- kind_plural edge cases ---------------------------------------------------

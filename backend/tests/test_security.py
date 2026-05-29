@@ -283,11 +283,11 @@ def test_redact_query_string_strips_api_key():
     """api_key parameter must be redacted from logged query strings."""
     from blackbeard.api.middleware import _redact_query_string
 
-    result = _redact_query_string("api_key=super-secret&namespace=default")
+    result = _redact_query_string("api_key=super-secret&project=default")
     assert "super-secret" not in result
     # urlencode may percent-encode brackets; check the key is paired with redacted value
     assert "api_key=" in result
-    assert "namespace=default" in result
+    assert "project=default" in result
 
 
 def test_redact_query_string_case_insensitive():
@@ -303,8 +303,8 @@ def test_redact_query_string_preserves_safe_params():
     """Non-sensitive parameters must pass through unmodified."""
     from blackbeard.api.middleware import _redact_query_string
 
-    result = _redact_query_string("namespace=prod&limit=50")
-    assert result == "namespace=prod&limit=50"
+    result = _redact_query_string("project=prod&limit=50")
+    assert result == "project=prod&limit=50"
 
 
 def test_redact_query_string_empty():

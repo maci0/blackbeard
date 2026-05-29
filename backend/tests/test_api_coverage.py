@@ -340,7 +340,7 @@ apiVersion: blackbeard/v1
 kind: Agent
 metadata:
   name: good-agent
-  namespace: default
+  project: default
 spec:
   role: R
   goal: G
@@ -446,13 +446,13 @@ async def test_copilot_endpoint_transport_error(client: AsyncClient, db_session:
     assert "failed" in resp.json()["detail"].lower()
 
 
-async def test_copilot_endpoint_with_namespace(client: AsyncClient, db_session: AsyncSession):
-    """Copilot endpoint accepts namespace parameter."""
+async def test_copilot_endpoint_with_project(client: AsyncClient, db_session: AsyncSession):
+    """Copilot endpoint accepts project parameter."""
     resp = await client.post(
         "/api/v1/copilot/generate",
         json={
             "prompt": "Build me a research crew that finds facts about topics",
-            "namespace": "custom-ns",
+            "project": "custom-ns",
         },
         headers=API_KEY_HEADER,
     )

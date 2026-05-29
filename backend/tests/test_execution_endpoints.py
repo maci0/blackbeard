@@ -28,7 +28,7 @@ def _crew_payload(name: str = "test-crew") -> dict:
     return {
         "apiVersion": "blackbeard/v1",
         "kind": "Crew",
-        "metadata": {"name": name, "namespace": "default"},
+        "metadata": {"name": name, "project": "default"},
         "spec": {
             "agents": [],
             "tasks": [],
@@ -42,7 +42,7 @@ def _flow_payload(name: str = "test-flow") -> dict:
     return {
         "apiVersion": "blackbeard/v1",
         "kind": "Flow",
-        "metadata": {"name": name, "namespace": "default"},
+        "metadata": {"name": name, "project": "default"},
         "spec": {
             "steps": [
                 {"name": "step-1", "type": "crew", "crew": "ref:crews/test-crew"},
@@ -69,7 +69,7 @@ def _make_mock_execution(
     crew_name: str = "test-crew",
     execution_type: str = "kickoff",
     status: str = "queued",
-    namespace: str = "default",
+    project: str = "default",
 ) -> object:
     """Build a detached Execution ORM object for mocking executor returns."""
     from blackbeard.models.execution import Execution, ExecutionStatus, ExecutionType
@@ -77,7 +77,7 @@ def _make_mock_execution(
     e = Execution()
     e.id = uuid.uuid4()
     e.crew_name = crew_name
-    e.crew_namespace = namespace
+    e.crew_project = project
     e.execution_type = ExecutionType(execution_type)
     e.status = ExecutionStatus(status)
     e.inputs = {}
@@ -147,7 +147,7 @@ async def test_kickoff_crew_with_inputs(client: AsyncClient):
     mock_exec = _make_mock_execution()
     captured_inputs = {}
 
-    async def _capture_kickoff(session, crew_name, inputs, namespace, user=None):
+    async def _capture_kickoff(session, crew_name, inputs, project, user=None):
         captured_inputs.update(inputs)
         return mock_exec
 

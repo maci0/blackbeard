@@ -22,6 +22,7 @@ from blackbeard.models.execution import (
     TaskStatus,
 )
 from blackbeard.models.resource import Resource, ResourceRef
+from blackbeard.models.resource_version import ResourceVersion
 from blackbeard.models.user import Group, GroupMember, User
 from blackbeard.models.webhook import Webhook
 
@@ -39,6 +40,7 @@ __all__ = [
     "GroupMember",
     "Resource",
     "ResourceRef",
+    "ResourceVersion",
     "TaskStatus",
     "User",
     "Webhook",

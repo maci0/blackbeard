@@ -319,7 +319,7 @@ class TestGetPIIConfig:
             "Crew/test-crew": {
                 "kind": "Crew",
                 "name": "test-crew",
-                "namespace": "default",
+                "project": "default",
                 "spec": {
                     "process": "sequential",
                     "agents": ["ref:agents/researcher"],
@@ -329,7 +329,7 @@ class TestGetPIIConfig:
             "Agent/researcher": {
                 "kind": "Agent",
                 "name": "researcher",
-                "namespace": "default",
+                "project": "default",
                 "spec": {
                     "role": "Researcher",
                     "goal": "Research",
@@ -346,7 +346,7 @@ class TestGetPIIConfig:
             "Crew/test-crew": {
                 "kind": "Crew",
                 "name": "test-crew",
-                "namespace": "default",
+                "project": "default",
                 "spec": {
                     "process": "sequential",
                     "agents": ["ref:agents/researcher"],
@@ -356,7 +356,7 @@ class TestGetPIIConfig:
             "Agent/researcher": {
                 "kind": "Agent",
                 "name": "researcher",
-                "namespace": "default",
+                "project": "default",
                 "spec": {
                     "role": "Researcher",
                     "goal": "Research",
@@ -367,7 +367,7 @@ class TestGetPIIConfig:
             "AgentPolicy/strict": {
                 "kind": "AgentPolicy",
                 "name": "strict",
-                "namespace": "default",
+                "project": "default",
                 "spec": {
                     "pii": {
                         "enabled": True,
@@ -389,7 +389,7 @@ class TestGetPIIConfig:
             "Crew/test-crew": {
                 "kind": "Crew",
                 "name": "test-crew",
-                "namespace": "default",
+                "project": "default",
                 "spec": {
                     "process": "sequential",
                     "agents": ["ref:agents/researcher"],
@@ -399,7 +399,7 @@ class TestGetPIIConfig:
             "Agent/researcher": {
                 "kind": "Agent",
                 "name": "researcher",
-                "namespace": "default",
+                "project": "default",
                 "spec": {
                     "role": "Researcher",
                     "goal": "Research",
@@ -410,7 +410,7 @@ class TestGetPIIConfig:
             "AgentPolicy/relaxed": {
                 "kind": "AgentPolicy",
                 "name": "relaxed",
-                "namespace": "default",
+                "project": "default",
                 "spec": {
                     "pii": {
                         "enabled": False,
@@ -427,7 +427,7 @@ class TestGetPIIConfig:
             "Crew/test-crew": {
                 "kind": "Crew",
                 "name": "test-crew",
-                "namespace": "default",
+                "project": "default",
                 "spec": {
                     "process": "sequential",
                     "agents": ["ref:agents/researcher"],
@@ -438,7 +438,7 @@ class TestGetPIIConfig:
             "Agent/researcher": {
                 "kind": "Agent",
                 "name": "researcher",
-                "namespace": "default",
+                "project": "default",
                 "spec": {
                     "role": "Researcher",
                     "goal": "Research",
@@ -448,7 +448,7 @@ class TestGetPIIConfig:
             "AgentPolicy/default-pii": {
                 "kind": "AgentPolicy",
                 "name": "default-pii",
-                "namespace": "default",
+                "project": "default",
                 "spec": {
                     "pii": {
                         "enabled": True,

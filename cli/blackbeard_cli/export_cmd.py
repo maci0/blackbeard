@@ -30,9 +30,9 @@ def _strip_server_fields(resource: dict[str, Any]) -> dict[str, Any]:
     """Keep only apiVersion, kind, metadata (name/namespace/labels), and spec."""
     meta = resource.get("metadata", {})
     clean_meta: dict[str, Any] = {"name": meta.get("name", "")}
-    ns = meta.get("namespace")
+    ns = meta.get("project")
     if ns and ns != "default":
-        clean_meta["namespace"] = ns
+        clean_meta["project"] = ns
     labels = meta.get("labels")
     if labels:
         clean_meta["labels"] = labels
@@ -50,7 +50,7 @@ def _fetch_resources(
     server: str,
     headers: dict[str, str],
     kind: str,
-    namespace: str | None,
+    project: str | None,
     *,
     lenient: bool = False,
 ) -> list[dict[str, Any]]:
@@ -68,8 +68,8 @@ def _fetch_resources(
         raise SystemExit(2)
 
     params: dict[str, Any] = {"limit": 1000}
-    if namespace:
-        params["namespace"] = namespace
+    if project:
+        params["project"] = namespace
 
     try:
         resp = client.get(f"{server}/api/v1/{plural}", headers=headers, params=params)
@@ -138,7 +138,7 @@ def export_cmd(
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
-    namespace = ctx.obj["namespace"]
+    namespace = ctx.obj["project"]
 
     if not export_all and not kind:
         console.print("[red bold]Error:[/] Specify a Kind or use --all.")
@@ -216,7 +216,7 @@ def _export_all(
     client: httpx.Client,
     server: str,
     headers: dict[str, str],
-    namespace: str | None,
+    project: str | None,
 ) -> list[dict[str, Any]]:
     """Fetch all resources of all kinds."""
     all_resources: list[dict[str, Any]] = []
@@ -235,7 +235,7 @@ def _export_single(
     headers: dict[str, str],
     kind: str,
     name: str,
-    namespace: str | None,
+    project: str | None,
 ) -> list[dict[str, Any]]:
     """Fetch a single resource by kind and name."""
     plural = KIND_TO_PLURAL.get(kind)
@@ -244,8 +244,8 @@ def _export_single(
         raise SystemExit(2)
 
     params: dict[str, Any] = {}
-    if namespace:
-        params["namespace"] = namespace
+    if project:
+        params["project"] = namespace
 
     try:
         resp = client.get(f"{server}/api/v1/{plural}/{name}", headers=headers, params=params)

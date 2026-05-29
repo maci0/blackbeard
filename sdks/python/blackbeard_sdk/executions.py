@@ -21,7 +21,7 @@ class ExecutionMixin:
         self,
         crew_name: str,
         inputs: dict[str, Any] | None = None,
-        namespace: str = "default",
+        project: str = "default",
     ) -> dict[str, Any]:
         """Kick off a crew execution.
 
@@ -36,7 +36,7 @@ class ExecutionMixin:
         return self._send(
             "POST",
             f"/api/v1/crews/{quote(crew_name, safe='')}/kickoff",
-            params={"namespace": namespace},
+            params={"project": namespace},
             json={"inputs": inputs or {}},
         ).json()
 
@@ -46,7 +46,7 @@ class ExecutionMixin:
         inputs: dict[str, Any] | None = None,
         n_iterations: int = 3,
         filename: str = "training_data.pkl",
-        namespace: str = "default",
+        project: str = "default",
     ) -> dict[str, Any]:
         """Start a crew training run.
 
@@ -63,7 +63,7 @@ class ExecutionMixin:
         return self._send(
             "POST",
             f"/api/v1/crews/{quote(crew_name, safe='')}/train",
-            params={"namespace": namespace},
+            params={"project": namespace},
             json={
                 "inputs": inputs or {},
                 "n_iterations": n_iterations,
@@ -76,7 +76,7 @@ class ExecutionMixin:
         crew_name: str,
         inputs: dict[str, Any] | None = None,
         n_iterations: int = 3,
-        namespace: str = "default",
+        project: str = "default",
     ) -> dict[str, Any]:
         """Start a crew test run.
 
@@ -92,7 +92,7 @@ class ExecutionMixin:
         return self._send(
             "POST",
             f"/api/v1/crews/{quote(crew_name, safe='')}/test",
-            params={"namespace": namespace},
+            params={"project": namespace},
             json={
                 "inputs": inputs or {},
                 "n_iterations": n_iterations,
@@ -103,7 +103,7 @@ class ExecutionMixin:
         self,
         flow_name: str,
         inputs: dict[str, Any] | None = None,
-        namespace: str = "default",
+        project: str = "default",
     ) -> dict[str, Any]:
         """Run a flow.
 
@@ -118,7 +118,7 @@ class ExecutionMixin:
         return self._send(
             "POST",
             f"/api/v1/flows/{quote(flow_name, safe='')}/run",
-            params={"namespace": namespace},
+            params={"project": namespace},
             json={"inputs": inputs or {}},
         ).json()
 
@@ -139,7 +139,7 @@ class ExecutionMixin:
         self,
         *,
         crew_name: str | None = None,
-        namespace: str | None = None,
+        project: str | None = None,
         status: str | None = None,
         limit: int = 100,
         offset: int = 0,
@@ -160,7 +160,7 @@ class ExecutionMixin:
         if crew_name:
             params["crew_name"] = crew_name
         if namespace:
-            params["namespace"] = namespace
+            params["project"] = namespace
         if status:
             params["status"] = status
         return self._send(

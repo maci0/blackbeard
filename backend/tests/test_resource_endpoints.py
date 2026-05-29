@@ -70,26 +70,26 @@ async def test_list_with_duplicate_label_key(client: AsyncClient):
 # ---------------------------------------------------------------------------
 
 
-async def test_list_by_namespace(client: AsyncClient):
-    """GET /agents?namespace=other returns only resources in that namespace."""
-    # Create in default namespace
+async def test_list_by_project(client: AsyncClient):
+    """GET /agents?project=other returns only resources in that project."""
+    # Create in default project
     resp1 = await client.post(
         "/api/v1/agents", json=_agent_payload("ns-default"), headers=API_KEY_HEADER
     )
     assert resp1.status_code == 201
 
-    # Create in custom namespace
+    # Create in custom project
     payload = _agent_payload("ns-other")
-    payload["metadata"]["namespace"] = "other"
+    payload["metadata"]["project"] = "other"
     resp2 = await client.post("/api/v1/agents", json=payload, headers=API_KEY_HEADER)
     assert resp2.status_code == 201
 
-    # Filter by namespace
-    resp = await client.get("/api/v1/agents?namespace=other", headers=API_KEY_HEADER)
+    # Filter by project
+    resp = await client.get("/api/v1/agents?project=other", headers=API_KEY_HEADER)
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 1
-    assert data["items"][0]["metadata"]["namespace"] == "other"
+    assert data["items"][0]["metadata"]["project"] == "other"
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ async def test_update_with_name_mismatch(client: AsyncClient):
 
     update_payload = {
         "version": 1,
-        "metadata": {"name": "different-name", "namespace": "default"},
+        "metadata": {"name": "different-name", "project": "default"},
         "spec": {"role": "R", "goal": "G", "backstory": "B"},
     }
     resp = await client.put(
@@ -114,21 +114,21 @@ async def test_update_with_name_mismatch(client: AsyncClient):
     assert "rename" in resp.json()["detail"].lower()
 
 
-async def test_update_with_namespace_mismatch(client: AsyncClient):
-    """PUT /agents/{name} with different namespace in body returns 422."""
+async def test_update_with_project_mismatch(client: AsyncClient):
+    """PUT /agents/{name} with different project in body returns 422."""
     r = await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
     assert r.status_code == 201
 
     update_payload = {
         "version": 1,
-        "metadata": {"name": "researcher", "namespace": "other"},
+        "metadata": {"name": "researcher", "project": "other"},
         "spec": {"role": "R", "goal": "G", "backstory": "B"},
     }
     resp = await client.put(
         "/api/v1/agents/researcher", json=update_payload, headers=API_KEY_HEADER
     )
     assert resp.status_code == 422
-    assert "namespace" in resp.json()["detail"].lower()
+    assert "project" in resp.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +152,7 @@ async def test_create_and_list_tool(client: AsyncClient):
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "Tool",
-        "metadata": {"name": "web-search", "namespace": "default"},
+        "metadata": {"name": "web-search", "project": "default"},
         "spec": {"type": "builtin", "description": "Search the web"},
     }
     r = await client.post("/api/v1/tools", json=payload, headers=API_KEY_HEADER)
@@ -174,7 +174,7 @@ async def test_create_guardrail(client: AsyncClient):
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "Guardrail",
-        "metadata": {"name": "no-pii", "namespace": "default"},
+        "metadata": {"name": "no-pii", "project": "default"},
         "spec": {
             "description": "Prevent PII in output",
             "type": "function",
@@ -196,7 +196,7 @@ async def test_create_knowledge_source(client: AsyncClient):
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "KnowledgeSource",
-        "metadata": {"name": "docs-db", "namespace": "default"},
+        "metadata": {"name": "docs-db", "project": "default"},
         "spec": {
             "type": "text",
         },
@@ -216,7 +216,7 @@ async def test_create_agent_policy(client: AsyncClient):
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "AgentPolicy",
-        "metadata": {"name": "budget-policy", "namespace": "default"},
+        "metadata": {"name": "budget-policy", "project": "default"},
         "spec": {
             "budget": {
                 "max_tokens": 10000,

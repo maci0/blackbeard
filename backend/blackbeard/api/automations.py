@@ -57,12 +57,12 @@ class TriggerResponse(BaseModel):
 async def _get_automation_spec(
     session: AsyncSession,
     name: str,
-    namespace: str,
+    project: str,
 ) -> dict[str, Any]:
     """Load an Automation resource spec or raise 404."""
     service = ResourceService(session)
     try:
-        resource = await service.get("Automation", name, namespace)
+        resource = await service.get("Automation", name, project)
     except ResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return dict(resource.spec or {})
@@ -92,7 +92,7 @@ async def trigger_automation(
         description="Automation name",
     ),
     body: TriggerRequest = Body(...),
-    namespace: str = Query(
+    project: str = Query(
         default="default",
         pattern=NAME_PATTERN,
         max_length=255,
@@ -103,16 +103,16 @@ async def trigger_automation(
 ) -> TriggerResponse:
     """Manually trigger an automation via API."""
     check_rate_limit(execution_limiter, user, _TRIGGER_RATE_MSG)
-    spec = await _get_automation_spec(session, name, namespace)
+    spec = await _get_automation_spec(session, name, project)
 
     if not spec.get("enabled", True):
         raise HTTPException(status_code=409, detail=f"Automation '{name}' is disabled")
 
     target = spec.get("target", {})
     merged_inputs = {**spec.get("inputs", {}), **body.inputs}
-    target_namespace = spec.get("namespace", namespace)
+    target_project = spec.get("project", project)
 
-    execution = await _execute_target(session, target, merged_inputs, target_namespace, user)
+    execution = await _execute_target(session, target, merged_inputs, target_project, user)
 
     await log_audit(
         session,
@@ -141,7 +141,7 @@ async def trigger_automation(
             "automation_name": name,
             "target_kind": target.get("kind"),
             "target_name": target.get("name"),
-            "namespace": target_namespace,
+            "project": target_project,
         },
     )
 
@@ -173,7 +173,7 @@ async def webhook_trigger(
         description="Automation name",
     ),
     body: WebhookTriggerRequest = Body(...),
-    namespace: str = Query(
+    project: str = Query(
         default="default",
         pattern=NAME_PATTERN,
         max_length=255,
@@ -182,7 +182,7 @@ async def webhook_trigger(
     session: AsyncSession = Depends(get_session),
 ) -> TriggerResponse:
     """Trigger an automation via external webhook (validates secret)."""
-    spec = await _get_automation_spec(session, name, namespace)
+    spec = await _get_automation_spec(session, name, project)
 
     if not spec.get("enabled", True):
         raise HTTPException(status_code=409, detail=f"Automation '{name}' is disabled")
@@ -221,9 +221,9 @@ async def webhook_trigger(
 
     target = spec.get("target", {})
     merged_inputs = {**spec.get("inputs", {}), **body.inputs}
-    target_namespace = spec.get("namespace", namespace)
+    target_project = spec.get("project", project)
 
-    execution = await _execute_target(session, target, merged_inputs, target_namespace, user=None)
+    execution = await _execute_target(session, target, merged_inputs, target_project, user=None)
 
     await log_audit(
         session,
@@ -254,7 +254,7 @@ async def webhook_trigger(
             "automation_name": name,
             "target_kind": target.get("kind"),
             "target_name": target.get("name"),
-            "namespace": target_namespace,
+            "project": target_project,
         },
     )
 
@@ -269,7 +269,7 @@ async def _execute_target(
     session: AsyncSession,
     target: dict[str, Any],
     inputs: dict[str, Any],
-    namespace: str,
+    project: str,
     user: User | None,
 ) -> Execution | None:
     """Execute the target Crew or Flow."""
@@ -282,14 +282,14 @@ async def _execute_target(
                 session,
                 target_name,
                 inputs=inputs,
-                namespace=namespace,
+                project=project,
                 user=user,
             )
         return await _executor_mod.kickoff(
             session,
             target_name,
             inputs=inputs,
-            namespace=namespace,
+            project=project,
             user=user,
         )
     except ExecutionNotFoundError as exc:
@@ -308,7 +308,7 @@ async def _execute_target(
                 "event": "automation_execute_failed",
                 "target_kind": target_kind,
                 "target_name": target_name,
-                "namespace": namespace,
+                "project": project,
                 "error_type": type(exc).__name__,
                 "error_message": str(exc)[:500],
             },

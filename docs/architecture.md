@@ -62,7 +62,7 @@ apiVersion: blackbeard/v1
 kind: Agent          # one of 13 kinds
 metadata:
   name: researcher
-  namespace: default
+  project: default
   labels: {}
 spec: { ... }        # kind-specific fields
 ```

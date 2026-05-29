@@ -220,7 +220,7 @@ async def test_export_single_resource(client: AsyncClient):
     assert doc["apiVersion"] == "blackbeard/v1"
     assert doc["kind"] == "Agent"
     assert doc["metadata"]["name"] == "researcher"
-    assert doc["metadata"]["namespace"] == "default"
+    assert doc["metadata"]["project"] == "default"
     assert doc["spec"]["role"] == "Research Analyst"
 
 
@@ -235,7 +235,7 @@ async def test_export_multiple_resources(client: AsyncClient):
     task_payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "Task",
-        "metadata": {"name": "gather-data", "namespace": "default"},
+        "metadata": {"name": "gather-data", "project": "default"},
         "spec": {
             "description": "Gather data",
             "expected_output": "A JSON summary",
@@ -268,7 +268,7 @@ async def test_export_multiple_resources(client: AsyncClient):
         assert "metadata" in doc
         assert "spec" in doc
         assert "name" in doc["metadata"]
-        assert "namespace" in doc["metadata"]
+        assert "project" in doc["metadata"]
 
 
 async def test_export_contains_yaml_separators(client: AsyncClient):
@@ -282,27 +282,27 @@ async def test_export_contains_yaml_separators(client: AsyncClient):
     assert "---" in resp.text
 
 
-async def test_export_namespace_filter(client: AsyncClient):
-    """GET /resources/export?namespace=X should filter by namespace."""
+async def test_export_project_filter(client: AsyncClient):
+    """GET /resources/export?project=X should filter by project."""
     # Create agents in different namespaces
     payload_default = _agent_payload("ns-default-agent")
     r = await client.post("/api/v1/agents", json=payload_default, headers=API_KEY_HEADER)
     assert r.status_code == 201
 
     payload_prod = _agent_payload("ns-prod-agent")
-    payload_prod["metadata"]["namespace"] = "prod"
+    payload_prod["metadata"]["project"] = "prod"
     r = await client.post("/api/v1/agents", json=payload_prod, headers=API_KEY_HEADER)
     assert r.status_code == 201
 
-    # Export only default namespace
-    resp = await client.get("/api/v1/resources/export?namespace=default", headers=API_KEY_HEADER)
+    # Export only default project
+    resp = await client.get("/api/v1/resources/export?project=default", headers=API_KEY_HEADER)
     assert resp.status_code == 200
     docs = [d for d in yaml.safe_load_all(resp.text) if d is not None]
     assert len(docs) == 1
     assert docs[0]["metadata"]["name"] == "ns-default-agent"
 
-    # Export only prod namespace
-    resp_prod = await client.get("/api/v1/resources/export?namespace=prod", headers=API_KEY_HEADER)
+    # Export only prod project
+    resp_prod = await client.get("/api/v1/resources/export?project=prod", headers=API_KEY_HEADER)
     assert resp_prod.status_code == 200
     docs_prod = [d for d in yaml.safe_load_all(resp_prod.text) if d is not None]
     assert len(docs_prod) == 1

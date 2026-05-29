@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Task
 metadata:
   name: check-style
-  namespace: default
+  project: default
 spec:
   description: >
     Review the following code diff for style and quality:

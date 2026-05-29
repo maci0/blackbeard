@@ -32,7 +32,7 @@ export const STORAGE_KEYS = {
   ONBOARDING_COMPLETED: 'blackbeard_onboarding_completed',
   TOUR_COMPLETED: 'blackbeard_tour_completed',
   SIDEBAR_COLLAPSED: 'blackbeard_sidebar_collapsed',
-  NAMESPACE: 'blackbeard_namespace',
+  PROJECT: 'blackbeard_project',
 } as const
 
 export const STORAGE_KEYS_NAV = {

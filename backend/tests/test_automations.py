@@ -25,7 +25,7 @@ def _automation_payload(
     return {
         "apiVersion": "blackbeard/v1",
         "kind": "Automation",
-        "metadata": {"name": name, "namespace": "default"},
+        "metadata": {"name": name, "project": "default"},
         "spec": {
             "target": {"kind": target_kind, "name": target_name},
             "trigger": trigger,

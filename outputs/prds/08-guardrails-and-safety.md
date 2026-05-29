@@ -13,7 +13,9 @@ Provide configurable safety mechanisms that validate, filter, and redact agent o
 **Implemented (beyond MVP):**
 - Guardrail Playground (`/guardrails/playground`): Interactive page for testing guardrails with sample input before deploying them to production tasks. Users select a guardrail resource, provide sample text, and see the validation result (pass/fail, score, feedback) in real-time. Supports function-based, LLM-based, and schema-based guardrail types.
 
-**Deferred to post-MVP:** Hallucination detection, namespace-level and crew-level guardrails, composite guardrail chains.
+**Implemented (post-MVP):** Namespace-level guardrails — Namespace resources support a `spec.guardrails` array of guardrail refs. At execution time, namespace guardrails are prepended to task-level guardrails (namespace guardrails run first). Configured via Namespace resource YAML or UI.
+
+**Deferred to post-MVP:** Hallucination detection, crew-level guardrails, composite guardrail chains.
 
 ---
 

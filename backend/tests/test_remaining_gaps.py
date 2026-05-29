@@ -425,7 +425,7 @@ def test_search_tools_tool_empty_query():
     tool = SearchToolsTool(
         api_url="http://localhost:8000",
         api_key="test-key",
-        namespace="default",
+        project="default",
     )
     # Mock the HTTP client to avoid real requests
     mock_resp = MagicMock()
@@ -447,7 +447,7 @@ def test_search_tools_tool_with_matches():
     tool = SearchToolsTool(
         api_url="http://localhost:8000",
         api_key="test-key",
-        namespace="default",
+        project="default",
     )
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -477,7 +477,7 @@ def test_search_tools_tool_http_error():
     tool = SearchToolsTool(
         api_url="http://localhost:8000",
         api_key="test-key",
-        namespace="default",
+        project="default",
     )
     mock_resp = MagicMock()
     mock_resp.status_code = 500
@@ -497,7 +497,7 @@ def test_search_tools_tool_exception_handling():
     tool = SearchToolsTool(
         api_url="http://localhost:8000",
         api_key="test-key",
-        namespace="default",
+        project="default",
     )
     with patch(
         "blackbeard.engine.discovery_tools.get_sync_client",
@@ -519,7 +519,7 @@ def test_get_tool_tool_not_found():
     tool = GetToolTool(
         api_url="http://localhost:8000",
         api_key="test-key",
-        namespace="default",
+        project="default",
     )
     mock_resp = MagicMock()
     mock_resp.status_code = 404
@@ -539,7 +539,7 @@ def test_get_tool_tool_success():
     tool = GetToolTool(
         api_url="http://localhost:8000",
         api_key="test-key",
-        namespace="default",
+        project="default",
     )
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -571,7 +571,7 @@ def test_get_tool_tool_exception():
     tool = GetToolTool(
         api_url="http://localhost:8000",
         api_key="test-key",
-        namespace="default",
+        project="default",
     )
     with patch(
         "blackbeard.engine.discovery_tools.get_sync_client",

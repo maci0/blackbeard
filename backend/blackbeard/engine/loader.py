@@ -81,8 +81,7 @@ def _validate_tool_config(config: dict[str, Any], tool_name: str) -> None:
     """Reject tool config values containing path traversal, sensitive paths, or excessive size."""
     if len(config) > _MAX_CONFIG_ENTRIES:
         raise LoaderError(
-            f"Tool '{tool_name}' config has {len(config)} entries "
-            f"(max {_MAX_CONFIG_ENTRIES})"
+            f"Tool '{tool_name}' config has {len(config)} entries (max {_MAX_CONFIG_ENTRIES})"
         )
     for key, val in config.items():
         if not isinstance(val, str):
@@ -635,6 +634,13 @@ class ResourceLoader:
 
         return _schema_guardrail
 
+    def _get_project_guardrails(self, project: str) -> list[str]:
+        """Return guardrail refs from the project resource, if any."""
+        ns_resource = self._resources.get(f"Namespace/{project}")
+        if ns_resource is None:
+            return []
+        return list(ns_resource.spec.get("guardrails", []))
+
     def _build_guardrails(self, refs: list[str]) -> list[Any]:
         """Build guardrail callables from refs or inline strings.
 
@@ -717,7 +723,10 @@ class ResourceLoader:
         elif spec.get("output_json"):
             task_kwargs["output_json"] = spec["output_json"]
 
-        guardrail_refs = spec.get("guardrails", [])
+        guardrail_refs = list(spec.get("guardrails", []))
+        ns_guardrails = self._get_project_guardrails(resource.project)
+        if ns_guardrails:
+            guardrail_refs = ns_guardrails + guardrail_refs
         if guardrail_refs:
             guardrails = self._build_guardrails(guardrail_refs)
             if guardrails:
@@ -727,9 +736,9 @@ class ResourceLoader:
         self._task_cache[ref_or_name] = task
         return task
 
-    def _build_discovery_tools(self, namespace: str) -> list[Any]:
-        """Build the JIT discovery meta-tools for the given namespace (cached per loader)."""
-        cached = self._discovery_tools_cache.get(namespace)
+    def _build_discovery_tools(self, project: str) -> list[Any]:
+        """Build the JIT discovery meta-tools for the given project (cached per loader)."""
+        cached = self._discovery_tools_cache.get(project)
         if cached is not None:
             return cached
 
@@ -740,15 +749,15 @@ class ResourceLoader:
             SearchToolsTool(
                 api_url=_self_api_url(),
                 api_key=api_key,
-                namespace=namespace,
+                project=project,
             ),
             GetToolTool(
                 api_url=_self_api_url(),
                 api_key=api_key,
-                namespace=namespace,
+                project=project,
             ),
         ]
-        self._discovery_tools_cache[namespace] = tools
+        self._discovery_tools_cache[project] = tools
         return tools
 
     def _inject_discovery_tools(
@@ -756,7 +765,7 @@ class ResourceLoader:
         agent: Agent,
         agent_resource: Resource,
         tool_loading: str,
-        namespace: str,
+        project: str,
     ) -> None:
         """Inject discovery meta-tools into an agent if the crew/agent config allows it."""
         if tool_loading not in ("jit", "hybrid"):
@@ -766,7 +775,7 @@ class ResourceLoader:
         if not agent_spec.get("tool_discovery", True):
             return
 
-        discovery_tools = self._build_discovery_tools(namespace)
+        discovery_tools = self._build_discovery_tools(project)
         existing = agent.tools or []
         agent.tools = list(existing) + discovery_tools
         if logger.isEnabledFor(logging.DEBUG):
@@ -783,7 +792,7 @@ class ResourceLoader:
     def _build_muninndb_backend(
         self,
         memory_spec: dict[str, Any],
-        namespace: str,
+        project: str,
     ) -> Any:
         """Build a MuninnDB memory backend from crew memory configuration.
 
@@ -794,7 +803,7 @@ class ResourceLoader:
 
         Args:
             memory_spec: The ``memory`` dict from the Crew spec.
-            namespace: Blackbeard resource namespace.
+            project: Blackbeard resource project.
 
         Returns:
             A :class:`MuninnMemoryBackend` instance.
@@ -811,7 +820,7 @@ class ResourceLoader:
             ssrf_error = check_url_ssrf(url)
             if ssrf_error:
                 raise LoaderError(f"muninndb_url blocked: {ssrf_error}")
-        vault = memory_spec.get("muninndb_vault", namespace)
+        vault = memory_spec.get("muninndb_vault", project)
         token: str | None = None
         token_env = memory_spec.get("muninndb_token_env")
         if token_env:
@@ -824,7 +833,7 @@ class ResourceLoader:
         try:
             backend = MuninnMemoryBackend(
                 url=url,
-                namespace=namespace,
+                project=project,
                 vault=vault,
                 token=token,
             )
@@ -842,7 +851,7 @@ class ResourceLoader:
                 "event": "muninndb_backend_built",
                 "vault": vault,
                 "url": url,
-                "namespace": namespace,
+                "project": project,
             },
         )
         return backend
@@ -871,7 +880,7 @@ class ResourceLoader:
                 agent_resource = self._resources.get(f"{ref.kind.value}/{ref.name}")
                 if agent_resource:
                     self._inject_discovery_tools(
-                        agent, agent_resource, tool_loading, resource.namespace
+                        agent, agent_resource, tool_loading, resource.project
                     )
 
         task_refs = spec.get("tasks", [])
@@ -900,7 +909,7 @@ class ResourceLoader:
             provider = memory_spec.get("provider")
             if provider == "muninndb":
                 crew_kwargs["_muninndb_backend"] = self._build_muninndb_backend(
-                    memory_spec, resource.namespace
+                    memory_spec, resource.project
                 )
 
         embedder_spec = spec.get("embedder")

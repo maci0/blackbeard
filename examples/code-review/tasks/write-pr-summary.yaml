@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Task
 metadata:
   name: write-pr-summary
-  namespace: default
+  project: default
 spec:
   description: >
     Synthesize the security scan and style review findings into a

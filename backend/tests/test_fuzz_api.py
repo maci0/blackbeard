@@ -305,8 +305,8 @@ EVIL_QUERY_PARAMS = [
     {"offset": "99999999999"},
     {"limit": "abc"},
     {"offset": "abc"},
-    {"namespace": "../../../etc"},
-    {"namespace": "'; DROP TABLE--"},
+    {"project": "../../../etc"},
+    {"project": "'; DROP TABLE--"},
     {"label_selector": "a" * 10_000},
     {"label_selector": "key=val,=empty,noequals"},
 ]

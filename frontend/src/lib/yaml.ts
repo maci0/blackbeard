@@ -63,7 +63,7 @@ export function resourceToYaml(resource: Resource): string {
     `kind: ${resource.kind}`,
     'metadata:',
     `  name: ${resource.metadata.name}`,
-    `  namespace: ${resource.metadata.namespace || 'default'}`,
+    `  project: ${resource.metadata.project || 'default'}`,
   ]
   const labels = resource.metadata.labels ?? {}
   if (Object.keys(labels).length > 0) {

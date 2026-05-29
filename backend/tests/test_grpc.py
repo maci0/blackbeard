@@ -91,7 +91,7 @@ async def test_grpc_list_resources(servicer, db_session):
     resource = Resource(
         kind=ResourceKind.AGENT,
         name="grpc-agent",
-        namespace="default",
+        project="default",
         spec={"role": "tester", "goal": "test", "backstory": "test"},
         version=1,
     )
@@ -126,7 +126,7 @@ async def test_grpc_get_resource(servicer, db_session):
     resource = Resource(
         kind=ResourceKind.TASK,
         name="grpc-task",
-        namespace="default",
+        project="default",
         spec={
             "description": "test task",
             "expected_output": "output",
@@ -187,7 +187,7 @@ async def test_grpc_delete_resource(servicer, db_session):
     resource = Resource(
         kind=ResourceKind.GUARDRAIL,
         name="grpc-guard",
-        namespace="default",
+        project="default",
         spec={"type": "function"},
         version=1,
     )

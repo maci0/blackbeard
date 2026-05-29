@@ -111,8 +111,8 @@ function ToolCard({ resource }: { resource: Resource }) {
               <p className="truncate text-sm font-semibold" title={resource.metadata.name}>
                 {resource.metadata.name}
               </p>
-              {resource.metadata.namespace && resource.metadata.namespace !== 'default' && (
-                <p className="text-xs text-muted-foreground">{resource.metadata.namespace}</p>
+              {resource.metadata.project && resource.metadata.project !== 'default' && (
+                <p className="text-xs text-muted-foreground">{resource.metadata.project}</p>
               )}
             </div>
           </div>

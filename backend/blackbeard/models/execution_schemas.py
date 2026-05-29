@@ -50,9 +50,7 @@ _REDACTED = "[REDACTED]"
 _MAX_REDACT_DEPTH = 20
 
 
-def redact_sensitive_values(
-    inputs: dict[str, Any], _depth: int = 0
-) -> dict[str, Any]:
+def redact_sensitive_values(inputs: dict[str, Any], _depth: int = 0) -> dict[str, Any]:
     """Return a copy of inputs with sensitive-looking values redacted (recursively).
 
     Returns the original dict unchanged when no keys match and no nested
@@ -207,7 +205,7 @@ class ExecutionResponse(BaseModel):
 
     id: UUID
     crew_name: str
-    crew_namespace: str
+    crew_project: str
     execution_type: Literal["kickoff", "train", "test", "flow"] = Field(
         default="kickoff",
         description="Execution mode: kickoff, train, test, or flow",
@@ -275,7 +273,7 @@ class ExecutionResponse(BaseModel):
         return cls.model_construct(
             id=execution.id,
             crew_name=execution.crew_name,
-            crew_namespace=execution.crew_namespace,
+            crew_project=execution.crew_project,
             execution_type=(
                 execution.execution_type.value if execution.execution_type else "kickoff"
             ),

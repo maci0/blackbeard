@@ -42,7 +42,7 @@ def test_flow_two_crew_steps_sequential():
         "Flow/my-flow": {
             "kind": "Flow",
             "name": "my-flow",
-            "namespace": "default",
+            "project": "default",
             "spec": {
                 "steps": [
                     {"name": "step-1", "type": "crew", "crew": "ref:crews/crew-a"},
@@ -95,7 +95,7 @@ def test_flow_step_outputs_chain():
         "Flow/chain-flow": {
             "kind": "Flow",
             "name": "chain-flow",
-            "namespace": "default",
+            "project": "default",
             "spec": {
                 "steps": [
                     {"name": "fetch", "type": "crew", "crew": "ref:crews/fetcher"},
@@ -143,7 +143,7 @@ def test_flow_function_step():
         "Flow/fn-flow": {
             "kind": "Flow",
             "name": "fn-flow",
-            "namespace": "default",
+            "project": "default",
             "spec": {
                 "steps": [
                     {
@@ -177,7 +177,7 @@ def test_flow_missing_crew_ref_skips_step():
         "Flow/skip-flow": {
             "kind": "Flow",
             "name": "skip-flow",
-            "namespace": "default",
+            "project": "default",
             "spec": {
                 "steps": [
                     {"name": "broken-step", "type": "crew"},
@@ -221,7 +221,7 @@ def test_flow_non_crew_output_stringified():
         "Flow/str-flow": {
             "kind": "Flow",
             "name": "str-flow",
-            "namespace": "default",
+            "project": "default",
             "spec": {
                 "steps": [
                     {"name": "step-1", "type": "crew", "crew": "crews/my-crew"},
@@ -247,7 +247,7 @@ def test_flow_router_step_continues():
         "Flow/router-flow": {
             "kind": "Flow",
             "name": "router-flow",
-            "namespace": "default",
+            "project": "default",
             "spec": {
                 "steps": [
                     {"name": "route-step", "type": "router"},
@@ -274,7 +274,7 @@ def test_flow_function_step_blocked_module():
         "Flow/blocked-flow": {
             "kind": "Flow",
             "name": "blocked-flow",
-            "namespace": "default",
+            "project": "default",
             "spec": {
                 "steps": [
                     {
@@ -304,7 +304,7 @@ def test_flow_function_step_not_in_allowlist():
         "Flow/noallow-flow": {
             "kind": "Flow",
             "name": "noallow-flow",
-            "namespace": "default",
+            "project": "default",
             "spec": {
                 "steps": [
                     {
@@ -333,7 +333,7 @@ def test_flow_empty_steps():
         "Flow/empty-flow": {
             "kind": "Flow",
             "name": "empty-flow",
-            "namespace": "default",
+            "project": "default",
             "spec": {
                 "steps": [],
             },

@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Crew
 metadata:
   name: support-triage-crew
-  namespace: default
+  project: default
   labels:
     type: support
 spec:

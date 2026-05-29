@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Crew
 metadata:
   name: research-stage
-  namespace: default
+  project: default
 spec:
   description: "First stage: research and gather information"
   process: sequential
@@ -15,7 +15,7 @@ apiVersion: blackbeard/v1
 kind: Crew
 metadata:
   name: publish-stage
-  namespace: default
+  project: default
 spec:
   description: "Second stage: format and publish the research"
   process: sequential

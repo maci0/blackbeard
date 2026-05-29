@@ -4,7 +4,7 @@ export interface Resource {
   kind: string
   metadata: {
     name: string
-    namespace: string
+    project: string
     labels: Record<string, string>
   }
   spec: Record<string, unknown>
@@ -39,7 +39,7 @@ export type ExecutionType = 'kickoff' | 'train' | 'test' | 'flow'
 export interface Execution {
   id: string
   crew_name: string
-  crew_namespace: string
+  crew_project: string
   execution_type: ExecutionType
   status: string
   n_iterations: number | null

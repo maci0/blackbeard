@@ -103,7 +103,7 @@ class TestResources:
         assert items[0]["kind"] == "Agent"
         req = transport.requests[0]
         assert req.url.path == "/api/v1/agents"
-        assert "namespace=default" in str(req.url)
+        assert "project=default" in str(req.url)
 
     def test_list_with_plural(
         self, client: BlackbeardClient, transport: MockTransport
@@ -114,10 +114,10 @@ class TestResources:
                 {"items": [], "total": 0, "limit": 100, "offset": 0, "has_more": False},
             )
         )
-        client.list("agents", namespace="prod")
+        client.list("agents", project="prod")
         req = transport.requests[0]
         assert req.url.path == "/api/v1/agents"
-        assert "namespace=prod" in str(req.url)
+        assert "project=prod" in str(req.url)
 
     def test_get_resource(
         self, client: BlackbeardClient, transport: MockTransport
@@ -135,7 +135,7 @@ class TestResources:
     ) -> None:
         resource = {
             "kind": "Agent",
-            "metadata": {"name": "coder", "namespace": "default"},
+            "metadata": {"name": "coder", "project": "default"},
             "spec": {"role": "Software Engineer"},
         }
         transport.queue(_mock_response(201, {**resource, "version": 1}))
@@ -205,7 +205,7 @@ class TestResources:
         assert len(transport.requests) == 1
         req = transport.requests[0]
         assert req.url.path == "/api/v1/resources/export"
-        assert "namespace=default" in str(req.url)
+        assert "project=default" in str(req.url)
 
     def test_unknown_kind_raises(self, client: BlackbeardClient) -> None:
         with pytest.raises(ValueError, match="Unknown resource kind"):

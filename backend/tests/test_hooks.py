@@ -14,7 +14,7 @@ async def test_crew_with_hooks_schema_valid(client):
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "Crew",
-        "metadata": {"name": "hooked-crew", "namespace": "default"},
+        "metadata": {"name": "hooked-crew", "project": "default"},
         "spec": {
             "process": "sequential",
             "agents": ["ref:agents/researcher"],
@@ -37,7 +37,7 @@ async def test_crew_hooks_invalid_additional_prop(client):
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "Crew",
-        "metadata": {"name": "bad-hook-crew", "namespace": "default"},
+        "metadata": {"name": "bad-hook-crew", "project": "default"},
         "spec": {
             "process": "sequential",
             "agents": ["ref:agents/researcher"],
@@ -57,7 +57,7 @@ async def test_flow_step_with_hooks_schema_valid(client):
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "Flow",
-        "metadata": {"name": "hooked-flow", "namespace": "default"},
+        "metadata": {"name": "hooked-flow", "project": "default"},
         "spec": {
             "steps": [
                 {
@@ -84,7 +84,7 @@ async def test_flow_step_hooks_invalid_additional_prop(client):
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "Flow",
-        "metadata": {"name": "bad-flow-hooks", "namespace": "default"},
+        "metadata": {"name": "bad-flow-hooks", "project": "default"},
         "spec": {
             "steps": [
                 {
@@ -169,7 +169,7 @@ def test_flow_step_hooks_called():
         "Flow/test-flow": {
             "kind": "Flow",
             "name": "test-flow",
-            "namespace": "default",
+            "project": "default",
             "spec": {
                 "steps": [
                     {
@@ -187,7 +187,7 @@ def test_flow_step_hooks_called():
         "Crew/my-crew": {
             "kind": "Crew",
             "name": "my-crew",
-            "namespace": "default",
+            "project": "default",
             "spec": {
                 "process": "sequential",
                 "agents": [],

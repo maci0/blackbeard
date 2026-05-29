@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Tool
 metadata:
   name: web-search
-  namespace: default
+  project: default
   labels:
     category: search
 spec:

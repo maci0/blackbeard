@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Tool
 metadata:
   name: http-request
-  namespace: default
+  project: default
   labels:
     category: integration
 spec:

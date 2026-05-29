@@ -40,7 +40,7 @@ class CopilotRequest(BaseModel):
         max_length=255,
         description="Name of the LLMConnection to use (uses first available if omitted)",
     )
-    namespace: str = Field(
+    project: str = Field(
         default="default",
         pattern=NAME_PATTERN,
         max_length=255,
@@ -70,7 +70,7 @@ class CopilotErrorResponse(BaseModel):
         422: {"description": "Validation error (prompt too short/long)"},
         424: {
             "model": CopilotErrorResponse,
-            "description": "No LLMConnection available in the specified namespace",
+            "description": "No LLMConnection available in the specified project",
         },
         429: {"description": "Too many copilot requests"},
         502: {
@@ -88,7 +88,7 @@ async def generate_crew(
 
     Uses a configured LLMConnection via the LiteLLM proxy. If no
     llm_connection is specified, uses the first available LLMConnection
-    in the given namespace.
+    in the given project.
     """
     check_rate_limit(copilot_limiter, user, "Too many copilot requests. Try again later.")
 
@@ -96,13 +96,13 @@ async def generate_crew(
         "Copilot request: prompt_len=%d llm=%s ns=%s user=%s",
         len(body.prompt),
         body.llm_connection or "(auto)",
-        body.namespace,
+        body.project,
         str(user.id) if user else "api-key",
         extra={
             "event": "copilot_api_request",
             "prompt_length": len(body.prompt),
             "llm_connection": body.llm_connection,
-            "namespace": body.namespace,
+            "project": body.project,
             "user_id": str(user.id) if user else None,
         },
     )
@@ -111,7 +111,7 @@ async def generate_crew(
         resources, explanation = await generate_resources(
             prompt=body.prompt,
             llm_connection_name=body.llm_connection,
-            namespace=body.namespace,
+            project=body.project,
             session=session,
         )
     except NoLLMConnectionError as e:
@@ -123,7 +123,7 @@ async def generate_crew(
         )
         raise HTTPException(
             status_code=424,
-            detail="No LLM connection available in the specified namespace.",
+            detail="No LLM connection available in the specified project.",
         ) from e
     except CopilotError as e:
         logger.warning(

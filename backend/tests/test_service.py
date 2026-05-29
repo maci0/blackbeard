@@ -28,7 +28,7 @@ def _agent_create(name: str = "svc-agent") -> ResourceCreate:
     return ResourceCreate(
         apiVersion="blackbeard/v1",
         kind="Agent",
-        metadata=ResourceMetadata(name=name, namespace="default"),
+        metadata=ResourceMetadata(name=name, project="default"),
         spec={
             "role": "Test Agent",
             "goal": "Test goal",
@@ -42,7 +42,7 @@ def _task_create(name: str = "svc-task", agent_ref: str = "ref:agents/svc-agent"
     return ResourceCreate(
         apiVersion="blackbeard/v1",
         kind="Task",
-        metadata=ResourceMetadata(name=name, namespace="default"),
+        metadata=ResourceMetadata(name=name, project="default"),
         spec={
             "description": "Test task description",
             "expected_output": "Test expected output",
@@ -70,7 +70,7 @@ async def test_service_create_returns_resource(db_session: AsyncSession):
 
 
 async def test_service_create_upsert_on_duplicate(db_session: AsyncSession):
-    """create() with same name/kind/namespace upserts (version incremented)."""
+    """create() with same name/kind/project upserts (version incremented)."""
     service = ResourceService(db_session)
 
     resource1, created1 = await service.create(_agent_create())
@@ -102,7 +102,7 @@ async def test_service_create_invalid_spec_raises(db_session: AsyncSession):
     bad_data = ResourceCreate(
         apiVersion="blackbeard/v1",
         kind="Agent",
-        metadata=ResourceMetadata(name="bad-agent", namespace="default"),
+        metadata=ResourceMetadata(name="bad-agent", project="default"),
         spec={"goal": "Only goal, no role or backstory"},
     )
     with pytest.raises(ResourceValidationError):
@@ -115,13 +115,13 @@ async def test_service_create_different_namespaces(db_session: AsyncSession):
     data1 = ResourceCreate(
         apiVersion="blackbeard/v1",
         kind="Agent",
-        metadata=ResourceMetadata(name="agent-x", namespace="alpha"),
+        metadata=ResourceMetadata(name="agent-x", project="alpha"),
         spec={"role": "R", "goal": "G", "backstory": "B"},
     )
     data2 = ResourceCreate(
         apiVersion="blackbeard/v1",
         kind="Agent",
-        metadata=ResourceMetadata(name="agent-x", namespace="beta"),
+        metadata=ResourceMetadata(name="agent-x", project="beta"),
         spec={"role": "R2", "goal": "G2", "backstory": "B2"},
     )
     r1, c1 = await service.create(data1)
@@ -207,25 +207,25 @@ async def test_service_list_pagination(db_session: AsyncSession):
     assert page1_names.isdisjoint(page2_names), "Pages should not overlap"
 
 
-async def test_service_list_filters_by_namespace(db_session: AsyncSession):
-    """list_resources() filters by namespace."""
+async def test_service_list_filters_by_project(db_session: AsyncSession):
+    """list_resources() filters by project."""
     service = ResourceService(db_session)
     data_default = ResourceCreate(
         apiVersion="blackbeard/v1",
         kind="Agent",
-        metadata=ResourceMetadata(name="agent-default", namespace="default"),
+        metadata=ResourceMetadata(name="agent-default", project="default"),
         spec={"role": "R", "goal": "G", "backstory": "B"},
     )
     data_other = ResourceCreate(
         apiVersion="blackbeard/v1",
         kind="Agent",
-        metadata=ResourceMetadata(name="agent-other", namespace="other"),
+        metadata=ResourceMetadata(name="agent-other", project="other"),
         spec={"role": "R", "goal": "G", "backstory": "B"},
     )
     await service.create(data_default)
     await service.create(data_other)
 
-    items, total = await service.list_resources(kind="Agent", namespace="default")
+    items, total = await service.list_resources(kind="Agent", project="default")
     assert total == 1
     assert items[0].name == "agent-default"
 
@@ -238,7 +238,7 @@ async def test_service_list_filters_by_kind(db_session: AsyncSession):
         ResourceCreate(
             apiVersion="blackbeard/v1",
             kind="LLMConnection",
-            metadata=ResourceMetadata(name="my-llm", namespace="default"),
+            metadata=ResourceMetadata(name="my-llm", project="default"),
             spec={"provider": "openai", "model": "gpt-4o"},
         )
     )
@@ -315,7 +315,7 @@ async def test_service_update_metadata_only(db_session: AsyncSession):
 
     update_data = ResourceUpdate(
         version=1,
-        metadata=ResourceMetadata(name="svc-agent", namespace="default", labels={"env": "test"}),
+        metadata=ResourceMetadata(name="svc-agent", project="default", labels={"env": "test"}),
     )
     updated = await service.update("Agent", "svc-agent", update_data)
     assert updated.version == 2

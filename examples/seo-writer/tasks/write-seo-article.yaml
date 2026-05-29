@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Task
 metadata:
   name: write-seo-article
-  namespace: default
+  project: default
 spec:
   description: >
     Write a 1500-word SEO-optimized article for the niche: {niche}

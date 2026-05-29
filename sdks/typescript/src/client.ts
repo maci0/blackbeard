@@ -199,14 +199,14 @@ export class BlackbeardClient {
   async list(
     kind: string,
     options?: {
-      namespace?: string;
+      project?: string;
       label_selector?: string;
       limit?: number;
       offset?: number;
     }
   ): Promise<ListResponse<Resource>> {
     const params = new URLSearchParams();
-    params.set("namespace", options?.namespace ?? "default");
+    params.set("project", options?.namespace ?? "default");
     if (options?.label_selector)
       params.set("label_selector", options.label_selector);
     params.set("limit", String(options?.limit ?? 100));
@@ -220,10 +220,10 @@ export class BlackbeardClient {
   async get(
     kind: string,
     name: string,
-    namespace?: string
+    project?: string
   ): Promise<Resource> {
     const params = new URLSearchParams({
-      namespace: namespace ?? "default",
+      project: namespace ?? "default",
     });
     return this.request<Resource>(
       "GET",
@@ -243,10 +243,10 @@ export class BlackbeardClient {
     kind: string,
     name: string,
     resource: Partial<Resource>,
-    namespace?: string
+    project?: string
   ): Promise<Resource> {
     const params = new URLSearchParams({
-      namespace: namespace ?? "default",
+      project: namespace ?? "default",
     });
     return this.request<Resource>(
       "PUT",
@@ -255,9 +255,9 @@ export class BlackbeardClient {
     );
   }
 
-  async delete(kind: string, name: string, namespace?: string): Promise<void> {
+  async delete(kind: string, name: string, project?: string): Promise<void> {
     const params = new URLSearchParams({
-      namespace: namespace ?? "default",
+      project: namespace ?? "default",
     });
     await this.request<void>(
       "DELETE",
@@ -292,10 +292,10 @@ export class BlackbeardClient {
   async kickoff(
     crewName: string,
     inputs?: Record<string, unknown>,
-    namespace?: string
+    project?: string
   ): Promise<Execution> {
     const params = new URLSearchParams({
-      namespace: namespace ?? "default",
+      project: namespace ?? "default",
     });
     return this.request<Execution>(
       "POST",
@@ -310,11 +310,11 @@ export class BlackbeardClient {
       inputs?: Record<string, unknown>;
       n_iterations?: number;
       filename?: string;
-      namespace?: string;
+      project?: string;
     }
   ): Promise<Execution> {
     const params = new URLSearchParams({
-      namespace: options?.namespace ?? "default",
+      project: options?.namespace ?? "default",
     });
     return this.request<Execution>(
       "POST",
@@ -332,11 +332,11 @@ export class BlackbeardClient {
     options?: {
       inputs?: Record<string, unknown>;
       n_iterations?: number;
-      namespace?: string;
+      project?: string;
     }
   ): Promise<Execution> {
     const params = new URLSearchParams({
-      namespace: options?.namespace ?? "default",
+      project: options?.namespace ?? "default",
     });
     return this.request<Execution>(
       "POST",
@@ -351,10 +351,10 @@ export class BlackbeardClient {
   async runFlow(
     flowName: string,
     inputs?: Record<string, unknown>,
-    namespace?: string
+    project?: string
   ): Promise<Execution> {
     const params = new URLSearchParams({
-      namespace: namespace ?? "default",
+      project: namespace ?? "default",
     });
     return this.request<Execution>(
       "POST",
@@ -372,14 +372,14 @@ export class BlackbeardClient {
 
   async listExecutions(options?: {
     crew_name?: string;
-    namespace?: string;
+    project?: string;
     status?: string;
     limit?: number;
     offset?: number;
   }): Promise<ListResponse<Execution>> {
     const params = new URLSearchParams();
     if (options?.crew_name) params.set("crew_name", options.crew_name);
-    if (options?.namespace) params.set("namespace", options.namespace);
+    if (options?.namespace) params.set("project", options.namespace);
     if (options?.status) params.set("status", options.status);
     params.set("limit", String(options?.limit ?? 100));
     params.set("offset", String(options?.offset ?? 0));

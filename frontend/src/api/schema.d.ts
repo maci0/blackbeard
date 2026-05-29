@@ -768,8 +768,8 @@ export interface components {
       id: string
       /** Crew Name */
       crew_name: string
-      /** Crew Namespace */
-      crew_namespace: string
+      /** Crew Project */
+      crew_project: string
       /**
        * Execution Type
        * @description Execution mode: kickoff, train, test, or flow
@@ -1109,10 +1109,10 @@ export interface components {
       /** Name */
       name: string
       /**
-       * Namespace
+       * Project
        * @default default
        */
-      namespace: string
+      project: string
       /** Labels */
       labels?: {
         [key: string]: string

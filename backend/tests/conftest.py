@@ -151,7 +151,14 @@ def _clear_rate_limit_state() -> None:
     )
 
     _auth_failures.clear()
-    for limiter in (mutation_limiter, execution_limiter, marketplace_limiter, copilot_limiter, chat_limiter, registration_limiter):
+    for limiter in (
+        mutation_limiter,
+        execution_limiter,
+        marketplace_limiter,
+        copilot_limiter,
+        chat_limiter,
+        registration_limiter,
+    ):
         limiter._buckets.clear()
 
 
@@ -181,7 +188,7 @@ def make_resource(kind: ResourceKind, name: str, spec: dict) -> Resource:
     r = Resource()
     r.kind = kind
     r.name = name
-    r.namespace = "default"
+    r.project = "default"
     r.spec = spec
     return r
 
@@ -194,7 +201,7 @@ def _agent_payload(name: str = "researcher") -> dict:
     return {
         "apiVersion": "blackbeard/v1",
         "kind": "Agent",
-        "metadata": {"name": name, "namespace": "default"},
+        "metadata": {"name": name, "project": "default"},
         "spec": {
             "role": "Research Analyst",
             "goal": "Find and synthesise information",
@@ -232,7 +239,7 @@ def _make_execution(
     e = Execution()
     e.id = _uuid.uuid4()
     e.crew_name = crew_name
-    e.crew_namespace = "default"
+    e.crew_project = "default"
     e.execution_type = ExecutionType(execution_type)
     e.status = ExecutionStatus(status)
     e.inputs = inputs if inputs is not None else {}

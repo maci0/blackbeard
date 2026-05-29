@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Task
 metadata:
   name: classify-ticket
-  namespace: default
+  project: default
 spec:
   description: >
     Classify the following support ticket:

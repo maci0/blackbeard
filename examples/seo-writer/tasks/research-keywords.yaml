@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Task
 metadata:
   name: research-keywords
-  namespace: default
+  project: default
 spec:
   description: >
     Research keywords for the following niche: {niche}

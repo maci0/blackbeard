@@ -36,7 +36,7 @@ class Resource(Base):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    namespace: Mapped[str] = mapped_column(
+    project: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
         default="default",
@@ -73,17 +73,17 @@ class Resource(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("kind", "name", "namespace", name="uq_resource_kind_name_ns"),
-        Index("ix_resource_ns_kind", "namespace", "kind"),
-        Index("ix_resource_kind_ns_name", "kind", "namespace", "name"),
+        UniqueConstraint("kind", "name", "project", name="uq_resource_kind_name_ns"),
+        Index("ix_resource_ns_kind", "project", "kind"),
+        Index("ix_resource_kind_ns_name", "kind", "project", "name"),
         Index("ix_resource_labels", "labels", postgresql_using="gin"),
         CheckConstraint("version >= 1", name="ck_resource_version_positive"),
         CheckConstraint("length(name) >= 1", name="ck_resource_name_nonempty"),
-        CheckConstraint("length(namespace) >= 1", name="ck_resource_namespace_nonempty"),
+        CheckConstraint("length(project) >= 1", name="ck_resource_project_nonempty"),
     )
 
     def __repr__(self) -> str:
-        return f"<Resource {self.kind.value}/{self.name} ns={self.namespace} v{self.version}>"
+        return f"<Resource {self.kind.value}/{self.name} project={self.project} v{self.version}>"
 
 
 class ResourceRef(Base):
@@ -102,7 +102,7 @@ class ResourceRef(Base):
         nullable=False,
     )
     target_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    target_namespace: Mapped[str] = mapped_column(
+    target_project: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
         default="default",
@@ -115,10 +115,10 @@ class ResourceRef(Base):
     )
 
     __table_args__ = (
-        Index("ix_ref_target", "target_kind", "target_name", "target_namespace"),
+        Index("ix_ref_target", "target_kind", "target_name", "target_project"),
         UniqueConstraint("source_id", "ref_field", name="uq_ref_source_field"),
         CheckConstraint("length(target_name) >= 1", name="ck_ref_target_name_nonempty"),
-        CheckConstraint("length(target_namespace) >= 1", name="ck_ref_target_ns_nonempty"),
+        CheckConstraint("length(target_project) >= 1", name="ck_ref_target_project_nonempty"),
         CheckConstraint("length(ref_field) >= 1", name="ck_ref_field_nonempty"),
     )
 

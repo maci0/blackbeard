@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Task
 metadata:
   name: clean-data
-  namespace: default
+  project: default
 spec:
   description: >
     Validate and clean the following dataset: {dataset_description}

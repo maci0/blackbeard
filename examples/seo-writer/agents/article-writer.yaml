@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Agent
 metadata:
   name: seo-article-writer
-  namespace: default
+  project: default
   labels:
     role: writing
 spec:

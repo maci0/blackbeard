@@ -139,7 +139,7 @@ apiVersion: blackbeard/v1
 kind: Agent
 metadata:
   name: test-agent
-  namespace: default
+  project: default
 spec:
   role: Research Analyst
   goal: Find information
@@ -633,7 +633,7 @@ def test_strip_server_fields():
         "kind": "Agent",
         "metadata": {
             "name": "test",
-            "namespace": "default",
+            "project": "default",
             "labels": {"env": "prod"},
         },
         "spec": {"role": "R", "goal": "G", "backstory": "B"},
@@ -645,7 +645,7 @@ def test_strip_server_fields():
     assert "created_at" not in cleaned
     assert cleaned["metadata"]["name"] == "test"
     # default namespace is not included
-    assert "namespace" not in cleaned["metadata"]
+    assert "project" not in cleaned["metadata"]
     assert cleaned["metadata"]["labels"] == {"env": "prod"}
 
 
@@ -655,11 +655,11 @@ def test_strip_server_fields_non_default_namespace():
 
     resource = {
         "kind": "Agent",
-        "metadata": {"name": "test", "namespace": "prod"},
+        "metadata": {"name": "test", "project": "prod"},
         "spec": {},
     }
     cleaned = _strip_server_fields(resource)
-    assert cleaned["metadata"]["namespace"] == "prod"
+    assert cleaned["metadata"]["project"] == "prod"
 
 
 # ---------------------------------------------------------------------------

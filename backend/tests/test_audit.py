@@ -54,7 +54,7 @@ def _agent_payload(name: str = "audit-agent") -> dict:
     return {
         "apiVersion": "blackbeard/v1",
         "kind": "Agent",
-        "metadata": {"name": name, "namespace": "default"},
+        "metadata": {"name": name, "project": "default"},
         "spec": {
             "role": "Research Analyst",
             "goal": "Find information",

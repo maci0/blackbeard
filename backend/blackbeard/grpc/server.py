@@ -169,7 +169,7 @@ def _resource_to_proto(resource: Any) -> blackbeard_pb2.Resource:
         api_version=API_VERSION,
         kind=resource.kind.value if hasattr(resource.kind, "value") else str(resource.kind),
         name=resource.name or "",
-        namespace=resource.namespace or "default",
+        namespace=resource.project or "default",
         spec_json=json.dumps(resource.spec) if resource.spec else "{}",
         version=resource.version or 1,
         created_at=resource.created_at.isoformat() if resource.created_at else "",
@@ -182,7 +182,7 @@ def _execution_to_proto(execution: Any) -> blackbeard_pb2.Execution:
     return blackbeard_pb2.Execution(
         id=str(execution.id) if execution.id else "",
         crew_name=execution.crew_name or "",
-        namespace=execution.crew_namespace or "default",
+        namespace=execution.crew_project or "default",
         status=execution.status.value
         if hasattr(execution.status, "value")
         else str(execution.status),
@@ -234,7 +234,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
     ) -> blackbeard_pb2.ListResourcesResponse:
         """List resources by kind."""
         kind = _resolve_kind(request.kind)
-        namespace = request.namespace or None
+        project = request.namespace or None
         limit = request.limit or 100
         offset = request.offset or 0
 
@@ -242,7 +242,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
             service = ResourceService(session)
             items, total = await service.list_resources(
                 kind=kind,
-                namespace=namespace,
+                project=project,
                 limit=limit,
                 offset=offset,
             )
@@ -259,12 +259,12 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
     ) -> blackbeard_pb2.Resource:
         """Get a single resource."""
         kind = _resolve_kind(request.kind)
-        namespace = request.namespace or "default"
+        project = request.namespace or "default"
 
         async with async_session() as session:
             service = ResourceService(session)
             try:
-                resource = await service.get(kind, request.name, namespace)
+                resource = await service.get(kind, request.name, project)
             except ResourceNotFoundError as exc:
                 await context.abort(grpc.StatusCode.NOT_FOUND, str(exc))
                 return blackbeard_pb2.Resource()
@@ -278,7 +278,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
     ) -> blackbeard_pb2.Resource:
         """Create a resource."""
         kind = _resolve_kind(request.kind)
-        namespace = request.namespace or "default"
+        project = request.namespace or "default"
 
         try:
             spec = json.loads(request.spec_json) if request.spec_json else {}
@@ -292,7 +292,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
         data = ResourceCreate(
             apiVersion=request.api_version or API_VERSION,
             kind=kind,
-            metadata=ResourceMetadata(name=request.name, namespace=namespace),
+            metadata=ResourceMetadata(name=request.name, project=project),
             spec=spec,
         )
 
@@ -318,12 +318,12 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
     ) -> blackbeard_pb2.DeleteResponse:
         """Delete a resource."""
         kind = _resolve_kind(request.kind)
-        namespace = request.namespace or "default"
+        project = request.namespace or "default"
 
         async with async_session() as session:
             service = ResourceService(session)
             try:
-                await service.delete(kind, request.name, namespace)
+                await service.delete(kind, request.name, project)
                 await session.commit()
             except ResourceNotFoundError:
                 return blackbeard_pb2.DeleteResponse(deleted=False)
@@ -339,7 +339,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
         from blackbeard.engine import ExecutionError, ExecutionNotFoundError
         from blackbeard.engine import executor as _executor_mod
 
-        namespace = request.namespace or "default"
+        project = request.namespace or "default"
         try:
             inputs = json.loads(request.inputs_json) if request.inputs_json else {}
         except json.JSONDecodeError:
@@ -355,7 +355,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
                     session,
                     request.crew_name,
                     inputs,
-                    namespace,
+                    project,
                 )
             except ExecutionNotFoundError as exc:
                 await context.abort(grpc.StatusCode.NOT_FOUND, str(exc))

@@ -60,7 +60,7 @@ def _make_snapshot(
         snapshot[f"Agent/{name}"] = {
             "kind": "Agent",
             "name": name,
-            "namespace": "default",
+            "project": "default",
             "spec": agent_spec,
         }
 
@@ -75,7 +75,7 @@ def _make_snapshot(
     snapshot[f"Crew/{crew_name}"] = {
         "kind": "Crew",
         "name": crew_name,
-        "namespace": "default",
+        "project": "default",
         "spec": crew_spec,
     }
 
@@ -84,7 +84,7 @@ def _make_snapshot(
         snapshot[f"AgentPolicy/{pname}"] = {
             "kind": "AgentPolicy",
             "name": pname,
-            "namespace": "default",
+            "project": "default",
             "spec": pspec,
         }
 

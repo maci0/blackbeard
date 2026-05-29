@@ -596,7 +596,7 @@ ROLE_BINDING_SCHEMA: dict[str, Any] = {
         "scope": {
             "type": "object",
             "properties": {
-                "namespace": {"type": "string", "maxLength": 255},
+                "project": {"type": "string", "maxLength": 255},
             },
             "additionalProperties": False,
         },
@@ -631,7 +631,7 @@ AUTOMATION_SCHEMA: dict[str, Any] = {
         "inputs": {"type": "object", "maxProperties": 100},
         "enabled": {"type": "boolean", "default": True},
         "max_concurrent": {"type": "integer", "minimum": 1, "maximum": 10, "default": 1},
-        "namespace": {"type": "string", "maxLength": 255},
+        "project": {"type": "string", "maxLength": 255},
     },
     "additionalProperties": False,
 }
@@ -653,6 +653,11 @@ NAMESPACE_SCHEMA: dict[str, Any] = {
                 "max_executions_per_hour": {"type": "integer", "minimum": 1, "maximum": 1000},
             },
             "additionalProperties": False,
+        },
+        "guardrails": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 500},
+            "maxItems": 20,
         },
     },
     "additionalProperties": False,

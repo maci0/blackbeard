@@ -84,6 +84,12 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Cost alert thresholds**: AgentPolicy supports `warn_at_usd` and `warn_at_tokens` fields. Triggers `cost_alert` event when spend crosses warning thresholds during execution, before the hard budget limit.
 
+**A2A Protocol**: `GET /.well-known/agent-card.json` auto-generates agent cards from Crew resources with `spec.a2a.enabled: true`. Public endpoint (no auth). Cards include skills from task refs, auth schemes, capabilities. Cached 60s in-memory.
+
+**Resource versioning**: `resource_versions` table stores spec/labels snapshots on every create/update. Endpoints: `GET /{kind}/{name}/versions` (list), `GET /{kind}/{name}/versions/{version}` (detail), `POST /{kind}/{name}/rollback` (restore from snapshot).
+
+**Namespace-level guardrails**: Namespace resources support `spec.guardrails` array. At execution time, namespace guardrails are prepended to task-level guardrails.
+
 **OpenTelemetry**: Optional trace export via `OTEL_ENDPOINT` env var. When unset, tracing is disabled with no overhead.
 
 **External services**: PostgreSQL (resources + executions + users), Valkey (real-time collaboration pub/sub for multi-replica WebSocket fan-out + health checks), LiteLLM proxy (model routing to Vertex AI / OpenAI, with per-execution virtual keys for budget enforcement + spend tracking).

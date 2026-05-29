@@ -5,11 +5,14 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncGenerator
+from datetime import datetime
 from typing import Any
 
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.audit import audit_from_request, log_audit
@@ -25,6 +28,7 @@ from blackbeard.models.resource_schemas import (
     ResourceResponse,
     ResourceUpdate,
 )
+from blackbeard.models.resource_version import ResourceVersion
 from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
 from blackbeard.resources import (
     ResourceConflictError,
@@ -74,6 +78,54 @@ async def _sync_llm_to_litellm(kind: str, name: str, spec: dict[str, Any] | None
 
 
 _MUTATION_RATE_MSG = "Too many mutation requests. Try again later."
+
+
+async def _save_version_snapshot(
+    session: AsyncSession,
+    resource: Any,
+    user: User | None,
+) -> None:
+    """Persist a version snapshot for the given resource."""
+    snapshot = ResourceVersion(
+        resource_id=resource.id,
+        version=resource.version,
+        spec=resource.spec,
+        labels=resource.labels,
+        changed_by=user.email if user else None,
+    )
+    session.add(snapshot)
+    await session.commit()
+
+
+class _VersionSummary(BaseModel):
+    """Summary of a single version snapshot (without full spec)."""
+
+    version: int
+    changed_by: str | None
+    created_at: datetime
+    changed_keys: list[str]
+
+
+class _VersionListResponse(BaseModel):
+    """List of version summaries for a resource."""
+
+    versions: list[_VersionSummary]
+
+
+class _VersionDetailResponse(BaseModel):
+    """Full snapshot of a resource at a specific version."""
+
+    version: int
+    changed_by: str | None
+    created_at: datetime
+    spec: dict[str, Any]
+    labels: dict[str, Any] | None
+
+
+class _RollbackRequest(BaseModel):
+    """Request body for rolling back a resource."""
+
+    version: int = Field(..., ge=1)
 
 
 router = APIRouter(tags=["resources"])
@@ -130,7 +182,7 @@ def _resource_to_document(resource: Any) -> dict[str, Any]:
         "kind": resource.kind.value,
         "metadata": {
             "name": resource.name,
-            "namespace": resource.namespace,
+            "project": resource.project,
         },
         "spec": spec,
     }
@@ -149,11 +201,11 @@ _EXPORT_PAGE_SIZE = 200
     },
 )
 async def export_resources(
-    namespace: str | None = Query(
+    project: str | None = Query(
         default=None,
         pattern=NAME_PATTERN,
         max_length=255,
-        description="Filter by namespace (omit for all namespaces)",
+        description="Filter by project (omit for all projects)",
     ),
     session: AsyncSession = Depends(get_session),
     _user: User | None = Depends(get_current_user),
@@ -170,7 +222,7 @@ async def export_resources(
         offset = 0
         while True:
             items, _total = await service.list_resources(
-                namespace=namespace,
+                project=project,
                 limit=_EXPORT_PAGE_SIZE,
                 offset=offset,
             )
@@ -193,7 +245,7 @@ async def export_resources(
         media_type="application/x-yaml",
         headers={
             "Cache-Control": "no-store",
-            "Content-Disposition": "attachment; filename=\"blackbeard-resources.yaml\"",
+            "Content-Disposition": 'attachment; filename="blackbeard-resources.yaml"',
         },
     )
 
@@ -208,11 +260,11 @@ async def export_resources(
 )
 async def list_resources(
     kind_plural: str = Path(..., pattern=_KIND_PATTERN),
-    namespace: str | None = Query(
+    project: str | None = Query(
         default=None,
         pattern=NAME_PATTERN,
         max_length=255,
-        description="Filter by namespace (omit for all namespaces)",
+        description="Filter by project (omit for all projects)",
     ),
     label_selector: str | None = Query(
         default=None,
@@ -252,7 +304,7 @@ async def list_resources(
     service = ResourceService(session)
     items, total = await service.list_resources(
         kind=kind,
-        namespace=namespace,
+        project=project,
         labels=labels,
         limit=limit,
         offset=offset,
@@ -304,17 +356,18 @@ async def create_resource(
             **audit_from_request(request, user),
         )
         await session.commit()
+        await _save_version_snapshot(session, resource, user)
     except ResourceValidationError as exc:
         logger.warning(
-            "Resource validation failed: %s/%s namespace=%s",
+            "Resource validation failed: %s/%s project=%s",
             data.kind,
             data.metadata.name,
-            data.metadata.namespace,
+            data.metadata.project,
             extra={
                 "event": "resource_api_validation_failed",
                 "resource_kind": data.kind,
                 "resource_name": data.metadata.name,
-                "namespace": data.metadata.namespace,
+                "project": data.metadata.project,
                 "error_count": len(exc.errors),
             },
         )
@@ -323,8 +376,8 @@ async def create_resource(
             detail=[e.to_dict() for e in exc.errors],
         ) from exc
     if created:
-        ns = data.metadata.namespace
-        response.headers["Location"] = f"/api/v1/{kind_plural}/{data.metadata.name}?namespace={ns}"
+        ns = data.metadata.project
+        response.headers["Location"] = f"/api/v1/{kind_plural}/{data.metadata.name}?project={ns}"
     else:
         response.status_code = 200
     _fire_and_forget(_maybe_reload_scheduler(request, url_kind))
@@ -347,11 +400,11 @@ async def get_resource(
         max_length=255,
         description="Resource name",
     ),
-    namespace: str = Query(
+    project: str = Query(
         default="default",
         pattern=NAME_PATTERN,
         max_length=255,
-        description="Resource namespace",
+        description="Resource project",
     ),
     session: AsyncSession = Depends(get_session),
     _user: User | None = Depends(check_resource_permission),
@@ -360,7 +413,7 @@ async def get_resource(
     kind = _resolve_kind(kind_plural)
     service = ResourceService(session)
     try:
-        resource = await service.get(kind, name, namespace)
+        resource = await service.get(kind, name, project)
     except ResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return ResourceResponse.from_db(resource)
@@ -372,7 +425,7 @@ async def get_resource(
     responses={
         404: {"description": "Resource not found"},
         409: {"description": "Version conflict (optimistic locking)"},
-        422: {"description": "Validation error or name/namespace mismatch"},
+        422: {"description": "Validation error or name/project mismatch"},
         429: {"description": "Too many mutation requests"},
     },
 )
@@ -386,11 +439,11 @@ async def update_resource(
         max_length=255,
         description="Resource name",
     ),
-    namespace: str = Query(
+    project: str = Query(
         default="default",
         pattern=NAME_PATTERN,
         max_length=255,
-        description="Resource namespace",
+        description="Resource project",
     ),
     session: AsyncSession = Depends(get_session),
     user: User | None = Depends(check_resource_permission),
@@ -408,18 +461,18 @@ async def update_resource(
                     f" but body has '{data.metadata.name}'"
                 ),
             )
-        if data.metadata.namespace != namespace:
+        if data.metadata.project != project:
             raise HTTPException(
                 status_code=422,
                 detail=(
-                    f"Cannot move resource to different namespace: "
-                    f"URL namespace is '{namespace}' but body has '{data.metadata.namespace}'"
+                    f"Cannot move resource to different project: "
+                    f"URL project is '{project}' but body has '{data.metadata.project}'"
                 ),
             )
 
     service = ResourceService(session)
     try:
-        resource = await service.update(kind, name, data, namespace=namespace)
+        resource = await service.update(kind, name, data, project=project)
         await log_audit(
             session,
             action="resource_updated",
@@ -428,33 +481,34 @@ async def update_resource(
             **audit_from_request(request, user),
         )
         await session.commit()
+        await _save_version_snapshot(session, resource, user)
     except ResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ResourceConflictError as exc:
         logger.warning(
-            "Version conflict: %s/%s namespace=%s",
+            "Version conflict: %s/%s project=%s",
             kind,
             name,
-            namespace,
+            project,
             extra={
                 "event": "resource_version_conflict",
                 "resource_kind": kind,
                 "resource_name": name,
-                "namespace": namespace,
+                "project": project,
             },
         )
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ResourceValidationError as exc:
         logger.warning(
-            "Resource update validation failed: %s/%s namespace=%s",
+            "Resource update validation failed: %s/%s project=%s",
             kind,
             name,
-            namespace,
+            project,
             extra={
                 "event": "resource_update_validation_failed",
                 "resource_kind": kind,
                 "resource_name": name,
-                "namespace": namespace,
+                "project": project,
                 "error_count": len(exc.errors),
             },
         )
@@ -486,11 +540,11 @@ async def delete_resource(
         max_length=255,
         description="Resource name",
     ),
-    namespace: str = Query(
+    project: str = Query(
         default="default",
         pattern=NAME_PATTERN,
         max_length=255,
-        description="Resource namespace",
+        description="Resource project",
     ),
     session: AsyncSession = Depends(get_session),
     user: User | None = Depends(check_resource_permission),
@@ -500,7 +554,7 @@ async def delete_resource(
     kind = _resolve_kind(kind_plural)
     service = ResourceService(session)
     try:
-        await service.delete(kind, name, namespace)
+        await service.delete(kind, name, project)
         await log_audit(
             session,
             action="resource_deleted",
@@ -511,15 +565,15 @@ async def delete_resource(
         await session.commit()
     except ResourceNotFoundError:
         logger.debug(
-            "Delete no-op: %s/%s not found in namespace=%s",
+            "Delete no-op: %s/%s not found in project=%s",
             kind,
             name,
-            namespace,
+            project,
             extra={
                 "event": "resource_delete_noop",
                 "resource_kind": kind,
                 "resource_name": name,
-                "namespace": namespace,
+                "project": project,
             },
         )
     else:
@@ -527,3 +581,202 @@ async def delete_resource(
         _fire_and_forget(_sync_llm_to_litellm(kind, name, None))
         if kind in _AUTHZ_CACHE_KINDS:
             _clear_authz_cache()
+
+
+# ---------------------------------------------------------------------------
+# Version history endpoints
+# ---------------------------------------------------------------------------
+
+
+def _compute_changed_keys(
+    current_spec: dict[str, Any],
+    previous_spec: dict[str, Any] | None,
+) -> list[str]:
+    """Return the list of top-level spec keys that differ from the previous version."""
+    if previous_spec is None:
+        return sorted(current_spec.keys())
+    changed: list[str] = []
+    all_keys = set(current_spec.keys()) | set(previous_spec.keys())
+    for key in sorted(all_keys):
+        if current_spec.get(key) != previous_spec.get(key):
+            changed.append(key)
+    return changed
+
+
+@router.get(
+    "/{kind_plural}/{name}/versions",
+    response_model=_VersionListResponse,
+    responses={404: {"description": "Resource not found"}},
+)
+async def list_resource_versions(
+    kind_plural: str = Path(..., pattern=_KIND_PATTERN),
+    name: str = Path(
+        ...,
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Resource name",
+    ),
+    project: str = Query(
+        default="default",
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Resource project",
+    ),
+    session: AsyncSession = Depends(get_session),
+    _user: User | None = Depends(check_resource_permission),
+) -> _VersionListResponse:
+    """List all version snapshots for a resource."""
+    kind = _resolve_kind(kind_plural)
+    service = ResourceService(session)
+    try:
+        resource = await service.get(kind, name, project)
+    except ResourceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    result = await session.execute(
+        select(ResourceVersion)
+        .where(ResourceVersion.resource_id == resource.id)
+        .order_by(ResourceVersion.version.asc())
+    )
+    snapshots = list(result.scalars().all())
+
+    summaries: list[_VersionSummary] = []
+    for i, snap in enumerate(snapshots):
+        prev_spec = snapshots[i - 1].spec if i > 0 else None
+        summaries.append(
+            _VersionSummary(
+                version=snap.version,
+                changed_by=snap.changed_by,
+                created_at=snap.created_at,
+                changed_keys=_compute_changed_keys(snap.spec, prev_spec),
+            )
+        )
+
+    return _VersionListResponse(versions=summaries)
+
+
+@router.get(
+    "/{kind_plural}/{name}/versions/{version}",
+    response_model=_VersionDetailResponse,
+    responses={404: {"description": "Resource or version not found"}},
+)
+async def get_resource_version(
+    kind_plural: str = Path(..., pattern=_KIND_PATTERN),
+    name: str = Path(
+        ...,
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Resource name",
+    ),
+    version: int = Path(..., ge=1, description="Version number"),
+    project: str = Query(
+        default="default",
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Resource project",
+    ),
+    session: AsyncSession = Depends(get_session),
+    _user: User | None = Depends(check_resource_permission),
+) -> _VersionDetailResponse:
+    """Get the full snapshot of a resource at a specific version."""
+    kind = _resolve_kind(kind_plural)
+    service = ResourceService(session)
+    try:
+        resource = await service.get(kind, name, project)
+    except ResourceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    result = await session.execute(
+        select(ResourceVersion).where(
+            ResourceVersion.resource_id == resource.id,
+            ResourceVersion.version == version,
+        )
+    )
+    snapshot = result.scalar_one_or_none()
+    if snapshot is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version {version} not found for {kind}/{name}",
+        )
+
+    return _VersionDetailResponse(
+        version=snapshot.version,
+        changed_by=snapshot.changed_by,
+        created_at=snapshot.created_at,
+        spec=snapshot.spec,
+        labels=snapshot.labels,
+    )
+
+
+@router.post(
+    "/{kind_plural}/{name}/rollback",
+    response_model=ResourceResponse,
+    responses={
+        404: {"description": "Resource or version not found"},
+        422: {"description": "Validation error"},
+        429: {"description": "Too many mutation requests"},
+    },
+)
+async def rollback_resource(
+    body: _RollbackRequest,
+    request: Request,
+    kind_plural: str = Path(..., pattern=_KIND_PATTERN),
+    name: str = Path(
+        ...,
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Resource name",
+    ),
+    project: str = Query(
+        default="default",
+        pattern=NAME_PATTERN,
+        max_length=255,
+        description="Resource project",
+    ),
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(check_resource_permission),
+) -> ResourceResponse:
+    """Rollback a resource to a previous version snapshot."""
+    check_rate_limit(mutation_limiter, user, _MUTATION_RATE_MSG)
+    kind = _resolve_kind(kind_plural)
+    service = ResourceService(session)
+    try:
+        resource = await service.get(kind, name, project)
+    except ResourceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    # Find the target version snapshot
+    result = await session.execute(
+        select(ResourceVersion).where(
+            ResourceVersion.resource_id == resource.id,
+            ResourceVersion.version == body.version,
+        )
+    )
+    snapshot = result.scalar_one_or_none()
+    if snapshot is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version {body.version} not found for {kind}/{name}",
+        )
+
+    # Restore spec and labels from the snapshot, bump version
+    resource.spec = snapshot.spec
+    resource.labels = snapshot.labels or {}
+    resource.version += 1
+
+    await log_audit(
+        session,
+        action="resource_rollback",
+        resource_type=kind,
+        resource_id=name,
+        detail={"rollback_to_version": body.version, "new_version": resource.version},
+        **audit_from_request(request, user),
+    )
+    await session.commit()
+    await _save_version_snapshot(session, resource, user)
+
+    _fire_and_forget(_maybe_reload_scheduler(request, kind))
+    _fire_and_forget(_sync_llm_to_litellm(kind, name, resource.spec))
+    if kind in _AUTHZ_CACHE_KINDS:
+        _clear_authz_cache()
+    return ResourceResponse.from_db(resource)

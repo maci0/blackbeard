@@ -38,7 +38,7 @@ class AutomationScheduler:
 
                 result = await session.execute(
                     select(Resource)
-                    .options(load_only(Resource.name, Resource.namespace, Resource.spec))
+                    .options(load_only(Resource.name, Resource.project, Resource.spec))
                     .where(Resource.kind == ResourceKind.AUTOMATION)
                     .limit(1000)
                 )
@@ -56,9 +56,9 @@ class AutomationScheduler:
                     continue
                 target = spec.get("target", {})
                 inputs = spec.get("inputs", {})
-                namespace = spec.get("namespace", automation.namespace)
+                project = spec.get("project", automation.project)
 
-                self._schedule(automation.name, cron_expr, target, inputs, namespace)
+                self._schedule(automation.name, cron_expr, target, inputs, project)
 
             logger.info(
                 "Automation scheduler started: %d cron tasks scheduled",
@@ -137,7 +137,7 @@ class AutomationScheduler:
         cron_expr: str,
         target: dict[str, Any],
         inputs: dict[str, Any],
-        namespace: str,
+        project: str,
     ) -> None:
         """Schedule a single cron automation.
 
@@ -201,7 +201,7 @@ class AutomationScheduler:
             self._tasks[automation_name].cancel()
 
         task = asyncio.create_task(
-            self._run_cron(automation_name, cron_expr, target, inputs, namespace),
+            self._run_cron(automation_name, cron_expr, target, inputs, project),
             name=f"cron-{automation_name}",
         )
         task.add_done_callback(self._log_cron_task_exception)
@@ -213,7 +213,7 @@ class AutomationScheduler:
         cron_expr: str,
         target: dict[str, Any],
         inputs: dict[str, Any],
-        namespace: str,
+        project: str,
     ) -> None:
         """Run on cron schedule using croniter."""
         try:
@@ -245,14 +245,14 @@ class AutomationScheduler:
             if not self._running:
                 break
 
-            await self._trigger_target(automation_name, target, inputs, namespace)
+            await self._trigger_target(automation_name, target, inputs, project)
 
     async def _trigger_target(
         self,
         automation_name: str,
         target: dict[str, Any],
         inputs: dict[str, Any],
-        namespace: str,
+        project: str,
     ) -> None:
         """Trigger the target Crew or Flow."""
         target_kind = target.get("kind", "Crew")
@@ -267,14 +267,14 @@ class AutomationScheduler:
                         session,
                         target_name,
                         inputs=inputs,
-                        namespace=namespace,
+                        project=project,
                     )
                 else:
                     await kickoff(
                         session,
                         target_name,
                         inputs=inputs,
-                        namespace=namespace,
+                        project=project,
                     )
 
             logger.info(
@@ -287,7 +287,7 @@ class AutomationScheduler:
                     "automation_name": automation_name,
                     "target_kind": target_kind,
                     "target_name": target_name,
-                    "namespace": namespace,
+                    "project": project,
                 },
             )
         except Exception:
@@ -301,6 +301,6 @@ class AutomationScheduler:
                     "automation_name": automation_name,
                     "target_kind": target_kind,
                     "target_name": target_name,
-                    "namespace": namespace,
+                    "project": project,
                 },
             )

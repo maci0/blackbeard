@@ -15,7 +15,7 @@ interface ResourceState {
   createResource: (resource: {
     apiVersion: string
     kind: string
-    metadata: { name: string; namespace?: string; labels?: Record<string, string> }
+    metadata: { name: string; project?: string; labels?: Record<string, string> }
     spec: Record<string, unknown>
   }) => Promise<Resource>
   updateResource: (
@@ -23,7 +23,7 @@ interface ResourceState {
     name: string,
     data: {
       spec?: Record<string, unknown>
-      metadata?: { name: string; namespace?: string; labels?: Record<string, string> }
+      metadata?: { name: string; project?: string; labels?: Record<string, string> }
       version: number
     },
   ) => Promise<Resource>

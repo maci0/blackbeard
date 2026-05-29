@@ -103,7 +103,7 @@ POST /api/v1/crews/{name}/kickoff
 {
   "id": "exec-abc123",
   "crew_name": "research-crew",
-  "crew_namespace": "default",
+  "crew_project": "default",
   "status": "queued",
   "inputs": {"topic": "AI safety"},
   "total_tokens": 0,
@@ -1023,7 +1023,7 @@ POST /api/v1/crews/{name}/replay
 training_sessions
   id              UUID PK
   crew_name       VARCHAR(255) NOT NULL
-  crew_namespace  VARCHAR(255) NOT NULL DEFAULT 'default'
+  crew_project  VARCHAR(255) NOT NULL DEFAULT 'default'
   status          VARCHAR(32)          -- running, waiting_for_feedback, completed, failed
   n_iterations    INTEGER NOT NULL
   current_iter    INTEGER NOT NULL DEFAULT 0
@@ -1037,7 +1037,7 @@ training_sessions
 test_sessions
   id              UUID PK
   crew_name       VARCHAR(255) NOT NULL
-  crew_namespace  VARCHAR(255) NOT NULL DEFAULT 'default'
+  crew_project  VARCHAR(255) NOT NULL DEFAULT 'default'
   status          VARCHAR(32)          -- running, completed, failed
   n_iterations    INTEGER NOT NULL
   eval_model      VARCHAR(255)

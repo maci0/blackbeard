@@ -13,7 +13,7 @@ export interface BlackbeardConfig {
 /** Metadata attached to every Blackbeard resource. */
 export interface ResourceMetadata {
   name: string;
-  namespace?: string;
+  project?: string;
   labels?: Record<string, string>;
 }
 
@@ -57,7 +57,7 @@ export interface ExecutionTask {
 export interface Execution {
   id: string;
   crew_name: string;
-  crew_namespace: string;
+  crew_project: string;
   execution_type: "kickoff" | "train" | "test" | "flow";
   status: "queued" | "running" | "completed" | "failed" | "cancelled";
   n_iterations: number | null;

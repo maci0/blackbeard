@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Task
 metadata:
   name: gather-data
-  namespace: default
+  project: default
 spec:
   description: "Research {topic} thoroughly. Gather key facts, statistics, and expert opinions."
   expected_output: "Structured research notes with sources"
@@ -12,7 +12,7 @@ apiVersion: blackbeard/v1
 kind: Task
 metadata:
   name: format-report
-  namespace: default
+  project: default
 spec:
   description: "Take the research notes and format them into a publication-ready report with sections, key findings, and a summary."
   expected_output: "Polished report in markdown format"

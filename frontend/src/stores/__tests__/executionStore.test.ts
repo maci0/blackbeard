@@ -24,7 +24,7 @@ function makeExecution(overrides: Partial<Execution> = {}): Execution {
   return {
     id: 'exec-1',
     crew_name: 'test-crew',
-    crew_namespace: 'default',
+    crew_project: 'default',
     execution_type: 'kickoff',
     status: 'running',
     n_iterations: null,

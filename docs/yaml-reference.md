@@ -7,7 +7,7 @@ apiVersion: blackbeard/v1
 kind: <Kind>          # One of the kinds listed below
 metadata:
   name: <string>      # Unique name within the namespace (required)
-  namespace: default  # Logical grouping; defaults to "default"
+  project: default  # Logical grouping; defaults to "default"
   labels:             # Arbitrary key/value pairs for filtering (optional)
     key: value
 spec:                 # Kind-specific fields documented below
@@ -33,7 +33,7 @@ apiVersion: blackbeard/v1
 kind: Agent
 metadata:
   name: researcher
-  namespace: default
+  project: default
   labels:
     role: research
 spec:
@@ -92,7 +92,7 @@ apiVersion: blackbeard/v1
 kind: Task
 metadata:
   name: research-topic
-  namespace: default
+  project: default
 spec:
   # --- Required ---
   description: >                           # What the agent must do; supports {input} variables
@@ -147,7 +147,7 @@ apiVersion: blackbeard/v1
 kind: Crew
 metadata:
   name: research-crew
-  namespace: default
+  project: default
   labels:
     type: research
 spec:
@@ -259,7 +259,7 @@ apiVersion: blackbeard/v1
 kind: Tool
 metadata:
   name: web-search
-  namespace: default
+  project: default
   labels:
     category: search
 spec:
@@ -321,7 +321,7 @@ apiVersion: blackbeard/v1
 kind: LLMConnection
 metadata:
   name: vertex-claude-sonnet
-  namespace: default
+  project: default
   labels:
     provider: vertex-ai
     tier: standard
@@ -380,7 +380,7 @@ apiVersion: blackbeard/v1
 kind: AgentPolicy
 metadata:
   name: standard-policy
-  namespace: default
+  project: default
 spec:
   # Tool access control
   tools:
@@ -432,7 +432,7 @@ apiVersion: blackbeard/v1
 kind: Guardrail
 metadata:
   name: no-pii
-  namespace: default
+  project: default
 spec:
   # --- Required ---
   type: function                           # "function", "llm", or "schema"
@@ -486,7 +486,7 @@ apiVersion: blackbeard/v1
 kind: Flow
 metadata:
   name: research-pipeline
-  namespace: default
+  project: default
 spec:
   # --- Required ---
   steps:
@@ -540,7 +540,7 @@ apiVersion: blackbeard/v1
 kind: KnowledgeSource
 metadata:
   name: product-docs
-  namespace: default
+  project: default
 spec:
   # --- Required ---
   type: text                               # "text", "pdf", "csv", "json", "excel", "string", or "url"
@@ -582,7 +582,7 @@ apiVersion: blackbeard/v1
 kind: Role
 metadata:
   name: developer
-  namespace: default
+  project: default
 spec:
   description: "Create and manage agents, tasks, crews, and tools"
   rules:
@@ -616,7 +616,7 @@ apiVersion: blackbeard/v1
 kind: RoleBinding
 metadata:
   name: dev-team-binding
-  namespace: default
+  project: default
 spec:
   role: "ref:roles/developer"
   subjects:
@@ -627,7 +627,7 @@ spec:
     - kind: Agent
       name: researcher
   scope:
-    namespace: default                    # Limit permissions to this namespace (optional)
+    project: default                    # Limit permissions to this namespace (optional)
 ```
 
 | Field | Type | Required | Description |
@@ -649,7 +649,7 @@ apiVersion: blackbeard/v1
 kind: Automation
 metadata:
   name: nightly-research
-  namespace: default
+  project: default
 spec:
   target:
     kind: Crew

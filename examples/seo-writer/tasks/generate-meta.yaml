@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Task
 metadata:
   name: generate-meta
-  namespace: default
+  project: default
 spec:
   description: >
     Generate complete SEO metadata for the article:

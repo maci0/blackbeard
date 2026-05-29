@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Task
 metadata:
   name: write-article
-  namespace: default
+  project: default
 spec:
   description: >
     Using the research findings, write a 1000-word article on: {topic}

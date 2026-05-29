@@ -133,8 +133,8 @@ function ModelCard({
                   {resource.metadata.name}
                 </Link>
               </p>
-              {resource.metadata.namespace && resource.metadata.namespace !== 'default' && (
-                <p className="text-xs text-muted-foreground">{resource.metadata.namespace}</p>
+              {resource.metadata.project && resource.metadata.project !== 'default' && (
+                <p className="text-xs text-muted-foreground">{resource.metadata.project}</p>
               )}
             </div>
           </div>
@@ -666,7 +666,7 @@ export default function Models() {
       await createResource({
         apiVersion: API_VERSION,
         kind: 'LLMConnection',
-        metadata: { name: form.name, namespace: 'default' },
+        metadata: { name: form.name, project: 'default' },
         spec,
       })
       setAddOpen(false)

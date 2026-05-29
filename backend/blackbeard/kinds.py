@@ -70,7 +70,7 @@ PLURAL_TO_KIND_ENUM: dict[str, ResourceKind] = {
 
 ALL_KINDS: frozenset[str] = frozenset(KIND_TO_PLURAL.keys())
 
-# Regex for valid resource/namespace names (used across API and CLI layers)
+# Regex for valid resource/project names (used across API and CLI layers)
 NAME_PATTERN = r"^[a-z0-9][a-z0-9\-]*$"
 
 # Regex for safe filenames (used by execution schemas and resource loader)

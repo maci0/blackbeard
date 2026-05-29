@@ -17,14 +17,14 @@ def test_valid_namespace_minimal():
 
 
 def test_valid_namespace_with_description():
-    spec = {"description": "Default namespace"}
+    spec = {"description": "Default project"}
     errors, _ = validate_resource("Namespace", spec)
     assert errors == []
 
 
 def test_valid_namespace_full():
     spec = {
-        "description": "Production namespace",
+        "description": "Production project",
         "labels": {"team": "backend", "env": "prod"},
         "default_agent_policy": "ref:agent-policies/standard",
         "resource_quota": {
@@ -387,7 +387,7 @@ def test_resource_metadata_rejects_empty_name():
 def test_resource_metadata_accepts_valid_name():
     meta = ResourceMetadata(name="my-resource")
     assert meta.name == "my-resource"
-    assert meta.namespace == "default"
+    assert meta.project == "default"
 
 
 def test_resource_metadata_label_key_too_long():
@@ -494,7 +494,7 @@ def test_execution_response_identity_defaults():
     resp = ExecutionResponse(
         id="00000000-0000-0000-0000-000000000000",
         crew_name="test",
-        crew_namespace="default",
+        crew_project="default",
         status="queued",
         inputs={},
         created_at=datetime.now(UTC),

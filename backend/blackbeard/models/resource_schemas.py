@@ -30,7 +30,7 @@ class ResourceMetadata(BaseModel):
     """Resource metadata block (mirrors YAML metadata section)."""
 
     name: str = Field(..., min_length=1, max_length=255, pattern=NAME_PATTERN)
-    namespace: str = Field(default="default", max_length=255, pattern=NAME_PATTERN)
+    project: str = Field(default="default", max_length=255, pattern=NAME_PATTERN)
     labels: dict[str, str] = Field(default_factory=dict, max_length=50)
 
     @model_validator(mode="after")
@@ -115,7 +115,7 @@ class ResourceResponse(BaseModel):
             kind=resource.kind.value,
             metadata=ResourceMetadata.model_construct(
                 name=resource.name,
-                namespace=resource.namespace,
+                project=resource.project,
                 labels=resource.labels or {},
             ),
             spec=spec,

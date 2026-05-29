@@ -164,7 +164,7 @@ Common workflows:
     help="API key",
 )
 @click.option(
-    "--namespace",
+    "--project",
     "-n",
     default="default",
     envvar="BLACKBEARD_NAMESPACE",
@@ -190,7 +190,7 @@ def cli(
     ctx: click.Context,
     server: str,
     api_key: str | None,
-    namespace: str,
+    project: str,
     timeout: int,
     output_json: bool,
 ) -> None:
@@ -198,7 +198,7 @@ def cli(
     ctx.ensure_object(dict)
     ctx.obj["server"] = server.rstrip("/")
     ctx.obj["api_key"] = api_key
-    ctx.obj["namespace"] = namespace
+    ctx.obj["project"] = namespace
     ctx.obj["timeout"] = float(timeout)
     ctx.obj["json"] = output_json
 
@@ -430,13 +430,13 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
         raise SystemExit(1)
 
     if dry_run:
-        ns = ctx.obj["namespace"]
+        ns = ctx.obj["project"]
         if ctx.obj["json"]:
             print_json(
                 {
                     "dry_run": True,
                     "server": server,
-                    "namespace": ns,
+                    "project": ns,
                     "resources": [
                         {"kind": r.get("kind"), "name": r.get("metadata", {}).get("name")}
                         for r in resources
@@ -447,7 +447,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
             out.print(
                 Panel(
                     f"[cyan]Dry run — no changes applied[/]\n"
-                    f"[dim]Server: {server}  Namespace: {ns}[/]",
+                    f"[dim]Server: {server}  Project: {ns}[/]",
                     border_style="cyan",
                 )
             )
@@ -460,7 +460,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
     if not yes and not ctx.obj["json"]:
         console.print(
             f"\n[bold]{len(resources)}[/] resource(s) will be applied to"
-            f" [bold]{server}[/] (namespace: [bold]{ctx.obj['namespace']}[/])."
+            f" [bold]{server}[/] (project: [bold]{ctx.obj['project']}[/])."
         )
         if not click.confirm("Proceed?", default=True):
             console.print("[yellow]Aborted.[/]")
@@ -484,11 +484,11 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: 
         )
 
     # Inject CLI namespace into resources that lack one
-    namespace = ctx.obj["namespace"]
+    namespace = ctx.obj["project"]
     for res in resources:
         meta = res.setdefault("metadata", {})
-        if "namespace" not in meta:
-            meta["namespace"] = namespace
+        if "project" not in meta:
+            meta["project"] = namespace
 
     headers = require_auth(ctx)
     results: list[dict[str, Any]] = []
@@ -621,7 +621,7 @@ def get(ctx: click.Context, kind: str, name: str, output_json: bool) -> None:
     validate_name(name)
     server = ctx.obj["server"]
 
-    namespace = ctx.obj["namespace"]
+    namespace = ctx.obj["project"]
     plural = KIND_TO_PLURAL[kind]
 
     url = f"{server}/api/v1/{plural}/{name}"
@@ -629,7 +629,7 @@ def get(ctx: click.Context, kind: str, name: str, output_json: bool) -> None:
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-            response = client.get(url, headers=headers, params={"namespace": namespace})
+            response = client.get(url, headers=headers, params={"project": namespace})
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
 
@@ -648,7 +648,7 @@ def get(ctx: click.Context, kind: str, name: str, output_json: bool) -> None:
     header.add_column("Value")
     header.add_row("Kind", kind)
     header.add_row("Name", meta.get("name", name))
-    header.add_row("Namespace", meta.get("namespace", namespace))
+    header.add_row("Project", meta.get("project", namespace))
     header.add_row("Version", str(data.get("version", "—")))
     item_labels = meta.get("labels", {})
     if item_labels:
@@ -701,10 +701,10 @@ def list_resources_cmd(
     ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
 
-    namespace = ctx.obj["namespace"]
+    namespace = ctx.obj["project"]
     plural = KIND_TO_PLURAL[kind]
 
-    params: dict[str, Any] = {"namespace": namespace, "limit": limit}
+    params: dict[str, Any] = {"project": namespace, "limit": limit}
     if labels:
         for item in labels:
             if "=" not in item:
@@ -751,7 +751,7 @@ def list_resources_cmd(
 
     table = Table(title=f"{kind} Resources")
     table.add_column("Name", style="bold")
-    table.add_column("Namespace", style="dim")
+    table.add_column("Project", style="dim")
     table.add_column("Version", justify="right")
     table.add_column("Labels")
 
@@ -761,7 +761,7 @@ def list_resources_cmd(
         label_str = ", ".join(f"{k}={v}" for k, v in item_labels.items()) if item_labels else "—"
         table.add_row(
             meta.get("name", "—"),
-            meta.get("namespace", "—"),
+            meta.get("project", "—"),
             str(item.get("version", "—")),
             label_str,
         )
@@ -798,7 +798,7 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: boo
     validate_name(name)
     server = ctx.obj["server"]
 
-    namespace = ctx.obj["namespace"]
+    namespace = ctx.obj["project"]
     plural = KIND_TO_PLURAL[kind]
 
     if (
@@ -816,7 +816,7 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: boo
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-            response = client.delete(url, headers=headers, params={"namespace": namespace})
+            response = client.delete(url, headers=headers, params={"project": namespace})
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
 
@@ -824,7 +824,7 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: boo
         handle_http_error(response)
 
     if ctx.obj["json"]:
-        print_json({"deleted": f"{kind}/{name}", "namespace": namespace, "status": "deleted"})
+        print_json({"deleted": f"{kind}/{name}", "project": namespace, "status": "deleted"})
         return
 
     out.print(f"[green]✓[/] Deleted [bold]{kind}/{name}[/] from namespace '{namespace}'")
@@ -888,7 +888,7 @@ def kickoff(
 
     server = ctx.obj["server"]
 
-    namespace = ctx.obj["namespace"]
+    namespace = ctx.obj["project"]
     prog = ctx.find_root().info_name or "blackbeard"
 
     warn_unused_interval(ctx, watch, interval, f"{prog} kickoff {crew_name}")
@@ -904,7 +904,7 @@ def kickoff(
                     url,
                     json=body,
                     headers=headers,
-                    params={"namespace": namespace},
+                    params={"project": namespace},
                 )
         except httpx.RequestError as exc:
             handle_request_error(server, exc)
@@ -925,7 +925,7 @@ def kickoff(
         out.print(
             Panel.fit(
                 f"[bold]Crew:[/] {crew_name}\n"
-                f"[bold]Namespace:[/] {namespace}\n"
+                f"[bold]Project:[/] {namespace}\n"
                 f"[bold]Execution ID:[/] {execution_id}\n"
                 f"[bold]Status:[/] {status_val}",
                 title="[green]Execution Submitted[/]",
@@ -1027,7 +1027,7 @@ def train(
     parsed_inputs = parse_key_value_inputs(inputs)
 
     server = ctx.obj["server"]
-    namespace = ctx.obj["namespace"]
+    namespace = ctx.obj["project"]
     prog = ctx.find_root().info_name or "blackbeard"
 
     warn_unused_interval(ctx, watch, interval, f"{prog} train {crew_name}")
@@ -1043,7 +1043,7 @@ def train(
                     url,
                     json=body,
                     headers=headers,
-                    params={"namespace": namespace},
+                    params={"project": namespace},
                 )
         except httpx.RequestError as exc:
             handle_request_error(server, exc)
@@ -1064,7 +1064,7 @@ def train(
         out.print(
             Panel.fit(
                 f"[bold]Crew:[/] {crew_name}\n"
-                f"[bold]Namespace:[/] {namespace}\n"
+                f"[bold]Project:[/] {namespace}\n"
                 f"[bold]Mode:[/] train\n"
                 f"[bold]Iterations:[/] {iterations}\n"
                 f"[bold]Filename:[/] {filename}\n"
@@ -1151,7 +1151,7 @@ def test_crew_cmd(
     parsed_inputs = parse_key_value_inputs(inputs)
 
     server = ctx.obj["server"]
-    namespace = ctx.obj["namespace"]
+    namespace = ctx.obj["project"]
     prog = ctx.find_root().info_name or "blackbeard"
 
     warn_unused_interval(ctx, watch, interval, f"{prog} test-crew {crew_name}")
@@ -1167,7 +1167,7 @@ def test_crew_cmd(
                     url,
                     json=body,
                     headers=headers,
-                    params={"namespace": namespace},
+                    params={"project": namespace},
                 )
         except httpx.RequestError as exc:
             handle_request_error(server, exc)
@@ -1188,7 +1188,7 @@ def test_crew_cmd(
         out.print(
             Panel.fit(
                 f"[bold]Crew:[/] {crew_name}\n"
-                f"[bold]Namespace:[/] {namespace}\n"
+                f"[bold]Project:[/] {namespace}\n"
                 f"[bold]Mode:[/] test\n"
                 f"[bold]Iterations:[/] {iterations}\n"
                 f"[bold]Execution ID:[/] {execution_id}\n"

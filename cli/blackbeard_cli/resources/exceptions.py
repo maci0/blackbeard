@@ -25,7 +25,7 @@ class ValidationError(NamedTuple):
 class ResourceNotFoundError(Exception):
     """Raised when a resource is not found."""
 
-    def __init__(self, kind: str, name: str, namespace: str = "default") -> None:
+    def __init__(self, kind: str, name: str, project: str = "default") -> None:
         self.kind = kind
         self.name = name
         self.namespace = namespace

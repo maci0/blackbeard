@@ -24,9 +24,9 @@ _CACHE_MAX_SIZE = 10_000
 
 
 def _cache_key(
-    subject_kind: str, subject_name: str, verb: str, resource_kind: str, namespace: str
+    subject_kind: str, subject_name: str, verb: str, resource_kind: str, project: str
 ) -> str:
-    return f"{subject_kind}:{subject_name}:{verb}:{resource_kind}:{namespace}"
+    return f"{subject_kind}:{subject_name}:{verb}:{resource_kind}:{project}"
 
 
 def _get_cached(key: str) -> bool | None:
@@ -84,17 +84,17 @@ class Authorizer:
         subject_name: str,
         verb: str,
         resource_kind: str,
-        namespace: str = "default",
+        project: str = "default",
     ) -> bool:
         """Check if the subject is authorized for the given verb on resource_kind.
 
-        *namespace* is included in the cache key so that cache entries are
-        scoped per-namespace, but the underlying authorization check is
-        namespace-agnostic (roles and bindings are global).
+        *project* is included in the cache key so that cache entries are
+        scoped per-project, but the underlying authorization check is
+        project-agnostic (roles and bindings are global).
 
         Returns True if authorized, False otherwise.
         """
-        key = _cache_key(subject_kind, subject_name, verb, resource_kind, namespace)
+        key = _cache_key(subject_kind, subject_name, verb, resource_kind, project)
         cached = _get_cached(key)
         if cached is not None:
             return cached

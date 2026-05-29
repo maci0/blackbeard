@@ -147,8 +147,7 @@ class Settings(BaseSettings):
         if not url.startswith(("valkey://", "redis://", "rediss://")):
             got = url.split("://")[0] + "://" if "://" in url else "<no scheme>"
             raise ValueError(
-                f"VALKEY_URL must use 'valkey://', 'redis://', or 'rediss://' scheme "
-                f"(got {got})"
+                f"VALKEY_URL must use 'valkey://', 'redis://', or 'rediss://' scheme (got {got})"
             )
         return v
 

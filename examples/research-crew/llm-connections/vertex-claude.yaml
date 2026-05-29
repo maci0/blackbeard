@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: LLMConnection
 metadata:
   name: vertex-claude-sonnet
-  namespace: default
+  project: default
   labels:
     provider: vertex-ai
     tier: standard

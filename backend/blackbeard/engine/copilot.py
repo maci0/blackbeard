@@ -109,12 +109,12 @@ def _strip_markdown_fences(text: str) -> str:
 
 async def _resolve_model_name(
     llm_connection_name: str | None,
-    namespace: str,
+    project: str,
     session: Any,
 ) -> str:
     """Resolve an LLMConnection name to its LiteLLM model identifier.
 
-    If no name is given, uses the first available LLMConnection in the namespace.
+    If no name is given, uses the first available LLMConnection in the project.
     """
     from sqlalchemy import select
 
@@ -125,13 +125,13 @@ async def _resolve_model_name(
             select(Resource).where(
                 Resource.kind == ResourceKind.LLM_CONNECTION,
                 Resource.name == llm_connection_name,
-                Resource.namespace == namespace,
+                Resource.project == project,
             )
         )
         resource = result.scalar_one_or_none()
         if resource is None:
             raise NoLLMConnectionError(
-                f"LLMConnection '{llm_connection_name}' not found in namespace '{namespace}'. "
+                f"LLMConnection '{llm_connection_name}' not found in project '{project}'. "
                 "Create an LLMConnection resource first, or omit the llm_connection field "
                 "to use any available model."
             )
@@ -140,14 +140,14 @@ async def _resolve_model_name(
             select(Resource)
             .where(
                 Resource.kind == ResourceKind.LLM_CONNECTION,
-                Resource.namespace == namespace,
+                Resource.project == project,
             )
             .limit(1)
         )
         resource = result.scalar_one_or_none()
         if resource is None:
             raise NoLLMConnectionError(
-                f"No LLMConnection found in namespace '{namespace}'. "
+                f"No LLMConnection found in project '{project}'. "
                 "Create an LLMConnection resource first so the copilot knows which model to use. "
                 "Example: POST /api/v1/llm-connections with provider='ollama' and model='llama3'."
             )
@@ -267,7 +267,7 @@ def _validate_and_filter(docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
 async def generate_resources(
     prompt: str,
     llm_connection_name: str | None,
-    namespace: str,
+    project: str,
     session: Any,
 ) -> tuple[list[dict[str, Any]], str]:
     """Generate Blackbeard resources from a natural language prompt.
@@ -282,7 +282,7 @@ async def generate_resources(
         NoLLMConnectionError: No LLMConnection available.
         CopilotError: LLM call or parsing failed.
     """
-    model_name = await _resolve_model_name(llm_connection_name, namespace, session)
+    model_name = await _resolve_model_name(llm_connection_name, project, session)
 
     logger.info(
         "Copilot generating resources: model=%s prompt_len=%d",
@@ -292,7 +292,7 @@ async def generate_resources(
             "event": "copilot_generate_start",
             "model": model_name,
             "prompt_length": len(prompt),
-            "namespace": namespace,
+            "project": project,
         },
     )
 

@@ -47,7 +47,7 @@ agent = client.get("Agent", "researcher")
 client.create({
     "kind": "Agent",
     "apiVersion": "blackbeard/v1",
-    "metadata": {"name": "researcher", "namespace": "default"},
+    "metadata": {"name": "researcher", "project": "default"},
     "spec": {
         "role": "Research Analyst",
         "goal": "Find relevant data",

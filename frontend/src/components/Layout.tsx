@@ -40,7 +40,7 @@ import { useDarkMode, useHealthCheck } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
 import { cn, STORAGE_KEYS, STORAGE_KEYS_NAV } from '@/lib/utils'
 import { useNotificationStore } from '@/stores/notificationStore'
-import { useNamespaceStore } from '@/stores/namespaceStore'
+import { useProjectStore } from '@/stores/projectStore'
 import { isMac, modKey } from '@/lib/platform'
 import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
@@ -203,18 +203,17 @@ function UserInitials({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' 
   )
 }
 
-function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
-  const { current, namespaces, loading, setCurrent, fetchNamespaces, createNamespace } =
-    useNamespaceStore(
-      useShallow((s) => ({
-        current: s.current,
-        namespaces: s.namespaces,
-        loading: s.loading,
-        setCurrent: s.setCurrent,
-        fetchNamespaces: s.fetchNamespaces,
-        createNamespace: s.createNamespace,
-      })),
-    )
+function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
+  const { current, projects, loading, setCurrent, fetchProjects, createProject } = useProjectStore(
+    useShallow((s) => ({
+      current: s.current,
+      projects: s.projects,
+      loading: s.loading,
+      setCurrent: s.setCurrent,
+      fetchProjects: s.fetchProjects,
+      createProject: s.createProject,
+    })),
+  )
   const toast = useToastStore()
   const navigate = useNavigate()
 
@@ -225,8 +224,8 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    void fetchNamespaces()
-  }, [fetchNamespaces])
+    void fetchProjects()
+  }, [fetchProjects])
 
   useEffect(() => {
     if (!open) return
@@ -260,14 +259,14 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
     if (!trimmed) return
     setSubmitting(true)
     try {
-      await createNamespace(trimmed)
+      await createProject(trimmed)
       setCurrent(trimmed)
       setNewName('')
       setCreating(false)
       setOpen(false)
-      toast.success(`Namespace "${trimmed}" created`)
+      toast.success(`Project "${trimmed}" created`)
     } catch {
-      toast.error('Failed to create namespace')
+      toast.error('Failed to create project')
     } finally {
       setSubmitting(false)
     }
@@ -278,8 +277,8 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        title={collapsed ? `Namespace: ${current}` : undefined}
-        aria-label={`Current namespace: ${current}`}
+        title={collapsed ? `Project: ${current}` : undefined}
+        aria-label={`Current project: ${current}`}
         aria-expanded={open}
         className={`flex w-full items-center gap-2 rounded-md border bg-muted/30 px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           collapsed ? 'md:justify-center md:px-2' : ''
@@ -296,7 +295,7 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
         <div className="absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-lg border bg-card shadow-lg">
           <div className="border-b px-3 py-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Namespace
+              Project
             </p>
           </div>
           <div className="max-h-48 overflow-y-auto">
@@ -305,7 +304,7 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
               </div>
             ) : (
-              namespaces.map((ns) => (
+              projects.map((ns) => (
                 <button
                   key={ns}
                   type="button"
@@ -327,11 +326,11 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
           <div className="border-t">
             {creating ? (
               <div className="flex items-center gap-1.5 p-2">
-                <label htmlFor="new-namespace-input" className="sr-only">
-                  New namespace name
+                <label htmlFor="new-project-input" className="sr-only">
+                  New project name
                 </label>
                 <input
-                  id="new-namespace-input"
+                  id="new-project-input"
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
@@ -342,7 +341,7 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
                       setNewName('')
                     }
                   }}
-                  placeholder="my-namespace"
+                  placeholder="my-project"
                   autoFocus
                   autoComplete="off"
                   spellCheck={false}
@@ -369,7 +368,7 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
                   className="flex items-center gap-2 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   <Plus className="h-3 w-3" />
-                  Create namespace
+                  Create project
                 </button>
                 <button
                   type="button"
@@ -380,7 +379,7 @@ function NamespaceSwitcher({ collapsed }: { collapsed: boolean }) {
                   className="flex items-center gap-2 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   <SettingsIcon className="h-3 w-3" />
-                  Manage namespaces
+                  Manage projects
                 </button>
               </div>
             )}
@@ -632,7 +631,7 @@ export default function Layout() {
           </kbd>
         </button>
 
-        <NamespaceSwitcher collapsed={collapsed} />
+        <ProjectSwitcher collapsed={collapsed} />
 
         <nav
           aria-label="Primary"

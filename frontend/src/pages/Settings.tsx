@@ -17,7 +17,7 @@ import {
 import { useDocumentTitle, useDarkMode } from '@/hooks'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { useToastStore } from '@/stores/toastStore'
-import { useNamespaceStore } from '@/stores/namespaceStore'
+import { useProjectStore } from '@/stores/projectStore'
 import { api, ApiError } from '@/api/client'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -38,9 +38,9 @@ export default function Settings() {
   const [apiBase, setApiBase] = useState(() => localStorage.getItem('blackbeard_api_base') || '')
   const [config, setConfig] = useState<PublicConfig | null>(null)
 
-  const { namespaces, fetchNamespaces } = useNamespaceStore()
-  const [defaultNamespace, setDefaultNamespace] = useState(
-    () => localStorage.getItem('blackbeard_default_namespace') || 'default',
+  const { projects, fetchProjects } = useProjectStore()
+  const [defaultProject, setDefaultProject] = useState(
+    () => localStorage.getItem('blackbeard_default_project') || 'default',
   )
   const [browserNotifications, setBrowserNotifications] = useState(
     () => localStorage.getItem('blackbeard_browser_notifications') === 'true',
@@ -54,8 +54,8 @@ export default function Settings() {
   )
 
   useEffect(() => {
-    void fetchNamespaces()
-  }, [fetchNamespaces])
+    void fetchProjects()
+  }, [fetchProjects])
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -65,10 +65,10 @@ export default function Settings() {
     return () => observer.disconnect()
   }, [])
 
-  const handleDefaultNamespaceChange = useCallback((ns: string) => {
-    setDefaultNamespace(ns)
-    localStorage.setItem('blackbeard_default_namespace', ns)
-    useToastStore.getState().success('Default namespace saved')
+  const handleDefaultProjectChange = useCallback((ns: string) => {
+    setDefaultProject(ns)
+    localStorage.setItem('blackbeard_default_project', ns)
+    useToastStore.getState().success('Default project saved')
   }, [])
 
   const handleBrowserNotificationsChange = useCallback((enabled: boolean) => {
@@ -448,25 +448,25 @@ export default function Settings() {
           <div className="space-y-5">
             <div className="space-y-1.5">
               <label
-                htmlFor="default-namespace"
+                htmlFor="default-project"
                 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
               >
-                Default Namespace
+                Default Project
               </label>
               <select
-                id="default-namespace"
-                value={defaultNamespace}
-                onChange={(e) => handleDefaultNamespaceChange(e.target.value)}
+                id="default-project"
+                value={defaultProject}
+                onChange={(e) => handleDefaultProjectChange(e.target.value)}
                 className="w-full max-w-xs rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {namespaces.map((ns) => (
+                {projects.map((ns) => (
                   <option key={ns} value={ns}>
                     {ns}
                   </option>
                 ))}
               </select>
               <p className="text-[11px] text-muted-foreground">
-                Pre-selected namespace when creating new resources
+                Pre-selected project when creating new resources
               </p>
             </div>
 

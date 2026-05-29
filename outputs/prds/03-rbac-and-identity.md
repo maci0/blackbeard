@@ -144,7 +144,7 @@ spec:
     - kind: Group
       name: engineering
   scope:
-    namespace: production
+    project: production
 ```
 
 ```yaml
@@ -161,7 +161,7 @@ spec:
     - kind: Crew
       name: crews/research-crew       # all agents in this crew get this role
   scope:
-    namespace: production
+    project: production
 ```
 
 ---

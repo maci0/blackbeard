@@ -48,7 +48,7 @@ async def _insert_execution(
     crew_name: str = "test-crew",
     status: ExecutionStatus = ExecutionStatus.QUEUED,
     execution_type: ExecutionType = ExecutionType.KICKOFF,
-    namespace: str = "default",
+    project: str = "default",
     started_at: datetime | None = None,
     completed_at: datetime | None = None,
     error: str | None = None,
@@ -57,7 +57,7 @@ async def _insert_execution(
     e = Execution()
     e.id = uuid.uuid4()
     e.crew_name = crew_name
-    e.crew_namespace = namespace
+    e.crew_project = project
     e.execution_type = execution_type
     e.status = status
     e.inputs = {}
@@ -191,15 +191,15 @@ async def test_list_executions_filter_status(db_session: AsyncSession):
     assert items[0].status == ExecutionStatus.QUEUED
 
 
-async def test_list_executions_filter_namespace(db_session: AsyncSession):
-    """list_executions filters by namespace."""
-    await _insert_execution(db_session, namespace="default")
-    await _insert_execution(db_session, namespace="staging")
+async def test_list_executions_filter_project(db_session: AsyncSession):
+    """list_executions filters by project."""
+    await _insert_execution(db_session, project="default")
+    await _insert_execution(db_session, project="staging")
     await db_session.commit()
 
-    items, total = await list_executions(db_session, namespace="staging")
+    items, total = await list_executions(db_session, project="staging")
     assert total == 1
-    assert items[0].crew_namespace == "staging"
+    assert items[0].crew_project == "staging"
 
 
 async def test_list_executions_pagination(db_session: AsyncSession):

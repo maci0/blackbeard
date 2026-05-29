@@ -2,7 +2,7 @@
 
 Targeted areas:
   - Label selector parsing in the resource list API
-  - Update metadata name/namespace mismatch rejection
+  - Update metadata name/project mismatch rejection
   - Crew validation: empty tasks list (minItems enforcement)
   - _exceeds_depth edge cases (empty containers, lists of dicts)
   - _parse_kind case-insensitive lookup
@@ -155,7 +155,7 @@ async def test_update_rejects_name_rename(client: AsyncClient):
 
     update_payload = {
         "version": 1,
-        "metadata": {"name": "different-name", "namespace": "default"},
+        "metadata": {"name": "different-name", "project": "default"},
         "spec": {"role": "R", "goal": "G", "backstory": "B"},
     }
     response = await client.put(
@@ -165,21 +165,21 @@ async def test_update_rejects_name_rename(client: AsyncClient):
     assert "rename" in response.json()["detail"].lower()
 
 
-async def test_update_rejects_namespace_move(client: AsyncClient):
-    """PUT with metadata.namespace different from URL namespace should return 422."""
+async def test_update_rejects_project_move(client: AsyncClient):
+    """PUT with metadata.project different from URL project should return 422."""
     r = await client.post("/api/v1/agents", json=_agent_payload(), headers=API_KEY_HEADER)
     assert r.status_code == 201
 
     update_payload = {
         "version": 1,
-        "metadata": {"name": "researcher", "namespace": "other-ns"},
+        "metadata": {"name": "researcher", "project": "other-ns"},
         "spec": {"role": "R", "goal": "G", "backstory": "B"},
     }
     response = await client.put(
         "/api/v1/agents/researcher", json=update_payload, headers=API_KEY_HEADER
     )
     assert response.status_code == 422
-    assert "namespace" in response.json()["detail"].lower()
+    assert "project" in response.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +296,7 @@ def test_resource_response_from_db_none_labels():
     r.id = uuid.uuid4()
     r.kind = ResourceKind.AGENT
     r.name = "test"
-    r.namespace = "default"
+    r.project = "default"
     r.spec = {"role": "R", "goal": "G", "backstory": "B"}
     r.version = 1
     r.labels = None
@@ -313,7 +313,7 @@ def test_resource_response_from_db_with_labels():
     r.id = uuid.uuid4()
     r.kind = ResourceKind.TOOL
     r.name = "my-tool"
-    r.namespace = "default"
+    r.project = "default"
     r.spec = {"type": "python", "class_path": "crewai_tools.Test"}
     r.version = 2
     r.labels = {"env": "prod"}
@@ -446,11 +446,11 @@ def test_ref_info_repr():
 
 
 def test_resource_not_found_error_attributes():
-    """ResourceNotFoundError should expose kind, name, namespace."""
+    """ResourceNotFoundError should expose kind, name, project."""
     err = ResourceNotFoundError("Agent", "test-agent", "prod")
     assert err.kind == "Agent"
     assert err.name == "test-agent"
-    assert err.namespace == "prod"
+    assert err.project == "prod"
     assert "prod" in str(err)
 
 
@@ -835,7 +835,7 @@ def test_get_tool_tool_rejects_invalid_name():
     tool = GetToolTool(
         api_url="http://localhost:8000",
         api_key="test-key",
-        namespace="default",
+        project="default",
     )
     result = tool._run("Invalid_Name!")
     assert "invalid" in result.lower()
@@ -848,7 +848,7 @@ def test_get_tool_tool_rejects_uppercase_name():
     tool = GetToolTool(
         api_url="http://localhost:8000",
         api_key="test-key",
-        namespace="default",
+        project="default",
     )
     result = tool._run("UpperCase")
     assert "Invalid tool name" in result

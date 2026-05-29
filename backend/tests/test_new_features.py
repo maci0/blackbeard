@@ -265,7 +265,7 @@ class TestHITLEndpoint:
         execution = Execution(
             id=uuid.uuid4(),
             crew_name="test-crew",
-            crew_namespace="default",
+            crew_project="default",
             execution_type=ExecutionType.KICKOFF,
             status=ExecutionStatus.RUNNING,
             inputs={},
@@ -317,7 +317,7 @@ class TestHITLEndpoint:
         execution = Execution(
             id=uuid.uuid4(),
             crew_name="test-crew",
-            crew_namespace="default",
+            crew_project="default",
             execution_type=ExecutionType.KICKOFF,
             status=ExecutionStatus.COMPLETED,
             inputs={},
@@ -345,7 +345,7 @@ class TestHITLEndpoint:
         execution = Execution(
             id=uuid.uuid4(),
             crew_name="test-crew",
-            crew_namespace="default",
+            crew_project="default",
             execution_type=ExecutionType.KICKOFF,
             status=ExecutionStatus.RUNNING,
             inputs={},

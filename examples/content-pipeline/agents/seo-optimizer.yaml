@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Agent
 metadata:
   name: seo-optimizer
-  namespace: default
+  project: default
   labels:
     role: seo
 spec:

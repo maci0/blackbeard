@@ -52,7 +52,7 @@ class ResourceMixin:
     def list(
         self,
         kind: str,
-        namespace: str = "default",
+        project: str = "default",
         *,
         label_selector: str | None = None,
         limit: int = 100,
@@ -73,7 +73,7 @@ class ResourceMixin:
         """
         plural = _kind_plural(kind)
         params: dict[str, Any] = {
-            "namespace": namespace,
+            "project": namespace,
             "limit": limit,
             "offset": offset,
         }
@@ -81,7 +81,7 @@ class ResourceMixin:
             params["label_selector"] = label_selector
         return self._send("GET", f"/api/v1/{plural}", params=params).json()["items"]
 
-    def get(self, kind: str, name: str, namespace: str = "default") -> dict[str, Any]:
+    def get(self, kind: str, name: str, project: str = "default") -> dict[str, Any]:
         """Get a single resource by kind and name.
 
         Args:
@@ -96,7 +96,7 @@ class ResourceMixin:
         return self._send(
             "GET",
             f"/api/v1/{plural}/{quote(name, safe='')}",
-            params={"namespace": namespace},
+            params={"project": namespace},
         ).json()
 
     def create(self, resource: dict[str, Any]) -> dict[str, Any]:
@@ -122,7 +122,7 @@ class ResourceMixin:
         kind: str,
         name: str,
         resource: dict[str, Any],
-        namespace: str = "default",
+        project: str = "default",
     ) -> dict[str, Any]:
         """Update a resource by kind and name (optimistic locking via version).
 
@@ -140,11 +140,11 @@ class ResourceMixin:
         return self._send(
             "PUT",
             f"/api/v1/{plural}/{quote(name, safe='')}",
-            params={"namespace": namespace},
+            params={"project": namespace},
             json=resource,
         ).json()
 
-    def delete(self, kind: str, name: str, namespace: str = "default") -> None:
+    def delete(self, kind: str, name: str, project: str = "default") -> None:
         """Delete a resource by kind and name. Idempotent.
 
         Args:
@@ -156,7 +156,7 @@ class ResourceMixin:
         self._send(
             "DELETE",
             f"/api/v1/{plural}/{quote(name, safe='')}",
-            params={"namespace": namespace},
+            params={"project": namespace},
         )
 
     def apply(self, resources: _DictList) -> _DictList:
@@ -186,7 +186,7 @@ class ResourceMixin:
                 ) from exc
         return results
 
-    def export_all(self, namespace: str = "default") -> str:
+    def export_all(self, project: str = "default") -> str:
         """Export all resources in a namespace as a YAML string.
 
         Uses the server's bulk export endpoint (single request) and returns
@@ -202,5 +202,5 @@ class ResourceMixin:
         return self._send(
             "GET",
             "/api/v1/resources/export",
-            params={"namespace": namespace},
+            params={"project": namespace},
         ).text

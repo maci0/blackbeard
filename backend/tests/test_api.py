@@ -25,7 +25,7 @@ def _task_payload(name: str = "gather-data", agent_ref: str = "ref:agents/resear
     return {
         "apiVersion": "blackbeard/v1",
         "kind": "Task",
-        "metadata": {"name": name, "namespace": "default"},
+        "metadata": {"name": name, "project": "default"},
         "spec": {
             "description": "Gather relevant data from the web",
             "expected_output": "A structured JSON summary",
@@ -106,7 +106,7 @@ async def test_create_agent(client: AsyncClient):
     assert _uuid.UUID(data["id"]), "id must be a valid UUID"
     assert data["kind"] == "Agent"
     assert data["metadata"]["name"] == "researcher"
-    assert data["metadata"]["namespace"] == "default"
+    assert data["metadata"]["project"] == "default"
     assert data["version"] == 1
     assert data["spec"]["role"] == "Research Analyst"
     assert isinstance(data["created_at"], str), "created_at should be a string"
@@ -286,7 +286,7 @@ async def test_create_and_get_llm_connection(client: AsyncClient):
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "LLMConnection",
-        "metadata": {"name": "gpt4", "namespace": "default"},
+        "metadata": {"name": "gpt4", "project": "default"},
         "spec": {
             "provider": "openai",
             "model": "gpt-4o",
@@ -364,7 +364,7 @@ async def test_resource_response_shape(client: AsyncClient):
     }
     assert required.issubset(data.keys()), f"Missing: {required - set(data.keys())}"
     assert data["apiVersion"] == "blackbeard/v1"
-    assert data["metadata"]["namespace"] == "default"
+    assert data["metadata"]["project"] == "default"
     assert isinstance(data["version"], int)
     assert isinstance(data["id"], str)
     assert isinstance(data["spec"], dict)
@@ -434,7 +434,7 @@ async def test_create_resource_invalid_name(client: AsyncClient):
     payload = {
         "apiVersion": "blackbeard/v1",
         "kind": "Agent",
-        "metadata": {"name": "Invalid_Name", "namespace": "default"},
+        "metadata": {"name": "Invalid_Name", "project": "default"},
         "spec": {"role": "R", "goal": "G", "backstory": "B"},
     }
     response = await client.post("/api/v1/agents", json=payload, headers=API_KEY_HEADER)
@@ -463,7 +463,7 @@ async def test_create_task_with_dangling_ref_succeeds(client: AsyncClient):
 # ---------------------------------------------------------------------------
 
 
-def _namespace_payload(name: str = "default", description: str = "Default namespace") -> dict:
+def _namespace_payload(name: str = "default", description: str = "Default project") -> dict:
     return {
         "apiVersion": "blackbeard/v1",
         "kind": "Namespace",
@@ -481,7 +481,7 @@ async def test_create_namespace(client: AsyncClient):
     data = response.json()
     assert data["kind"] == "Namespace"
     assert data["metadata"]["name"] == "default"
-    assert data["spec"]["description"] == "Default namespace"
+    assert data["spec"]["description"] == "Default project"
 
 
 async def test_create_namespace_full_spec(client: AsyncClient):
@@ -491,7 +491,7 @@ async def test_create_namespace_full_spec(client: AsyncClient):
         "kind": "Namespace",
         "metadata": {"name": "production"},
         "spec": {
-            "description": "Production namespace",
+            "description": "Production project",
             "labels": {"team": "backend", "env": "prod"},
             "default_agent_policy": "ref:agent-policies/standard",
             "resource_quota": {
@@ -507,7 +507,7 @@ async def test_create_namespace_full_spec(client: AsyncClient):
 
 
 async def test_get_namespace(client: AsyncClient):
-    """GET /namespaces/{name} should return the created namespace."""
+    """GET /namespaces/{name} should return the created project."""
     await client.post("/api/v1/namespaces", json=_namespace_payload(), headers=API_KEY_HEADER)
     response = await client.get("/api/v1/namespaces/default", headers=API_KEY_HEADER)
     assert response.status_code == 200

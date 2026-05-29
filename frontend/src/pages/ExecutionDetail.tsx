@@ -1255,8 +1255,8 @@ export default function ExecutionDetail() {
         <div className="mt-8 flex items-center gap-6 border-t pt-4 text-xs text-muted-foreground">
           <span>Created: {formatDate(execution.created_at)}</span>
           {execution.completed_at && <span>Completed: {formatDate(execution.completed_at)}</span>}
-          {execution.crew_namespace && execution.crew_namespace !== 'default' && (
-            <span>Namespace: {execution.crew_namespace}</span>
+          {execution.crew_project && execution.crew_project !== 'default' && (
+            <span>Project: {execution.crew_project}</span>
           )}
         </div>
       </div>

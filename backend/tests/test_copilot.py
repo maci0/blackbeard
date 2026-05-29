@@ -294,7 +294,7 @@ async def test_generate_resources_success(db_session, llm_connection_resource):
         resources, explanation = await generate_resources(
             prompt="Build me a research crew",
             llm_connection_name="test-llm",
-            namespace="default",
+            project="default",
             session=db_session,
         )
 
@@ -309,7 +309,7 @@ async def test_generate_resources_no_llm_connection(db_session):
         await generate_resources(
             prompt="Build me a research crew",
             llm_connection_name=None,
-            namespace="default",
+            project="default",
             session=db_session,
         )
 
@@ -319,7 +319,7 @@ async def test_generate_resources_specific_llm_not_found(db_session):
         await generate_resources(
             prompt="Build me a research crew",
             llm_connection_name="nonexistent",
-            namespace="default",
+            project="default",
             session=db_session,
         )
 
@@ -335,7 +335,7 @@ async def test_generate_resources_llm_error(db_session, llm_connection_resource)
             await generate_resources(
                 prompt="Build me a research crew",
                 llm_connection_name="test-llm",
-                namespace="default",
+                project="default",
                 session=db_session,
             )
 
@@ -351,7 +351,7 @@ async def test_generate_resources_rate_limited(db_session, llm_connection_resour
             await generate_resources(
                 prompt="Build me a research crew",
                 llm_connection_name="test-llm",
-                namespace="default",
+                project="default",
                 session=db_session,
             )
 
@@ -367,7 +367,7 @@ async def test_generate_resources_empty_response(db_session, llm_connection_reso
             await generate_resources(
                 prompt="Build me a research crew",
                 llm_connection_name="test-llm",
-                namespace="default",
+                project="default",
                 session=db_session,
             )
 
@@ -383,7 +383,7 @@ async def test_generate_resources_transport_error(db_session, llm_connection_res
             await generate_resources(
                 prompt="Build me a research crew",
                 llm_connection_name="test-llm",
-                namespace="default",
+                project="default",
                 session=db_session,
             )
 
@@ -399,7 +399,7 @@ async def test_generate_resources_auto_selects_llm(db_session, llm_connection_re
         resources, _ = await generate_resources(
             prompt="Build me a research crew",
             llm_connection_name=None,
-            namespace="default",
+            project="default",
             session=db_session,
         )
 
@@ -427,7 +427,7 @@ async def test_generate_resources_openai_provider(db_session):
         await generate_resources(
             prompt="Build me a research crew",
             llm_connection_name="openai-llm",
-            namespace="default",
+            project="default",
             session=db_session,
         )
 

@@ -27,7 +27,7 @@ class MuninnMemoryBackend:
     fades when unused, and pushes relevant information when it matters.
 
     The adapter translates CrewAI memory operations into MuninnDB's
-    ``write()`` and ``activate()`` calls, using vaults for namespace
+    ``write()`` and ``activate()`` calls, using vaults for project
     isolation and tags for per-agent scoping.
     """
 
@@ -35,7 +35,7 @@ class MuninnMemoryBackend:
         self,
         url: str = "http://localhost:8475",
         agent_name: str = "default",
-        namespace: str = "default",
+        project: str = "default",
         vault: str | None = None,
         token: str | None = None,
     ) -> None:
@@ -44,8 +44,8 @@ class MuninnMemoryBackend:
         Args:
             url: MuninnDB server URL.
             agent_name: Name of the agent using this memory backend.
-            namespace: Blackbeard resource namespace for scoping.
-            vault: MuninnDB vault name. Defaults to the namespace.
+            project: Blackbeard resource project for scoping.
+            vault: MuninnDB vault name. Defaults to the project.
             token: Optional API token for MuninnDB authentication.
         """
         if not HAS_MUNINN:
@@ -54,8 +54,8 @@ class MuninnMemoryBackend:
             )
         self._url = url
         self._agent_name = agent_name
-        self._namespace = namespace
-        self._vault = vault or namespace
+        self._project = project
+        self._vault = vault or project
         self._token = token
 
     def _make_client(self) -> Any:
@@ -87,7 +87,7 @@ class MuninnMemoryBackend:
         Args:
             content: The memory content to store.
             concept: Concept label for the memory. Defaults to ``"agent_memory"``.
-            tags: Tags for categorization. Defaults to agent name and namespace.
+            tags: Tags for categorization. Defaults to agent name and project.
             confidence: Optional confidence score (0.0-1.0).
 
         Returns:
@@ -97,7 +97,7 @@ class MuninnMemoryBackend:
             "vault": self._vault,
             "concept": concept or "agent_memory",
             "content": content,
-            "tags": tags or [self._agent_name, self._namespace],
+            "tags": tags or [self._agent_name, self._project],
         }
         if confidence is not None:
             write_kwargs["confidence"] = confidence

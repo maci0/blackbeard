@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Agent
 metadata:
   name: keyword-researcher
-  namespace: default
+  project: default
   labels:
     role: keyword-research
 spec:

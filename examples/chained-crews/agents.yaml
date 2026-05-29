@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Agent
 metadata:
   name: researcher
-  namespace: default
+  project: default
 spec:
   role: Research Specialist
   goal: "Gather comprehensive information on the given topic"
@@ -15,7 +15,7 @@ apiVersion: blackbeard/v1
 kind: Agent
 metadata:
   name: publisher
-  namespace: default
+  project: default
 spec:
   role: Content Publisher
   goal: "Format research into polished, publication-ready content"

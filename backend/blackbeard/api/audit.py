@@ -79,9 +79,7 @@ async def list_audit_logs(
     ),
     start_date: datetime | None = Query(
         default=None,
-        description=(
-            "Return entries at or after this timestamp (ISO 8601)"
-        ),
+        description=("Return entries at or after this timestamp (ISO 8601)"),
     ),
     end_date: datetime | None = Query(
         default=None,

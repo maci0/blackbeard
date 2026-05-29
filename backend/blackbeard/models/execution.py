@@ -71,7 +71,7 @@ class Execution(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     crew_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    crew_namespace: Mapped[str] = mapped_column(
+    crew_project: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
         default="default",
@@ -143,11 +143,11 @@ class Execution(Base):
         Index(
             "ix_execution_crew_created",
             "crew_name",
-            "crew_namespace",
+            "crew_project",
             created_at.desc(),
         ),
         Index("ix_execution_crew_name_created", "crew_name", created_at.desc()),
-        Index("ix_execution_ns_status_created", "crew_namespace", "status", created_at.desc()),
+        Index("ix_execution_ns_status_created", "crew_project", "status", created_at.desc()),
         Index("ix_execution_status_created", "status", "created_at"),
         Index("ix_execution_created_at", "created_at"),
         Index("ix_execution_initiated_by", "initiated_by"),
@@ -160,7 +160,7 @@ class Execution(Base):
             name="ck_execution_n_iterations_positive",
         ),
         CheckConstraint("length(crew_name) >= 1", name="ck_execution_crew_name_nonempty"),
-        CheckConstraint("length(crew_namespace) >= 1", name="ck_execution_crew_ns_nonempty"),
+        CheckConstraint("length(crew_project) >= 1", name="ck_execution_crew_project_nonempty"),
         CheckConstraint(
             "status != 'running' OR started_at IS NOT NULL",
             name="ck_execution_running_has_started_at",

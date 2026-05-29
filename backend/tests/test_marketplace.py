@@ -113,7 +113,7 @@ apiVersion: blackbeard/v1
 kind: Agent
 metadata:
   name: example-agent
-  namespace: default
+  project: default
 spec:
   role: Research Analyst
   goal: Find information

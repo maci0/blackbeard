@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: LLMConnection
 metadata:
   name: support-llm
-  namespace: default
+  project: default
   labels:
     provider: vertex-ai
     tier: standard

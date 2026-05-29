@@ -61,7 +61,7 @@ class ResourceService:
     ) -> tuple[Resource, bool]:
         """Create or upsert a resource.
 
-        If a resource with the same kind/name/namespace exists, it is updated
+        If a resource with the same kind/name/project exists, it is updated
         (version incremented). Returns (resource, created) where created=True
         for new resources and created=False for upserted existing resources.
         """
@@ -72,24 +72,22 @@ class ResourceService:
         if errors:
             raise ResourceValidationError(errors)
 
-        existing = await self._get_for_update(
-            kind_enum, data.metadata.name, data.metadata.namespace
-        )
+        existing = await self._get_for_update(kind_enum, data.metadata.name, data.metadata.project)
         if existing:
             resource = await self._update_existing(existing, data, raw_yaml, validated_refs)
             duration_ms = round((time.monotonic() - t0) * 1000, 1)
             logger.info(
-                "Resource upsert (create path): %s/%s namespace=%s version=%d (%.0fms)",
+                "Resource upsert (create path): %s/%s project=%s version=%d (%.0fms)",
                 kind_enum.value,
                 data.metadata.name,
-                data.metadata.namespace,
+                data.metadata.project,
                 resource.version,
                 duration_ms,
                 extra={
                     "event": "resource_upsert_via_create",
                     "resource_kind": kind_enum.value,
                     "resource_name": data.metadata.name,
-                    "namespace": data.metadata.namespace,
+                    "project": data.metadata.project,
                     "version": resource.version,
                     "duration_ms": duration_ms,
                     "request_id": request_id_var.get("-"),
@@ -100,7 +98,7 @@ class ResourceService:
         resource = Resource(
             kind=kind_enum,
             name=data.metadata.name,
-            namespace=data.metadata.namespace,
+            project=data.metadata.project,
             labels=data.metadata.labels,
             spec=data.spec,
             raw_yaml=raw_yaml,
@@ -112,20 +110,20 @@ class ResourceService:
                 await self.session.flush()
         except IntegrityError:
             logger.info(
-                "Create race: %s/%s namespace=%s — retrying as upsert",
+                "Create race: %s/%s project=%s — retrying as upsert",
                 kind_enum.value,
                 data.metadata.name,
-                data.metadata.namespace,
+                data.metadata.project,
                 extra={
                     "event": "resource_create_race",
                     "resource_kind": kind_enum.value,
                     "resource_name": data.metadata.name,
-                    "namespace": data.metadata.namespace,
+                    "project": data.metadata.project,
                     "request_id": request_id_var.get("-"),
                 },
             )
             existing = await self._get_for_update(
-                kind_enum, data.metadata.name, data.metadata.namespace
+                kind_enum, data.metadata.name, data.metadata.project
             )
             if existing:
                 resource = await self._update_existing(existing, data, raw_yaml, validated_refs)
@@ -135,34 +133,34 @@ class ResourceService:
 
         duration_ms = round((time.monotonic() - t0) * 1000, 1)
         logger.info(
-            "Resource created: %s/%s namespace=%s (%.0fms)",
+            "Resource created: %s/%s project=%s (%.0fms)",
             kind_enum.value,
             data.metadata.name,
-            data.metadata.namespace,
+            data.metadata.project,
             duration_ms,
             extra={
                 "event": "resource_created",
                 "resource_kind": kind_enum.value,
                 "resource_name": data.metadata.name,
-                "namespace": data.metadata.namespace,
+                "project": data.metadata.project,
                 "duration_ms": duration_ms,
                 "request_id": request_id_var.get("-"),
             },
         )
         return resource, True
 
-    async def get(self, kind: str, name: str, namespace: str = "default") -> Resource:
-        """Get a single resource by kind/name/namespace."""
+    async def get(self, kind: str, name: str, project: str = "default") -> Resource:
+        """Get a single resource by kind/name/project."""
         kind_enum = _parse_kind(kind)
-        resource = await self._get_by_identity(kind_enum, name, namespace)
+        resource = await self._get_by_identity(kind_enum, name, project)
         if not resource:
-            raise ResourceNotFoundError(kind, name, namespace)
+            raise ResourceNotFoundError(kind, name, project)
         return resource
 
     async def list_resources(
         self,
         kind: str | None = None,
-        namespace: str | None = None,
+        project: str | None = None,
         labels: dict[str, str] | None = None,
         limit: int = 100,
         offset: int = 0,
@@ -171,8 +169,8 @@ class ResourceService:
         filters = []
         if kind:
             filters.append(Resource.kind == _parse_kind(kind))
-        if namespace:
-            filters.append(Resource.namespace == namespace)
+        if project:
+            filters.append(Resource.project == project)
         if labels:
             filters.append(Resource.labels.contains(labels))
 
@@ -183,7 +181,7 @@ class ResourceService:
                     Resource.id,
                     Resource.kind,
                     Resource.name,
-                    Resource.namespace,
+                    Resource.project,
                     Resource.labels,
                     Resource.spec,
                     Resource.version,
@@ -192,7 +190,7 @@ class ResourceService:
                 )
             )
             .where(*filters)
-            .order_by(Resource.kind, Resource.namespace, Resource.name)
+            .order_by(Resource.kind, Resource.project, Resource.name)
             .limit(limit)
             .offset(offset)
         )
@@ -212,16 +210,16 @@ class ResourceService:
         kind: str,
         name: str,
         data: ResourceUpdate,
-        namespace: str = "default",
+        project: str = "default",
         raw_yaml: str | None = None,
     ) -> Resource:
         """Update a resource with optimistic locking."""
         t0 = time.monotonic()
         kind_enum = _parse_kind(kind)
 
-        resource = await self._get_for_update(kind_enum, name, namespace)
+        resource = await self._get_for_update(kind_enum, name, project)
         if not resource:
-            raise ResourceNotFoundError(kind, name, namespace)
+            raise ResourceNotFoundError(kind, name, project)
 
         if resource.version != data.version:
             raise ResourceConflictError(kind, name, data.version, resource.version)
@@ -237,7 +235,7 @@ class ResourceService:
 
         if data.metadata is not None:
             resource.labels = data.metadata.labels
-            # name and namespace are immutable after creation
+            # name and project are immutable after creation
             has_changes = True
 
         if raw_yaml is not None:
@@ -253,17 +251,17 @@ class ResourceService:
 
         duration_ms = round((time.monotonic() - t0) * 1000, 1)
         logger.info(
-            "Resource updated: %s/%s namespace=%s version=%d (%.0fms)",
+            "Resource updated: %s/%s project=%s version=%d (%.0fms)",
             kind,
             name,
-            namespace,
+            project,
             resource.version,
             duration_ms,
             extra={
                 "event": "resource_updated",
                 "resource_kind": kind,
                 "resource_name": name,
-                "namespace": namespace,
+                "project": project,
                 "version": resource.version,
                 "duration_ms": duration_ms,
                 "request_id": request_id_var.get("-"),
@@ -271,7 +269,7 @@ class ResourceService:
         )
         return resource
 
-    async def delete(self, kind: str, name: str, namespace: str = "default") -> None:
+    async def delete(self, kind: str, name: str, project: str = "default") -> None:
         """Delete a resource. Raises ResourceNotFoundError if not found."""
         t0 = time.monotonic()
         kind_enum = _parse_kind(kind)
@@ -281,7 +279,7 @@ class ResourceService:
                     select(Resource.id).where(
                         Resource.kind == kind_enum,
                         Resource.name == name,
-                        Resource.namespace == namespace,
+                        Resource.project == project,
                     )
                 )
             )
@@ -291,31 +289,31 @@ class ResourceService:
             .where(
                 Resource.kind == kind_enum,
                 Resource.name == name,
-                Resource.namespace == namespace,
+                Resource.project == project,
             )
             .returning(Resource.id)
         )
         if result.scalar_one_or_none() is None:
-            raise ResourceNotFoundError(kind, name, namespace)
+            raise ResourceNotFoundError(kind, name, project)
         duration_ms = round((time.monotonic() - t0) * 1000, 1)
         logger.info(
-            "Resource deleted: %s/%s namespace=%s (%.0fms)",
+            "Resource deleted: %s/%s project=%s (%.0fms)",
             kind,
             name,
-            namespace,
+            project,
             duration_ms,
             extra={
                 "event": "resource_deleted",
                 "resource_kind": kind,
                 "resource_name": name,
-                "namespace": namespace,
+                "project": project,
                 "duration_ms": duration_ms,
                 "request_id": request_id_var.get("-"),
             },
         )
 
     async def _get_by_identity(
-        self, kind: ResourceKind, name: str, namespace: str
+        self, kind: ResourceKind, name: str, project: str
     ) -> Resource | None:
         """Look up a resource by its unique identity."""
         result = await self.session.execute(
@@ -323,22 +321,20 @@ class ResourceService:
             .where(
                 Resource.kind == kind,
                 Resource.name == name,
-                Resource.namespace == namespace,
+                Resource.project == project,
             )
             .options(defer(Resource.raw_yaml))
         )
         return result.scalar_one_or_none()
 
-    async def _get_for_update(
-        self, kind: ResourceKind, name: str, namespace: str
-    ) -> Resource | None:
+    async def _get_for_update(self, kind: ResourceKind, name: str, project: str) -> Resource | None:
         """Look up a resource with a row-level lock for safe mutation."""
         result = await self.session.execute(
             select(Resource)
             .where(
                 Resource.kind == kind,
                 Resource.name == name,
-                Resource.namespace == namespace,
+                Resource.project == project,
             )
             .options(defer(Resource.raw_yaml))
             .with_for_update()
@@ -361,16 +357,16 @@ class ResourceService:
         await self.session.flush()
         await self._sync_refs(resource, refs)
         logger.info(
-            "Resource upserted: %s/%s namespace=%s version=%d",
+            "Resource upserted: %s/%s project=%s version=%d",
             resource.kind.value,
             resource.name,
-            resource.namespace,
+            resource.project,
             resource.version,
             extra={
                 "event": "resource_upserted",
                 "resource_kind": resource.kind.value,
                 "resource_name": resource.name,
-                "namespace": resource.namespace,
+                "project": resource.project,
                 "version": resource.version,
                 "request_id": request_id_var.get("-"),
             },
@@ -392,7 +388,7 @@ class ResourceService:
                         "event": "ref_sync_skipped",
                         "resource_kind": resource.kind.value,
                         "resource_name": resource.name,
-                        "namespace": resource.namespace,
+                        "project": resource.project,
                         "error_message": str(e)[:500],
                         "request_id": request_id_var.get("-"),
                     },
@@ -408,7 +404,7 @@ class ResourceService:
                         source_id=resource.id,
                         target_kind=ref.kind,
                         target_name=ref.name,
-                        target_namespace=resource.namespace,
+                        target_project=resource.project,
                         ref_field=ref.field,
                     )
                     for ref in refs

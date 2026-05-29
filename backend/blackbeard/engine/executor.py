@@ -261,23 +261,23 @@ class ExecutionNotFoundError(ExecutionError):
 async def _load_crew_resources(
     session: AsyncSession,
     crew_name: str,
-    namespace: str = "default",
+    project: str = "default",
     target_kind: str = "Crew",
 ) -> dict[str, Resource]:
-    """Load crew-relevant resources from the namespace.
+    """Load crew-relevant resources from the project.
 
-    Loads by namespace+kind filter rather than resolving refs recursively.
+    Loads by project+kind filter rather than resolving refs recursively.
     Returns a dict keyed by 'Kind/name' for the ResourceLoader.
     Silently truncates at ``_NAMESPACE_RESOURCE_LIMIT`` (500) with a warning.
 
     Raises:
-        ExecutionNotFoundError: If the target crew/flow is not in the namespace.
+        ExecutionNotFoundError: If the target crew/flow is not in the project.
     """
     result = await session.execute(
         select(Resource)
-        .where(Resource.namespace == namespace)
+        .where(Resource.project == project)
         .where(Resource.kind.in_(_CREW_RELEVANT_KINDS))
-        .options(load_only(Resource.kind, Resource.name, Resource.namespace, Resource.spec))
+        .options(load_only(Resource.kind, Resource.name, Resource.project, Resource.spec))
         .limit(_NAMESPACE_RESOURCE_LIMIT + 1)
     )
 
@@ -285,11 +285,11 @@ async def _load_crew_resources(
     if len(rows) > _NAMESPACE_RESOURCE_LIMIT:
         logger.warning(
             "Namespace '%s' has >%d resources; some refs may not resolve",
-            namespace,
+            project,
             _NAMESPACE_RESOURCE_LIMIT,
             extra={
                 "event": "namespace_resource_limit",
-                "namespace": namespace,
+                "project": project,
                 "limit": _NAMESPACE_RESOURCE_LIMIT,
             },
         )
@@ -299,22 +299,22 @@ async def _load_crew_resources(
     root_key = f"{target_kind}/{crew_name}"
     if root_key not in resources:
         raise ExecutionNotFoundError(
-            f"{target_kind} '{crew_name}' not found in namespace '{namespace}'"
+            f"{target_kind} '{crew_name}' not found in project '{project}'"
         )
 
     if len(resources) > 100:
         logger.warning(
-            "Loaded %d resources for %s '%s' in namespace '%s' — "
+            "Loaded %d resources for %s '%s' in project '%s' — "
             "consider splitting into smaller namespaces for performance",
             len(resources),
             target_kind,
             crew_name,
-            namespace,
+            project,
             extra={
                 "event": "large_namespace_load",
                 "resource_count": len(resources),
                 "crew_name": crew_name,
-                "namespace": namespace,
+                "project": project,
             },
         )
 
@@ -355,7 +355,7 @@ async def kickoff(
     session: AsyncSession,
     crew_name: str,
     inputs: dict[str, Any] | None = None,
-    namespace: str = "default",
+    project: str = "default",
     user: User | None = None,
 ) -> Execution:
     """Start a crew execution.
@@ -364,7 +364,7 @@ async def kickoff(
     Returns the execution record immediately (status=queued).
     """
     return await _submit_execution(
-        session, crew_name, inputs or {}, namespace, user, ExecutionType.KICKOFF
+        session, crew_name, inputs or {}, project, user, ExecutionType.KICKOFF
     )
 
 
@@ -372,7 +372,7 @@ async def _submit_execution(
     session: AsyncSession,
     crew_name: str,
     inputs: dict[str, Any],
-    namespace: str,
+    project: str,
     user: User | None,
     execution_type: ExecutionType,
     n_iterations: int | None = None,
@@ -380,14 +380,14 @@ async def _submit_execution(
 ) -> Execution:
     """Shared logic for creating and submitting train/test/flow executions."""
     target_kind = "Flow" if execution_type == ExecutionType.FLOW else "Crew"
-    resources = await _load_crew_resources(session, crew_name, namespace, target_kind=target_kind)
+    resources = await _load_crew_resources(session, crew_name, project, target_kind=target_kind)
     crew_key = f"{target_kind}/{crew_name}"
     crew_resource = resources[crew_key]
     principal_chain = _build_principal_chain(user, crew_name, resources)
 
     execution = Execution(
         crew_name=crew_name,
-        crew_namespace=namespace,
+        crew_project=project,
         execution_type=execution_type,
         status=ExecutionStatus.QUEUED,
         inputs=redact_sensitive_values(inputs) if inputs else {},
@@ -404,11 +404,11 @@ async def _submit_execution(
     pool_saturated = pool["saturated"]
     logger.log(
         logging.WARNING if pool_saturated else logging.INFO,
-        "%s: execution_id=%s crew=%s namespace=%s n_iterations=%s pool=%d/%d queued=%d",
+        "%s: execution_id=%s crew=%s project=%s n_iterations=%s pool=%d/%d queued=%d",
         execution_type.value.capitalize(),
         execution.id,
         crew_name,
-        namespace,
+        project,
         n_iterations,
         pool["active_threads"],
         pool["max_workers"],
@@ -418,7 +418,7 @@ async def _submit_execution(
             "execution_id": str(execution.id),
             "execution_type": execution_type.value,
             "crew_name": crew_name,
-            "namespace": namespace,
+            "project": project,
             "n_iterations": n_iterations,
             "pool_active_threads": pool["active_threads"],
             "pool_max_workers": pool["max_workers"],
@@ -493,7 +493,7 @@ async def train_crew(
     inputs: dict[str, Any] | None = None,
     n_iterations: int = 3,
     filename: str = "training_data.pkl",
-    namespace: str = "default",
+    project: str = "default",
     user: User | None = None,
 ) -> Execution:
     """Start a crew training run.
@@ -505,7 +505,7 @@ async def train_crew(
         session,
         crew_name,
         inputs or {},
-        namespace,
+        project,
         user,
         ExecutionType.TRAIN,
         n_iterations=n_iterations,
@@ -518,7 +518,7 @@ async def test_crew(
     crew_name: str,
     inputs: dict[str, Any] | None = None,
     n_iterations: int = 3,
-    namespace: str = "default",
+    project: str = "default",
     user: User | None = None,
 ) -> Execution:
     """Start a crew test run.
@@ -530,7 +530,7 @@ async def test_crew(
         session,
         crew_name,
         inputs or {},
-        namespace,
+        project,
         user,
         ExecutionType.TEST,
         n_iterations=n_iterations,
@@ -541,7 +541,7 @@ async def run_flow(
     session: AsyncSession,
     flow_name: str,
     inputs: dict[str, Any] | None = None,
-    namespace: str = "default",
+    project: str = "default",
     user: User | None = None,
 ) -> Execution:
     """Start a flow execution.
@@ -554,7 +554,7 @@ async def run_flow(
         session,
         flow_name,
         inputs or {},
-        namespace,
+        project,
         user,
         ExecutionType.FLOW,
     )
@@ -597,11 +597,11 @@ async def _mark_failed_async(execution_id: UUID, error: str) -> None:
 
 
 def _snapshot_resource(resource: Resource) -> dict[str, Any]:
-    """Snapshot kind/name/namespace/spec for background crew execution."""
+    """Snapshot kind/name/project/spec for background crew execution."""
     return {
         "kind": resource.kind.value,
         "name": resource.name,
-        "namespace": resource.namespace,
+        "project": resource.project,
         "spec": dict(resource.spec or {}),
     }
 
@@ -619,7 +619,7 @@ def _snapshot_crew_resources(
 
     Walks crew/flow -> agents/tasks -> tools/llms/knowledge_sources/guardrails/context
     recursively, snapshotting only what the execution actually needs instead of
-    the entire namespace (which could be hundreds of resources).
+    the entire project (which could be hundreds of resources).
     """
     needed: dict[str, dict[str, Any]] = {}
 
@@ -645,7 +645,7 @@ def _snapshot_crew_resources(
         resource = resources.get(key)
         if resource is None:
             logger.warning(
-                "Snapshot: referenced resource '%s' not found in namespace — "
+                "Snapshot: referenced resource '%s' not found in project — "
                 "execution may fail when loader tries to resolve this ref",
                 key,
                 extra={"event": "snapshot_ref_missing", "key": key, "depth": depth},
@@ -860,21 +860,21 @@ async def _run_crew_async(
             )
             return
 
-        running_namespace = execution.crew_namespace
+        running_project = execution.crew_project
         execution.status = ExecutionStatus.RUNNING
         execution.started_at = datetime.now(UTC)
         await session.commit()
         logger.info(
-            "Execution %s running: crew=%s namespace=%s input_keys=%s",
+            "Execution %s running: crew=%s project=%s input_keys=%s",
             execution_id,
             crew_name,
-            running_namespace,
+            running_project,
             sorted(inputs.keys()),
             extra={
                 "event": "execution_running",
                 "execution_id": str(execution_id),
                 "crew_name": crew_name,
-                "namespace": running_namespace,
+                "project": running_project,
                 "input_keys": sorted(inputs.keys()),
             },
         )
@@ -886,7 +886,7 @@ async def _run_crew_async(
                 key: Resource(
                     kind=ResourceKind(snap["kind"]),
                     name=snap["name"],
-                    namespace=snap["namespace"],
+                    project=snap["project"],
                     spec=snap["spec"],
                 )
                 for key, snap in resource_snapshot.items()
@@ -1124,7 +1124,7 @@ async def _run_crew_async(
                     "event": "execution_completed",
                     "execution_id": str(execution_id),
                     "crew_name": crew_name,
-                    "namespace": execution.crew_namespace,
+                    "project": execution.crew_project,
                     "execution_type": execution_type.value,
                     "total_tokens": execution.total_tokens or 0,
                     "prompt_tokens": execution.prompt_tokens or 0,
@@ -1167,7 +1167,7 @@ async def _run_crew_async(
                     "event": "execution_failed",
                     "execution_id": str(execution_id),
                     "crew_name": crew_name,
-                    "namespace": running_namespace,
+                    "project": running_project,
                     "execution_type": execution_type.value,
                     "task_count": task_count,
                     "error_type": type(e).__name__,
@@ -1305,7 +1305,7 @@ async def get_execution_status(session: AsyncSession, execution_id: UUID) -> Exe
 async def list_executions(
     session: AsyncSession,
     crew_name: str | None = None,
-    namespace: str | None = None,
+    project: str | None = None,
     status: ExecutionStatus | None = None,
     execution_type: ExecutionType | None = None,
     limit: int = 100,
@@ -1320,8 +1320,8 @@ async def list_executions(
     filters = []
     if crew_name:
         filters.append(Execution.crew_name == crew_name)
-    if namespace:
-        filters.append(Execution.crew_namespace == namespace)
+    if project:
+        filters.append(Execution.crew_project == project)
     if status:
         filters.append(Execution.status == status)
     if execution_type:
@@ -1336,7 +1336,7 @@ async def list_executions(
             load_only(
                 Execution.id,
                 Execution.crew_name,
-                Execution.crew_namespace,
+                Execution.crew_project,
                 Execution.execution_type,
                 Execution.status,
                 Execution.n_iterations,
@@ -1494,7 +1494,7 @@ async def cancel_execution(session: AsyncSession, execution_id: UUID) -> Executi
                 "event": "execution_cancelled",
                 "execution_id": str(execution_id),
                 "crew_name": execution.crew_name,
-                "namespace": execution.crew_namespace,
+                "project": execution.crew_project,
                 "previous_status": prev_status,
             },
         )

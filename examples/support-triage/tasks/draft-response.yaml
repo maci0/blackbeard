@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Task
 metadata:
   name: draft-response
-  namespace: default
+  project: default
 spec:
   description: >
     Draft an initial customer response for the support ticket.

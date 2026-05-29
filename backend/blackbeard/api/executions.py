@@ -126,13 +126,9 @@ async def _poll_execution(execution_id: UUID) -> AsyncGenerator[_StreamEvent]:
                 )
                 last_status = current_status
             else:
-                current_status = await _executor_mod.get_execution_status(
-                    session, execution_id
-                )
+                current_status = await _executor_mod.get_execution_status(session, execution_id)
                 if current_status is None:
-                    yield _StreamEvent(
-                        "error", {"detail": f"Execution '{execution_id}' not found"}
-                    )
+                    yield _StreamEvent("error", {"detail": f"Execution '{execution_id}' not found"})
                     return
 
                 if current_status != last_status or current_status in TERMINAL_STATUSES:
@@ -197,7 +193,7 @@ async def _run_executor(
     *,
     log_event: str,
     log_resource: str,
-    log_namespace: str,
+    log_project: str,
 ) -> Execution:
     """Await an executor coroutine, converting its exceptions to HTTP errors."""
     try:
@@ -206,16 +202,16 @@ async def _run_executor(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ExecutionError as exc:
         logger.error(
-            "%s error: resource=%s namespace=%s: %s",
+            "%s error: resource=%s project=%s: %s",
             log_event,
             log_resource,
-            log_namespace,
+            log_project,
             exc,
             exc_info=True,
             extra={
                 "event": log_event,
                 "resource_name": log_resource,
-                "namespace": log_namespace,
+                "project": log_project,
                 "error_type": type(exc).__name__,
                 "error_message": str(exc)[:500],
             },
@@ -237,7 +233,7 @@ router = APIRouter(tags=["executions"])
     response_model=ExecutionResponse,
     status_code=202,
     responses={
-        404: {"description": "Crew not found in namespace"},
+        404: {"description": "Crew not found in project"},
         422: {"description": "Invalid request body"},
         429: {"description": "Too many execution requests"},
         500: {"description": "Internal execution error"},
@@ -253,7 +249,7 @@ async def kickoff_crew(
         description="Name of the crew to execute",
     ),
     body: KickoffRequest = Body(...),
-    namespace: str = Query(
+    project: str = Query(
         default="default",
         pattern=NAME_PATTERN,
         max_length=255,
@@ -265,17 +261,17 @@ async def kickoff_crew(
     """Kick off a crew execution. Returns immediately with status=queued."""
     check_rate_limit(execution_limiter, user, _EXECUTION_RATE_MSG)
     execution = await _run_executor(
-        _executor_mod.kickoff(session, crew_name, body.inputs, namespace, user=user),
+        _executor_mod.kickoff(session, crew_name, body.inputs, project, user=user),
         log_event="kickoff_internal_error",
         log_resource=crew_name,
-        log_namespace=namespace,
+        log_project=project,
     )
     await log_audit(
         session,
         action="execution_started",
         resource_type="Crew",
         resource_id=crew_name,
-        detail={"execution_id": str(execution.id), "namespace": namespace},
+        detail={"execution_id": str(execution.id), "project": project},
         **audit_from_request(request, user),
     )
     await session.commit()
@@ -288,7 +284,7 @@ async def kickoff_crew(
     response_model=ExecutionResponse,
     status_code=202,
     responses={
-        404: {"description": "Crew not found in namespace"},
+        404: {"description": "Crew not found in project"},
         422: {"description": "Invalid request body"},
         429: {"description": "Too many execution requests"},
         500: {"description": "Internal execution error"},
@@ -304,7 +300,7 @@ async def train_crew_endpoint(
         description="Name of the crew to train",
     ),
     body: TrainRequest = Body(...),
-    namespace: str = Query(
+    project: str = Query(
         default="default",
         pattern=NAME_PATTERN,
         max_length=255,
@@ -322,19 +318,19 @@ async def train_crew_endpoint(
             body.inputs,
             body.n_iterations,
             body.filename,
-            namespace,
+            project,
             user=user,
         ),
         log_event="train_internal_error",
         log_resource=crew_name,
-        log_namespace=namespace,
+        log_project=project,
     )
     await log_audit(
         session,
         action="train_started",
         resource_type="Crew",
         resource_id=crew_name,
-        detail={"execution_id": str(execution.id), "namespace": namespace},
+        detail={"execution_id": str(execution.id), "project": project},
         **audit_from_request(request, user),
     )
     await session.commit()
@@ -347,7 +343,7 @@ async def train_crew_endpoint(
     response_model=ExecutionResponse,
     status_code=202,
     responses={
-        404: {"description": "Crew not found in namespace"},
+        404: {"description": "Crew not found in project"},
         422: {"description": "Invalid request body"},
         429: {"description": "Too many execution requests"},
         500: {"description": "Internal execution error"},
@@ -363,7 +359,7 @@ async def test_crew_endpoint(
         description="Name of the crew to test",
     ),
     body: TestRequest = Body(...),
-    namespace: str = Query(
+    project: str = Query(
         default="default",
         pattern=NAME_PATTERN,
         max_length=255,
@@ -380,19 +376,19 @@ async def test_crew_endpoint(
             crew_name,
             body.inputs,
             body.n_iterations,
-            namespace,
+            project,
             user=user,
         ),
         log_event="test_internal_error",
         log_resource=crew_name,
-        log_namespace=namespace,
+        log_project=project,
     )
     await log_audit(
         session,
         action="test_started",
         resource_type="Crew",
         resource_id=crew_name,
-        detail={"execution_id": str(execution.id), "namespace": namespace},
+        detail={"execution_id": str(execution.id), "project": project},
         **audit_from_request(request, user),
     )
     await session.commit()
@@ -421,7 +417,7 @@ async def run_flow_endpoint(
         description="Name of the flow to run",
     ),
     body: KickoffRequest = Body(...),
-    namespace: str = Query(
+    project: str = Query(
         default="default",
         pattern=NAME_PATTERN,
         max_length=255,
@@ -433,17 +429,17 @@ async def run_flow_endpoint(
     """Run a flow. Returns immediately with status=queued."""
     check_rate_limit(execution_limiter, user, _EXECUTION_RATE_MSG)
     execution = await _run_executor(
-        _executor_mod.run_flow(session, flow_name, body.inputs, namespace=namespace, user=user),
+        _executor_mod.run_flow(session, flow_name, body.inputs, project=project, user=user),
         log_event="flow_run_error",
         log_resource=flow_name,
-        log_namespace=namespace,
+        log_project=project,
     )
     await log_audit(
         session,
         action="flow_started",
         resource_type="Flow",
         resource_id=flow_name,
-        detail={"execution_id": str(execution.id), "namespace": namespace},
+        detail={"execution_id": str(execution.id), "project": project},
         **audit_from_request(request, user),
     )
     await session.commit()
@@ -463,11 +459,11 @@ async def list_executions(
         max_length=255,
         description="Filter by crew name",
     ),
-    namespace: str | None = Query(
+    project: str | None = Query(
         default=None,
         pattern=NAME_PATTERN,
         max_length=255,
-        description="Filter by namespace (omit for all namespaces)",
+        description="Filter by project (omit for all projects)",
     ),
     status: ExecutionStatus | None = Query(
         default=None,
@@ -486,7 +482,7 @@ async def list_executions(
     items, total = await _executor_mod.list_executions(
         session,
         crew_name=crew_name,
-        namespace=namespace,
+        project=project,
         status=status,
         execution_type=execution_type,
         limit=limit,
@@ -692,7 +688,7 @@ async def retry_execution(
 ) -> ExecutionResponse:
     """Retry a failed or cancelled execution.
 
-    Creates a new execution with the same crew, namespace, and inputs as the
+    Creates a new execution with the same crew, project, and inputs as the
     original. Only terminal executions (completed, failed, cancelled) can be
     retried. Returns the new execution immediately with status=queued.
     """
@@ -712,7 +708,7 @@ async def retry_execution(
             session,
             original.crew_name,
             original.inputs,
-            namespace=original.crew_namespace,
+            project=original.crew_project,
             user=user,
         )
     elif exec_type == ExecutionType.TRAIN:
@@ -722,7 +718,7 @@ async def retry_execution(
             original.inputs,
             n_iterations=original.n_iterations or 3,
             filename=original.training_file or "training_data.pkl",
-            namespace=original.crew_namespace,
+            project=original.crew_project,
             user=user,
         )
     elif exec_type == ExecutionType.TEST:
@@ -731,7 +727,7 @@ async def retry_execution(
             original.crew_name,
             original.inputs,
             n_iterations=original.n_iterations or 3,
-            namespace=original.crew_namespace,
+            project=original.crew_project,
             user=user,
         )
     else:
@@ -739,7 +735,7 @@ async def retry_execution(
             session,
             original.crew_name,
             original.inputs,
-            original.crew_namespace,
+            original.crew_project,
             user=user,
         )
 
@@ -747,7 +743,7 @@ async def retry_execution(
         coro,
         log_event="retry_failed",
         log_resource=original.crew_name,
-        log_namespace=original.crew_namespace,
+        log_project=original.crew_project,
     )
 
     await log_audit(
@@ -758,7 +754,7 @@ async def retry_execution(
         detail={
             "new_execution_id": str(new_execution.id),
             "crew_name": original.crew_name,
-            "namespace": original.crew_namespace,
+            "project": original.crew_project,
         },
         **audit_from_request(request, user),
     )
@@ -935,9 +931,7 @@ async def ws_execution(
     try:
         async for item in _poll_execution(execution_id):
             if item.kind == "event":
-                await websocket.send_json(
-                    {"event": item.event_type, "data": item.data}
-                )
+                await websocket.send_json({"event": item.event_type, "data": item.data})
             elif item.kind in ("error", "timeout"):
                 await websocket.send_json({"event": "error", "data": item.data})
             else:

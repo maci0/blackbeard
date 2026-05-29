@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Agent
 metadata:
   name: security-scanner
-  namespace: default
+  project: default
   labels:
     role: security
 spec:

@@ -74,7 +74,7 @@ export default function Resources() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [newKind, setNewKind] = useState(KIND_ENTRIES[0]![0])
   const [newName, setNewName] = useState('')
-  const [newNamespace, setNewNamespace] = useState('default')
+  const [newProject, setNewProject] = useState('default')
   const [newSpec, setNewSpec] = useState('{}')
   const [specError, setSpecError] = useState('')
   const [nameError, setNameError] = useState('')
@@ -116,7 +116,7 @@ export default function Resources() {
       const parsed = parseYaml(doc)
       const kind = typeof parsed.kind === 'string' ? parsed.kind : ''
       const metadata = parsed.metadata as
-        | { name?: string; namespace?: string; labels?: Record<string, string> }
+        | { name?: string; project?: string; labels?: Record<string, string> }
         | undefined
       const name = metadata?.name ?? ''
       const spec = (parsed.spec ?? {}) as Record<string, unknown>
@@ -131,7 +131,7 @@ export default function Resources() {
           kind,
           metadata: {
             name,
-            namespace: metadata?.namespace || 'default',
+            project: metadata?.project || 'default',
             labels: metadata?.labels,
           },
           spec,
@@ -186,7 +186,7 @@ export default function Resources() {
   function resetDialog() {
     setNewKind(KIND_ENTRIES[0]![0])
     setNewName('')
-    setNewNamespace('default')
+    setNewProject('default')
     setNewSpec('{}')
     setSpecError('')
     setNameError('')
@@ -221,7 +221,7 @@ export default function Resources() {
       await createResource({
         apiVersion: API_VERSION,
         kind: newKind,
-        metadata: { name: newName, namespace: newNamespace || 'default' },
+        metadata: { name: newName, project: newProject || 'default' },
         spec: JSON.parse(newSpec) as Record<string, unknown>,
       })
       toast.success(`Created ${newKind} "${newName}"`)
@@ -259,8 +259,8 @@ export default function Resources() {
     return result
   }, [resources])
 
-  const showNamespace = useMemo(
-    () => allResources.some((r) => r.metadata.namespace && r.metadata.namespace !== 'default'),
+  const showProject = useMemo(
+    () => allResources.some((r) => r.metadata.project && r.metadata.project !== 'default'),
     [allResources],
   )
 
@@ -566,11 +566,11 @@ export default function Resources() {
                           >
                             {resource.metadata.name}
                           </p>
-                          {showNamespace &&
-                            resource.metadata.namespace &&
-                            resource.metadata.namespace !== 'default' && (
+                          {showProject &&
+                            resource.metadata.project &&
+                            resource.metadata.project !== 'default' && (
                               <p className="text-xs text-muted-foreground">
-                                {resource.metadata.namespace}
+                                {resource.metadata.project}
                               </p>
                             )}
                         </div>
@@ -616,7 +616,7 @@ export default function Resources() {
                         [
                           'Kind',
                           'Name',
-                          ...(showNamespace ? ['Namespace'] : []),
+                          ...(showProject ? ['Project'] : []),
                           'Version',
                           'Updated',
                         ] as const
@@ -678,18 +678,18 @@ export default function Resources() {
                             <KindBadge kind={resource.kind} />
                           </td>
                           <td className="px-4 py-3 font-medium">{resource.metadata.name}</td>
-                          {showNamespace && (
+                          {showProject && (
                             <td className="px-4 py-3 text-muted-foreground">
-                              {!resource.metadata.namespace ||
-                              resource.metadata.namespace === 'default' ? (
+                              {!resource.metadata.project ||
+                              resource.metadata.project === 'default' ? (
                                 <>
                                   <span className="text-muted-foreground/40" aria-hidden="true">
                                     —
                                   </span>
-                                  <span className="sr-only">default namespace</span>
+                                  <span className="sr-only">default project</span>
                                 </>
                               ) : (
-                                resource.metadata.namespace
+                                resource.metadata.project
                               )}
                             </td>
                           )}
@@ -815,16 +815,16 @@ export default function Resources() {
 
                 <div>
                   <label
-                    htmlFor="new-resource-namespace"
+                    htmlFor="new-resource-project"
                     className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
                   >
-                    Namespace
+                    Project
                   </label>
                   <input
-                    id="new-resource-namespace"
+                    id="new-resource-project"
                     type="text"
-                    value={newNamespace}
-                    onChange={(e) => setNewNamespace(e.target.value)}
+                    value={newProject}
+                    onChange={(e) => setNewProject(e.target.value)}
                     placeholder="default"
                     autoComplete="off"
                     spellCheck={false}

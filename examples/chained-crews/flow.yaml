@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Flow
 metadata:
   name: research-then-publish
-  namespace: default
+  project: default
   labels:
     category: pipeline
 spec:

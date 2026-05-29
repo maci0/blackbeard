@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Task
 metadata:
   name: route-ticket
-  namespace: default
+  project: default
 spec:
   description: >
     Based on the ticket classification, determine the routing:

@@ -27,7 +27,7 @@ class _DiscoveryBaseTool(BaseTool):
 
     api_url: str = Field(exclude=True)
     api_key: str = Field(exclude=True)
-    namespace: str = Field(default="default", exclude=True)
+    project: str = Field(default="default", exclude=True)
 
 
 class SearchToolsTool(_DiscoveryBaseTool):
@@ -46,18 +46,18 @@ class SearchToolsTool(_DiscoveryBaseTool):
             client = get_sync_client("tool-discovery", timeout=10)
             resp = client.get(
                 f"{self.api_url}/api/v1/tools",
-                params={"namespace": self.namespace, "limit": 20},
+                params={"project": self.project, "limit": 20},
                 headers={"X-API-Key": self.api_key},
             )
             if resp.status_code != 200:
                 logger.warning(
-                    "search_tools API error: status=%d namespace=%s",
+                    "search_tools API error: status=%d project=%s",
                     resp.status_code,
-                    self.namespace,
+                    self.project,
                     extra={
                         "event": "search_tools_api_error",
                         "http_status": resp.status_code,
-                        "namespace": self.namespace,
+                        "project": self.project,
                     },
                 )
                 return f"Error searching tools: HTTP {resp.status_code}"
@@ -88,13 +88,13 @@ class SearchToolsTool(_DiscoveryBaseTool):
             return json.dumps(matches, indent=2)
         except Exception:
             logger.exception(
-                "search_tools failed for query=%s namespace=%s",
+                "search_tools failed for query=%s project=%s",
                 query[:200],
-                self.namespace,
+                self.project,
                 extra={
                     "event": "search_tools_failed",
                     "query": query[:200],
-                    "namespace": self.namespace,
+                    "project": self.project,
                 },
             )
             return "Error searching tools. Check server logs for details."
@@ -118,22 +118,22 @@ class GetToolTool(_DiscoveryBaseTool):
             client = get_sync_client("tool-discovery", timeout=10)
             resp = client.get(
                 f"{self.api_url}/api/v1/tools/{tool_name}",
-                params={"namespace": self.namespace},
+                params={"project": self.project},
                 headers={"X-API-Key": self.api_key},
             )
             if resp.status_code == 404:
                 return f"Tool '{tool_name}' not found in the registry."
             if resp.status_code != 200:
                 logger.warning(
-                    "get_tool API error: tool=%s status=%d namespace=%s",
+                    "get_tool API error: tool=%s status=%d project=%s",
                     tool_name,
                     resp.status_code,
-                    self.namespace,
+                    self.project,
                     extra={
                         "event": "get_tool_api_error",
                         "tool_name": tool_name,
                         "http_status": resp.status_code,
-                        "namespace": self.namespace,
+                        "project": self.project,
                     },
                 )
                 return f"Error fetching tool: HTTP {resp.status_code}"
@@ -153,13 +153,13 @@ class GetToolTool(_DiscoveryBaseTool):
             return json.dumps(result, indent=2)
         except Exception:
             logger.exception(
-                "get_tool failed for tool=%s namespace=%s",
+                "get_tool failed for tool=%s project=%s",
                 tool_name,
-                self.namespace,
+                self.project,
                 extra={
                     "event": "get_tool_failed",
                     "tool_name": tool_name,
-                    "namespace": self.namespace,
+                    "project": self.project,
                 },
             )
             return "Error fetching tool. Check server logs for details."

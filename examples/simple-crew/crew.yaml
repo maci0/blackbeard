@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: Crew
 metadata:
   name: simple-crew
-  namespace: default
+  project: default
 spec:
   description: "A simple single-agent crew for quick tasks"
   process: sequential

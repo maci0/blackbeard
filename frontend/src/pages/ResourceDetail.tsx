@@ -554,13 +554,13 @@ export default function ResourceDetail() {
       const parsed = parseYaml(yamlContent)
       const spec = (parsed['spec'] as Record<string, unknown>) ?? {}
       const meta = parsed['metadata'] as
-        | { name?: string; namespace?: string; labels?: Record<string, string> }
+        | { name?: string; project?: string; labels?: Record<string, string> }
         | undefined
       const updated = await updateResource(kindPlural, name, {
         spec,
         metadata: {
           name: meta?.name ?? resource.metadata.name,
-          namespace: meta?.namespace ?? resource.metadata.namespace,
+          project: meta?.project ?? resource.metadata.project,
           labels: meta?.labels ?? resource.metadata.labels,
         },
         version: resource.version,
@@ -617,7 +617,7 @@ export default function ResourceDetail() {
       await api.post(`/api/v1/${kindPlural}`, {
         apiVersion: resource.apiVersion,
         kind: resource.kind,
-        metadata: { name: cloneName, namespace: resource.metadata.namespace },
+        metadata: { name: cloneName, project: resource.metadata.project },
         spec: resource.spec,
       })
       toasts.success(`Cloned as "${cloneName}"`)
@@ -667,8 +667,8 @@ export default function ResourceDetail() {
         setRunLoading(false)
         return
       }
-      const ns = resource?.metadata.namespace ?? 'default'
-      const nsParam = ns !== 'default' ? `?namespace=${encodeURIComponent(ns)}` : ''
+      const ns = resource?.metadata.project ?? 'default'
+      const nsParam = ns !== 'default' ? `?project=${encodeURIComponent(ns)}` : ''
 
       let result: { id: string }
       if (params.mode === 'train') {
@@ -866,13 +866,13 @@ export default function ResourceDetail() {
 
         {/* Metadata strip */}
         <div className="mb-6 flex flex-col gap-4 rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-6">
-          {resource.metadata.namespace && resource.metadata.namespace !== 'default' && (
+          {resource.metadata.project && resource.metadata.project !== 'default' && (
             <>
               <div>
                 <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
-                  Namespace
+                  Project
                 </span>
-                <p className="mt-0.5 font-medium text-foreground">{resource.metadata.namespace}</p>
+                <p className="mt-0.5 font-medium text-foreground">{resource.metadata.project}</p>
               </div>
               <div className="hidden h-8 w-px bg-border sm:block" />
             </>

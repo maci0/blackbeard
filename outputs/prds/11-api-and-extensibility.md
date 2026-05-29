@@ -10,6 +10,8 @@ Define the public API surface, webhook streaming protocol, plugin SDK, and exten
 
 **Deferred to post-MVP:** Plugin SDK, AsyncAPI spec for webhook events (no `/api/v1/asyncapi.json` endpoint exists).
 
+**Implemented (post-MVP):** Credentials API (`POST/GET/DELETE /api/v1/credentials`) for centralized secret management. Resource version endpoints (`GET /{kind}/{name}/versions`, `GET /{kind}/{name}/versions/{version}`, `POST /{kind}/{name}/rollback`). A2A discovery endpoint (`GET /.well-known/agent-card.json`).
+
 **Implemented (beyond initial MVP):**
 - Bulk resource export: `GET /api/v1/resources/export` returns multi-document YAML of all resources.
 - API key management: `POST /api/v1/auth/api-key` (generate) and `DELETE /api/v1/auth/api-key` (revoke) endpoints.
@@ -156,7 +158,7 @@ spec:
     checkpoint_ttl_days: 7
     hitl_timeout_hours: 24
   defaults:
-    namespace: default
+    project: default
     sandbox_tier: wasm
     agent_policy: ref:agent-policies/standard
 ```

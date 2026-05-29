@@ -583,10 +583,16 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 - [x] Cost alert thresholds on AgentPolicy (`warn_at_usd`, `warn_at_tokens`, `cost_alert` event)
 - [x] Enhanced Marketplace template gallery (search, category chips, preview dialog, resource summaries)
 
-### Removed from DoD (deferred to post-MVP)
+### Post-MVP (implemented)
 
-- Automation versioning/rollback (no versioning system exists)
-- A2A agent cards (no `.well-known/agent-card.json` exists)
+- [x] A2A Protocol — `GET /.well-known/agent-card.json` auto-generates agent cards from crews with `spec.a2a.enabled`
+- [x] Resource version snapshots — `resource_versions` table with list/view/rollback endpoints
+- [x] Namespace-level guardrails — `spec.guardrails` on Namespace resources, merged with task guardrails at execution
+- [x] Credentials Manager — `/credentials` page + CRUD API for centralized secret management
+- [x] Inline Studio run log — collapsible bottom panel with real-time execution events
+- [x] Workflow summary bar — node counts + live execution status in Studio
+- [x] Multi-step pipeline sample — pre-loaded example with 3 agents, 3 tasks, 1 condition
+- [x] UI: "Namespace" → "Project" in all user-facing labels (API field remains `project`)
 
 ---
 

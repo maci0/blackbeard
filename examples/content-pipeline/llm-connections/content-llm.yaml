@@ -2,7 +2,7 @@ apiVersion: blackbeard/v1
 kind: LLMConnection
 metadata:
   name: content-llm
-  namespace: default
+  project: default
   labels:
     provider: ollama
     tier: local
