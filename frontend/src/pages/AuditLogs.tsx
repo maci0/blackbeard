@@ -146,7 +146,13 @@ export default function AuditLogs() {
   const [actionFilter, setActionFilter] = useState('')
   const [resourceTypeFilter, setResourceTypeFilter] = useState('')
   const [actorSearch, setActorSearch] = useState('')
+  const [debouncedActorSearch, setDebouncedActorSearch] = useState('')
   const [autoRefresh, setAutoRefresh] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedActorSearch(actorSearch), 300)
+    return () => clearTimeout(timer)
+  }, [actorSearch])
 
   useDocumentTitle('Audit Logs')
 
@@ -156,11 +162,11 @@ export default function AuditLogs() {
     params.set('offset', String(offset))
     if (actionFilter) params.set('action', actionFilter)
     if (resourceTypeFilter) params.set('resource_type', resourceTypeFilter)
-    if (actorSearch.trim()) params.set('actor_id', actorSearch.trim())
+    if (debouncedActorSearch.trim()) params.set('actor_id', debouncedActorSearch.trim())
     const result = await api.get<AuditLogListResponse>(`/api/v1/audit-logs?${params.toString()}`)
     setLogs(result.items)
     setTotal(result.total)
-  }, [offset, actionFilter, resourceTypeFilter, actorSearch])
+  }, [offset, actionFilter, resourceTypeFilter, debouncedActorSearch])
 
   const fetchLogs = useCallback(async () => {
     setLoading(true)
@@ -181,8 +187,8 @@ export default function AuditLogs() {
   const pollLogs = useCallback(async () => {
     try {
       await loadLogs()
-    } catch {
-      /* polling failures are silent */
+    } catch (err) {
+      console.warn('[audit-logs] polling failed:', err)
     }
   }, [loadLogs])
 

@@ -36,6 +36,14 @@ class BlackbeardApiError(Exception):
         return self.status_code >= 500
 
     @property
+    def is_unauthorized(self) -> bool:
+        return self.status_code == 401
+
+    @property
+    def is_forbidden(self) -> bool:
+        return self.status_code == 403
+
+    @property
     def is_not_found(self) -> bool:
         return self.status_code == 404
 

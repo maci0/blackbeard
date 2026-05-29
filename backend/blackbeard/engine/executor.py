@@ -305,7 +305,7 @@ async def _load_crew_resources(
     if len(resources) > 100:
         logger.warning(
             "Loaded %d resources for %s '%s' in project '%s' — "
-            "consider splitting into smaller namespaces for performance",
+            "consider splitting into smaller projects for performance",
             len(resources),
             target_kind,
             crew_name,

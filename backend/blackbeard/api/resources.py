@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.authorizer import clear_cache as _clear_authz_cache
@@ -77,6 +78,7 @@ async def _sync_llm_to_litellm(kind: str, name: str, spec: dict[str, Any] | None
 
 
 _MUTATION_RATE_MSG = "Too many mutation requests. Try again later."
+_VERSION_LIST_LIMIT = 500
 
 
 async def _save_version_snapshot(
@@ -635,7 +637,16 @@ async def list_resource_versions(
     result = await session.execute(
         select(ResourceVersion)
         .where(ResourceVersion.resource_id == resource.id)
+        .options(
+            load_only(
+                ResourceVersion.version,
+                ResourceVersion.spec,
+                ResourceVersion.changed_by,
+                ResourceVersion.created_at,
+            )
+        )
         .order_by(ResourceVersion.version.asc())
+        .limit(_VERSION_LIST_LIMIT)
     )
     snapshots = list(result.scalars().all())
 
@@ -740,7 +751,7 @@ async def rollback_resource(
     kind = _resolve_kind(kind_plural)
     service = ResourceService(session)
     try:
-        resource = await service.get(kind, name, project)
+        resource = await service.get(kind, name, project, for_update=True)
     except ResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

@@ -149,6 +149,7 @@ class Execution(Base):
         Index("ix_execution_crew_name_created", "crew_name", created_at.desc()),
         Index("ix_execution_ns_status_created", "crew_project", "status", created_at.desc()),
         Index("ix_execution_status_created", "status", "created_at"),
+        Index("ix_execution_type_created", "execution_type", created_at.desc()),
         Index("ix_execution_created_at", "created_at"),
         Index("ix_execution_initiated_by", "initiated_by"),
         CheckConstraint("total_tokens >= 0", name="ck_execution_total_tokens_nonneg"),

@@ -117,7 +117,6 @@ _SENSITIVE_KEYS = frozenset(
         "signing_secret",
         "webhook_secret",
         "ip_address",
-        "client_ip",
     }
 )
 

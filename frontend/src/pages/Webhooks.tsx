@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   Webhook,
   Plus,
@@ -31,7 +31,8 @@ function getWebhookTestRecord(): Record<string, string> {
   try {
     const raw = localStorage.getItem(WEBHOOK_TEST_KEY)
     return raw ? (JSON.parse(raw) as Record<string, string>) : {}
-  } catch {
+  } catch (err) {
+    console.warn('[webhooks] failed to parse test record from localStorage:', err)
     return {}
   }
 }
@@ -42,10 +43,6 @@ function setWebhookTested(webhookId: string) {
   localStorage.setItem(WEBHOOK_TEST_KEY, JSON.stringify(record))
 }
 
-function getLastTested(webhookId: string): string | null {
-  const record = getWebhookTestRecord()
-  return record[webhookId] ?? null
-}
 
 interface WebhookRecord {
   id: string
@@ -403,8 +400,9 @@ export default function Webhooks() {
   const [deleting, setDeleting] = useState(false)
   const { deleteError, showDeleteError, clearDeleteError } = useDeleteError()
   const [testingId, setTestingId] = useState<string | null>(null)
-  const [, setTestTick] = useState(0)
+  const [testTick, setTestTick] = useState(0)
   const toasts = useToastStore()
+  const testRecords = useMemo(() => getWebhookTestRecord(), [testTick])
 
   const handleTest = useCallback(
     async (webhook: WebhookRecord) => {
@@ -598,7 +596,7 @@ export default function Webhooks() {
 
                       <td className="px-4 py-3 text-muted-foreground">
                         {(() => {
-                          const lastTested = getLastTested(webhook.id)
+                          const lastTested = testRecords[webhook.id] ?? null
                           if (!lastTested) {
                             return (
                               <span className="text-xs text-muted-foreground/60">Not tested</span>

@@ -149,10 +149,15 @@ class ResourceService:
         )
         return resource, True
 
-    async def get(self, kind: str, name: str, project: str = "default") -> Resource:
+    async def get(
+        self, kind: str, name: str, project: str = "default", *, for_update: bool = False
+    ) -> Resource:
         """Get a single resource by kind/name/project."""
         kind_enum = _parse_kind(kind)
-        resource = await self._get_by_identity(kind_enum, name, project)
+        if for_update:
+            resource = await self._get_for_update(kind_enum, name, project)
+        else:
+            resource = await self._get_by_identity(kind_enum, name, project)
         if not resource:
             raise ResourceNotFoundError(kind, name, project)
         return resource

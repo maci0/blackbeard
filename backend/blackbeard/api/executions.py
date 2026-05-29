@@ -33,7 +33,7 @@ from blackbeard.engine import ExecutionError, ExecutionNotFoundError
 from blackbeard.engine import executor as _executor_mod
 from blackbeard.http_client import get_litellm_client
 from blackbeard.kinds import NAME_PATTERN
-from blackbeard.logging_config import request_id_var
+from blackbeard.logging_config import anonymize_ip, request_id_var
 from blackbeard.models import (
     TERMINAL_STATUSES,
     Execution,
@@ -909,11 +909,11 @@ async def ws_execution(
         logger.warning(
             "WebSocket auth failed: execution_id=%s from %s",
             execution_id,
-            client_ip,
+            anonymize_ip(client_ip),
             extra={
                 "event": "ws_auth_failure",
                 "execution_id": str(execution_id),
-                "client_ip": client_ip,
+                "client_ip": anonymize_ip(client_ip),
             },
         )
         await websocket.close(code=4401, reason="Authentication required")

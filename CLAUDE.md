@@ -138,7 +138,7 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Resource version history**: Audit log timeline tab on ResourceDetail pages showing all mutations for that resource.
 
-**User preferences**: Settings page includes default namespace, notification preferences, and sound settings.
+**User preferences**: Settings page includes default project, notification preferences, and sound settings.
 
 **Rate limit badges**: Models page shows RPM/TPM badges on model cards.
 

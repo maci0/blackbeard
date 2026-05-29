@@ -6,7 +6,7 @@ All Blackbeard resources share a common envelope:
 apiVersion: blackbeard/v1
 kind: <Kind>          # One of the kinds listed below
 metadata:
-  name: <string>      # Unique name within the namespace (required)
+  name: <string>      # Unique name within the project (required)
   project: default  # Logical grouping; defaults to "default"
   labels:             # Arbitrary key/value pairs for filtering (optional)
     key: value
@@ -627,7 +627,7 @@ spec:
     - kind: Agent
       name: researcher
   scope:
-    project: default                    # Limit permissions to this namespace (optional)
+    project: default                    # Limit permissions to this project (optional)
 ```
 
 | Field | Type | Required | Description |
@@ -636,7 +636,7 @@ spec:
 | `subjects` | object[] (≥1) | ✅ | Subjects receiving the role's permissions |
 | `subjects[].kind` | `User`\|`Group`\|`Agent`\|`Crew` | ✅ | Subject type |
 | `subjects[].name` | string | ✅ | Subject identifier (email for users, resource name for agents/crews) |
-| `scope.namespace` | string | — | Limit the binding to a specific namespace |
+| `scope.project` | string | — | Limit the binding to a specific project |
 
 ---
 
@@ -681,7 +681,7 @@ spec:
 
 ## Namespace
 
-A Namespace provides logical grouping and resource isolation. Resources belong to a namespace (default: `"default"`).
+A Namespace provides logical grouping and resource isolation. Resources belong to a project (default: `"default"`).
 
 ```yaml
 apiVersion: blackbeard/v1
@@ -702,6 +702,6 @@ spec:
 |-------|------|----------|-------------|
 | `description` | string | — | Human-readable description (max 5000 chars) |
 | `labels` | object | — | Arbitrary key-value labels for filtering (max 50) |
-| `default_agent_policy` | string | — | Default AgentPolicy ref applied to all agents in this namespace |
-| `resource_quota.max_resources` | integer (1–10000) | — | Maximum resources allowed in this namespace |
+| `default_agent_policy` | string | — | Default AgentPolicy ref applied to all agents in this project |
+| `resource_quota.max_resources` | integer (1–10000) | — | Maximum resources allowed in this project |
 | `resource_quota.max_executions_per_hour` | integer (1–1000) | — | Maximum executions per hour |

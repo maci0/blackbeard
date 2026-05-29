@@ -18,6 +18,7 @@ from blackbeard.auth.dependencies import require_permission
 from blackbeard.engine import ExecutionError, ExecutionNotFoundError
 from blackbeard.engine import executor as _executor_mod
 from blackbeard.kinds import NAME_PATTERN
+from blackbeard.logging_config import anonymize_ip
 from blackbeard.models import User, get_session
 from blackbeard.models.execution_schemas import ExecutionResponse, validate_inputs
 from blackbeard.rate_limiter import check_rate_limit, execution_limiter, record_auth_failure
@@ -210,7 +211,7 @@ async def webhook_trigger(
             extra={
                 "event": "webhook_auth_failed",
                 "automation_name": name,
-                "client_ip": client_ip,
+                "client_ip": anonymize_ip(client_ip),
             },
         )
         raise HTTPException(

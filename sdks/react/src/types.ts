@@ -77,6 +77,14 @@ export interface Execution {
   tasks?: ExecutionTask[]
 }
 
+export interface User {
+  id: string
+  email: string
+  display_name: string
+  is_active: boolean
+  created_at: string
+}
+
 /** Execution event returned from the events endpoint. */
 export interface ExecutionEvent {
   sequence: number
@@ -90,6 +98,50 @@ export interface ExecutionEventsResponse {
   events: ExecutionEvent[]
   next_sequence: number
   has_more: boolean
+}
+
+export interface AuthResponse {
+  access_token: string
+  refresh_token: string
+  token_type: string
+  user: User
+}
+
+export interface TokenResponse {
+  access_token: string
+  refresh_token: string | null
+  token_type: string
+}
+
+export interface HealthResponse {
+  status: string
+  service: string
+  version: string
+  uptime_s: number
+}
+
+export interface ReadinessResponse {
+  status: string
+  service: string
+  checks: Record<string, { status: string; latency_ms?: number; error?: string }>
+}
+
+export interface HITLResponseResult {
+  status: string
+  execution_id: string
+}
+
+export interface SpendRecord {
+  request_id: string
+  call_type: string
+  model: string
+  spend: number
+  total_tokens: number
+  prompt_tokens: number
+  completion_tokens: number
+  startTime: string
+  endTime: string
+  [key: string]: unknown
 }
 
 /** Error thrown by apiFetch when the API returns a non-OK response. */
@@ -112,6 +164,14 @@ export class BlackbeardApiError extends Error {
 
   get isServerError(): boolean {
     return this.status >= 500
+  }
+
+  get isUnauthorized(): boolean {
+    return this.status === 401
+  }
+
+  get isForbidden(): boolean {
+    return this.status === 403
   }
 
   get isNotFound(): boolean {

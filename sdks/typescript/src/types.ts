@@ -172,6 +172,14 @@ export class BlackbeardApiError extends Error {
     return this.status >= 500;
   }
 
+  get isUnauthorized(): boolean {
+    return this.status === 401;
+  }
+
+  get isForbidden(): boolean {
+    return this.status === 403;
+  }
+
   get isNotFound(): boolean {
     return this.status === 404;
   }

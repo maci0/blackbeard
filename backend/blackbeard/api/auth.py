@@ -174,7 +174,7 @@ async def register(
         extra={
             "event": "user_registered",
             "user_id": str(user.id),
-            "client_ip": ip,
+            "client_ip": anonymize_ip(ip),
         },
     )
 
@@ -225,7 +225,7 @@ async def login(
             anonymize_ip(ip),
             extra={
                 "event": "login_failed",
-                "client_ip": ip or "unknown",
+                "client_ip": anonymize_ip(ip),
             },
         )
         await log_audit(
@@ -248,7 +248,7 @@ async def login(
             extra={
                 "event": "login_blocked_deactivated",
                 "user_id": str(user.id),
-                "client_ip": ip or "unknown",
+                "client_ip": anonymize_ip(ip),
             },
         )
         await log_audit(
@@ -284,7 +284,7 @@ async def login(
         extra={
             "event": "user_login",
             "user_id": str(user.id),
-            "client_ip": ip or "unknown",
+            "client_ip": anonymize_ip(ip),
         },
     )
 
@@ -426,7 +426,7 @@ async def generate_api_key(
         extra={
             "event": action,
             "user_id": str(user.id),
-            "client_ip": ip or "unknown",
+            "client_ip": anonymize_ip(ip),
         },
     )
 
@@ -476,6 +476,6 @@ async def revoke_api_key(
         extra={
             "event": "api_key_revoked",
             "user_id": str(user.id),
-            "client_ip": ip or "unknown",
+            "client_ip": anonymize_ip(ip),
         },
     )

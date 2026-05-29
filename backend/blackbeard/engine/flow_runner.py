@@ -128,6 +128,8 @@ def _validate_callable_path(
 
 def _load_callable(fn_path: str) -> Any:
     """Import and return the callable referenced by ``module.path:func_name``."""
+    if ":" not in fn_path:
+        raise LoaderError(f"Invalid callable path (expected 'module:func'): {fn_path}")
     module_path, fn_name = fn_path.rsplit(":", 1)
     mod = importlib.import_module(module_path)
     return getattr(mod, fn_name)

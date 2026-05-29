@@ -72,7 +72,7 @@ Resources are stored in a single `resources` table with a JSONB `spec` column. T
 ```
 resources table
 ┌────┬──────────┬──────────┬───────────┬──────────────────┬─────────┐
-│ id │  kind    │  name    │ namespace │       spec       │ version │
+│ id │  kind    │  name    │  project  │       spec       │ version │
 ├────┼──────────┼──────────┼───────────┼──────────────────┼─────────┤
 │  1 │ Agent    │ researcher│ default  │ {"role": "..."}  │       1 │
 │  2 │ Task     │ research │ default   │ {"desc": "..."}  │       1 │
@@ -351,8 +351,8 @@ blackbeard_cli/
 ├─────────────────┤     ├──────────────────┤     ├──────────────────┤
 │ id         (PK) │     │ id          (PK) │     │ id          (PK) │
 │ kind             │◄────│ source_id   (FK) │     │ crew_name        │
-│ name             │◄────│ target_kind      │     │ namespace        │
-│ namespace        │     │ target_name      │     │ status           │
+│ name             │◄────│ target_kind      │     │ project          │
+│ project          │     │ target_name      │     │ status           │
 │ spec      (JSONB)│     │ ref_field        │     │ inputs    (JSONB)│
 │ labels    (JSONB)│     └──────────────────┘     │ outputs   (JSONB)│
 │ version    (int) │                              │ error            │

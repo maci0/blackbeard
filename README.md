@@ -183,7 +183,7 @@ uv run blackbeard role list                                 # list roles
 uv run blackbeard rolebinding create ...                    # bind roles to subjects
 ```
 
-All commands support `--json` for scripting and `--server` / `--api-key` / `--namespace` overrides.
+All commands support `--json` for scripting and `--server` / `--api-key` / `--project` overrides.
 
 ## Development
 

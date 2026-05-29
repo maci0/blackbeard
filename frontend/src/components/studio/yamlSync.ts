@@ -116,7 +116,8 @@ export function yamlToCanvas(
   let docs: unknown[]
   try {
     docs = yaml.loadAll(yamlStr)
-  } catch {
+  } catch (err) {
+    console.warn('[yaml-sync] failed to parse YAML:', err)
     return null
   }
 
@@ -193,6 +194,7 @@ export function yamlToCanvas(
   }
 
   // Build edges from ref fields in task specs
+  const nodeIds = new Set(nodes.map((n) => n.id))
   for (const node of nodes) {
     if (node.type !== 'task') continue
     const data = node.data
@@ -202,7 +204,7 @@ export function yamlToCanvas(
     if (typeof agentRef === 'string' && agentRef.startsWith('ref:')) {
       const agentName = parseRef(agentRef)
       const sourceId = `agent-${agentName}`
-      if (nodes.some((n) => n.id === sourceId)) {
+      if (nodeIds.has(sourceId)) {
         edges.push({
           id: `edge-${sourceId}-${node.id}`,
           source: sourceId,
@@ -220,7 +222,7 @@ export function yamlToCanvas(
         if (typeof ref === 'string' && ref.startsWith('ref:')) {
           const taskName = parseRef(ref)
           const sourceId = `task-${taskName}`
-          if (nodes.some((n) => n.id === sourceId)) {
+          if (nodeIds.has(sourceId)) {
             edges.push({
               id: `edge-${sourceId}-${node.id}`,
               source: sourceId,

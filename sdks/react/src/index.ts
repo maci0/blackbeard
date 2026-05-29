@@ -16,5 +16,12 @@ export type {
   ExecutionTask,
   ExecutionEvent,
   ExecutionEventsResponse,
+  User,
+  AuthResponse,
+  TokenResponse,
+  HealthResponse,
+  ReadinessResponse,
+  HITLResponseResult,
+  SpendRecord,
 } from './types'
 export { BlackbeardApiError, TERMINAL_STATUSES } from './types'

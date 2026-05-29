@@ -18,7 +18,7 @@ from blackbeard.auth.api_key import get_api_key
 from blackbeard.auth.jwt import decode_access_token
 from blackbeard.config import settings
 from blackbeard.kinds import NAME_PATTERN
-from blackbeard.logging_config import log_task_exception
+from blackbeard.logging_config import anonymize_ip, log_task_exception
 from blackbeard.models.execution_schemas import exceeds_depth as _exceeds_depth
 from blackbeard.rate_limiter import record_auth_failure
 
@@ -402,11 +402,11 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
         logger.warning(
             "Collaboration WebSocket auth failed: crew=%s from %s",
             crew_name,
-            client_ip,
+            anonymize_ip(client_ip),
             extra={
                 "event": "collab_ws_auth_failure",
                 "crew_name": crew_name,
-                "client_ip": client_ip,
+                "client_ip": anonymize_ip(client_ip),
             },
         )
         await websocket.close(code=4401, reason="Authentication required")

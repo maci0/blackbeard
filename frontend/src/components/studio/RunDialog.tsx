@@ -3,6 +3,7 @@ import {
   useCallback,
   useRef,
   useEffect,
+  useMemo,
   type ChangeEvent,
   type KeyboardEvent,
 } from 'react'
@@ -96,7 +97,8 @@ function loadPresets(): RunPreset[] {
         typeof (p as RunPreset).inputs === 'string' &&
         typeof (p as RunPreset).crewName === 'string',
     )
-  } catch {
+  } catch (err) {
+    console.warn('[run-dialog] failed to load presets:', err)
     return []
   }
 }
@@ -140,7 +142,7 @@ export function RunDialog({
     }
   }, [])
 
-  const crewPresets = presets.filter((p) => p.crewName === crewName)
+  const crewPresets = useMemo(() => presets.filter((p) => p.crewName === crewName), [presets, crewName])
 
   const handleSelectPreset = useCallback(
     (name: string) => {

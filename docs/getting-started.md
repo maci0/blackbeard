@@ -16,7 +16,7 @@ Blackbeard is an open, self-hosted Agent Management Platform built on top of Cre
 ## 1. Start the Platform
 
 ```bash
-git clone <repo-url> blackbeard
+git clone https://github.com/blackbeard/blackbeard.git
 cd blackbeard
 
 # Copy and configure environment variables
