@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
 
+from blackbeard.api import MUTATION_RATE_MSG as _MUTATION_RATE_MSG
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.authorizer import clear_cache as _clear_authz_cache
 from blackbeard.auth.dependencies import check_resource_permission, get_current_user
@@ -59,6 +60,19 @@ _LLM_KIND = "LLMConnection"
 _AUTHZ_CACHE_KINDS = frozenset({ResourceKind.ROLE.value, ResourceKind.ROLE_BINDING.value})
 
 
+def _post_mutation_hooks(
+    request: Request,
+    kind: str,
+    name: str,
+    spec: dict[str, Any] | None = None,
+) -> None:
+    """Fire scheduler/LiteLLM/RBAC side-effects after a resource mutation."""
+    _fire_and_forget(_maybe_reload_scheduler(request, kind))
+    _fire_and_forget(_sync_llm_to_litellm(kind, name, spec))
+    if kind in _AUTHZ_CACHE_KINDS:
+        _clear_authz_cache()
+
+
 async def _sync_llm_to_litellm(kind: str, name: str, spec: dict[str, Any] | None) -> None:
     """Push LLMConnection changes to LiteLLM proxy (errors logged, not raised)."""
     if kind != _LLM_KIND:
@@ -77,7 +91,6 @@ async def _sync_llm_to_litellm(kind: str, name: str, spec: dict[str, Any] | None
         )
 
 
-_MUTATION_RATE_MSG = "Too many mutation requests. Try again later."
 _VERSION_LIST_LIMIT = 500
 
 
@@ -92,7 +105,7 @@ async def _save_version_snapshot(
         version=resource.version,
         spec=resource.spec,
         labels=resource.labels,
-        changed_by=user.email if user else None,
+        changed_by=str(user.id) if user else None,
     )
     session.add(snapshot)
     await session.flush()
@@ -178,13 +191,16 @@ def _resource_to_document(resource: Any) -> dict[str, Any]:
         if isinstance(trigger, dict) and "webhook_secret" in trigger:
             trigger = {**trigger, "webhook_secret": "**REDACTED**"}  # nosec B105
             spec["trigger"] = trigger
+    metadata: dict[str, Any] = {
+        "name": resource.name,
+        "project": resource.project,
+    }
+    if resource.labels:
+        metadata["labels"] = resource.labels
     return {
         "apiVersion": API_VERSION,
         "kind": resource.kind.value,
-        "metadata": {
-            "name": resource.name,
-            "project": resource.project,
-        },
+        "metadata": metadata,
         "spec": spec,
     }
 
@@ -226,6 +242,7 @@ async def export_resources(
                 project=project,
                 limit=_EXPORT_PAGE_SIZE,
                 offset=offset,
+                skip_total=True,
             )
             for resource in items:
                 doc = _resource_to_document(resource)
@@ -381,10 +398,7 @@ async def create_resource(
         response.headers["Location"] = f"/api/v1/{kind_plural}/{data.metadata.name}?project={ns}"
     else:
         response.status_code = 200
-    _fire_and_forget(_maybe_reload_scheduler(request, url_kind))
-    _fire_and_forget(_sync_llm_to_litellm(url_kind, data.metadata.name, data.spec))
-    if url_kind in _AUTHZ_CACHE_KINDS:
-        _clear_authz_cache()
+    _post_mutation_hooks(request, url_kind, data.metadata.name, data.spec)
     return ResourceResponse.from_db(resource)
 
 
@@ -517,10 +531,7 @@ async def update_resource(
             status_code=422,
             detail=[e.to_dict() for e in exc.errors],
         ) from exc
-    _fire_and_forget(_maybe_reload_scheduler(request, kind))
-    _fire_and_forget(_sync_llm_to_litellm(kind, name, resource.spec))
-    if kind in _AUTHZ_CACHE_KINDS:
-        _clear_authz_cache()
+    _post_mutation_hooks(request, kind, name, resource.spec)
     return ResourceResponse.from_db(resource)
 
 
@@ -578,10 +589,7 @@ async def delete_resource(
             },
         )
     else:
-        _fire_and_forget(_maybe_reload_scheduler(request, kind))
-        _fire_and_forget(_sync_llm_to_litellm(kind, name, None))
-        if kind in _AUTHZ_CACHE_KINDS:
-            _clear_authz_cache()
+        _post_mutation_hooks(request, kind, name)
 
 
 # ---------------------------------------------------------------------------
@@ -596,12 +604,8 @@ def _compute_changed_keys(
     """Return the list of top-level spec keys that differ from the previous version."""
     if previous_spec is None:
         return sorted(current_spec.keys())
-    changed: list[str] = []
-    all_keys = set(current_spec.keys()) | set(previous_spec.keys())
-    for key in sorted(all_keys):
-        if current_spec.get(key) != previous_spec.get(key):
-            changed.append(key)
-    return changed
+    all_keys = current_spec.keys() | previous_spec.keys()
+    return sorted(k for k in all_keys if current_spec.get(k) != previous_spec.get(k))
 
 
 @router.get(
@@ -785,8 +789,5 @@ async def rollback_resource(
     await _save_version_snapshot(session, resource, user)
     await session.commit()
 
-    _fire_and_forget(_maybe_reload_scheduler(request, kind))
-    _fire_and_forget(_sync_llm_to_litellm(kind, name, resource.spec))
-    if kind in _AUTHZ_CACHE_KINDS:
-        _clear_authz_cache()
+    _post_mutation_hooks(request, kind, name, resource.spec)
     return ResourceResponse.from_db(resource)

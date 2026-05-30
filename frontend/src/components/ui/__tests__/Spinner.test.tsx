@@ -8,7 +8,7 @@ describe('Spinner', () => {
       const { container } = render(<Spinner />)
 
       const svg = container.querySelector('svg')
-      expect(svg).toBeInTheDocument()
+      expect(svg).not.toBeNull()
       expect(svg).toHaveClass('h-5', 'w-5')
     })
 
@@ -24,6 +24,7 @@ describe('Spinner', () => {
       const { container } = render(<Spinner size="sm" />)
 
       const svg = container.querySelector('svg')
+      expect(svg).not.toBeNull()
       expect(svg).toHaveClass('h-3.5', 'w-3.5')
     })
 
@@ -31,6 +32,7 @@ describe('Spinner', () => {
       const { container } = render(<Spinner size="md" />)
 
       const svg = container.querySelector('svg')
+      expect(svg).not.toBeNull()
       expect(svg).toHaveClass('h-5', 'w-5')
     })
 
@@ -38,6 +40,7 @@ describe('Spinner', () => {
       const { container } = render(<Spinner size="lg" />)
 
       const svg = container.querySelector('svg')
+      expect(svg).not.toBeNull()
       expect(svg).toHaveClass('h-8', 'w-8')
     })
   })
@@ -68,6 +71,7 @@ describe('Spinner', () => {
       const { container } = render(<Spinner />)
 
       const svg = container.querySelector('svg')
+      expect(svg).not.toBeNull()
       expect(svg).toHaveClass('animate-spin')
     })
 
@@ -75,6 +79,7 @@ describe('Spinner', () => {
       const { container } = render(<Spinner />)
 
       const svg = container.querySelector('svg')
+      expect(svg).not.toBeNull()
       expect(svg).toHaveClass('motion-reduce:animate-none')
     })
   })
@@ -84,6 +89,7 @@ describe('Spinner', () => {
       const { container } = render(<Spinner className="text-blue-500" />)
 
       const svg = container.querySelector('svg')
+      expect(svg).not.toBeNull()
       expect(svg).toHaveClass('text-blue-500')
     })
   })

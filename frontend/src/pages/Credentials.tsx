@@ -169,6 +169,7 @@ function CreateCredentialDialog({
           {error && (
             <div
               role="alert"
+              aria-live="assertive"
               className="mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
             >
               {error}
@@ -186,11 +187,16 @@ function CreateCredentialDialog({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
+                aria-required="true"
                 autoFocus
                 pattern="[a-z0-9][a-z0-9\-]*"
+                aria-describedby="cred-name-hint"
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="my-api-key"
               />
+              <p id="cred-name-hint" className="mt-1 text-xs text-muted-foreground">
+                Lowercase letters, numbers, and hyphens only
+              </p>
             </div>
 
             <div>
@@ -222,6 +228,7 @@ function CreateCredentialDialog({
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   required
+                  aria-required="true"
                   className="w-full rounded-md border bg-background px-3 py-2 pr-10 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   placeholder="sk-..."
                 />
@@ -229,7 +236,7 @@ function CreateCredentialDialog({
                   type="button"
                   onClick={() => setShowValue((v) => !v)}
                   aria-label={showValue ? 'Hide value' : 'Show value'}
-                  className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+                  className="absolute right-1 top-1/2 flex h-[44px] w-[44px] -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {showValue ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
@@ -325,7 +332,7 @@ function CredentialCard({
           <button
             type="button"
             onClick={handleCopy}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Copy masked value"
           >
             {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
@@ -341,7 +348,7 @@ function CredentialCard({
         <button
           type="button"
           onClick={() => onDelete(credential.id)}
-          className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`Delete ${credential.name}`}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -383,8 +390,11 @@ export default function Credentials() {
     void fetchCredentials()
   }, [fetchCredentials])
 
+  const [deleting, setDeleting] = useState(false)
+
   const handleDelete = async () => {
     if (!deleteTarget) return
+    setDeleting(true)
     try {
       await api.delete(`/api/v1/credentials/${deleteTarget}`)
       toasts.success('Credential deleted')
@@ -392,6 +402,8 @@ export default function Credentials() {
       void fetchCredentials()
     } catch (err) {
       toasts.error(getErrorMessage(err, 'Failed to delete credential'))
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -418,7 +430,7 @@ export default function Credentials() {
                 aria-label="Refresh credentials"
                 className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+                <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin motion-reduce:animate-none')} />
               </button>
               <button
                 type="button"
@@ -436,12 +448,13 @@ export default function Credentials() {
         {credentials.length > 0 && (
           <div className="mt-6 flex items-center gap-3">
             <div className="relative max-w-xs flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
-                type="text"
+                type="search"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 placeholder="Filter credentials…"
+                autoComplete="off"
                 aria-label="Filter credentials by name or type"
                 className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
@@ -471,9 +484,11 @@ export default function Credentials() {
               action={{ label: 'Add Credential', onClick: () => setCreateOpen(true) }}
             />
           ) : filtered.length === 0 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              No credentials match &quot;{filter}&quot;
-            </p>
+            <EmptyState
+              icon={<Search className="h-10 w-10" />}
+              title="No matching credentials"
+              description={`No credentials match "${filter}". Try a different search term.`}
+            />
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((cred) => (
@@ -503,6 +518,7 @@ export default function Credentials() {
         description="This credential will be permanently deleted. Any tools or integrations using it will lose access."
         confirmLabel="Delete"
         confirmVariant="destructive"
+        loading={deleting}
         onConfirm={() => void handleDelete()}
       />
     </div>

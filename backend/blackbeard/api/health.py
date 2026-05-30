@@ -142,7 +142,7 @@ async def _check_valkey() -> dict[str, object]:
 async def _check_litellm() -> dict[str, object]:
     """Hit LiteLLM /health/liveliness and return status dict.
 
-    Note: "liveliness" is LiteLLM's actual endpoint name (their misspelling).
+    Note: "liveliness" is LiteLLM's actual endpoint name — not a typo.
     """
     t0 = time.monotonic()
     try:

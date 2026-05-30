@@ -43,7 +43,9 @@ export function getDuration(
 ): string {
   if (!start) return '—'
   const s = new Date(start).getTime()
+  if (isNaN(s)) return '—'
   const e = end ? new Date(end).getTime() : Date.now()
+  if (isNaN(e)) return '—'
   const sec = Math.round((e - s) / 1000)
   if (sec < 60) return `${sec}s`
   const min = Math.floor(sec / 60)
@@ -60,8 +62,8 @@ export function parseCost(cost: number | string | null | undefined): number {
 }
 
 export function formatCost(cost: number | string | null | undefined): string {
-  const n = typeof cost === 'string' ? parseFloat(cost) : cost
-  if (n == null || n === 0 || isNaN(n)) return '—'
+  const n = parseCost(cost)
+  if (n === 0) return '—'
   if (n >= 1) return `$${n.toFixed(2)}`
   if (n >= 0.01) return `$${n.toFixed(3)}`
   return `$${n.toFixed(4)}`

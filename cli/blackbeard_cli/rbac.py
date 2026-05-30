@@ -38,6 +38,7 @@ Examples:
   blackbeard role describe admin
 """,
 )
+@json_opt
 @click.pass_context
 def role(ctx: click.Context) -> None:
     """Manage RBAC roles."""
@@ -65,9 +66,8 @@ Examples:
 )
 @json_opt
 @click.pass_context
-def role_list(ctx: click.Context, limit: int, output_json: bool = False) -> None:
+def role_list(ctx: click.Context, limit: int) -> None:
     """List all roles."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
@@ -107,7 +107,7 @@ def role_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
         name = item.get("metadata", {}).get("name", "—")
         desc = spec.get("description", "—")
         rules = spec.get("rules", [])
-        table.add_row(name, desc[:60], str(len(rules)))
+        table.add_row(escape(str(name)), escape(str(desc))[:60], str(len(rules)))
 
     out.print(table)
     total = extract_total(data, items)
@@ -128,9 +128,8 @@ Examples:
 @click.argument("name")
 @json_opt
 @click.pass_context
-def role_describe(ctx: click.Context, name: str, output_json: bool = False) -> None:
+def role_describe(ctx: click.Context, name: str) -> None:
     """Show role details with resource-verb permission matrix."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     validate_name(name)
     server = ctx.obj["server"]
     headers = require_auth(ctx)
@@ -208,8 +207,10 @@ def role_describe(ctx: click.Context, name: str, output_json: bool = False) -> N
 Examples:
   blackbeard rolebinding list
   blackbeard rolebinding create dev-binding -r developer --subject User:dev@example.com
+  blackbeard rolebinding delete dev-binding
 """,
 )
+@json_opt
 @click.pass_context
 def rolebinding(ctx: click.Context) -> None:
     """Manage role bindings."""
@@ -237,9 +238,8 @@ Examples:
 )
 @json_opt
 @click.pass_context
-def rolebinding_list(ctx: click.Context, limit: int, output_json: bool = False) -> None:
+def rolebinding_list(ctx: click.Context, limit: int) -> None:
     """List all role bindings."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
@@ -279,8 +279,8 @@ def rolebinding_list(ctx: click.Context, limit: int, output_json: bool = False) 
         name = item.get("metadata", {}).get("name", "—")
         role_name = spec.get("role", "—")
         subjects = spec.get("subjects", [])
-        subj_str = ", ".join(f"{s['kind']}:{s['name']}" for s in subjects)
-        table.add_row(name, role_name, subj_str or "—")
+        subj_str = ", ".join(f"{escape(str(s['kind']))}:{escape(str(s['name']))}" for s in subjects)
+        table.add_row(escape(str(name)), escape(str(role_name)), subj_str or "—")
 
     out.print(table)
     total = extract_total(data, items)
@@ -310,8 +310,8 @@ Examples:
     help="Subject as Kind:Name (repeatable)",
 )
 @click.option(
-    "--scope-namespace",
-    "scope_ns",
+    "--scope-project",
+    "scope_project",
     default=None,
     metavar="PROJECT",
     help="Restrict binding to this project (separate from global -n)",
@@ -323,11 +323,9 @@ def rolebinding_create(
     name: str,
     role_name: str,
     subjects: tuple[str, ...],
-    scope_ns: str | None,
-    output_json: bool = False,
+    scope_project: str | None,
 ) -> None:
     """Create a role binding."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     validate_name(name)
     server = ctx.obj["server"]
     headers = require_auth(ctx)
@@ -357,13 +355,13 @@ def rolebinding_create(
         "role": role_name,
         "subjects": parsed_subjects,
     }
-    if scope_ns:
-        spec["scope"] = {"project": scope_ns}
+    if scope_project:
+        spec["scope"] = {"project": scope_project}
 
     body = {
         "apiVersion": API_VERSION,
         "kind": "RoleBinding",
-        "metadata": {"name": name, "project": ctx.obj.get("project", "default")},
+        "metadata": {"name": name, "project": ctx.obj["project"]},
         "spec": spec,
     }
 
@@ -385,4 +383,58 @@ def rolebinding_create(
     subj_display = ", ".join(f"{escape(s['kind'])}:{escape(s['name'])}" for s in parsed_subjects)
     out.print(
         f"[green]Created[/] binding [bold]{escape(name)}[/]: {escape(role_name)} -> {subj_display}"
+    )
+
+
+@rolebinding.command(
+    "delete",
+    epilog="""\b
+Examples:
+  blackbeard rolebinding delete dev-binding
+  blackbeard rolebinding delete dev-binding -y
+  blackbeard rolebinding delete dev-binding --json
+""",
+)
+@click.argument("name")
+@click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
+@json_opt
+@click.pass_context
+def rolebinding_delete(ctx: click.Context, name: str, yes: bool) -> None:
+    """Delete a role binding by name."""
+    validate_name(name)
+    server = ctx.obj["server"]
+    headers = require_auth(ctx)
+
+    namespace = ctx.obj["project"]
+
+    if (
+        not yes
+        and not ctx.obj["json"]
+        and not click.confirm(
+            f"Delete rolebinding {name} in project '{namespace}' on {server}?", default=False
+        )
+    ):
+        console.print("[yellow]Aborted.[/]")
+        return
+
+    try:
+        with httpx.Client(timeout=ctx.obj["timeout"]) as client:
+            resp = client.delete(
+                f"{server}/api/v1/role-bindings/{name}",
+                headers=headers,
+                params={"project": namespace},
+            )
+    except httpx.RequestError as exc:
+        handle_request_error(server, exc)
+
+    if resp.status_code not in (200, 204):
+        handle_http_error(resp)
+
+    if ctx.obj["json"]:
+        print_json({"deleted": name, "project": namespace, "status": "deleted"})
+        return
+
+    out.print(
+        f"[green]✓[/] Deleted rolebinding [bold]{escape(name)}[/]"
+        f" from project '{escape(namespace)}'"
     )

@@ -73,7 +73,7 @@ services:
     restart: unless-stopped
     init: true
     logging: *default-logging
-    # read_only: true — disabled; nginx envsubst writes to /etc/nginx/conf.d at startup
+    # read_only: true — disabled; nginx needs writable /var/cache, /var/run, and envsubst writes to /etc/nginx/conf.d
     tmpfs:
       - /tmp:size=10m
     security_opt:
@@ -244,7 +244,7 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/readiness')"]
       interval: 15s
       timeout: 10s
-      retries: 20
+      retries: 12
       start_period: 120s
     networks: [backend]
 

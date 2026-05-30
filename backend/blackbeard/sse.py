@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
@@ -20,6 +21,7 @@ from blackbeard.config import settings
 _max_sse = settings.max_concurrent_sse
 semaphore = asyncio.Semaphore(_max_sse)
 _active_streams = 0
+_active_lock = threading.Lock()
 
 
 @asynccontextmanager
@@ -31,17 +33,20 @@ async def acquire_stream() -> AsyncIterator[bool]:
     except TimeoutError:
         yield False
         return
-    _active_streams += 1
+    with _active_lock:
+        _active_streams += 1
     try:
         yield True
     finally:
-        _active_streams -= 1
+        with _active_lock:
+            _active_streams -= 1
         semaphore.release()
 
 
 def get_active_count() -> int:
     """Return the current number of active SSE streams."""
-    return _active_streams
+    with _active_lock:
+        return _active_streams
 
 
 def get_status() -> dict[str, int]:

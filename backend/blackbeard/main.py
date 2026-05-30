@@ -385,6 +385,14 @@ app = FastAPI(
             "name": "copilot",
             "description": "AI-powered resource generation from natural language prompts",
         },
+        {
+            "name": "credentials",
+            "description": "Centralized secret management (API keys, tokens, passwords)",
+        },
+        {
+            "name": "a2a",
+            "description": "Agent-to-Agent protocol (agent card discovery)",
+        },
     ],
 )
 

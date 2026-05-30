@@ -148,7 +148,7 @@ async def register(
         logger.info(
             "Registration conflict from %s",
             anonymize_ip(ip),
-            extra={"event": "registration_conflict", "client_ip": ip},
+            extra={"event": "registration_conflict", "client_ip": anonymize_ip(ip)},
         )
         raise HTTPException(
             status_code=409, detail="Registration failed — please try again or log in"

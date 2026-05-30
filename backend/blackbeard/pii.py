@@ -33,7 +33,6 @@ _anonymizer: AnonymizerEngine | None = None
 _analyzer_lock = threading.Lock()
 _anonymizer_lock = threading.Lock()
 
-# Default PII entity types to detect when none are specified.
 DEFAULT_ENTITIES: list[str] = [
     "PERSON",
     "EMAIL_ADDRESS",
@@ -339,7 +338,7 @@ def redact_text(
     Returns:
         Text with PII replaced by ``<ENTITY_TYPE>`` placeholders.
     """
-    if not text:
+    if not text or len(text) < 3:
         return text
 
     analyzer = _get_analyzer(config)
@@ -360,14 +359,18 @@ def redact_dict(
     entities: list[str] | None = None,
     config: dict[str, Any] | None = None,
     max_depth: int = 5,
+    shared_cache: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Recursively redact PII from string values in *data*.
 
     Non-string leaves (ints, floats, bools, None) are left untouched.
     Recursion stops at *max_depth* to prevent runaway traversal.
     Identical strings are redacted once and cached for the duration of this call.
+
+    Pass *shared_cache* to reuse redaction results across multiple calls
+    (e.g. across events within a single execution).
     """
-    cache: dict[str, str] = {}
+    cache = shared_cache if shared_cache is not None else {}
     return _redact_value(  # type: ignore[no-any-return]
         data, entities=entities, config=config, depth=0, max_depth=max_depth, cache=cache
     )
@@ -387,6 +390,8 @@ def _redact_value(
         return value
 
     if isinstance(value, str):
+        if len(value) < 3:
+            return value
         cached = cache.get(value)
         if cached is not None:
             return cached

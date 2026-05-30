@@ -32,6 +32,7 @@ Examples:
   blackbeard user invite -e user@example.com --display-name "Jane Doe"
 """,
 )
+@json_opt
 @click.pass_context
 def user(ctx: click.Context) -> None:
     """Manage platform users."""
@@ -60,9 +61,8 @@ Examples:
 )
 @json_opt
 @click.pass_context
-def user_list(ctx: click.Context, limit: int, output_json: bool = False) -> None:
+def user_list(ctx: click.Context, limit: int) -> None:
     """List all users."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
@@ -97,8 +97,8 @@ def user_list(ctx: click.Context, limit: int, output_json: bool = False) -> None
         active = "[green]active[/]" if u.get("is_active") else "[red]inactive[/]"
         table.add_row(
             str(u.get("id", "—")),
-            u.get("email", "—"),
-            u.get("display_name", "—"),
+            escape(str(u.get("email", "—"))),
+            escape(str(u.get("display_name", "—"))),
             active,
             str(u.get("created_at", "—"))[:19],
         )
@@ -143,10 +143,8 @@ def user_invite(
     email: str,
     password: str,
     display_name: str,
-    output_json: bool = False,
 ) -> None:
     """Create a new user account (admin invite)."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
@@ -188,6 +186,7 @@ Examples:
   blackbeard group delete 1
 """,
 )
+@json_opt
 @click.pass_context
 def group(ctx: click.Context) -> None:
     """Manage groups."""
@@ -216,9 +215,8 @@ Examples:
 )
 @json_opt
 @click.pass_context
-def group_list(ctx: click.Context, limit: int, output_json: bool = False) -> None:
+def group_list(ctx: click.Context, limit: int) -> None:
     """List all groups."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
@@ -251,8 +249,8 @@ def group_list(ctx: click.Context, limit: int, output_json: bool = False) -> Non
     for g in items:
         table.add_row(
             str(g.get("id", "—")),
-            g.get("name", "—"),
-            g.get("description", "—") or "—",
+            escape(str(g.get("name", "—"))),
+            escape(str(g.get("description", "—") or "—")),
             str(g.get("created_at", "—"))[:19],
         )
 
@@ -277,11 +275,8 @@ Examples:
 @click.option("--description", "-d", default="", metavar="TEXT", help="Group description")
 @json_opt
 @click.pass_context
-def group_create(
-    ctx: click.Context, name: str, description: str, output_json: bool = False
-) -> None:
+def group_create(ctx: click.Context, name: str, description: str) -> None:
     """Create a new group."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     validate_name(name)
     server = ctx.obj["server"]
     headers = require_auth(ctx)
@@ -321,9 +316,8 @@ Examples:
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @json_opt
 @click.pass_context
-def group_delete(ctx: click.Context, group_id: str, yes: bool, output_json: bool = False) -> None:
+def group_delete(ctx: click.Context, group_id: str, yes: bool) -> None:
     """Delete a group by ID."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 

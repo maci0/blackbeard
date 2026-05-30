@@ -44,7 +44,8 @@ _SENSITIVE_INPUT_KEYS = re.compile(
     r"|username|address|zip.?code|postal.?code|ip.?addr"
     r"|nationality|ethnicity|race|gender|sex"
     r"|medical|diagnosis|health.?record|insurance.?number|biometric"
-    r"|tax.?id|tin|salary|income|wage)",
+    r"|tax.?id|tin|salary|income|wage"
+    r"|location|home.?address|mailing.?address|street)",
     re.IGNORECASE,
 )
 _REDACTED = "[REDACTED]"
@@ -52,36 +53,39 @@ _REDACTED = "[REDACTED]"
 
 _MAX_REDACT_DEPTH = 20
 
+_ALLOWED_USER_KEYS = frozenset({"id", "role"})
+
 
 def redact_sensitive_values(inputs: dict[str, Any], _depth: int = 0) -> dict[str, Any]:
     """Return a copy of inputs with sensitive-looking values redacted (recursively).
 
     Returns the original dict unchanged when no keys match and no nested
-    structures need walking — avoids a copy on the common-case flat dict.
+    structures need walking — uses copy-on-write in a single pass.
     """
     if _depth >= _MAX_REDACT_DEPTH:
         return inputs
-    needs_copy = False
-    for k, v in inputs.items():
-        if _SENSITIVE_INPUT_KEYS.search(k) or isinstance(v, (dict, list)):
-            needs_copy = True
-            break
-    if not needs_copy:
-        return inputs
-    redacted: dict[str, Any] = {}
+    redacted: dict[str, Any] | None = None
     for k, v in inputs.items():
         if _SENSITIVE_INPUT_KEYS.search(k):
+            if redacted is None:
+                redacted = dict(inputs)
             redacted[k] = _REDACTED
         elif isinstance(v, dict):
-            redacted[k] = redact_sensitive_values(v, _depth + 1)
+            new_v = redact_sensitive_values(v, _depth + 1)
+            if new_v is not v:
+                if redacted is None:
+                    redacted = dict(inputs)
+                redacted[k] = new_v
         elif isinstance(v, list):
-            redacted[k] = [
+            new_list = [
                 redact_sensitive_values(item, _depth + 1) if isinstance(item, dict) else item
                 for item in v
             ]
-        else:
-            redacted[k] = v
-    return redacted
+            if any(new is not orig for new, orig in zip(new_list, v, strict=True)):
+                if redacted is None:
+                    redacted = dict(inputs)
+                redacted[k] = new_list
+    return redacted if redacted is not None else inputs
 
 
 def exceeds_depth(obj: object, limit: int = 10, current: int = 0) -> bool:
@@ -271,7 +275,9 @@ class ExecutionResponse(BaseModel):
         if isinstance(principal_chain, dict) and isinstance(principal_chain.get("user"), dict):
             principal_chain = {
                 **principal_chain,
-                "user": {k: v for k, v in principal_chain["user"].items() if k != "email"},
+                "user": {
+                    k: v for k, v in principal_chain["user"].items() if k in _ALLOWED_USER_KEYS
+                },
             }
         return cls.model_construct(
             id=execution.id,
@@ -351,8 +357,7 @@ class ExecutionEventsResponse(BaseModel):
     events: list[ExecutionEventItem]
     next_sequence: int = Field(
         description=(
-            "Sequence number of the last returned event."
-            " Pass as 'after' to fetch the next page."
+            "Sequence number of the last returned event. Pass as 'after' to fetch the next page."
         ),
     )
     has_more: bool = False

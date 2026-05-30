@@ -150,8 +150,8 @@ export class BlackbeardApiError extends Error {
   readonly detail: string
   readonly body?: Record<string, unknown>
 
-  constructor(status: number, detail: string, body?: Record<string, unknown>) {
-    super(`HTTP ${status}: ${detail}`)
+  constructor(status: number, detail: string, body?: Record<string, unknown>, options?: ErrorOptions) {
+    super(`HTTP ${status}: ${detail}`, options)
     this.name = 'BlackbeardApiError'
     this.status = status
     this.detail = detail
@@ -184,6 +184,10 @@ export class BlackbeardApiError extends Error {
 
   get isRateLimited(): boolean {
     return this.status === 429
+  }
+
+  get isTimeout(): boolean {
+    return this.status === 0 && this.detail.toLowerCase().includes('timed out')
   }
 
   get isNetworkError(): boolean {

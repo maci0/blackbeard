@@ -47,6 +47,7 @@ spec:
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          terminationMessagePolicy: FallbackToLogsOnError
           ports:
             - name: http
               containerPort: 8000
@@ -95,7 +96,7 @@ spec:
               port: http
             periodSeconds: 5
             timeoutSeconds: 5
-            failureThreshold: 24
+            failureThreshold: 36
           readinessProbe:
             httpGet:
               path: /api/v1/health/ready

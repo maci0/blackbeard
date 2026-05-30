@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
-import httpx
+if TYPE_CHECKING:
+    import httpx
 
 TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
 

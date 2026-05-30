@@ -6,8 +6,8 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install --frozen-lockfile
 COPY . .
 # NOTE: Do NOT bake VITE_API_KEY into the image — it would expose the API key
-# in the client JS bundle. In production the nginx reverse proxy handles auth
-# (see nginx.conf). For local dev, set VITE_API_KEY in frontend/.env.local.
+# in the client JS bundle. In production, users authenticate via JWT (login flow).
+# For local dev, set VITE_API_KEY in frontend/.env.local.
 RUN bun run build
 
 # Stage 2: Serve with nginx
@@ -18,10 +18,7 @@ LABEL org.opencontainers.image.source="https://github.com/blackbeard" \
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY security-headers.conf /etc/nginx/security-headers.conf
-# SECURITY: Empty by default. Only set this for local development.
-# Setting this in production means anyone who can reach the UI can make
-# authenticated API calls without knowing the API key.
-ENV NGINX_API_KEY_FALLBACK=
+ENV API_UPSTREAM=api:8000
 EXPOSE 3000
 STOPSIGNAL SIGQUIT
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=5s \

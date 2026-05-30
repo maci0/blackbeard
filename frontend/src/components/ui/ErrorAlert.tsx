@@ -47,7 +47,7 @@ export function ErrorAlert({
           <button
             type="button"
             onClick={onDismiss}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-destructive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md transition-colors hover:bg-destructive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Dismiss error"
           >
             <X className="h-3.5 w-3.5" />

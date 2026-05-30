@@ -550,7 +550,7 @@ function PIIForm({
   const handlePresetChange = (newPreset: string) => {
     onChange('preset', newPreset)
     if (newPreset !== 'custom' && PII_PRESETS[newPreset]) {
-      onChange('entities', PII_PRESETS[newPreset]!.entities)
+      onChange('entities', PII_PRESETS[newPreset].entities)
     }
   }
 
@@ -570,8 +570,8 @@ function PIIForm({
         />
         {preset !== 'custom' && PII_PRESETS[preset] && (
           <p className="mt-1 text-[10px] text-muted-foreground">
-            {PII_PRESETS[preset]!.entities.length} entities selected by{' '}
-            {PII_PRESETS[preset]!.label} standard
+            {PII_PRESETS[preset].entities.length} entities selected by{' '}
+            {PII_PRESETS[preset].label} standard
           </p>
         )}
       </FieldGroup>

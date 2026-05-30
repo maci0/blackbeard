@@ -23,7 +23,7 @@ from blackbeard.api import RETRY_HEADERS_30
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.config import settings
 from blackbeard.http_client import get_litellm_client
-from blackbeard.logging_config import request_id_var
+from blackbeard.logging_config import request_id_var, scrub_pii
 from blackbeard.models import User
 from blackbeard.rate_limiter import chat_limiter, check_rate_limit
 
@@ -204,7 +204,7 @@ async def chat(
     latency_ms = int((time.monotonic() - t0) * 1000)
 
     if resp.status_code != 200:
-        error_body = resp.text[:500] if resp.text else ""
+        error_body = scrub_pii(resp.text[:500]) if resp.text else ""
         logger.warning(
             "LiteLLM error: model=%s status=%d latency_ms=%d body=%s",
             body.model,
@@ -336,7 +336,7 @@ async def chat_stream(
                         "LiteLLM stream error: model=%s status=%d body=%s",
                         request_model,
                         response.status_code,
-                        error_text[:200],
+                        scrub_pii(error_text[:200]),
                         extra={
                             "event": "chat_stream_litellm_error",
                             "model": request_model,
@@ -521,7 +521,7 @@ async def test_model(
         latency_ms = int((time.monotonic() - t0) * 1000)
 
         if resp.status_code != 200:
-            error_body = resp.text[:500] if resp.text else ""
+            error_body = scrub_pii(resp.text[:500]) if resp.text else ""
             logger.warning(
                 "Model test failed: model=%s status=%d body=%s",
                 model,

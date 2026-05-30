@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -38,7 +39,7 @@ def test_cli_help():
 def test_cli_version():
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "0." in result.output  # version starts with 0.x
+    assert re.search(r"\d+\.\d+\.\d+", result.output), "output should contain semver"
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +75,9 @@ def test_subcommand_help(cmd):
     result = runner.invoke(cli, [cmd, "--help"])
     assert result.exit_code == 0, f"'{cmd} --help' failed: {result.output}"
     # Help text should include the command name or description keywords
-    assert len(result.output) > 20
+    assert cmd in result.output.lower() or "usage:" in result.output.lower(), (
+        f"'{cmd} --help' should contain command name or Usage"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +97,7 @@ def test_subcommand_help(cmd):
         ("role", "describe"),
         ("rolebinding", "list"),
         ("rolebinding", "create"),
+        ("rolebinding", "delete"),
     ],
 )
 def test_subgroup_help(group, sub):
@@ -336,7 +340,10 @@ def test_logout_no_credentials():
     with patch("blackbeard_cli.auth_cmds.clear_credentials", return_value=False):
         result = runner.invoke(cli, ["logout"])
     assert result.exit_code == 0
-    assert "no" in result.output.lower() or "credentials" in result.output.lower()
+    out = result.output.lower()
+    assert "no credentials" in out or "no stored" in out or "not logged" in out, (
+        f"logout with no creds should say so, got: {result.output!r}"
+    )
 
 
 def test_logout_with_credentials():

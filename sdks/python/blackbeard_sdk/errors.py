@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import httpx
+if TYPE_CHECKING:
+    import httpx
 
 
 class BlackbeardApiError(Exception):
@@ -56,6 +57,10 @@ class BlackbeardApiError(Exception):
         return self.status_code == 429
 
     @property
+    def is_timeout(self) -> bool:
+        return self.status_code == 0 and "timed out" in self.detail.lower()
+
+    @property
     def is_network_error(self) -> bool:
         return self.status_code == 0
 
@@ -71,14 +76,11 @@ def raise_for_status(resp: httpx.Response) -> None:
     if resp.is_success:
         return
     try:
-        body = resp.json()
+        raw = resp.json()
+        body = raw if isinstance(raw, dict) else None
         fallback = resp.reason_phrase or f"HTTP {resp.status_code}"
-        detail = (
-            body.get("detail", fallback)
-            if isinstance(body, dict)
-            else fallback
-        )
-    except Exception:
+        detail = body.get("detail", fallback) if body else fallback
+    except ValueError:
         body = None
         detail = resp.reason_phrase or f"HTTP {resp.status_code}"
     raise BlackbeardApiError(resp.status_code, detail, body)

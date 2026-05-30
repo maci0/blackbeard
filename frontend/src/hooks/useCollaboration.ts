@@ -14,15 +14,11 @@ interface CollabMessage {
 }
 
 interface UseCollaborationReturn {
-  /** Number of participants in the collaboration room (including self). */
   participants: number
-  /** Whether the WebSocket connection is currently open. */
   connected: boolean
-  /** Send a collaboration message to other participants. */
   broadcast: (type: string, data: Record<string, unknown>) => void
-  /** Throttled cursor position broadcast (call on every mousemove). */
+  /** Throttled — call on every mousemove. */
   broadcastCursor: (data: Record<string, unknown>) => void
-  /** Map of remote collaborator cursors keyed by userId. */
   remoteCursors: Map<string, RemoteCursor>
 }
 
@@ -53,7 +49,7 @@ const CURSOR_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#
  * - Applies incoming changes from other participants to the local store
  * - Tracks participant count and connection state
  *
- * Incoming messages are applied with a `_remote` flag set on the store
+ * Incoming messages are applied inside an `applyingRemoteRef` guard
  * to prevent re-broadcasting changes that originated from other users.
  */
 export function useCollaboration(crewName: string, enabled: boolean): UseCollaborationReturn {

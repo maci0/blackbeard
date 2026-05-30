@@ -358,7 +358,7 @@ export function RunDialog({
                     <button
                       type="button"
                       onClick={() => handleDeletePreset(selectedPreset)}
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label={`Delete preset "${selectedPreset}"`}
                     >
                       <Trash2 className="h-3 w-3" />

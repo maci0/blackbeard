@@ -69,6 +69,12 @@ async def _get_automation_spec(
     return dict(resource.spec or {})
 
 
+def _require_enabled(spec: dict[str, Any], name: str) -> None:
+    """Raise 409 if the automation is disabled."""
+    if not spec.get("enabled", True):
+        raise HTTPException(status_code=409, detail=f"Automation '{name}' is disabled")
+
+
 _TRIGGER_RATE_MSG = "Too many trigger requests. Try again later."
 
 
@@ -105,9 +111,7 @@ async def trigger_automation(
     """Manually trigger an automation via API."""
     check_rate_limit(execution_limiter, user, _TRIGGER_RATE_MSG)
     spec = await _get_automation_spec(session, name, project)
-
-    if not spec.get("enabled", True):
-        raise HTTPException(status_code=409, detail=f"Automation '{name}' is disabled")
+    _require_enabled(spec, name)
 
     target = spec.get("target", {})
     merged_inputs = {**spec.get("inputs", {}), **body.inputs}
@@ -184,9 +188,7 @@ async def webhook_trigger(
 ) -> TriggerResponse:
     """Trigger an automation via external webhook (validates secret)."""
     spec = await _get_automation_spec(session, name, project)
-
-    if not spec.get("enabled", True):
-        raise HTTPException(status_code=409, detail=f"Automation '{name}' is disabled")
+    _require_enabled(spec, name)
 
     trigger = spec.get("trigger", {})
     if trigger.get("type") != "webhook":

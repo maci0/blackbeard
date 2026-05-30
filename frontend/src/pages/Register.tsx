@@ -54,6 +54,7 @@ export default function Register() {
 
     try {
       await register(email, password, displayName)
+      setPassword('')
       void navigate('/studio', { replace: true })
     } catch {
       // Error is set in the store
@@ -92,6 +93,7 @@ export default function Register() {
                 autoComplete="name"
                 autoFocus
                 required
+                aria-required="true"
                 aria-invalid={
                   validationField === 'displayName' ||
                   (!validationField && !!storeError) ||
@@ -128,6 +130,7 @@ export default function Register() {
                 }}
                 autoComplete="email"
                 required
+                aria-required="true"
                 aria-invalid={
                   validationField === 'email' || (!validationField && !!storeError) || undefined
                 }
@@ -163,6 +166,7 @@ export default function Register() {
                   }}
                   autoComplete="new-password"
                   required
+                  aria-required="true"
                   minLength={8}
                   aria-invalid={
                     validationField === 'password' ||

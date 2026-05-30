@@ -20,7 +20,7 @@ export async function autoLayout(
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   if (nodes.length === 0) return { nodes, edges }
 
-  // Separate group nodes from leaf nodes — ELK only lays out leaf nodes
+  // Lay out only leaf nodes via ELK (flat), then rebuild group bounds manually
   const groupNodes = nodes.filter((n) => n.type === 'crewGroup')
   const leafNodes = nodes.filter((n) => n.type !== 'crewGroup')
 

@@ -17,7 +17,6 @@ import time as _time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-import httpx
 from crewai.events import (
     BaseEventListener,
     CrewKickoffCompletedEvent,
@@ -29,7 +28,9 @@ from crewai.events import (
     ToolUsageFinishedEvent,
     ToolUsageStartedEvent,
 )
-from sqlalchemy import create_engine, update
+from sqlalchemy import create_engine, func, update
+from sqlalchemy import select as sync_select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 if TYPE_CHECKING:
@@ -128,7 +129,12 @@ def _get_webhook_executor() -> Any:
             return _webhook_executor
         from concurrent.futures import ThreadPoolExecutor
 
-        _webhook_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="webhook-deliver")
+        from blackbeard.config import settings
+
+        workers = max(4, settings.max_concurrent_executions * 2)
+        _webhook_executor = ThreadPoolExecutor(
+            max_workers=workers, thread_name_prefix="webhook-deliver"
+        )
         return _webhook_executor
 
 
@@ -185,45 +191,44 @@ def _get_cached_webhooks(db_url: str) -> list[Any]:
             if (now - cache_time) < _WEBHOOK_CACHE_TTL:
                 return cache
 
-        from sqlalchemy import select as sync_select
+    from blackbeard.models.webhook import Webhook
 
-        from blackbeard.models.webhook import Webhook
-
-        session_factory = _get_sync_session_factory(db_url)
-        try:
-            with session_factory() as session:
-                result = session.execute(
-                    sync_select(Webhook).where(Webhook.active.is_(True)).limit(1000)
-                )
-                cached = list(result.scalars())
-                session.expunge_all()
-        except Exception as exc:
-            if entry is not None:
-                logger.warning(
-                    "Failed to refresh webhook cache — using stale data (%d webhooks): %s",
-                    len(entry[1]),
-                    exc,
-                    exc_info=True,
-                    extra={
-                        "event": "webhook_load_failed_using_stale",
-                        "error_type": type(exc).__name__,
-                    },
-                )
-                return entry[1]
-            logger.error(
-                "Failed to load webhooks for event delivery — "
-                "no stale cache available, webhook notifications will be skipped: %s",
+    session_factory = _get_sync_session_factory(db_url)
+    try:
+        with session_factory() as session:
+            result = session.execute(
+                sync_select(Webhook).where(Webhook.active.is_(True)).order_by(Webhook.id).limit(1000)
+            )
+            cached = list(result.scalars())
+            session.expunge_all()
+    except Exception as exc:
+        if entry is not None:
+            logger.warning(
+                "Failed to refresh webhook cache — using stale data (%d webhooks): %s",
+                len(entry[1]),
                 exc,
                 exc_info=True,
                 extra={
-                    "event": "webhook_load_failed",
+                    "event": "webhook_load_failed_using_stale",
                     "error_type": type(exc).__name__,
                 },
             )
-            return []
+            return entry[1]
+        logger.error(
+            "Failed to load webhooks for event delivery — "
+            "no stale cache available, webhook notifications will be skipped: %s",
+            exc,
+            exc_info=True,
+            extra={
+                "event": "webhook_load_failed",
+                "error_type": type(exc).__name__,
+            },
+        )
+        return []
 
+    with _webhook_cache_lock:
         _webhook_cache_entry = (_time.monotonic(), cached)
-        return cached
+    return cached
 
 
 def invalidate_webhook_cache() -> None:
@@ -290,7 +295,7 @@ def _deliver_single_webhook(
                     "latency_ms": latency_ms,
                 },
             )
-    except (httpx.HTTPError, OSError):
+    except Exception:
         latency_ms = round((_time.monotonic() - t0) * 1000, 1)
         logger.exception(
             "Webhook delivery error: id=%s url=%s event=%s (%.0fms)",
@@ -324,10 +329,8 @@ def _get_webhook_hostname(webhook_url: str) -> str | None:
     hostname = urlparse(webhook_url).hostname or ""
     is_blocked = is_internal_host(hostname) if hostname else True
     with _webhook_host_cache_lock:
-        if len(_webhook_host_cache) >= _MAX_WEBHOOK_HOST_CACHE:
-            evict_count = _MAX_WEBHOOK_HOST_CACHE // 5
-            for _ in range(evict_count):
-                _webhook_host_cache.popitem(last=False)
+        while len(_webhook_host_cache) >= _MAX_WEBHOOK_HOST_CACHE:
+            _webhook_host_cache.popitem(last=False)
         _webhook_host_cache[webhook_url] = "" if is_blocked else hostname
     return None if is_blocked else hostname
 
@@ -409,13 +412,18 @@ def _get_sync_session_factory(db_url: str) -> sessionmaker[Session]:
         global _sync_engine, _sync_session_factory
         if _sync_session_factory is not None:
             return _sync_session_factory
+
+        from blackbeard.config import settings
+
         sync_url = db_url.replace("postgresql+asyncpg", "postgresql+psycopg").replace(
             "postgresql+aiopg", "postgresql+psycopg"
         )
+        pool_size = max(5, settings.max_concurrent_executions * 3)
+        max_overflow = pool_size * 2
         _sync_engine = create_engine(
             sync_url,
-            pool_size=5,
-            max_overflow=10,
+            pool_size=pool_size,
+            max_overflow=max_overflow,
             pool_pre_ping=True,
             pool_recycle=3600,
             pool_timeout=30,
@@ -431,7 +439,11 @@ def _get_sync_session_factory(db_url: str) -> sessionmaker[Session]:
         instrument_engine(_sync_engine, label="sync-events")
         logger.info(
             "Sync DB engine created for execution events",
-            extra={"event": "sync_engine_created", "pool_size": 5, "max_overflow": 10},
+            extra={
+                "event": "sync_engine_created",
+                "pool_size": pool_size,
+                "max_overflow": max_overflow,
+            },
         )
         return _sync_session_factory
 
@@ -464,6 +476,7 @@ class BlackbeardExecutionListener(BaseEventListener):
         self._pii_config = pii_config
         self._pii_redact_events = bool(pii_config and pii_config.get("redact_events", True))
         self._pii_entities: list[str] | None = pii_config.get("entities") if pii_config else None
+        self._pii_cache: dict[str, str] = {}
         self._seq = 0
         self._task_order = 0  # tracks which task (by order) is currently running
         self._lock = threading.Lock()  # guards _seq, _task_order, and _buffer
@@ -527,6 +540,8 @@ class BlackbeardExecutionListener(BaseEventListener):
                     },
                 )
         except Exception as exc:
+            if isinstance(exc, IntegrityError):
+                self._renumber_events(to_flush)
             with self._lock:
                 self._buffer = to_flush + self._buffer
             logger.error(
@@ -543,6 +558,59 @@ class BlackbeardExecutionListener(BaseEventListener):
                     "requeued_event_types": [e.event_type for e in to_flush],
                     "error_type": type(exc).__name__,
                     "error_message": str(exc)[:500],
+                },
+            )
+
+    def _renumber_events(self, events: list[ExecutionEvent]) -> None:
+        """Re-assign sequence numbers from current DB max after a collision.
+
+        When the HITL endpoint inserts an event using DB-queried sequences,
+        it can collide with the listener's locally-assigned sequence numbers.
+        Without renumbering, the buffered events would permanently fail to
+        flush due to the unique constraint on (execution_id, sequence).
+        """
+        try:
+            with self._session_factory() as session:
+                result = session.execute(
+                    sync_select(func.coalesce(func.max(ExecutionEvent.sequence), -1)).where(
+                        ExecutionEvent.execution_id == self._execution_id
+                    )
+                )
+                max_seq = (result.scalar() or -1) + 1
+            for event in events:
+                event.sequence = max_seq
+                max_seq += 1
+            with self._lock:
+                self._seq = max_seq
+            logger.info(
+                "Renumbered %d events for %s after sequence collision (new start=%d)",
+                len(events),
+                self._execution_id,
+                max_seq - len(events),
+                extra={
+                    "event": "events_renumbered",
+                    "execution_id": self._execution_id_str,
+                    "count": len(events),
+                    "new_start_seq": max_seq - len(events),
+                },
+            )
+        except Exception:
+            with self._lock:
+                fallback_seq = self._seq
+                for event in events:
+                    event.sequence = fallback_seq
+                    fallback_seq += 1
+                self._seq = fallback_seq
+            logger.warning(
+                "Failed to renumber events for %s after sequence collision — "
+                "using local counter fallback (start=%d)",
+                self._execution_id,
+                fallback_seq - len(events),
+                exc_info=True,
+                extra={
+                    "event": "event_renumber_failed",
+                    "execution_id": self._execution_id_str,
+                    "fallback_start_seq": fallback_seq - len(events),
                 },
             )
 
@@ -708,6 +776,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 data,
                 entities=self._pii_entities,
                 config=self._pii_config,
+                shared_cache=self._pii_cache,
             )
         now = datetime.now(UTC)
         flush_now = False
@@ -769,6 +838,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 data,
                 entities=self._pii_entities,
                 config=self._pii_config,
+                shared_cache=self._pii_cache,
             )
             if task_output is not None:
                 task_output = _redact_text_fn(
@@ -824,6 +894,8 @@ class BlackbeardExecutionListener(BaseEventListener):
             # Fire webhook delivery in background
             self._dispatch_webhook(event_type, data)
         except Exception as exc:
+            if isinstance(exc, IntegrityError):
+                self._renumber_events(to_flush)
             with self._lock:
                 self._buffer = to_flush + self._buffer
             self._schedule_flush()

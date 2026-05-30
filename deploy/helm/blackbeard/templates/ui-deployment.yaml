@@ -35,6 +35,10 @@ spec:
           imagePullPolicy: {{ .Values.ui.image.pullPolicy }}
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          terminationMessagePolicy: FallbackToLogsOnError
+          env:
+            - name: API_UPSTREAM
+              value: "{{ include "blackbeard.fullname" . }}-api:{{ .Values.api.service.port }}"
           ports:
             - name: http
               containerPort: 3000

@@ -7,7 +7,7 @@ import '@xyflow/react/dist/style.css'
 import './index.css'
 
 // Set API key from build-time env var (for Vite dev server).
-// In Docker production, nginx injects the key server-side (NGINX_API_KEY_FALLBACK)
+// In Docker production, users authenticate via JWT login flow,
 // so this is only needed for local `bun run dev`.
 if (import.meta.env.VITE_API_KEY) {
   api.setApiKey(import.meta.env.VITE_API_KEY as string)

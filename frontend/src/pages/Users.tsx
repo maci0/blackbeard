@@ -330,7 +330,7 @@ function UserDetailPanel({
             )}
             {roleStatus === 'error' && (
               <span role="alert" className="text-xs text-destructive">
-                Failed
+                Failed — try again
               </span>
             )}
           </dd>

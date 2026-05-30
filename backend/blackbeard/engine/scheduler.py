@@ -40,6 +40,7 @@ class AutomationScheduler:
                     select(Resource)
                     .options(load_only(Resource.name, Resource.project, Resource.spec))
                     .where(Resource.kind == ResourceKind.AUTOMATION)
+                    .order_by(Resource.name)
                     .limit(1000)
                 )
                 automations = list(result.scalars())
@@ -96,7 +97,10 @@ class AutomationScheduler:
     def _log_cron_task_exception(task: asyncio.Task[None]) -> None:
         if task.cancelled():
             return
-        exc = task.exception()
+        try:
+            exc = task.exception()
+        except Exception:
+            return
         if exc is not None:
             logger.error(
                 "Cron task '%s' died unexpectedly: %s",

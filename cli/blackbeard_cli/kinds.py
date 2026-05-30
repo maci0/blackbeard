@@ -6,6 +6,7 @@ Keep in sync with the backend's canonical registry.
 from __future__ import annotations
 
 import enum
+import re
 
 __all__ = [
     "ALL_KINDS",
@@ -14,6 +15,7 @@ __all__ = [
     "NAME_PATTERN",
     "PLURAL_TO_KIND",
     "PLURAL_TO_KIND_ENUM",
+    "SAFE_FILENAME",
     "ResourceKind",
 ]
 
@@ -68,5 +70,8 @@ PLURAL_TO_KIND_ENUM: dict[str, ResourceKind] = {
 
 ALL_KINDS: frozenset[str] = frozenset(KIND_TO_PLURAL.keys())
 
-# Regex for valid resource/namespace names (used across API and CLI layers)
+# Regex for valid resource/project names
 NAME_PATTERN = r"^[a-z0-9][a-z0-9\-]*$"
+
+# Regex for safe filenames (used by execution schemas and resource loader)
+SAFE_FILENAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")

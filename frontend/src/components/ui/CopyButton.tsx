@@ -32,7 +32,7 @@ export function CopyButton({
       onClick={handleCopy}
       aria-label={state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy failed' : label}
       className={cn(
-        'inline-flex h-8 w-8 items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'inline-flex h-[44px] w-[44px] items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         className,
       )}
     >

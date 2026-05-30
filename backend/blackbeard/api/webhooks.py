@@ -14,12 +14,15 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
+from blackbeard.api import MUTATION_RATE_MSG as _MUTATION_RATE_MSG
+from blackbeard.api import smart_total
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import require_permission
 from blackbeard.config import settings
 from blackbeard.engine.execution_listener import invalidate_webhook_cache
 from blackbeard.logging_config import safe_log_url
 from blackbeard.models import User, Webhook, get_session
+from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
 from blackbeard.resources import check_url_ssrf
 
 logger = logging.getLogger(__name__)
@@ -95,6 +98,7 @@ class WebhookCreateResponse(WebhookResponse):
     responses={
         201: {"description": "Webhook registered"},
         422: {"description": "Invalid request body"},
+        429: {"description": "Too many mutation requests"},
     },
 )
 async def create_webhook(
@@ -105,6 +109,7 @@ async def create_webhook(
     user: User = Depends(require_permission("create", "Webhook")),
 ) -> WebhookCreateResponse:
     """Register a new webhook for execution event delivery."""
+    check_rate_limit(mutation_limiter, user, _MUTATION_RATE_MSG)
     parsed = urlparse(body.url)
 
     if not settings.debug and parsed.scheme != "https":
@@ -199,11 +204,9 @@ async def list_webhooks(
         )
         for w in webhooks
     ]
-    if len(items) < limit and (len(items) > 0 or offset == 0):
-        total = offset + len(items)
-    else:
-        count_result = await session.execute(select(func.count()).select_from(Webhook))
-        total = count_result.scalar_one()
+    total = await smart_total(
+        session, items, limit, offset, select(func.count()).select_from(Webhook)
+    )
     return WebhookListResponse(
         items=items,
         total=total,
@@ -218,6 +221,7 @@ async def list_webhooks(
     status_code=204,
     responses={
         204: {"description": "Webhook deleted (or did not exist — idempotent)"},
+        429: {"description": "Too many mutation requests"},
     },
 )
 async def delete_webhook(
@@ -227,6 +231,7 @@ async def delete_webhook(
     user: User = Depends(require_permission("delete", "Webhook")),
 ) -> None:
     """Remove a registered webhook."""
+    check_rate_limit(mutation_limiter, user, _MUTATION_RATE_MSG)
     result = await session.execute(
         select(Webhook)
         .where(Webhook.id == webhook_id)

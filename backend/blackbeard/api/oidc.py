@@ -76,7 +76,13 @@ async def _ensure_oauth() -> OAuth:
         return oauth
 
 
-@router.get("/login")
+@router.get(
+    "/login",
+    responses={
+        302: {"description": "Redirect to OIDC provider"},
+        501: {"description": "OIDC not configured"},
+    },
+)
 async def oidc_login(request: Request) -> RedirectResponse:
     """Redirect to OIDC provider's authorization endpoint."""
     oauth = await _ensure_oauth()
@@ -84,7 +90,17 @@ async def oidc_login(request: Request) -> RedirectResponse:
     return await oauth.provider.authorize_redirect(request, redirect_uri)  # type: ignore[no-any-return]
 
 
-@router.get("/callback", name="oidc_callback")
+@router.get(
+    "/callback",
+    name="oidc_callback",
+    responses={
+        303: {"description": "Redirect to frontend with tokens"},
+        400: {"description": "OIDC provider returned invalid email"},
+        401: {"description": "OIDC token exchange failed"},
+        403: {"description": "Email not verified or account deactivated"},
+        501: {"description": "OIDC not configured"},
+    },
+)
 async def oidc_callback(
     request: Request,
     session: AsyncSession = Depends(get_session),
@@ -156,9 +172,20 @@ async def oidc_callback(
         )
         raise HTTPException(status_code=403, detail="OIDC provider reports email is not verified")
 
-    user = await _find_or_create_user(session, email, userinfo)
-
     ip = get_client_ip(request)
+    user, created = await _find_or_create_user(session, email, userinfo)
+
+    if created:
+        await log_audit(
+            session,
+            action="user_registered",
+            actor_type="oidc",
+            actor_id=str(user.id),
+            actor_email=user.email,
+            resource_type="User",
+            resource_id=str(user.id),
+            ip_address=ip,
+        )
     await log_audit(
         session,
         action="oidc_login",
@@ -214,8 +241,12 @@ async def _find_or_create_user(
     session: AsyncSession,
     email: str,
     userinfo: dict[str, Any],
-) -> User:
-    """Find existing user by email or create from OIDC claims."""
+) -> tuple[User, bool]:
+    """Find existing user by email or create from OIDC claims.
+
+    Returns ``(user, created)`` where *created* is True for newly
+    provisioned accounts.
+    """
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
@@ -232,13 +263,16 @@ async def _find_or_create_user(
             )
             raise HTTPException(status_code=403, detail="Account is deactivated")
         user.last_login_at = datetime.now(UTC)
-        return user
+        return user, False
 
-    display_name = userinfo.get("name") or userinfo.get("preferred_username") or email.split("@")[0]
+    display_name = (
+        userinfo.get("name") or userinfo.get("preferred_username") or email.split("@")[0]
+    )[:255]
+    placeholder_hash = await asyncio.to_thread(_make_oidc_placeholder_hash)
     user = User(
         email=email,
         display_name=display_name,
-        password_hash=_make_oidc_placeholder_hash(),
+        password_hash=placeholder_hash,
     )
     session.add(user)
     await session.flush()
@@ -249,4 +283,4 @@ async def _find_or_create_user(
         user.id,
         extra={"event": "oidc_user_created", "user_id": str(user.id)},
     )
-    return user
+    return user, True

@@ -100,11 +100,12 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
         try:
             resp = self._http.request(method, url, **kwargs)
         except httpx.TimeoutException as exc:
-            raise BlackbeardApiError(0, f"Request timed out: {exc}") from exc
-        except httpx.TransportError as exc:
             raise BlackbeardApiError(
-                0, str(exc) or "Network request failed"
+                0, f"Request timed out: {method} {url}: {exc}"
             ) from exc
+        except httpx.TransportError as exc:
+            msg = str(exc) or "Network request failed"
+            raise BlackbeardApiError(0, f"{method} {url}: {msg}") from exc
         raise_for_status(resp)
         return resp
 
@@ -123,6 +124,42 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
             Readiness response dict with component checks.
         """
         return self._send("GET", "/api/v1/health/ready").json()
+
+    def list_audit_logs(
+        self,
+        *,
+        action: str | None = None,
+        actor_id: str | None = None,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """List audit log entries with optional filters.
+
+        Args:
+            action: Filter by action (e.g. 'resource_created').
+            actor_id: Filter by actor ID.
+            resource_type: Filter by resource type (e.g. 'Agent').
+            resource_id: Filter by resource ID.
+            limit: Maximum number of results (1-1000).
+            offset: Number of results to skip.
+
+        Returns:
+            List of audit log entry dicts.
+        """
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if action:
+            params["action"] = action
+        if actor_id:
+            params["actor_id"] = actor_id
+        if resource_type:
+            params["resource_type"] = resource_type
+        if resource_id:
+            params["resource_id"] = resource_id
+        return self._send(
+            "GET", "/api/v1/audit-logs", params=params
+        ).json()["items"]
 
     def close(self) -> None:
         """Close the underlying HTTP client."""

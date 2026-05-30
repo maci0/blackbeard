@@ -126,6 +126,7 @@ const TaskRow = memo(function TaskRow({ task, index }: { task: ExecutionTask; in
           </p>
           {needsExpand && (
             <button
+              type="button"
               onClick={() => setExpanded((v) => !v)}
               className="mt-1 min-h-[44px] rounded px-1 text-xs text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
               aria-expanded={expanded}
@@ -449,6 +450,7 @@ const EventGroupSection = memo(function EventGroupSection({
   return (
     <div>
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-expanded={open}
@@ -519,6 +521,7 @@ const EventLog = memo(function EventLog({ events }: { events: ExecutionEvent[] }
         </h2>
         <div className="flex items-center rounded-md border bg-muted/30 p-0.5">
           <button
+            type="button"
             onClick={() => setGrouped(true)}
             className={cn(
               'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -533,6 +536,7 @@ const EventLog = memo(function EventLog({ events }: { events: ExecutionEvent[] }
             Grouped
           </button>
           <button
+            type="button"
             onClick={() => setGrouped(false)}
             className={cn(
               'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -775,13 +779,16 @@ function HITLPanel({
             }
           }}
           placeholder="Type your response…"
+          aria-label="Your response to the crew"
           rows={2}
           className="flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           disabled={submitting}
         />
         <button
+          type="button"
           onClick={() => void handleSubmit()}
           disabled={!response.trim() || submitting}
+          aria-label="Submit response"
           className="flex shrink-0 items-center gap-1.5 self-end rounded-md bg-yellow-600 px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? <Spinner size="sm" /> : <Send className="h-3.5 w-3.5" />}
@@ -1100,7 +1107,6 @@ export default function ExecutionDetail() {
           />
         </div>
 
-        {/* Header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="mb-1.5 flex flex-wrap items-center gap-3">
@@ -1158,7 +1164,6 @@ export default function ExecutionDetail() {
           </div>
         </div>
 
-        {/* Summary cards */}
         <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryCard
             icon={Activity}
@@ -1227,12 +1232,10 @@ export default function ExecutionDetail() {
           />
         )}
 
-        {/* HITL */}
         {isActive && (
           <HITLPanel executionId={id} events={events} onResponded={() => void fetchEvents(id)} />
         )}
 
-        {/* Tasks */}
         <TasksSection
           tasks={sortedTasks}
           isActive={isActive}
@@ -1240,7 +1243,6 @@ export default function ExecutionDetail() {
           executionEnd={execution.completed_at}
         />
 
-        {/* Event log */}
         <EventLog events={events} />
 
         {/* Spend */}

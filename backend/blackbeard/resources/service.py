@@ -72,7 +72,9 @@ class ResourceService:
         if errors:
             raise ResourceValidationError(errors)
 
-        existing = await self._get_for_update(kind_enum, data.metadata.name, data.metadata.project)
+        existing = await self._get_by_identity(
+            kind_enum, data.metadata.name, data.metadata.project, for_update=True
+        )
         if existing:
             resource = await self._update_existing(existing, data, raw_yaml, validated_refs)
             duration_ms = round((time.monotonic() - t0) * 1000, 1)
@@ -122,8 +124,8 @@ class ResourceService:
                     "request_id": request_id_var.get("-"),
                 },
             )
-            existing = await self._get_for_update(
-                kind_enum, data.metadata.name, data.metadata.project
+            existing = await self._get_by_identity(
+                kind_enum, data.metadata.name, data.metadata.project, for_update=True
             )
             if existing:
                 resource = await self._update_existing(existing, data, raw_yaml, validated_refs)
@@ -154,10 +156,7 @@ class ResourceService:
     ) -> Resource:
         """Get a single resource by kind/name/project."""
         kind_enum = _parse_kind(kind)
-        if for_update:
-            resource = await self._get_for_update(kind_enum, name, project)
-        else:
-            resource = await self._get_by_identity(kind_enum, name, project)
+        resource = await self._get_by_identity(kind_enum, name, project, for_update=for_update)
         if not resource:
             raise ResourceNotFoundError(kind, name, project)
         return resource
@@ -169,8 +168,14 @@ class ResourceService:
         labels: dict[str, str] | None = None,
         limit: int = 100,
         offset: int = 0,
+        skip_total: bool = False,
     ) -> tuple[list[Resource], int]:
-        """List resources with optional filters. Returns (items, total_count)."""
+        """List resources with optional filters. Returns (items, total_count).
+
+        When *skip_total* is True the COUNT query is skipped and total is
+        returned as -1.  Use for streaming/export callers that discard the
+        total to avoid an extra round-trip per page.
+        """
         filters = []
         if kind:
             filters.append(Resource.kind == _parse_kind(kind))
@@ -202,6 +207,9 @@ class ResourceService:
         result = await self.session.execute(query)
         items = list(result.scalars().all())
 
+        if skip_total:
+            return items, -1
+
         if len(items) < limit and (len(items) > 0 or offset == 0):
             total = offset + len(items)
         else:
@@ -222,7 +230,7 @@ class ResourceService:
         t0 = time.monotonic()
         kind_enum = _parse_kind(kind)
 
-        resource = await self._get_for_update(kind_enum, name, project)
+        resource = await self._get_by_identity(kind_enum, name, project, for_update=True)
         if not resource:
             raise ResourceNotFoundError(kind, name, project)
 
@@ -318,23 +326,13 @@ class ResourceService:
         )
 
     async def _get_by_identity(
-        self, kind: ResourceKind, name: str, project: str
+        self, kind: ResourceKind, name: str, project: str, *, for_update: bool = False
     ) -> Resource | None:
-        """Look up a resource by its unique identity."""
-        result = await self.session.execute(
-            select(Resource)
-            .where(
-                Resource.kind == kind,
-                Resource.name == name,
-                Resource.project == project,
-            )
-            .options(defer(Resource.raw_yaml))
-        )
-        return result.scalar_one_or_none()
+        """Look up a resource by its unique identity.
 
-    async def _get_for_update(self, kind: ResourceKind, name: str, project: str) -> Resource | None:
-        """Look up a resource with a row-level lock for safe mutation."""
-        result = await self.session.execute(
+        When *for_update* is True, acquires a row-level lock for safe mutation.
+        """
+        query = (
             select(Resource)
             .where(
                 Resource.kind == kind,
@@ -342,8 +340,10 @@ class ResourceService:
                 Resource.project == project,
             )
             .options(defer(Resource.raw_yaml))
-            .with_for_update()
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
     async def _update_existing(

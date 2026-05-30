@@ -1,12 +1,15 @@
 import { useState, useEffect, useId, useMemo } from 'react'
 import { useBlackbeard } from './BlackbeardProvider'
 import { apiFetch } from './fetch'
+import { BlackbeardApiError } from './types'
 import type { Resource } from './types'
 
 export interface CrewViewerProps {
   /** Name of the crew resource to visualize. */
   crewName: string
-  /** Namespace containing the crew (defaults to "default"). */
+  /** Project containing the crew (defaults to "default"). */
+  project?: string
+  /** @deprecated Use `project` instead. */
   namespace?: string
 }
 
@@ -37,7 +40,7 @@ const NODE_COLORS: Record<string, { bg: string; border: string; text: string }> 
  * and its tasks from the API, then renders a simple node graph using
  * plain divs and SVG lines. No React Flow dependency.
  */
-export function CrewViewer({ crewName, namespace }: CrewViewerProps) {
+export function CrewViewer({ crewName, project, namespace }: CrewViewerProps) {
   const config = useBlackbeard()
   const markerId = `bb-arrow-${useId().replace(/:/g, '')}`
   const [agents, setAgents] = useState<Resource[]>([])
@@ -52,7 +55,7 @@ export function CrewViewer({ crewName, namespace }: CrewViewerProps) {
       setLoading(true)
       setError(null)
       try {
-        const ns = namespace ?? 'default'
+        const ns = project ?? namespace ?? 'default'
         const nsParam = `project=${encodeURIComponent(ns)}`
         const crew = await apiFetch<Resource>(config, `/api/v1/crews/${encodeURIComponent(crewName)}?${nsParam}`)
         const agentNames = ((crew.spec.agents as string[] | undefined) ?? []).map(parseRef)
@@ -68,7 +71,7 @@ export function CrewViewer({ crewName, namespace }: CrewViewerProps) {
         setTasks(taskResults)
       } catch (err) {
         if (!active) return
-        setError(err instanceof Error ? err.message : 'Failed to load crew')
+        setError(err instanceof BlackbeardApiError ? err.detail : err instanceof Error ? err.message : 'Failed to load crew')
       } finally {
         if (active) setLoading(false)
       }
@@ -78,7 +81,7 @@ export function CrewViewer({ crewName, namespace }: CrewViewerProps) {
     return () => {
       active = false
     }
-  }, [config, crewName, namespace])
+  }, [config, crewName, project, namespace])
 
   /* ── Compute layout positions ── */
   const NODE_W = 180

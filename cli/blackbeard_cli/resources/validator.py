@@ -279,7 +279,7 @@ def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError])
             else:
                 _check_dns_resolution(hostname, field_name, errors)
     except Exception:
-        logger.debug(
+        logger.warning(
             "URL SSRF validation failed for field %s: %s",
             field_name,
             url[:200],
@@ -294,11 +294,12 @@ _DNS_EXECUTOR_LOCK = threading.Lock()
 
 
 def _get_dns_executor() -> concurrent.futures.ThreadPoolExecutor:
-    """Return a shared executor for DNS resolution."""
-    global _DNS_EXECUTOR
-    if _DNS_EXECUTOR is not None:
-        return _DNS_EXECUTOR
+    """Return a shared executor for DNS resolution.
+
+    Uses lock-always pattern (safe under both GIL and free-threaded Python).
+    """
     with _DNS_EXECUTOR_LOCK:
+        global _DNS_EXECUTOR
         if _DNS_EXECUTOR is not None:
             return _DNS_EXECUTOR
         _DNS_EXECUTOR = concurrent.futures.ThreadPoolExecutor(

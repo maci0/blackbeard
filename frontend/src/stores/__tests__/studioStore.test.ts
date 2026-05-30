@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { useStudioStore } from '../studioStore'
+import { useStudioStore, MAX_HISTORY } from '../studioStore'
 import type { Node, Edge, Connection } from '@xyflow/react'
 
 function makeNode(id: string, overrides: Partial<Node> = {}): Node {
@@ -236,17 +236,17 @@ describe('studioStore', () => {
   })
 
   describe('history limits', () => {
-    it('limits history to MAX_HISTORY (30) entries', () => {
+    it('limits history to MAX_HISTORY entries', () => {
       vi.useFakeTimers()
 
-      // Push 35 history entries — each addNode pushes one
-      for (let i = 0; i < 35; i++) {
+      // Push more than MAX_HISTORY entries — each addNode pushes one
+      for (let i = 0; i < MAX_HISTORY + 5; i++) {
         useStudioStore.getState().addNode(makeNode(`node-${i}`))
         vi.advanceTimersByTime(200)
       }
 
       const state = useStudioStore.getState()
-      expect(state.history.length).toBe(30)
+      expect(state.history.length).toBe(MAX_HISTORY)
 
       vi.useRealTimers()
     })

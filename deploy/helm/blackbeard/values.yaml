@@ -22,10 +22,13 @@ api:
     port: 8000
   forwardedAllowIps: "*"  # IPs trusted for X-Forwarded-* headers. "*" is correct behind an ingress controller.
   env: {}
-  # Additional environment variables as key-value pairs:
+  # Additional environment variables as key-value pairs.
+  # CORS_ORIGINS is REQUIRED for production — the API refuses to start
+  # with http:// origins when DEBUG=false. Format is a JSON array:
+  #   CORS_ORIGINS: '["https://your-domain.com"]'
+  #   ENFORCE_RBAC: "true"
   #   DEBUG: "false"
   #   LOG_LEVEL: "info"
-  #   ENFORCE_RBAC: "true"
 
 # -- UI (React/Vite + nginx) --
 ui:
@@ -165,6 +168,8 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
   #   cert-manager.io/cluster-issuer: letsencrypt-prod
+  #   nginx.ingress.kubernetes.io/limit-rps: "20"
+  #   nginx.ingress.kubernetes.io/limit-connections: "10"
   host: blackbeard.local
   tls: []
   #   - secretName: blackbeard-tls

@@ -19,11 +19,11 @@ _NAME_RE = r"^[a-z0-9][a-z0-9\-]*$"
 
 _PG_CHECKS = [
     f"DO $$ BEGIN ALTER TABLE resources ADD CONSTRAINT ck_resource_name_pattern CHECK (name ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
-    f"DO $$ BEGIN ALTER TABLE resources ADD CONSTRAINT ck_resource_namespace_pattern CHECK (namespace ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+    f"DO $$ BEGIN ALTER TABLE resources ADD CONSTRAINT ck_resource_project_pattern CHECK (project ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
     f"DO $$ BEGIN ALTER TABLE executions ADD CONSTRAINT ck_execution_crew_name_pattern CHECK (crew_name ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
-    f"DO $$ BEGIN ALTER TABLE executions ADD CONSTRAINT ck_execution_crew_ns_pattern CHECK (crew_namespace ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+    f"DO $$ BEGIN ALTER TABLE executions ADD CONSTRAINT ck_execution_crew_project_pattern CHECK (crew_project ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
     f"DO $$ BEGIN ALTER TABLE resource_refs ADD CONSTRAINT ck_ref_target_name_pattern CHECK (target_name ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
-    f"DO $$ BEGIN ALTER TABLE resource_refs ADD CONSTRAINT ck_ref_target_ns_pattern CHECK (target_namespace ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+    f"DO $$ BEGIN ALTER TABLE resource_refs ADD CONSTRAINT ck_ref_target_project_pattern CHECK (target_project ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
 ]
 
 async def migrate():
@@ -53,7 +53,7 @@ reload_flag=""
 if [ "${DEBUG:-false}" = "true" ] && [ "${WEB_CONCURRENCY:-1}" = "1" ]; then
   reload_flag="--reload"
 fi
-exec uvicorn blackbeard.main:app --host 0.0.0.0 --port 8000 \
+exec uvicorn blackbeard.main:app --host "${HOST:-0.0.0.0}" --port "${PORT:-8000}" \
   --proxy-headers --forwarded-allow-ips="${FORWARDED_ALLOW_IPS:-127.0.0.1}" \
   --log-level "${LOG_LEVEL:-info}" \
   --workers "$(printf '%d' "${WEB_CONCURRENCY:-1}" 2>/dev/null || echo 1)" \

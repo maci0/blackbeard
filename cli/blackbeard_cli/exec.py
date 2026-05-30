@@ -33,11 +33,13 @@ Examples:
   blackbeard executions
   blackbeard executions --crew research-crew
   blackbeard executions --status running
-  blackbeard executions --crew research-crew --status failed
+  blackbeard executions --project prod --status failed
+  blackbeard executions --type train
   blackbeard executions --json
 """,
 )
 @click.option("--crew", "-c", default=None, metavar="NAME", help="Filter by crew name")
+@click.option("--project", "-n", default=None, metavar="NAME", help="Filter by project")
 @click.option(
     "--status",
     "status_filter",
@@ -47,6 +49,13 @@ Examples:
         case_sensitive=False,
     ),
     help="Filter by status",
+)
+@click.option(
+    "--type",
+    "exec_type",
+    default=None,
+    type=click.Choice(["kickoff", "train", "test", "flow"], case_sensitive=False),
+    help="Filter by execution type",
 )
 @click.option(
     "--limit",
@@ -61,20 +70,24 @@ Examples:
 def executions_list(
     ctx: click.Context,
     crew: str | None,
+    project: str | None,
     status_filter: str | None,
+    exec_type: str | None,
     limit: int,
-    output_json: bool = False,
 ) -> None:
-    """List executions with optional crew and status filters."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
+    """List executions with optional crew, project, status, and type filters."""
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
     params: dict[str, Any] = {"limit": limit}
     if crew:
         params["crew_name"] = crew
+    if project:
+        params["project"] = project
     if status_filter:
         params["status"] = status_filter
+    if exec_type:
+        params["execution_type"] = exec_type
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
@@ -97,8 +110,12 @@ def executions_list(
         filters = []
         if crew:
             filters.append(f"crew={escape(crew)}")
+        if project:
+            filters.append(f"project={escape(project)}")
         if status_filter:
             filters.append(f"status={escape(status_filter)}")
+        if exec_type:
+            filters.append(f"type={escape(exec_type)}")
         if filters:
             msg += f" matching {', '.join(filters)}"
         out.print(f"[dim]{msg}.[/]")
@@ -124,7 +141,7 @@ def executions_list(
             cost_str = "—"
         table.add_row(
             ex_id,
-            ex.get("crew_name", "—"),
+            escape(str(ex.get("crew_name", "—"))),
             f"[{color}]{status_val}[/]",
             str(ex.get("created_at", "—"))[:19],
             f"{tokens:,}" if tokens else "—",
@@ -168,13 +185,11 @@ def events(
     execution_id: str,
     follow: bool,
     interval: int,
-    output_json: bool = False,
 ) -> None:
     """Show execution events.
 
     EXECUTION_ID is the UUID returned by the kickoff command.
     """
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
     is_json = ctx.obj["json"]
@@ -308,12 +323,11 @@ Examples:
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @json_opt
 @click.pass_context
-def cancel(ctx: click.Context, execution_id: str, yes: bool, output_json: bool = False) -> None:
+def cancel(ctx: click.Context, execution_id: str, yes: bool) -> None:
     """Cancel a running execution.
 
     EXECUTION_ID is the UUID returned by the kickoff command.
     """
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 

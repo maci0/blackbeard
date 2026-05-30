@@ -317,6 +317,7 @@ def test_configure_logging_invalid_log_level_fallback():
 from blackbeard.http_client import _clients, _lock, _sync_clients, close_all_clients, close_client
 
 
+@pytest.mark.usefixtures("_clean_test_http_clients")
 async def test_close_client_removes_and_closes():
     """close_client should remove the named client and call aclose()."""
     from unittest.mock import AsyncMock
@@ -333,6 +334,7 @@ async def test_close_client_removes_and_closes():
     mock_client.aclose.assert_awaited_once()
 
 
+@pytest.mark.usefixtures("_clean_test_http_clients")
 async def test_close_client_nonexistent_noop():
     """close_client for a nonexistent name should be a no-op."""
     with _lock:
@@ -343,6 +345,7 @@ async def test_close_client_nonexistent_noop():
     assert before == after, "close_client must not modify the client dict for unknown names"
 
 
+@pytest.mark.usefixtures("_clean_test_http_clients")
 async def test_close_all_clients_handles_errors():
     """close_all_clients should log but not raise on individual close errors."""
     import httpx

@@ -8,24 +8,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.models.user import User
-from tests.conftest import API_KEY_HEADER, _agent_payload
+from tests.conftest import API_KEY_HEADER, _agent_payload, _bearer, _register_payload
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-
-def _register_payload(
-    email: str = "apikey-user@example.com",
-    password: str = "securepass123",
-    display_name: str = "API Key Test User",
-) -> dict:
-    return {"email": email, "password": password, "display_name": display_name}
+_APIKEY_EMAIL = "apikey-user@example.com"
 
 
 async def _register_and_get_token(
     client: AsyncClient,
-    email: str = "apikey-user@example.com",
+    email: str = _APIKEY_EMAIL,
 ) -> str:
     """Register a user and return their JWT access token."""
     resp = await client.post(
@@ -34,10 +28,6 @@ async def _register_and_get_token(
     )
     assert resp.status_code == 201, resp.text
     return resp.json()["access_token"]
-
-
-def _bearer(token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
 
 
 # ---------------------------------------------------------------------------

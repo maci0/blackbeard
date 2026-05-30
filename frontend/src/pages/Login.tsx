@@ -80,6 +80,7 @@ export default function Login() {
 
     try {
       await login(email, password)
+      setPassword('')
       void navigate(redirectTo, { replace: true })
     } catch {
       // Error is set in the store
@@ -117,6 +118,7 @@ export default function Login() {
                   autoComplete="email"
                   autoFocus
                   required
+                  aria-required="true"
                   aria-invalid={(emailMissing ? !email.trim() : !!error) || undefined}
                   aria-describedby={
                     emailMissing && !email.trim()
@@ -150,6 +152,7 @@ export default function Login() {
                     }}
                     autoComplete="current-password"
                     required
+                    aria-required="true"
                     aria-invalid={(passwordMissing ? !password.trim() : !!error) || undefined}
                     aria-describedby={
                       passwordMissing && !password.trim()

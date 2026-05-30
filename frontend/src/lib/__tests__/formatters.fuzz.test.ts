@@ -125,8 +125,10 @@ describe('fuzz: getDuration', () => {
     fc.assert(
       fc.property(isoArb, isoArb, (start, end) => {
         const result = getDuration(start, end)
-        // Must be either "Ns", "Nm Ns", or "Nh Nm" format
-        expect(result).toMatch(/^-?\d+s$|^\d+m -?\d+s$|^\d+h \d+m$/)
+        // Must be either "Ns"/"-Ns", "Nm Ns", or "Nh Nm" format.
+        // Negative durations (end < start) always resolve to seconds only
+        // because negative sec is always < 60.
+        expect(result).toMatch(/^-?\d+s$|^\d+m \d+s$|^\d+h \d+m$/)
       }),
       { numRuns: NUM_RUNS },
     )
@@ -188,14 +190,11 @@ describe('fuzz: formatCost', () => {
     )
   })
 
-  it('negative numbers produce dash (filtered by n === 0 || isNaN check)', () => {
+  it('negative numbers still produce a dollar-prefixed string', () => {
     fc.assert(
       fc.property(fc.double({ min: -1_000_000, max: -0.0001, noNaN: true }), (n) => {
-        // Negative numbers should still produce a string (implementation detail:
-        // formatCost does not explicitly guard negatives, so it formats them)
         const result = formatCost(n)
-        expect(typeof result).toBe('string')
-        expect(result.length).toBeGreaterThan(0)
+        expect(result).toMatch(/^\$-/)
       }),
       { numRuns: NUM_RUNS },
     )
@@ -255,19 +254,25 @@ describe('fuzz: statusLabel', () => {
   })
 
   it('result length matches input length for non-prototype strings', () => {
-    // Exclude Object.prototype keys that collide with Record lookup.
     const protoKeys = new Set(Object.getOwnPropertyNames(Object.prototype))
+    const knownStatuses: Record<string, string> = {
+      queued: 'Queued',
+      running: 'Running',
+      completed: 'Completed',
+      failed: 'Failed',
+      cancelled: 'Cancelled',
+      pending: 'Pending',
+    }
     fc.assert(
       fc.property(
         fc.string().filter((s) => !protoKeys.has(s)),
         (s) => {
           const result = statusLabel(s)
-          // statusLabel either returns a known label or capitalize(s), both preserve length
-          expect(result.length).toBe(
-            ['queued', 'running', 'completed', 'failed', 'cancelled', 'pending'].includes(s)
-              ? result.length // known status: length is already correct
-              : s.length,
-          )
+          if (s in knownStatuses) {
+            expect(result).toBe(knownStatuses[s])
+          } else {
+            expect(result.length).toBe(s.length)
+          }
         },
       ),
       { numRuns: NUM_RUNS },

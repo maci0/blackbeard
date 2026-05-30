@@ -338,7 +338,7 @@ export function CommandPalette({
             )}
           </div>
           <div className="flex items-center justify-between border-t px-3 py-2 text-xs text-muted-foreground">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3" aria-hidden="true">
               <span className="flex items-center gap-1">
                 <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">
                   &uarr;&darr;
@@ -356,7 +356,7 @@ export function CommandPalette({
                 close
               </span>
             </div>
-            <span>{filtered.length} results</span>
+            <span aria-live="polite" aria-atomic="true">{filtered.length} results</span>
           </div>
         </Dialog.Content>
       </Dialog.Portal>

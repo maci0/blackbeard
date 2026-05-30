@@ -117,6 +117,26 @@ _SENSITIVE_KEYS = frozenset(
         "signing_secret",
         "webhook_secret",
         "ip_address",
+        "principal_chain",
+        "initiated_by",
+        "original_email",
+        "address",
+        "home_address",
+        "mailing_address",
+        "zip_code",
+        "postal_code",
+        "dob",
+        "location",
+        "first_name",
+        "last_name",
+        "full_name",
+        "nationality",
+        "ethnicity",
+        "gender",
+        "passport",
+        "driver_license",
+        "national_id",
+        "tax_id",
     }
 )
 
@@ -125,11 +145,21 @@ _SENSITIVE_SUFFIXES = tuple(f"_{s}" for s in _SENSITIVE_KEYS)
 _SCALAR_TYPES = (str, int, float, bool, type(None))
 
 _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+_PHONE_RE = re.compile(
+    r"(?<!\d)"
+    r"(?:\+?\d{1,3}[\s.\-]?)?"
+    r"(?:\(?\d{2,4}\)?[\s.\-]?)"
+    r"\d{3,4}[\s.\-]?\d{3,4}"
+    r"(?!\d)"
+)
+_SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 
 
 def scrub_pii(text: str) -> str:
-    """Replace email-like patterns in exception messages to prevent PII leakage."""
-    return _EMAIL_RE.sub("[EMAIL]", text)
+    """Replace PII patterns (email, phone, SSN) in exception messages."""
+    text = _EMAIL_RE.sub("[EMAIL]", text)
+    text = _SSN_RE.sub("[SSN]", text)
+    return _PHONE_RE.sub("[PHONE]", text)
 
 
 def anonymize_ip(ip: str | None) -> str:
@@ -155,7 +185,10 @@ def log_task_exception(task: asyncio.Task[None]) -> None:
     """Callback for fire-and-forget asyncio tasks that logs exceptions silently swallowed."""
     if task.cancelled():
         return
-    exc = task.exception()
+    try:
+        exc = task.exception()
+    except Exception:
+        return
     if exc is not None:
         _logger = logging.getLogger(__name__)
         _logger.error(
@@ -173,17 +206,24 @@ def log_task_exception(task: asyncio.Task[None]) -> None:
 
 
 def safe_log_url(url: str) -> str:
-    """Strip query/fragment from URL to prevent credential leakage in logs.
+    """Strip userinfo/query/fragment from URL to prevent credential leakage in logs.
 
     Webhook URLs may carry API keys or tokens in query parameters
-    (e.g. ``?key=secret``). This preserves scheme/host/path for debugging
-    while redacting the parts that could leak credentials.
+    (e.g. ``?key=secret``) or as userinfo (e.g. ``https://user:token@host``).
+    This preserves scheme/host/path for debugging while redacting the parts
+    that could leak credentials.
     """
     parsed = urlparse(url)
-    if not parsed.query and not parsed.fragment:
+    has_userinfo = parsed.username is not None
+    has_sensitive = parsed.query or parsed.fragment or has_userinfo
+    if not has_sensitive:
         return url
+    netloc = parsed.hostname or ""
+    if parsed.port:
+        netloc += f":{parsed.port}"
     return urlunparse(
         parsed._replace(
+            netloc=netloc,
             query="[REDACTED]" if parsed.query else "",
             fragment="",
         )

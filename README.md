@@ -112,7 +112,7 @@ uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 - **13 resource kinds** -- Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Namespace
 - **Visual graph editor** -- drag-and-drop crew design with React Flow, undo/redo, YAML preview
 - **Full RBAC** -- JWT auth (access + refresh tokens), predefined roles (owner, admin, developer, operator, viewer, policy-admin), user/group management
-- **CLI with 28 commands** -- apply, validate, kickoff, train, test-crew, export, pull, status, login, and more
+- **CLI with 29 commands** -- apply, validate, kickoff, train, test-crew, export, pull, status, login, and more
 - **Budget enforcement** -- per-execution spending caps via AgentPolicy `max_usd`/`max_tokens` and LiteLLM virtual keys
 - **Multi-provider LLM routing** -- Vertex AI, OpenAI, Anthropic, Ollama, and any LiteLLM-supported provider
 - **Execution streaming** -- SSE and WebSocket streams with event replay for real-time execution monitoring

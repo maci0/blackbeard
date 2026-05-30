@@ -87,24 +87,23 @@ export class BlackbeardClient {
         err instanceof DOMException &&
         (err.name === "TimeoutError" || err.name === "AbortError")
       ) {
-        const timeoutError = new BlackbeardApiError(0, `Request timed out after ${this.timeout}ms`);
-        timeoutError.cause = err;
-        throw timeoutError;
+        throw new BlackbeardApiError(0, `${method} ${path}: request timed out after ${this.timeout}ms`, undefined, { cause: err });
       }
-      const networkError = new BlackbeardApiError(
+      throw new BlackbeardApiError(
         0,
-        err instanceof Error ? err.message : "Network request failed"
+        `${method} ${path}: ${err instanceof Error ? err.message : "network request failed"}`,
+        undefined,
+        { cause: err },
       );
-      networkError.cause = err;
-      throw networkError;
     }
 
     if (!resp.ok) {
+      const fallback = resp.statusText || `HTTP ${resp.status}`;
       const errorBody = (await resp
         .json()
-        .catch(() => ({ detail: resp.statusText }))) as Record<string, unknown>;
+        .catch(() => ({}))) as Record<string, unknown>;
       const detail =
-        typeof errorBody.detail === "string" ? errorBody.detail : resp.statusText;
+        (typeof errorBody.detail === "string" && errorBody.detail) ? errorBody.detail : fallback;
       throw new BlackbeardApiError(resp.status, detail, errorBody);
     }
 
@@ -191,7 +190,8 @@ export class BlackbeardClient {
     const p = KIND_PLURALS[kind];
     if (p) return p;
     if (Object.values(KIND_PLURALS).includes(kind)) return kind;
-    throw new Error(
+    throw new BlackbeardApiError(
+      0,
       `Unknown resource kind '${kind}'. Valid kinds: ${Object.keys(KIND_PLURALS).sort().join(", ")}`
     );
   }
@@ -265,6 +265,45 @@ export class BlackbeardClient {
     );
   }
 
+  async listVersions(
+    kind: string,
+    name: string,
+    project?: string
+  ): Promise<{ versions: Array<{ version: number; changed_by: string | null; created_at: string; changed_keys: string[] }> }> {
+    const params = new URLSearchParams({ project: project ?? "default" });
+    return this.request(
+      "GET",
+      `/api/v1/${this.plural(kind)}/${encodeURIComponent(name)}/versions?${params}`
+    );
+  }
+
+  async getVersion(
+    kind: string,
+    name: string,
+    version: number,
+    project?: string
+  ): Promise<{ version: number; changed_by: string | null; created_at: string; spec: Record<string, unknown>; labels: Record<string, string> | null }> {
+    const params = new URLSearchParams({ project: project ?? "default" });
+    return this.request(
+      "GET",
+      `/api/v1/${this.plural(kind)}/${encodeURIComponent(name)}/versions/${version}?${params}`
+    );
+  }
+
+  async rollback(
+    kind: string,
+    name: string,
+    toVersion: number,
+    project?: string
+  ): Promise<Resource> {
+    const params = new URLSearchParams({ project: project ?? "default" });
+    return this.request<Resource>(
+      "POST",
+      `/api/v1/${this.plural(kind)}/${encodeURIComponent(name)}/rollback?${params}`,
+      { to_version: toVersion }
+    );
+  }
+
   async apply(resources: Resource[]): Promise<Resource[]> {
     const results: Resource[] = [];
     for (let i = 0; i < resources.length; i++) {
@@ -273,13 +312,12 @@ export class BlackbeardClient {
       } catch (err) {
         if (err instanceof BlackbeardApiError) {
           const name = resources[i]!.metadata?.name ?? "?";
-          const wrapped = new BlackbeardApiError(
+          throw new BlackbeardApiError(
             err.status,
             `[${i}] ${resources[i]!.kind}/${name}: ${err.detail}`,
             err.body,
+            { cause: err },
           );
-          wrapped.cause = err;
-          throw wrapped;
         }
         throw err;
       }
@@ -458,6 +496,28 @@ export class BlackbeardClient {
       }
       await new Promise((r) => setTimeout(r, pollInterval));
     }
+  }
+
+  async listAuditLogs(options?: {
+    action?: string;
+    actor_id?: string;
+    resource_type?: string;
+    resource_id?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ListResponse<{ id: string; timestamp: string; actor_type: string; actor_id: string; action: string; resource_type: string | null; resource_id: string | null; detail: Record<string, unknown> | null; request_id: string | null }>> {
+    const params = new URLSearchParams();
+    if (options?.action) params.set("action", options.action);
+    if (options?.actor_id) params.set("actor_id", options.actor_id);
+    if (options?.resource_type) params.set("resource_type", options.resource_type);
+    if (options?.resource_id) params.set("resource_id", options.resource_id);
+    params.set("limit", String(options?.limit ?? 100));
+    params.set("offset", String(options?.offset ?? 0));
+    const qs = params.toString();
+    return this.request(
+      "GET",
+      `/api/v1/audit-logs${qs ? `?${qs}` : ""}`
+    );
   }
 
   /** Fetch all resources by listing each kind in parallel (13 requests). For a single-request alternative, use {@link exportYaml}. */

@@ -125,7 +125,7 @@ function KnowledgeSourceCard({ resource, onDelete }: { resource: Resource; onDel
       : spec.file_paths && spec.file_paths.length > 0
         ? spec.file_paths[0]
         : spec.content
-          ? `${spec.content.slice(0, 80)}${spec.content.length > 80 ? '...' : ''}`
+          ? `${spec.content.slice(0, 80)}${spec.content.length > 80 ? '…' : ''}`
           : null
 
   const itemCount =
@@ -437,7 +437,7 @@ function AddKnowledgeSourceDialog({
                 className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting && <Spinner size="sm" className="text-current" />}
-                Add source
+                Add Knowledge Source
               </button>
             </div>
           </form>

@@ -11,37 +11,13 @@ import uuid
 
 from httpx import AsyncClient
 
-from tests.conftest import API_KEY_HEADER
+from tests.conftest import API_KEY_HEADER, _bearer, _register_user
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-
-def _register_payload(
-    email: str = "dep-test@example.com",
-    password: str = "securepass123",
-    display_name: str = "Dep Test User",
-) -> dict:
-    return {"email": email, "password": password, "display_name": display_name}
-
-
-async def _register_user(
-    client: AsyncClient,
-    email: str = "dep-test@example.com",
-    password: str = "securepass123",
-    display_name: str = "Dep Test User",
-) -> dict:
-    resp = await client.post(
-        "/api/v1/auth/register",
-        json=_register_payload(email, password, display_name),
-    )
-    assert resp.status_code == 201, resp.text
-    return resp.json()
-
-
-def _bearer(token: str) -> dict:
-    return {"Authorization": f"Bearer {token}"}
+_DEP_EMAIL = "dep-test@example.com"
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +27,7 @@ def _bearer(token: str) -> dict:
 
 async def test_get_current_user_valid_jwt(client: AsyncClient):
     """Bearer token with valid JWT resolves user for protected endpoints."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     token = data["access_token"]
 
     # /auth/me uses require_user -> get_current_user
@@ -94,7 +70,7 @@ async def test_get_current_user_invalid_jwt(client: AsyncClient):
 
 async def test_get_current_user_wrong_token_type(client: AsyncClient):
     """JWT with type='refresh' used as Bearer returns 401."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     # Use the refresh token as a bearer token
     resp = await client.get(
         "/api/v1/auth/me",
@@ -132,7 +108,7 @@ async def test_get_current_user_jwt_missing_sub(client: AsyncClient):
 
 async def test_get_current_user_jwt_deleted_user(client: AsyncClient):
     """JWT for deactivated user returns 401."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     token = data["access_token"]
     user_id = data["user"]["id"]
 
@@ -173,7 +149,7 @@ async def test_require_user_api_key_without_user(client: AsyncClient):
 
 async def test_require_user_with_jwt(client: AsyncClient):
     """require_user succeeds with valid JWT."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     resp = await client.get("/api/v1/users", headers=_bearer(data["access_token"]))
     assert resp.status_code == 200
 
@@ -198,7 +174,7 @@ async def test_update_other_user_forbidden(client: AsyncClient):
 
 async def test_update_user_preserves_email(client: AsyncClient):
     """PUT /users/{id} updating display_name does not change email."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     user_id = data["user"]["id"]
     token = data["access_token"]
 
@@ -214,7 +190,7 @@ async def test_update_user_preserves_email(client: AsyncClient):
 
 async def test_get_user_not_found(client: AsyncClient):
     """GET /users/{id} for non-existent UUID returns 404."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     fake_id = str(uuid.uuid4())
 
     resp = await client.get(
@@ -226,7 +202,7 @@ async def test_get_user_not_found(client: AsyncClient):
 
 async def test_deactivate_self(client: AsyncClient):
     """DELETE /users/{id} deactivates the calling user."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     user_id = data["user"]["id"]
     token = data["access_token"]
 
@@ -241,7 +217,7 @@ async def test_deactivate_self(client: AsyncClient):
 
 async def test_get_group_by_id(client: AsyncClient):
     """GET /groups/{id} returns the group."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     headers = _bearer(data["access_token"])
 
     create_resp = await client.post(
@@ -260,7 +236,7 @@ async def test_get_group_by_id(client: AsyncClient):
 
 async def test_get_group_not_found(client: AsyncClient):
     """GET /groups/{id} for non-existent UUID returns 404."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     fake_id = str(uuid.uuid4())
 
     resp = await client.get(
@@ -272,7 +248,7 @@ async def test_get_group_not_found(client: AsyncClient):
 
 async def test_update_group_description(client: AsyncClient):
     """PUT /groups/{id} updates the description."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     headers = _bearer(data["access_token"])
 
     create_resp = await client.post(
@@ -294,7 +270,7 @@ async def test_update_group_description(client: AsyncClient):
 
 async def test_update_group_not_found(client: AsyncClient):
     """PUT /groups/{id} for non-existent group returns 404."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     fake_id = str(uuid.uuid4())
 
     resp = await client.put(
@@ -307,7 +283,7 @@ async def test_update_group_not_found(client: AsyncClient):
 
 async def test_delete_group(client: AsyncClient):
     """DELETE /groups/{id} removes the group."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     headers = _bearer(data["access_token"])
 
     create_resp = await client.post(
@@ -329,7 +305,7 @@ async def test_delete_group(client: AsyncClient):
 
 async def test_delete_group_idempotent(client: AsyncClient):
     """DELETE /groups/{id} for non-existent group returns 204 (idempotent)."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     fake_id = str(uuid.uuid4())
 
     resp = await client.delete(
@@ -347,7 +323,7 @@ async def test_groups_require_auth(client: AsyncClient):
 
 async def test_add_member_invalid_user_id_format(client: AsyncClient):
     """POST /groups/{id}/members with invalid user_id format returns 422."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_DEP_EMAIL)
     headers = _bearer(data["access_token"])
 
     create_resp = await client.post(

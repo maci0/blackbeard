@@ -9,15 +9,20 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import threading
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from blackbeard.api import MUTATION_RATE_MSG as _MUTATION_RATE_MSG
+from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import require_permission
-from blackbeard.models import User
+from blackbeard.models import User, get_session
+from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -28,17 +33,12 @@ router = APIRouter(prefix="/credentials", tags=["credentials"])
 # ---------------------------------------------------------------------------
 
 _credentials: dict[str, dict[str, Any]] = {}
+_credentials_lock = threading.Lock()
 
 
-def _mask(value: str) -> str:
-    """Return a masked version of a secret value.
-
-    Uses fixed-width masking to avoid leaking the value's length,
-    prefix, or suffix (CWE-200).
-    """
-    if len(value) <= 4:
-        return "****"
-    return "****" + value[-4:]
+# Fixed-width mask for all secret values — identical regardless of input
+# to avoid leaking length, prefix, or suffix information (CWE-200).
+_MASKED_VALUE = "****"
 
 
 # ---------------------------------------------------------------------------
@@ -58,17 +58,17 @@ class CredentialResponse(BaseModel):
     name: str
     type: str
     description: str
-    created_at: str
-    updated_at: str
-    last_used_at: str | None
+    created_at: datetime
+    updated_at: datetime
+    last_used_at: datetime | None
     masked_value: str
 
 
 class CredentialListResponse(BaseModel):
     items: list[CredentialResponse]
     total: int
-    limit: int
-    offset: int
+    limit: int = 100
+    offset: int = 0
     has_more: bool = False
 
 
@@ -83,33 +83,45 @@ class CredentialListResponse(BaseModel):
     status_code=201,
     responses={
         409: {"description": "Credential with this name already exists"},
+        429: {"description": "Too many mutation requests"},
     },
 )
 async def create_credential(
     body: CreateCredentialRequest,
+    request: Request,
     response: Response,
+    session: AsyncSession = Depends(get_session),
     _current_user: User = Depends(
         require_permission("create", "Credential", require_identity=True)
     ),
 ) -> CredentialResponse:
     """Create a new credential."""
-    if body.name in _credentials:
-        raise HTTPException(status_code=409, detail=f"Credential '{body.name}' already exists")
-
-    now = datetime.now(UTC).isoformat()
+    check_rate_limit(mutation_limiter, _current_user, _MUTATION_RATE_MSG)
+    now = datetime.now(UTC)
     cred_id = str(uuid.uuid4())
-    masked = _mask(body.value)
-    _credentials[body.name] = {
-        "id": cred_id,
-        "name": body.name,
-        "type": body.type,
-        "description": body.description,
-        "value_hash": hashlib.sha256(body.value.encode()).hexdigest(),
-        "masked_value": masked,
-        "created_at": now,
-        "updated_at": now,
-        "last_used_at": None,
-    }
+    with _credentials_lock:
+        if body.name in _credentials:
+            raise HTTPException(status_code=409, detail=f"Credential '{body.name}' already exists")
+        _credentials[body.name] = {
+            "id": cred_id,
+            "name": body.name,
+            "type": body.type,
+            "description": body.description,
+            "value_hash": hashlib.sha256(body.value.encode()).hexdigest(),
+            "masked_value": _MASKED_VALUE,
+            "created_at": now,
+            "updated_at": now,
+            "last_used_at": None,
+        }
+
+    await log_audit(
+        session,
+        action="credential_created",
+        resource_type="Credential",
+        resource_id=body.name,
+        **audit_from_request(request, _current_user),
+    )
+    await session.commit()
 
     logger.info(
         "Credential created: %s",
@@ -130,7 +142,7 @@ async def create_credential(
         created_at=now,
         updated_at=now,
         last_used_at=None,
-        masked_value=masked,
+        masked_value=_MASKED_VALUE,
     )
 
 
@@ -142,12 +154,13 @@ async def create_credential(
     },
 )
 async def list_credentials(
-    limit: int = Query(default=100, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0, le=100_000),
+    limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
+    offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     _current_user: User = Depends(require_permission("list", "Credential", require_identity=True)),
 ) -> CredentialListResponse:
     """List all credentials (masked values only)."""
-    all_creds = sorted(_credentials.values(), key=lambda x: x["created_at"], reverse=True)
+    with _credentials_lock:
+        all_creds = sorted(_credentials.values(), key=lambda x: x["created_at"], reverse=True)
     total = len(all_creds)
     page = all_creds[offset : offset + limit]
     items = [
@@ -156,9 +169,9 @@ async def list_credentials(
             name=c["name"],
             type=c["type"],
             description=c["description"],
-            created_at=c["created_at"],
-            updated_at=c["updated_at"],
-            last_used_at=c["last_used_at"],
+            created_at=cast(datetime, c["created_at"]),
+            updated_at=cast(datetime, c["updated_at"]),
+            last_used_at=cast("datetime | None", c["last_used_at"]),
             masked_value=c["masked_value"],
         )
         for c in page
@@ -176,20 +189,44 @@ async def list_credentials(
     "/{credential_id}",
     status_code=204,
     responses={
-        404: {"description": "Credential not found"},
+        204: {"description": "Credential deleted (or did not exist — idempotent)"},
+        429: {"description": "Too many mutation requests"},
     },
 )
 async def delete_credential(
-    credential_id: str,
+    request: Request,
+    credential_id: str = Path(
+        ...,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    session: AsyncSession = Depends(get_session),
     _current_user: User = Depends(
         require_permission("delete", "Credential", require_identity=True)
     ),
 ) -> None:
-    """Delete a credential by ID."""
-    target = next((n for n, c in _credentials.items() if c["id"] == credential_id), None)
-    if target is None:
-        raise HTTPException(status_code=404, detail="Credential not found")
-    del _credentials[target]
+    """Delete a credential by ID. Idempotent."""
+    check_rate_limit(mutation_limiter, _current_user, _MUTATION_RATE_MSG)
+    with _credentials_lock:
+        target = next((n for n, c in _credentials.items() if c["id"] == credential_id), None)
+        if target is None:
+            logger.debug(
+                "Delete no-op: credential %s not found",
+                credential_id,
+                extra={
+                    "event": "credential_delete_noop",
+                    "credential_id": credential_id,
+                },
+            )
+            return
+        del _credentials[target]
+    await log_audit(
+        session,
+        action="credential_deleted",
+        resource_type="Credential",
+        resource_id=target,
+        **audit_from_request(request, _current_user),
+    )
+    await session.commit()
     logger.info(
         "Credential deleted: %s",
         target,

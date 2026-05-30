@@ -294,8 +294,11 @@ async def test_cancel_execution(client: AsyncClient):
     assert cancel_resp.status_code == 200
     data = cancel_resp.json()
     assert data["status"] == "cancelled"
-    assert isinstance(data["completed_at"], str), "completed_at should be a string"
-    assert len(data["completed_at"]) > 0, "completed_at should be non-empty"
+    from datetime import datetime
+    completed = data["completed_at"]
+    assert isinstance(completed, str), "completed_at should be a string"
+    dt = datetime.fromisoformat(completed.replace("Z", "+00:00"))
+    assert dt.tzinfo is not None, "completed_at must be timezone-aware"
     assert data["error"] is None
     assert data["id"] == execution_id, "Cancelled response should return same execution id"
     assert data["crew_name"] == "test-crew", "Cancel response must preserve crew_name"
@@ -814,9 +817,12 @@ async def test_kickoff_rejects_empty_body(client: AsyncClient):
         headers={**API_KEY_HEADER, "Content-Type": "application/json"},
     )
     assert response.status_code == 422
-    detail = response.json().get("detail")
-    assert detail is not None, "422 response should include detail"
-    assert detail != "", "422 detail should be non-empty"
+    body = response.json()
+    assert "detail" in body, "422 response should include detail key"
+    detail = body["detail"]
+    assert isinstance(detail, (str, list)), "detail should be a string or validation error list"
+    if isinstance(detail, list):
+        assert len(detail) > 0, "validation error list should not be empty"
 
 
 async def test_kickoff_rejects_non_json_body(client: AsyncClient):
@@ -828,9 +834,12 @@ async def test_kickoff_rejects_non_json_body(client: AsyncClient):
         headers={**API_KEY_HEADER, "Content-Type": "application/json"},
     )
     assert response.status_code == 422
-    detail = response.json().get("detail")
-    assert detail is not None, "422 response should include detail"
-    assert detail != "", "422 detail should be non-empty"
+    body = response.json()
+    assert "detail" in body, "422 response should include detail key"
+    detail = body["detail"]
+    assert isinstance(detail, (str, list)), "detail should be a string or validation error list"
+    if isinstance(detail, list):
+        assert len(detail) > 0, "validation error list should not be empty"
 
 
 # ---------------------------------------------------------------------------

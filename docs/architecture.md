@@ -110,6 +110,12 @@ Execution Flow
            │
            ▼
   ┌──────────────────┐
+  │ Submit to        │  ThreadPoolExecutor
+  │ thread pool      │  (MAX_CONCURRENT_EXECUTIONS)
+  └────────┬─────────┘
+           │
+           ▼  (background thread)
+  ┌──────────────────┐
   │ Derive budget    │  AgentPolicy max_usd/max_tokens
   │ from policies    │  → most restrictive wins
   └────────┬─────────┘
@@ -121,12 +127,6 @@ Execution Flow
   └────────┬─────────┘
            │
            ▼
-  ┌──────────────────┐
-  │ Submit to        │  ThreadPoolExecutor
-  │ thread pool      │  (MAX_CONCURRENT_EXECUTIONS)
-  └────────┬─────────┘
-           │
-           ▼  (background thread)
   ┌──────────────────┐
   │ ResourceLoader   │  Resolve refs → build
   │                  │  LLM, Agent, Task, Crew

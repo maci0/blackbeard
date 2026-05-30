@@ -151,7 +151,9 @@ class Settings(BaseSettings):
             )
         return v
 
-    @field_validator("otel_endpoint", "muninndb_url", "litellm_proxy_url", "oidc_redirect_uri")
+    @field_validator(
+        "oidc_issuer", "otel_endpoint", "muninndb_url", "litellm_proxy_url", "oidc_redirect_uri"
+    )
     @classmethod
     def _validate_http_url(cls, v: str | None) -> str | None:
         if v is not None and not v.startswith(("http://", "https://")):
@@ -194,6 +196,14 @@ class Settings(BaseSettings):
                     f"Set a strong, unique value via environment variable before running "
                     f"in production (DEBUG=false)."
                 )
+        jwt_val = self.jwt_secret.get_secret_value()
+        if len(jwt_val) < 32:
+            raise ValueError(
+                "JWT_SECRET must be at least 32 characters for adequate HMAC-SHA256 "
+                "signing strength. Generate one with: "
+                'python -c "import secrets; print(secrets.token_urlsafe(32))"'
+            )
+
         # URL-based secrets: check for insecure password patterns regardless of
         # hostname (exact-URL matching misses Docker hostnames like @postgres).
         db_url = self.database_url.get_secret_value()

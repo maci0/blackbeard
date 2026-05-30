@@ -192,7 +192,6 @@ def cli(
     api_key: str | None,
     project: str,
     timeout: int,
-    output_json: bool,
 ) -> None:
     """Blackbeard — Agent Management Platform CLI."""
     ctx.ensure_object(dict)
@@ -200,7 +199,6 @@ def cli(
     ctx.obj["api_key"] = api_key
     ctx.obj["project"] = project
     ctx.obj["timeout"] = float(timeout)
-    ctx.obj["json"] = output_json
 
 
 cli.command_class = HelpCommand
@@ -223,9 +221,8 @@ Examples:
 )
 @json_opt
 @click.pass_context
-def health(ctx: click.Context, ready: bool, output_json: bool) -> None:
+def health(ctx: click.Context, ready: bool) -> None:
     """Check server health and component readiness (no API key required)."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     endpoint = "/api/v1/health/ready" if ready else "/api/v1/health"
     url = f"{server}{endpoint}"
@@ -298,9 +295,8 @@ Examples:
 )
 @json_opt
 @click.pass_context
-def validate(ctx: click.Context, path: str, output_json: bool) -> None:
+def validate(ctx: click.Context, path: str) -> None:
     """Validate YAML resource files offline (no server connection needed)."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     resources = load_yaml_resources(Path(path))
 
     if not resources:
@@ -399,9 +395,8 @@ Examples:
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @json_opt
 @click.pass_context
-def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool, output_json: bool) -> None:
+def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
     """Apply YAML resource files to the server (create or update)."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
 
     resources = load_yaml_resources(Path(path))
@@ -611,13 +606,12 @@ Examples:
 @click.argument("name")
 @json_opt
 @click.pass_context
-def get(ctx: click.Context, kind: str, name: str, output_json: bool) -> None:
+def get(ctx: click.Context, kind: str, name: str) -> None:
     """Get a single resource by kind and name.
 
     KIND is the resource type (e.g. Agent, Crew, Task).
     NAME is the resource name (e.g. my-agent).
     """
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     validate_name(name)
     server = ctx.obj["server"]
 
@@ -691,14 +685,11 @@ Examples:
 )
 @json_opt
 @click.pass_context
-def list_resources_cmd(
-    ctx: click.Context, kind: str, labels: tuple[str, ...], limit: int, output_json: bool
-) -> None:
+def list_resources_cmd(ctx: click.Context, kind: str, labels: tuple[str, ...], limit: int) -> None:
     """List resources of a given kind.
 
     KIND is the resource type (e.g. Agent, Crew, Task).
     """
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
 
     namespace = ctx.obj["project"]
@@ -788,13 +779,12 @@ Examples:
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @json_opt
 @click.pass_context
-def delete(ctx: click.Context, kind: str, name: str, yes: bool, output_json: bool) -> None:
+def delete(ctx: click.Context, kind: str, name: str, yes: bool) -> None:
     """Delete a resource by kind and name.
 
     KIND is the resource type (e.g. Agent, Crew, Task).
     NAME is the resource name (e.g. my-agent).
     """
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     validate_name(name)
     server = ctx.obj["server"]
 
@@ -875,13 +865,11 @@ def kickoff(
     inputs: tuple[str, ...],
     watch: bool,
     interval: int,
-    output_json: bool,
 ) -> None:
     """Kick off a crew execution.
 
     CREW_NAME is the name of the crew to run, e.g. research-crew.
     """
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     validate_name(crew_name)
 
     parsed_inputs = parse_key_value_inputs(inputs)
@@ -939,7 +927,6 @@ def kickoff(
             execution_id=execution_id,
             watch=True,
             interval=interval,
-            output_json=is_json,
         )
     else:
         console.print(f"\nTrack with: [bold]{prog} status {execution_id} -w[/]")
@@ -1015,13 +1002,11 @@ def train(
     filename: str,
     watch: bool,
     interval: int,
-    output_json: bool,
 ) -> None:
     """Train a crew with iterative learning.
 
     CREW_NAME is the name of the crew to train, e.g. research-crew.
     """
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     validate_name(crew_name)
 
     parsed_inputs = parse_key_value_inputs(inputs)
@@ -1081,7 +1066,6 @@ def train(
             execution_id=execution_id,
             watch=True,
             interval=interval,
-            output_json=is_json,
         )
     else:
         console.print(f"\nTrack with: [bold]{prog} status {execution_id} -w[/]")
@@ -1139,13 +1123,11 @@ def test_crew_cmd(
     iterations: int,
     watch: bool,
     interval: int,
-    output_json: bool,
 ) -> None:
     """Test a crew and collect performance metrics.
 
     CREW_NAME is the name of the crew to test, e.g. research-crew.
     """
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     validate_name(crew_name)
 
     parsed_inputs = parse_key_value_inputs(inputs)
@@ -1204,7 +1186,6 @@ def test_crew_cmd(
             execution_id=execution_id,
             watch=True,
             interval=interval,
-            output_json=is_json,
         )
     else:
         console.print(f"\nTrack with: [bold]{prog} status {execution_id} -w[/]")
@@ -1241,14 +1222,11 @@ Examples:
 )
 @json_opt
 @click.pass_context
-def status(
-    ctx: click.Context, execution_id: str, watch: bool, interval: int, output_json: bool
-) -> None:
+def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) -> None:
     """Show execution status and details.
 
     EXECUTION_ID is the UUID returned by the kickoff command.
     """
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
 
     is_json = ctx.obj["json"]
@@ -1256,7 +1234,6 @@ def status(
     prog = ctx.find_root().info_name or "blackbeard"
     warn_unused_interval(ctx, watch, interval, f"{prog} status {execution_id}")
 
-    terminal_states = TERMINAL_STATUSES
     url = f"{server}/api/v1/executions/{execution_id}"
     headers = require_auth(ctx)
 
@@ -1312,7 +1289,13 @@ def status(
             # Error
             error = data.get("error")
             if error:
-                out.print(Panel(f"[red]{error}[/]", title="[red]Error[/]", border_style="red"))
+                out.print(
+                    Panel(
+                        f"[red]{escape(str(error))}[/]",
+                        title="[red]Error[/]",
+                        border_style="red",
+                    )
+                )
 
             # Outputs
             outputs = data.get("outputs")
@@ -1360,7 +1343,7 @@ def status(
             data = fetch()
             render(data)
             current = data.get("status", "")
-            if current and current not in terminal_states:
+            if current and current not in TERMINAL_STATUSES:
                 console.print(f"\n[dim]Still running. Watch: {prog} status {execution_id} -w[/]")
             elif current in ("failed", "cancelled"):
                 raise SystemExit(1)
@@ -1385,7 +1368,7 @@ def status(
                     first = False
 
                 current_status = data.get("status", "")
-                if current_status in terminal_states:
+                if current_status in TERMINAL_STATUSES:
                     break
 
                 with console.status(f"[dim]Polling in {interval}s…[/]"):
@@ -1412,12 +1395,11 @@ Examples:
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @json_opt
 @click.pass_context
-def pull(ctx: click.Context, source: str, yes: bool, output_json: bool) -> None:
+def pull(ctx: click.Context, source: str, yes: bool) -> None:
     """Import resources from a git URL or local directory.
 
     SOURCE is a git HTTPS URL or local directory path containing YAML resource files.
     """
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
 
     if (
@@ -1429,6 +1411,7 @@ def pull(ctx: click.Context, source: str, yes: bool, output_json: bool) -> None:
         return
 
     headers = require_auth(ctx)
+    namespace = ctx.obj["project"]
 
     try:
         with httpx.Client(timeout=max(ctx.obj["timeout"], 60.0)) as client:
@@ -1436,6 +1419,7 @@ def pull(ctx: click.Context, source: str, yes: bool, output_json: bool) -> None:
                 f"{server}/api/v1/marketplace/import",
                 json={"url": source},
                 headers=headers,
+                params={"project": namespace},
             )
     except httpx.RequestError as exc:
         handle_request_error(server, exc)

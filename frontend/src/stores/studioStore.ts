@@ -11,7 +11,7 @@ import {
   type NodeChange,
 } from '@xyflow/react'
 
-const MAX_HISTORY = 30
+export const MAX_HISTORY = 30
 const HISTORY_DEBOUNCE_MS = 100
 const NODE_DATA_DEBOUNCE_MS = 500
 

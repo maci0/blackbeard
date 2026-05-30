@@ -27,7 +27,7 @@ from blackbeard_cli.kinds import ALL_KINDS, API_VERSION, KIND_TO_PLURAL
 
 
 def _strip_server_fields(resource: dict[str, Any]) -> dict[str, Any]:
-    """Keep only apiVersion, kind, metadata (name/namespace/labels), and spec."""
+    """Keep only apiVersion, kind, metadata (name/project/labels), and spec."""
     meta = resource.get("metadata", {})
     clean_meta: dict[str, Any] = {"name": meta.get("name", "")}
     ns = meta.get("project")
@@ -132,10 +132,8 @@ def export_cmd(
     name: str | None,
     export_all: bool,
     output_path: str | None,
-    output_json: bool = False,
 ) -> None:
     """Export resources as YAML (or JSON with --json)."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
     namespace = ctx.obj["project"]

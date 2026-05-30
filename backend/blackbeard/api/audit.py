@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
+from blackbeard.api import smart_total
 from blackbeard.auth.dependencies import require_permission
 from blackbeard.models import AuditLog, User, get_session
 from blackbeard.models.execution_schemas import redact_sensitive_values
@@ -120,11 +121,9 @@ async def list_audit_logs(
     result = await session.execute(data_query)
     logs = result.scalars().all()
 
-    if len(logs) < limit and (len(logs) > 0 or offset == 0):
-        total = offset + len(logs)
-    else:
-        count_query = select(func.count(AuditLog.id)).where(*filters)
-        total = (await session.execute(count_query)).scalar_one()
+    total = await smart_total(
+        session, list(logs), limit, offset, select(func.count(AuditLog.id)).where(*filters)
+    )
 
     return AuditLogListResponse(
         items=[

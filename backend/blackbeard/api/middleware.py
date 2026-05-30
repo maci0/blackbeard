@@ -71,33 +71,35 @@ _SENSITIVE_QS_PARAMS = frozenset(
         "authorization",
         "bearer",
         "jwt",
+        "user_id",
+        "initiated_by",
+        "first_name",
+        "last_name",
+        "full_name",
+        "passport",
+        "driver_license",
+        "national_id",
+        "tax_id",
+        "nationality",
+        "gender",
+        "ethnicity",
+        "location",
     }
 )
 
 
 def _redact_query_string(query: str) -> str:
-    """Redact sensitive query parameters before logging.
-
-    Parameter names in ``_SENSITIVE_QS_PARAMS`` have their values replaced
-    with '[REDACTED]' to prevent credential/PII leakage into log output.
-    """
+    """Redact sensitive query-parameter values before logging."""
     if not query:
         return query
     query_lower = query.lower()
-    if not any(param in query_lower for param in _SENSITIVE_QS_PARAMS):
+    if not any(p in query_lower for p in _SENSITIVE_QS_PARAMS):
         return query
     pairs = parse_qsl(query, keep_blank_values=True)
     if not pairs:
         return query
-    needs_redaction = False
-    redacted = []
-    for k, v in pairs:
-        if k.lower() in _SENSITIVE_QS_PARAMS:
-            redacted.append((k, "[REDACTED]"))
-            needs_redaction = True
-        else:
-            redacted.append((k, v))
-    if not needs_redaction:
+    redacted = [(k, "[REDACTED]" if k.lower() in _SENSITIVE_QS_PARAMS else v) for k, v in pairs]
+    if redacted == pairs:
         return query
     return urlencode(redacted)
 
@@ -163,7 +165,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         if path in _AUTH_PATHS and response.status_code in (401, 403, 409):
             record_auth_failure(client_ip)
 
-        _log_request(request, response, start)
+        _log_request(request, response, start, client_ip)
         return response
 
     if request.method == "OPTIONS":
@@ -193,7 +195,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     if _AUTOMATION_WEBHOOK_RE.match(path):
         response = await call_next(request)
         response.headers["X-Request-Id"] = request_id
-        _log_request(request, response, start)
+        _log_request(request, response, start, client_ip)
         return response
 
     # Validate JWT Bearer token (signature + expiry).  Invalid tokens
@@ -203,6 +205,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         token = auth_header[7:]
         try:
             payload = decode_access_token(token)
+            request.state.jwt_payload = payload
             user_id_var.set(payload.get("sub", ""))
         except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError) as jwt_exc:
             record_auth_failure(client_ip)
@@ -237,7 +240,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
             return response
         response = await call_next(request)
         response.headers["X-Request-Id"] = request_id
-        _log_request(request, response, start)
+        _log_request(request, response, start, client_ip)
         return response
 
     # Check API key — always run hmac.compare_digest to prevent timing attacks
@@ -281,11 +284,11 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
 
     response = await call_next(request)
     response.headers["X-Request-Id"] = request_id
-    _log_request(request, response, start)
+    _log_request(request, response, start, client_ip)
     return response
 
 
-def _log_request(request: Request, response: Response, start: float) -> None:
+def _log_request(request: Request, response: Response, start: float, client_ip: str = "") -> None:
     """Log completed request with method, path, status, and duration."""
     duration_ms = (time.monotonic() - start) * 1000
     status = response.status_code
@@ -303,7 +306,8 @@ def _log_request(request: Request, response: Response, start: float) -> None:
     if not logger.isEnabledFor(level):
         return
 
-    client_ip = get_client_ip(request) or "unknown"
+    if not client_ip:
+        client_ip = get_client_ip(request) or "unknown"
     user_agent = request.headers.get("User-Agent", "")
     content_length = request.headers.get("content-length")
     resp_content_length = response.headers.get("content-length")
@@ -363,10 +367,10 @@ SECURITY_HEADERS = {
     "X-Download-Options": "noopen",
 }
 
-_SECURITY_HEADERS_LIST = list(SECURITY_HEADERS.items())
-_SECURITY_HEADERS_NO_CSP = [
-    (k, v) for k, v in _SECURITY_HEADERS_LIST if k != "Content-Security-Policy"
-]
+_SECURITY_HEADERS_ITEMS = tuple(SECURITY_HEADERS.items())
+_SECURITY_HEADERS_NO_CSP = tuple(
+    (k, v) for k, v in _SECURITY_HEADERS_ITEMS if k != "Content-Security-Policy"
+)
 
 
 async def security_headers_middleware(
@@ -376,7 +380,7 @@ async def security_headers_middleware(
     """Add security headers to every response."""
     response = await call_next(request)
     skip_csp = settings.debug and request.url.path in _DOCS_PATHS
-    headers = _SECURITY_HEADERS_NO_CSP if skip_csp else _SECURITY_HEADERS_LIST
+    headers = _SECURITY_HEADERS_NO_CSP if skip_csp else _SECURITY_HEADERS_ITEMS
     for name, value in headers:
         if name not in response.headers:
             response.headers[name] = value

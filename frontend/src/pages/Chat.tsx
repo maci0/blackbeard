@@ -189,30 +189,28 @@ export default function Chat() {
     scrollToBottom()
   }, [messages, scrollToBottom])
 
-  useEffect(() => {
-    let cancelled = false
+  const fetchModels = useCallback(() => {
     setModelsLoading(true)
     setModelsError(null)
     api
       .get<ModelInfo[]>('/api/v1/models/available')
       .then((data) => {
-        if (cancelled) return
         setModels(data)
-        if (data.length > 0 && !selectedModel) {
-          setSelectedModel(data[0]!.name)
+        if (data.length > 0) {
+          setSelectedModel((prev) => prev || data[0]!.name)
         }
       })
       .catch((err: unknown) => {
-        if (cancelled) return
         setModelsError(getErrorMessage(err, 'Failed to load models'))
       })
       .finally(() => {
-        if (!cancelled) setModelsLoading(false)
+        setModelsLoading(false)
       })
-    return () => {
-      cancelled = true
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    fetchModels()
+  }, [fetchModels])
 
   const autoResizeTextarea = useCallback(() => {
     const el = textareaRef.current
@@ -474,7 +472,14 @@ export default function Chat() {
             ) : modelsError ? (
               <div className="flex h-9 items-center gap-2 rounded-md border border-destructive/30 px-3 text-sm text-destructive">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                {modelsError}
+                <span className="flex-1 truncate">{modelsError}</span>
+                <button
+                  type="button"
+                  onClick={fetchModels}
+                  className="shrink-0 text-xs font-medium underline underline-offset-2 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Retry
+                </button>
               </div>
             ) : (
               <select
@@ -556,6 +561,7 @@ export default function Chat() {
               onChange={(e) => setSystemPrompt(e.target.value)}
               disabled={sending}
               placeholder="You are a helpful assistant..."
+              aria-label="System prompt"
               rows={3}
               className="mt-2 w-full resize-y rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             />

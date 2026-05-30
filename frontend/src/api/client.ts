@@ -1,6 +1,7 @@
 // Relative paths work in both dev (Vite proxy) and Docker (nginx proxy).
 // Set VITE_API_BASE_URL only when hosting the frontend on a different origin.
 const API_BASE: string = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
+const REQUEST_TIMEOUT_MS = 30_000
 
 export class ApiError extends Error {
   constructor(
@@ -70,7 +71,7 @@ class ApiClient {
           ...authHeaders,
           ...headers,
         },
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       })
     } catch (err) {

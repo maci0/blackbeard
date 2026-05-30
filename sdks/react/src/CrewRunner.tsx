@@ -3,12 +3,14 @@ import { useBlackbeard } from './BlackbeardProvider'
 import { apiFetch } from './fetch'
 import { ExecutionStatus } from './ExecutionStatus'
 import type { Execution } from './types'
-import { TERMINAL_STATUSES } from './types'
+import { BlackbeardApiError, TERMINAL_STATUSES } from './types'
 
 export interface CrewRunnerProps {
   /** Name of the crew to run. */
   crewName: string
-  /** Namespace containing the crew (defaults to "default"). */
+  /** Project containing the crew (defaults to "default"). */
+  project?: string
+  /** @deprecated Use `project` instead. */
   namespace?: string
   /** Callback fired when the execution reaches a terminal state. */
   onComplete?: (execution: Execution) => void
@@ -18,7 +20,7 @@ export interface CrewRunnerProps {
  * Crew runner widget. Displays an input form based on the crew spec,
  * triggers a kickoff, and shows execution status while running.
  */
-export function CrewRunner({ crewName, namespace, onComplete }: CrewRunnerProps) {
+export function CrewRunner({ crewName, project, namespace, onComplete }: CrewRunnerProps) {
   const config = useBlackbeard()
   const [inputsJson, setInputsJson] = useState('{}')
   const [executionId, setExecutionId] = useState<string | null>(null)
@@ -55,7 +57,7 @@ export function CrewRunner({ crewName, namespace, onComplete }: CrewRunnerProps)
         return
       }
 
-      const ns = namespace ?? 'default'
+      const ns = project ?? namespace ?? 'default'
       const result = await apiFetch<{ id: string }>(
         config,
         `/api/v1/crews/${encodeURIComponent(crewName)}/kickoff?project=${encodeURIComponent(ns)}`,
@@ -86,11 +88,11 @@ export function CrewRunner({ crewName, namespace, onComplete }: CrewRunnerProps)
         pollTimerRef.current = setTimeout(() => void poll(), 3000)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start execution')
+      setError(err instanceof BlackbeardApiError ? err.detail : err instanceof Error ? err.message : 'Failed to start execution')
     } finally {
       setSubmitting(false)
     }
-  }, [config, crewName, namespace, inputsJson])
+  }, [config, crewName, project, namespace, inputsJson])
 
   // Read-only resource fetch not needed — we accept raw JSON input to
   // keep this widget dependency-free and simple.

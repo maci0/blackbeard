@@ -535,7 +535,7 @@ function AddModelDialog({
                 className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting && <Spinner size="sm" className="text-current" />}
-                Add connection
+                Add Connection
               </button>
             </div>
           </form>
@@ -913,7 +913,7 @@ export default function Models() {
                                           type="button"
                                           onClick={() => void handleTestModel(resource)}
                                           disabled={testingModels.has(resource.metadata.name)}
-                                          className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950 dark:hover:text-emerald-400"
+                                          className="inline-flex min-h-[44px] items-center gap-1 rounded border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950 dark:hover:text-emerald-400"
                                           aria-label={`Test connection ${resource.metadata.name}`}
                                         >
                                           {testingModels.has(resource.metadata.name) ? (
@@ -922,13 +922,13 @@ export default function Models() {
                                             <Zap className="h-3 w-3" />
                                           )}
                                           {testingModels.has(resource.metadata.name)
-                                            ? 'Testing...'
+                                            ? 'Testing…'
                                             : 'Test'}
                                         </button>
                                         <button
                                           type="button"
                                           onClick={() => setDeleteTarget(resource.metadata.name)}
-                                          className="inline-flex items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                          className="inline-flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                           aria-label={`Delete connection ${resource.metadata.name}`}
                                         >
                                           <Trash2 className="h-3.5 w-3.5" />

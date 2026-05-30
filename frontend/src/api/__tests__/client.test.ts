@@ -128,6 +128,9 @@ describe('ApiClient', () => {
       const result = await api.delete('/api/v1/resources/test')
 
       expect(result).toBeUndefined()
+      const [url, init] = fetchMock.mock.calls[0]!
+      expect(url).toBe('/api/v1/resources/test')
+      expect(init?.method).toBe('DELETE')
     })
 
     it('handles non-JSON response with ok status', async () => {

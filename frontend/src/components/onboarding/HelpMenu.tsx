@@ -97,7 +97,7 @@ export default function HelpMenu({ onRestartTour }: HelpMenuProps) {
           <button
             aria-label="Help menu"
             title="Help menu"
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-xs font-bold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-full border border-border text-xs font-bold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             ?
           </button>

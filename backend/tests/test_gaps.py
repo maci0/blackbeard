@@ -769,6 +769,7 @@ def test_crew_missing_process():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("_clean_test_http_clients")
 def test_get_client_returns_same_instance():
     """get_client should return the same AsyncClient for the same name."""
     from blackbeard.http_client import _clients, _lock, get_client
@@ -777,15 +778,12 @@ def test_get_client_returns_same_instance():
     with _lock:
         _clients.pop(name, None)
 
-    try:
-        c1 = get_client(name, timeout=5)
-        c2 = get_client(name, timeout=99)
-        assert c1 is c2
-    finally:
-        with _lock:
-            _clients.pop(name, None)
+    c1 = get_client(name, timeout=5)
+    c2 = get_client(name, timeout=99)
+    assert c1 is c2
 
 
+@pytest.mark.usefixtures("_clean_test_http_clients")
 def test_get_sync_client_returns_same_instance():
     """get_sync_client should return the same Client for the same name."""
     from blackbeard.http_client import _lock, _sync_clients, get_sync_client
@@ -794,15 +792,12 @@ def test_get_sync_client_returns_same_instance():
     with _lock:
         _sync_clients.pop(name, None)
 
-    try:
-        c1 = get_sync_client(name, timeout=5)
-        c2 = get_sync_client(name, timeout=99)
-        assert c1 is c2
-    finally:
-        with _lock:
-            _sync_clients.pop(name, None)
+    c1 = get_sync_client(name, timeout=5)
+    c2 = get_sync_client(name, timeout=99)
+    assert c1 is c2
 
 
+@pytest.mark.usefixtures("_clean_test_http_clients")
 def test_get_client_different_names_different_instances():
     """get_client with different names should return different instances."""
     from blackbeard.http_client import _clients, _lock, get_client
@@ -813,14 +808,9 @@ def test_get_client_different_names_different_instances():
         _clients.pop(name_a, None)
         _clients.pop(name_b, None)
 
-    try:
-        a = get_client(name_a)
-        b = get_client(name_b)
-        assert a is not b
-    finally:
-        with _lock:
-            _clients.pop(name_a, None)
-            _clients.pop(name_b, None)
+    a = get_client(name_a)
+    b = get_client(name_b)
+    assert a is not b
 
 
 # ---------------------------------------------------------------------------

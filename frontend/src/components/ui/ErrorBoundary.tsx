@@ -28,6 +28,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div
           role="alert"
+          aria-live="assertive"
           className="flex h-screen flex-col items-center justify-center gap-4 p-8 text-center"
         >
           <h1 className="text-xl font-semibold">Something went wrong</h1>
@@ -56,10 +57,10 @@ export class ErrorBoundary extends Component<Props, State> {
               Reload
             </button>
             <a
-              href="/studio"
+              href="/"
               className="rounded-md border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Go to Studio
+              Go to Dashboard
             </a>
           </div>
         </div>

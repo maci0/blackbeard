@@ -93,6 +93,13 @@ function App() {
     api.onUnauthorized(() => {
       setSessionExpired(true)
     })
+    // Strip OIDC tokens from URL hash at app level (defense-in-depth).
+    // Login.tsx handles the primary flow, but if the SPA root mounts
+    // before the Login route, tokens could linger in browser history.
+    const hash = window.location.hash
+    if (hash.includes('token=')) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
   }, [hydrate, setSessionExpired])
 
   useEffect(() => {

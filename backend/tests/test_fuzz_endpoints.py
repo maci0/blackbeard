@@ -36,7 +36,9 @@ from blackbeard.kinds import KIND_TO_PLURAL
 from tests.conftest import API_KEY_HEADER
 
 # Re-usable allowed status codes — never 500.
-_OK_STATUSES = frozenset({200, 201, 202, 204, 400, 401, 403, 404, 409, 413, 422, 429, 502, 504})
+_OK_STATUSES = frozenset({200, 201, 202, 204, 400, 401, 403, 404, 409, 413, 422, 429})
+# Chat/proxy endpoints may return 502/504 when LiteLLM is unreachable in test env.
+_OK_STATUSES_WITH_PROXY = _OK_STATUSES | {502, 504}
 
 _ALL_KIND_PLURALS = list(KIND_TO_PLURAL.values())
 
@@ -177,9 +179,9 @@ async def test_evil_credential_delete(client, cred_id):
 async def test_a2a_agent_card_returns_valid_json(client):
     """GET /.well-known/agent-card.json should always return 200 with valid JSON."""
     # Clear cache to ensure fresh response
-    from blackbeard.api.a2a import _cache
+    import blackbeard.api.a2a as _a2a_mod
 
-    _cache.clear()
+    _a2a_mod._cache_entry = None
 
     resp = await client.get("/.well-known/agent-card.json")
     assert resp.status_code == 200, f"A2A endpoint returned {resp.status_code}"
@@ -200,9 +202,9 @@ async def test_a2a_agent_card_returns_valid_json(client):
 )
 async def test_fuzz_a2a_with_crews(client, protocol_versions, transports, enabled):
     """Create a crew with random a2a spec, then verify the agent card endpoint."""
-    from blackbeard.api.a2a import _cache
+    import blackbeard.api.a2a as _a2a_mod
 
-    _cache.clear()
+    _a2a_mod._cache_entry = None
 
     crew_body = {
         "apiVersion": "blackbeard/v1",
@@ -478,8 +480,7 @@ EVIL_CHAT_MESSAGES = [
 async def test_evil_chat_messages(client, body):
     """Evil chat messages should be rejected or handled gracefully, never 500."""
     resp = await client.post("/api/v1/chat", json=body, headers=API_KEY_HEADER)
-    # 502 is acceptable (LiteLLM unreachable in test env)
-    assert resp.status_code in _OK_STATUSES, (
+    assert resp.status_code in _OK_STATUSES_WITH_PROXY, (
         f"Unexpected {resp.status_code} on POST /chat with body keys={list(body.keys())}"
     )
 
@@ -501,7 +502,7 @@ async def test_fuzz_chat_random(client, model, content, role):
         "messages": [{"role": role, "content": content}],
     }
     resp = await client.post("/api/v1/chat", json=body, headers=API_KEY_HEADER)
-    assert resp.status_code in _OK_STATUSES, (
+    assert resp.status_code in _OK_STATUSES_WITH_PROXY, (
         f"Unexpected {resp.status_code} on POST /chat model={model!r}"
     )
 
@@ -522,8 +523,7 @@ async def test_fuzz_chat_stream(client, model, content):
         "messages": [{"role": "user", "content": content}],
     }
     resp = await client.post("/api/v1/chat/stream", json=body, headers=API_KEY_HEADER)
-    # Streaming endpoint returns 200 (SSE) or validation error (422) or 502
-    assert resp.status_code in _OK_STATUSES, (
+    assert resp.status_code in _OK_STATUSES_WITH_PROXY, (
         f"Unexpected {resp.status_code} on POST /chat/stream model={model!r}"
     )
 
@@ -547,7 +547,7 @@ async def test_evil_model_test(client, model_name):
         json={"model": model_name},
         headers=API_KEY_HEADER,
     )
-    assert resp.status_code in _OK_STATUSES, (
+    assert resp.status_code in _OK_STATUSES_WITH_PROXY, (
         f"Unexpected {resp.status_code} on POST /models/test model={model_name!r}"
     )
 

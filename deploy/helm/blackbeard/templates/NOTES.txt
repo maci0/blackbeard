@@ -22,5 +22,13 @@ Then open:
 To check the status of the deployment:
   kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
 
+To verify connectivity:
+  helm test {{ .Release.Name }}
+
+To seed RBAC roles, example crew, and tools:
+  BLACKBEARD_SERVER=http://localhost:{{ .Values.api.service.port }} \
+  BLACKBEARD_API_KEY=$(kubectl get secret {{ include "blackbeard.secretsName" . }} -o jsonpath='{.data.api-key}' | base64 -d) \
+  bash deploy/seed.sh
+
 To view logs:
   kubectl logs -l app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=api -f

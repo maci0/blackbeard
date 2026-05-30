@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any
+from typing import Any, TypeVar
+
+_T = TypeVar("_T")
 
 import httpx
 
@@ -30,6 +32,29 @@ _lock = threading.Lock()
 _DEFAULT_TIMEOUT = 30.0
 
 
+def _get_or_create(
+    cache: dict[str, _T],
+    name: str,
+    factory: type[_T],
+    client_type: str,
+    kwargs: dict[str, Any],
+) -> _T:
+    """Shared lock-always factory for sync/async httpx clients."""
+    with _lock:
+        client = cache.get(name)
+        if client is not None:
+            return client
+        kwargs.setdefault("timeout", _DEFAULT_TIMEOUT)
+        client = factory(**kwargs)
+        cache[name] = client
+        logger.debug(
+            "HTTP client created: %s",
+            name,
+            extra={"event": "http_client_created", "client_name": name, "client_type": client_type},
+        )
+        return client
+
+
 def get_client(name: str, **kwargs: Any) -> httpx.AsyncClient:
     """Return a named httpx.AsyncClient, creating it on first call.
 
@@ -37,19 +62,7 @@ def get_client(name: str, **kwargs: Any) -> httpx.AsyncClient:
     kwargs are forwarded to httpx.AsyncClient() on first creation and ignored
     on subsequent calls. Applies a 30s default timeout if none is specified.
     """
-    with _lock:
-        client = _clients.get(name)
-        if client is not None:
-            return client
-        kwargs.setdefault("timeout", _DEFAULT_TIMEOUT)
-        client = httpx.AsyncClient(**kwargs)
-        _clients[name] = client
-        logger.debug(
-            "HTTP client created: %s",
-            name,
-            extra={"event": "http_client_created", "client_name": name, "client_type": "async"},
-        )
-        return client
+    return _get_or_create(_clients, name, httpx.AsyncClient, "async", kwargs)
 
 
 def get_sync_client(name: str, **kwargs: Any) -> httpx.Client:
@@ -59,27 +72,11 @@ def get_sync_client(name: str, **kwargs: Any) -> httpx.Client:
     kwargs are forwarded to httpx.Client() on first creation and ignored
     on subsequent calls. Applies a 30s default timeout if none is specified.
     """
-    with _lock:
-        client = _sync_clients.get(name)
-        if client is not None:
-            return client
-        kwargs.setdefault("timeout", _DEFAULT_TIMEOUT)
-        client = httpx.Client(**kwargs)
-        _sync_clients[name] = client
-        logger.debug(
-            "HTTP client created: %s",
-            name,
-            extra={"event": "http_client_created", "client_name": name, "client_type": "sync"},
-        )
-        return client
+    return _get_or_create(_sync_clients, name, httpx.Client, "sync", kwargs)
 
 
 def get_litellm_client(name: str, timeout: float = _DEFAULT_TIMEOUT) -> httpx.AsyncClient:
     """Return a shared httpx client pre-configured with LiteLLM Bearer auth."""
-    with _lock:
-        client = _clients.get(name)
-        if client is not None:
-            return client
     from blackbeard.config import settings
 
     key = settings.litellm_master_key.get_secret_value()

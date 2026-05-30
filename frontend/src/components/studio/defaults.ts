@@ -7,7 +7,6 @@ export const DATAFLOW_MARKER_END = {
   color: '#94a3b8',
 } as const
 
-/** Default data for newly created studio nodes. */
 export function getDefaultNodeData(type: string): Record<string, unknown> {
   switch (type) {
     case 'agent':

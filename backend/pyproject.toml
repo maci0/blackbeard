@@ -16,7 +16,7 @@ dependencies = [
     "alembic>=1.15,<2",
     "pydantic>=2.11,<3",
     "pydantic-settings>=2.9,<3",
-    "crewai>=1.14,<2",
+    "crewai>=1.14.6,<2",
     "redis>=5.0,<7",  # health.py uses redis.asyncio for Valkey health checks (wire-compatible)
     "wasmtime>=44,<45",  # 42.0.0 has CVE-2026-44216/34941..34946 (no Python patch release; 43.0.0 has CVE-2026-34983)
     "pyyaml>=6.0,<7",
@@ -25,7 +25,7 @@ dependencies = [
     "jsonschema>=4.23,<5",
     "croniter>=2.0,<3",
     "grpcio>=1.70,<2",
-    "crewai-tools>=1.14.4,<2",
+    "crewai-tools>=1.14.5,<2",
     "pyjwt>=2.10,<3",
     "bcrypt>=4.3,<5",
     "email-validator>=2.2,<3",
@@ -38,6 +38,8 @@ dependencies = [
 constraint-dependencies = [
     "pillow>=12.2.0",  # CVE-2026-40192, CVE-2026-42308..42311 (transitive via crewai)
     "starlette>=1.0.1",  # PYSEC-2026-161 host header injection (transitive via fastapi)
+    # chromadb: CVE-2026-45829 (GHSA-f4j7-r4q5-qw2c) critical pre-auth RCE — NO FIX available as of 2026-05-30
+    # transitive via crewai; monitor https://github.com/chroma-core/chroma for patch release
 ]
 
 [project.optional-dependencies]

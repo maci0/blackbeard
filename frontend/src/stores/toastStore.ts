@@ -20,10 +20,12 @@ interface ToastState {
 let counter = 0
 
 const DURATIONS: Record<Toast['type'], number> = {
-  success: 5000,
+  success: 7000,
   error: 15000,
   info: 7000,
 }
+
+const MAX_VISIBLE = 5
 
 const timers = new Map<
   string,
@@ -51,7 +53,19 @@ function startTimer(id: string, duration: number) {
 
 function addToast(type: Toast['type'], message: string) {
   const id = `toast-${++counter}-${Date.now()}`
-  useToastStore.setState((s) => ({ toasts: [...s.toasts, { id, type, message }] }))
+  useToastStore.setState((s) => {
+    const updated = [...s.toasts, { id, type, message }]
+    if (updated.length > MAX_VISIBLE) {
+      const overflow = updated.slice(0, updated.length - MAX_VISIBLE)
+      for (const t of overflow) {
+        const timer = timers.get(t.id)
+        if (timer) clearTimeout(timer.timeoutId)
+        timers.delete(t.id)
+      }
+      return { toasts: updated.slice(-MAX_VISIBLE) }
+    }
+    return { toasts: updated }
+  })
   startTimer(id, DURATIONS[type])
 }
 

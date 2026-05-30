@@ -61,10 +61,6 @@ logger = logging.getLogger(__name__)
 
 _MAX_STREAM_POLLS = 400
 
-_HEARTBEAT_JSON: dict[str, str] = {
-    s.value: json.dumps({"status": s.value}) for s in ExecutionStatus
-}
-
 _SSE_ERROR_TOO_MANY = json.dumps({"detail": "Too many concurrent SSE streams"})
 _SSE_ERROR_INTERNAL = json.dumps({"detail": "Internal stream error"})
 
@@ -98,6 +94,11 @@ class _StreamEvent:
         self.kind = kind  # "status" | "heartbeat" | "event" | "error" | "timeout"
         self.data = data
         self.event_type = event_type  # only set for kind="event"
+
+
+_HEARTBEAT_EVENTS: dict[ExecutionStatus, _StreamEvent] = {
+    s: _StreamEvent("heartbeat", {"status": s.value}) for s in ExecutionStatus
+}
 
 
 async def _poll_execution(execution_id: UUID) -> AsyncGenerator[_StreamEvent]:
@@ -140,7 +141,7 @@ async def _poll_execution(execution_id: UUID) -> AsyncGenerator[_StreamEvent]:
                         )
                     last_status = current_status
                 else:
-                    yield _StreamEvent("heartbeat", {"status": current_status.value})
+                    yield _HEARTBEAT_EVENTS[current_status]
 
             skip_events = (
                 not prev_had_events
@@ -832,17 +833,24 @@ async def stream_execution(
     async def event_generator() -> AsyncGenerator[dict[str, str]]:
         async with sse_state.acquire_stream() as acquired:
             if not acquired:
+                logger.warning(
+                    "SSE stream rejected (capacity full): execution_id=%s active=%d/%d",
+                    execution_id,
+                    sse_state.get_active_count(),
+                    settings.max_concurrent_sse,
+                    extra={
+                        "event": "sse_stream_rejected",
+                        "execution_id": str(execution_id),
+                        "active_streams": sse_state.get_active_count(),
+                        "max_concurrent_sse": settings.max_concurrent_sse,
+                    },
+                )
                 yield {"event": "error", "data": _SSE_ERROR_TOO_MANY}
                 return
             try:
                 async for item in _poll_execution(execution_id):
                     if item.kind == "event":
                         yield {"event": item.event_type, "data": json.dumps(item.data)}
-                    elif item.kind == "heartbeat":
-                        yield {
-                            "event": "heartbeat",
-                            "data": _HEARTBEAT_JSON[str(item.data["status"])],
-                        }
                     elif item.kind in ("error", "timeout"):
                         yield {"event": "error", "data": json.dumps(item.data)}
                     else:

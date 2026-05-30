@@ -139,6 +139,9 @@ async def update_model(name: str, spec: dict[str, Any]) -> None:
             name,
             extra={"event": "litellm_update_readd_failed", "model_name": name},
         )
+        raise LiteLLMSyncError(
+            f"Model '{name}' deleted but re-add failed — model unavailable until next sync"
+        )
 
 
 async def delete_model(name: str) -> bool:

@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
@@ -14,12 +13,25 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
+from blackbeard.api import MUTATION_RATE_MSG as _MUTATION_RATE_MSG
+from blackbeard.api import smart_total as _smart_total
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import require_permission
-from blackbeard.models import AuditLog, Execution, Group, GroupMember, User, get_session
+from blackbeard.models import (
+    AuditLog,
+    Execution,
+    Group,
+    GroupMember,
+    ResourceVersion,
+    User,
+    get_session,
+)
 from blackbeard.models.user_schemas import UserResponse, user_response
+from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
 
 logger = logging.getLogger(__name__)
+
+_USER_SAFE_LOAD = (defer(User.password_hash), defer(User.api_key), defer(User.last_login_at))
 
 router = APIRouter(tags=["users"])
 
@@ -96,20 +108,6 @@ class GroupListResponse(BaseModel):
     has_more: bool = False
 
 
-async def _smart_total(
-    session: AsyncSession,
-    items: list[Any],
-    limit: int,
-    offset: int,
-    count_stmt: Any,
-) -> int:
-    """Derive total count without a query when possible."""
-    if len(items) < limit and (len(items) > 0 or offset == 0):
-        return offset + len(items)
-    result = await session.execute(count_stmt)
-    return int(result.scalar_one())
-
-
 def group_response(group: Group) -> GroupResponse:
     return GroupResponse(
         id=str(group.id),
@@ -163,11 +161,7 @@ async def list_users(
 ) -> UserListResponse:
     """List users with pagination (requires authentication)."""
     result = await session.execute(
-        select(User)
-        .options(defer(User.password_hash), defer(User.api_key), defer(User.last_login_at))
-        .order_by(User.created_at)
-        .limit(limit)
-        .offset(offset)
+        select(User).options(*_USER_SAFE_LOAD).order_by(User.created_at).limit(limit).offset(offset)
     )
     users = list(result.scalars().all())
     total = await _smart_total(
@@ -196,11 +190,7 @@ async def get_user(
     session: AsyncSession = Depends(get_session),
 ) -> UserResponse:
     """Get a user by ID."""
-    result = await session.execute(
-        select(User)
-        .where(User.id == user_id)
-        .options(defer(User.password_hash), defer(User.api_key), defer(User.last_login_at))
-    )
+    result = await session.execute(select(User).where(User.id == user_id).options(*_USER_SAFE_LOAD))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -214,6 +204,7 @@ async def get_user(
         401: {"description": "Authentication required"},
         403: {"description": "Cannot modify other users"},
         404: {"description": "User not found"},
+        429: {"description": "Too many mutation requests"},
     },
 )
 async def update_user(
@@ -224,13 +215,11 @@ async def update_user(
     session: AsyncSession = Depends(get_session),
 ) -> UserResponse:
     """Update a user (self-only — users can only modify their own profile)."""
+    check_rate_limit(mutation_limiter, current_user, _MUTATION_RATE_MSG)
     _require_self_only(current_user, user_id, "modify")
 
     result = await session.execute(
-        select(User)
-        .where(User.id == user_id)
-        .options(defer(User.password_hash), defer(User.api_key), defer(User.last_login_at))
-        .with_for_update()
+        select(User).where(User.id == user_id).options(*_USER_SAFE_LOAD).with_for_update()
     )
     user = result.scalar_one_or_none()
     if user is None:
@@ -264,6 +253,7 @@ async def update_user(
         401: {"description": "Authentication required"},
         403: {"description": "Cannot deactivate other users"},
         404: {"description": "User not found"},
+        429: {"description": "Too many mutation requests"},
     },
 )
 async def deactivate_user(
@@ -273,6 +263,7 @@ async def deactivate_user(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Deactivate a user (self-only soft delete)."""
+    check_rate_limit(mutation_limiter, current_user, _MUTATION_RATE_MSG)
     _require_self_only(current_user, user_id, "deactivate")
 
     result = await session.execute(select(User).where(User.id == user_id).with_for_update())
@@ -301,6 +292,16 @@ async def deactivate_user(
     # Scrub user identity from execution records (principal_chain may reference user).
     await session.execute(
         update(Execution).where(Execution.initiated_by == user.id).values(principal_chain=None)
+    )
+    # Scrub user identity from resource version history (changed_by may store
+    # user ID or legacy email).
+    await session.execute(
+        update(ResourceVersion)
+        .where(
+            (ResourceVersion.changed_by == str(user.id))
+            | (ResourceVersion.changed_by == original_email)
+        )
+        .values(changed_by=None)
     )
     await log_audit(
         session,
@@ -351,6 +352,7 @@ async def list_groups(
     responses={
         401: {"description": "Authentication required"},
         409: {"description": "Group name already exists"},
+        429: {"description": "Too many mutation requests"},
     },
 )
 async def create_group(
@@ -361,6 +363,7 @@ async def create_group(
     session: AsyncSession = Depends(get_session),
 ) -> GroupResponse:
     """Create a new group."""
+    check_rate_limit(mutation_limiter, current_user, _MUTATION_RATE_MSG)
     group = Group(name=data.name, description=data.description)
     try:
         async with session.begin_nested():
@@ -423,6 +426,7 @@ async def get_group(
     responses={
         401: {"description": "Authentication required"},
         404: {"description": "Group not found"},
+        429: {"description": "Too many mutation requests"},
     },
 )
 async def update_group(
@@ -433,6 +437,7 @@ async def update_group(
     session: AsyncSession = Depends(get_session),
 ) -> GroupResponse:
     """Update a group."""
+    check_rate_limit(mutation_limiter, current_user, _MUTATION_RATE_MSG)
     group = await _require_group(session, group_id, for_update=True)
 
     if "description" in data.model_fields_set:
@@ -468,6 +473,7 @@ async def update_group(
     responses={
         204: {"description": "Group deleted (or did not exist — idempotent)"},
         401: {"description": "Authentication required"},
+        429: {"description": "Too many mutation requests"},
     },
 )
 async def delete_group(
@@ -477,6 +483,7 @@ async def delete_group(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Delete a group. Idempotent."""
+    check_rate_limit(mutation_limiter, current_user, _MUTATION_RATE_MSG)
     result = await session.execute(select(Group).where(Group.id == group_id).with_for_update())
     group = result.scalar_one_or_none()
     if group is None:
@@ -541,7 +548,7 @@ async def list_group_members(
         select(User)
         .join(GroupMember, GroupMember.user_id == User.id)
         .where(GroupMember.group_id == group_id)
-        .options(defer(User.password_hash), defer(User.api_key), defer(User.last_login_at))
+        .options(*_USER_SAFE_LOAD)
         .order_by(User.email)
         .limit(limit)
         .offset(offset)
@@ -571,6 +578,7 @@ async def list_group_members(
         401: {"description": "Authentication required"},
         404: {"description": "Group or user not found"},
         409: {"description": "User is already a member of the group"},
+        429: {"description": "Too many mutation requests"},
     },
 )
 async def add_group_member(
@@ -582,15 +590,14 @@ async def add_group_member(
     session: AsyncSession = Depends(get_session),
 ) -> GroupMemberAddResponse:
     """Add a user to a group."""
+    check_rate_limit(mutation_limiter, current_user, _MUTATION_RATE_MSG)
     target_user_id = data.user_id
 
     group = await _require_group(session, group_id)
 
     # Verify user exists
     user_result = await session.execute(
-        select(User)
-        .where(User.id == target_user_id)
-        .options(defer(User.password_hash), defer(User.api_key), defer(User.last_login_at))
+        select(User).where(User.id == target_user_id).options(*_USER_SAFE_LOAD)
     )
     target_user = user_result.scalar_one_or_none()
     if target_user is None or not target_user.is_active:
@@ -641,6 +648,7 @@ async def add_group_member(
         204: {"description": "Membership removed (or did not exist — idempotent)"},
         401: {"description": "Authentication required"},
         404: {"description": "Group not found"},
+        429: {"description": "Too many mutation requests"},
     },
 )
 async def remove_group_member(
@@ -651,6 +659,7 @@ async def remove_group_member(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Remove a user from a group. Idempotent."""
+    check_rate_limit(mutation_limiter, current_user, _MUTATION_RATE_MSG)
     group = await _require_group(session, group_id)
 
     result = await session.execute(

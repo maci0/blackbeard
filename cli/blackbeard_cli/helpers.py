@@ -29,14 +29,27 @@ STATUS_COLORS: dict[str, str] = {
 
 TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
 
+
+def _merge_json_flag(ctx: click.Context, _param: click.Parameter, value: bool) -> bool:
+    """Auto-merge parent and local ``--json`` into ``ctx.obj["json"]``."""
+    ctx.ensure_object(dict)
+    ctx.obj["json"] = ctx.obj.get("json", False) or value
+    return value
+
+
 json_opt = click.option(
-    "--json", "-j", "output_json", is_flag=True, default=False, help="Output as JSON for scripting"
+    "--json",
+    "-j",
+    "output_json",
+    is_flag=True,
+    default=False,
+    help="Output as JSON for scripting",
+    callback=_merge_json_flag,
+    expose_value=False,
 )
 
 
 class HelpCommand(click.Command):
-    """Click Command with -h/--help enabled by default."""
-
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         cs = dict(kwargs.pop("context_settings", None) or {})
         cs.setdefault("help_option_names", ["-h", "--help"])
@@ -45,7 +58,6 @@ class HelpCommand(click.Command):
 
 
 def print_json(data: object, *, compact: bool = False) -> None:
-    """Print data as JSON to stdout."""
     if compact:
         out.print(
             json.dumps(data, default=str, ensure_ascii=False, separators=(",", ":")),
@@ -56,7 +68,7 @@ def print_json(data: object, *, compact: bool = False) -> None:
 
 
 def extract_detail(response: httpx.Response) -> str:
-    """Safely extract error detail from an HTTP response."""
+    """Extract error detail from response JSON, falling back to raw text."""
     try:
         body = response.json()
         if isinstance(body, dict):
@@ -70,7 +82,7 @@ def extract_detail(response: httpx.Response) -> str:
 
 
 def handle_request_error(server: str, exc: httpx.RequestError) -> NoReturn:
-    """Handle network-level errors with helpful suggestions."""
+    """Print network error with suggestions and exit(1)."""
     console.print(
         f"[red bold]Error:[/] Cannot reach server at [bold]{escape(server)}[/]\n"
         f"  {escape(str(exc))}\n\n"
@@ -82,7 +94,7 @@ def handle_request_error(server: str, exc: httpx.RequestError) -> NoReturn:
 
 
 def handle_http_error(response: httpx.Response) -> NoReturn:
-    """Handle HTTP errors with status-specific hints."""
+    """Print HTTP error with status-specific hints and exit(1)."""
     detail = extract_detail(response)
     method = response.request.method
     path = response.request.url.path
@@ -96,7 +108,7 @@ def handle_http_error(response: httpx.Response) -> NoReturn:
     elif response.status_code == 403:
         console.print("[dim]Hint: Authenticated but lacking permission for this action[/]")
     elif response.status_code == 404:
-        console.print("[dim]Hint: Verify the resource name and namespace (-n)[/]")
+        console.print("[dim]Hint: Verify the resource name and project (-n)[/]")
     elif response.status_code == 409:
         console.print("[dim]Hint: Resource version conflict — re-fetch and retry[/]")
     elif response.status_code == 413:
@@ -219,5 +231,4 @@ def extract_items(data: Any) -> list[Any]:
 
 
 def extract_total(data: Any, items: list[Any]) -> int:
-    """Return total count from a list-or-paginated API response."""
     return len(items) if isinstance(data, list) else data.get("total", len(items))

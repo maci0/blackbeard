@@ -74,6 +74,7 @@ export default memo(function StickyNoteNode({ id, data, selected }: NodeProps) {
           value={text}
           onChange={handleChange}
           placeholder="Type a note..."
+          aria-label="Note content"
           rows={2}
           className={cn(
             'w-full resize-none bg-transparent text-xs leading-relaxed placeholder:opacity-40 focus-visible:outline-none',

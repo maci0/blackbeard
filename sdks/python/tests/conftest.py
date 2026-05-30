@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import deque
 from collections.abc import Generator
 from typing import Any
 
@@ -31,7 +32,7 @@ class MockTransport(httpx.BaseTransport):
     def __init__(self) -> None:
         self.requests: list[httpx.Request] = []
         self.responses: list[httpx.Response] = []
-        self._response_queue: list[httpx.Response] = []
+        self._response_queue: deque[httpx.Response] = deque()
 
     def queue(self, resp: httpx.Response) -> None:
         self._response_queue.append(resp)
@@ -42,7 +43,7 @@ class MockTransport(httpx.BaseTransport):
             f"MockTransport: no queued response for {request.method} {request.url} "
             f"(request #{len(self.requests)}). Queue a response with transport.queue()."
         )
-        resp = self._response_queue.pop(0)
+        resp = self._response_queue.popleft()
         resp.request = request
         return resp
 

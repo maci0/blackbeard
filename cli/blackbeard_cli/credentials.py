@@ -62,6 +62,7 @@ def save_credentials(
 ) -> None:
     """Write credentials to disk with 0600 permissions."""
     _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    os.chmod(_CONFIG_DIR, 0o700)
 
     data: dict[str, Any] = {
         "server": server,

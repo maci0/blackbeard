@@ -29,7 +29,6 @@ export function CursorOverlay({ cursors }: { cursors: RemoteCursor[] }) {
             willChange: 'transform',
           }}
         >
-          {/* Arrow cursor SVG */}
           <svg
             width="16"
             height="16"
@@ -39,7 +38,6 @@ export function CursorOverlay({ cursors }: { cursors: RemoteCursor[] }) {
           >
             <path d="M0 0 L0 14 L4 10 L8 16 L10 15 L6 9 L12 9 Z" />
           </svg>
-          {/* Name label */}
           <span
             className="-mt-1 ml-4 inline-block max-w-[120px] truncate whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-medium leading-tight text-white shadow-sm"
             style={{ backgroundColor: cursor.color }}

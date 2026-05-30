@@ -43,6 +43,7 @@ spec:
               add:
                 - SETGID
                 - SETUID
+          terminationMessagePolicy: FallbackToLogsOnError
           ports:
             - name: valkey
               containerPort: 6379

@@ -34,21 +34,20 @@ export async function apiFetch<T>(
     })
   } catch (err) {
     if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-      const timeoutError = new BlackbeardApiError(0, `Request timed out after ${timeout}ms`)
-      timeoutError.cause = err
-      throw timeoutError
+      throw new BlackbeardApiError(0, `${method} ${path}: request timed out after ${timeout}ms`, undefined, { cause: err })
     }
-    const networkError = new BlackbeardApiError(
+    throw new BlackbeardApiError(
       0,
-      err instanceof Error ? err.message : 'Network request failed',
+      `${method} ${path}: ${err instanceof Error ? err.message : 'network request failed'}`,
+      undefined,
+      { cause: err },
     )
-    networkError.cause = err
-    throw networkError
   }
 
   if (!response.ok) {
-    const errorBody = (await response.json().catch(() => ({ detail: response.statusText }))) as Record<string, unknown>
-    const detail = typeof errorBody.detail === 'string' ? errorBody.detail : response.statusText
+    const fallback = response.statusText || `HTTP ${response.status}`
+    const errorBody = (await response.json().catch(() => ({}))) as Record<string, unknown>
+    const detail = (typeof errorBody.detail === 'string' && errorBody.detail) ? errorBody.detail : fallback
     throw new BlackbeardApiError(response.status, detail, errorBody)
   }
 

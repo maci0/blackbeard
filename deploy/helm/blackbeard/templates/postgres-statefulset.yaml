@@ -46,6 +46,7 @@ spec:
                 - FOWNER
                 - SETGID
                 - SETUID
+          terminationMessagePolicy: FallbackToLogsOnError
           ports:
             - name: postgres
               containerPort: 5432

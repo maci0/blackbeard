@@ -142,6 +142,7 @@ async def _resolve_model_name(
                 Resource.kind == ResourceKind.LLM_CONNECTION,
                 Resource.project == project,
             )
+            .order_by(Resource.name)
             .limit(1)
         )
         resource = result.scalar_one_or_none()

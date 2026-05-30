@@ -10,57 +10,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.models.audit import AuditLog
-from tests.conftest import API_KEY_HEADER
+from tests.conftest import (
+    API_KEY_HEADER,
+    _agent_payload,
+    _bearer,
+    _login_payload,
+    _register_user,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-
-def _register_payload(
-    email: str = "audit@example.com",
-    password: str = "securepass123",
-    display_name: str = "Audit User",
-) -> dict:
-    return {"email": email, "password": password, "display_name": display_name}
-
-
-def _login_payload(
-    email: str = "audit@example.com",
-    password: str = "securepass123",
-) -> dict:
-    return {"email": email, "password": password}
-
-
-async def _register_user(
-    client: AsyncClient,
-    email: str = "audit@example.com",
-    password: str = "securepass123",
-    display_name: str = "Audit User",
-) -> dict:
-    resp = await client.post(
-        "/api/v1/auth/register",
-        json=_register_payload(email, password, display_name),
-    )
-    assert resp.status_code == 201, resp.text
-    return resp.json()
-
-
-def _bearer(token: str) -> dict:
-    return {"Authorization": f"Bearer {token}"}
-
-
-def _agent_payload(name: str = "audit-agent") -> dict:
-    return {
-        "apiVersion": "blackbeard/v1",
-        "kind": "Agent",
-        "metadata": {"name": name, "project": "default"},
-        "spec": {
-            "role": "Research Analyst",
-            "goal": "Find information",
-            "backstory": "Years of experience",
-        },
-    }
+_AUDIT_EMAIL = "audit@example.com"
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +143,7 @@ async def test_audit_logs_endpoint_requires_auth(client: AsyncClient):
 
 async def test_audit_logs_endpoint_returns_entries(client: AsyncClient):
     """Audit log endpoint returns entries after actions are performed."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_AUDIT_EMAIL)
     token = data["access_token"]
 
     # Registration itself creates an audit entry; query for it
@@ -201,11 +163,11 @@ async def test_audit_logs_endpoint_returns_entries(client: AsyncClient):
 
 async def test_audit_logs_filter_by_action(client: AsyncClient):
     """Audit log endpoint filters by action."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_AUDIT_EMAIL)
     token = data["access_token"]
 
     # Login creates a user_login audit entry
-    await client.post("/api/v1/auth/login", json=_login_payload())
+    await client.post("/api/v1/auth/login", json=_login_payload(email=_AUDIT_EMAIL))
 
     resp = await client.get(
         "/api/v1/audit-logs?action=user_login",
@@ -220,7 +182,7 @@ async def test_audit_logs_filter_by_action(client: AsyncClient):
 
 async def test_audit_logs_filter_by_actor_id(client: AsyncClient):
     """Audit log endpoint filters by actor_id."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_AUDIT_EMAIL)
     token = data["access_token"]
     user_id = data["user"]["id"]
 
@@ -237,13 +199,13 @@ async def test_audit_logs_filter_by_actor_id(client: AsyncClient):
 
 async def test_audit_logs_filter_by_resource_type(client: AsyncClient):
     """Audit log endpoint filters by resource_type."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_AUDIT_EMAIL)
     token = data["access_token"]
 
     # Create a resource to generate a resource_created audit entry
     await client.post(
         "/api/v1/agents",
-        json=_agent_payload(),
+        json=_agent_payload("audit-agent"),
         headers=_bearer(token),
     )
 
@@ -260,7 +222,7 @@ async def test_audit_logs_filter_by_resource_type(client: AsyncClient):
 
 async def test_audit_logs_pagination(client: AsyncClient):
     """Audit log endpoint supports pagination."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_AUDIT_EMAIL)
     token = data["access_token"]
 
     # Create several resources to generate multiple audit entries
@@ -299,7 +261,7 @@ async def test_audit_logs_pagination(client: AsyncClient):
 
 async def test_audit_logs_empty_result(client: AsyncClient):
     """Audit log endpoint returns empty list for unmatched filter."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_AUDIT_EMAIL)
     token = data["access_token"]
 
     resp = await client.get(
@@ -320,7 +282,7 @@ async def test_audit_logs_empty_result(client: AsyncClient):
 
 async def test_register_creates_audit_entry(client: AsyncClient, db_session: AsyncSession):
     """Registration creates a user_registered audit entry."""
-    await _register_user(client)
+    await _register_user(client, email=_AUDIT_EMAIL)
 
     result = await db_session.execute(select(AuditLog).where(AuditLog.action == "user_registered"))
     entry = result.scalar_one()
@@ -331,8 +293,8 @@ async def test_register_creates_audit_entry(client: AsyncClient, db_session: Asy
 
 async def test_login_creates_audit_entry(client: AsyncClient, db_session: AsyncSession):
     """Successful login creates a user_login audit entry."""
-    await _register_user(client)
-    await client.post("/api/v1/auth/login", json=_login_payload())
+    await _register_user(client, email=_AUDIT_EMAIL)
+    await client.post("/api/v1/auth/login", json=_login_payload(email=_AUDIT_EMAIL))
 
     result = await db_session.execute(select(AuditLog).where(AuditLog.action == "user_login"))
     entry = result.scalar_one()
@@ -342,7 +304,7 @@ async def test_login_creates_audit_entry(client: AsyncClient, db_session: AsyncS
 
 async def test_login_failure_creates_audit_entry(client: AsyncClient, db_session: AsyncSession):
     """Failed login creates a login_failed audit entry."""
-    await _register_user(client)
+    await _register_user(client, email=_AUDIT_EMAIL)
     await client.post(
         "/api/v1/auth/login",
         json=_login_payload(password="wrongpassword1"),
@@ -364,7 +326,7 @@ async def test_create_resource_creates_audit_entry(client: AsyncClient, db_sessi
     """Creating a resource creates a resource_created audit entry."""
     resp = await client.post(
         "/api/v1/agents",
-        json=_agent_payload(),
+        json=_agent_payload("audit-agent"),
         headers=API_KEY_HEADER,
     )
     assert resp.status_code == 201
@@ -379,7 +341,7 @@ async def test_update_resource_creates_audit_entry(client: AsyncClient, db_sessi
     """Updating a resource creates a resource_updated audit entry."""
     await client.post(
         "/api/v1/agents",
-        json=_agent_payload(),
+        json=_agent_payload("audit-agent"),
         headers=API_KEY_HEADER,
     )
     update_data = {
@@ -407,7 +369,7 @@ async def test_delete_resource_creates_audit_entry(client: AsyncClient, db_sessi
     """Deleting a resource creates a resource_deleted audit entry."""
     await client.post(
         "/api/v1/agents",
-        json=_agent_payload(),
+        json=_agent_payload("audit-agent"),
         headers=API_KEY_HEADER,
     )
     resp = await client.delete(
@@ -429,7 +391,7 @@ async def test_delete_resource_creates_audit_entry(client: AsyncClient, db_sessi
 
 async def test_deactivate_user_creates_audit_entry(client: AsyncClient, db_session: AsyncSession):
     """Deactivating a user creates a user_deactivated audit entry."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_AUDIT_EMAIL)
     user_id = data["user"]["id"]
     token = data["access_token"]
 
@@ -452,7 +414,7 @@ async def test_deactivate_user_creates_audit_entry(client: AsyncClient, db_sessi
 
 async def test_create_group_creates_audit_entry(client: AsyncClient, db_session: AsyncSession):
     """Creating a group creates a group_created audit entry."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_AUDIT_EMAIL)
     token = data["access_token"]
 
     resp = await client.post(
@@ -470,7 +432,7 @@ async def test_create_group_creates_audit_entry(client: AsyncClient, db_session:
 
 async def test_delete_group_creates_audit_entry(client: AsyncClient, db_session: AsyncSession):
     """Deleting a group creates a group_deleted audit entry."""
-    data = await _register_user(client)
+    data = await _register_user(client, email=_AUDIT_EMAIL)
     token = data["access_token"]
 
     resp = await client.post(

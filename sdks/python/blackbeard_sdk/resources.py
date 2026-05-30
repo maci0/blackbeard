@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
-import httpx
-
 from blackbeard_sdk.errors import BlackbeardApiError
+
+if TYPE_CHECKING:
+    import httpx
 
 _DictList = list[dict[str, Any]]
 
@@ -185,6 +186,80 @@ class ResourceMixin:
                     exc.body,
                 ) from exc
         return results
+
+    def list_versions(
+        self,
+        kind: str,
+        name: str,
+        project: str = "default",
+    ) -> list[dict[str, Any]]:
+        """List version snapshots for a resource.
+
+        Args:
+            kind: Resource kind or plural.
+            name: Resource name.
+            project: Resource project.
+
+        Returns:
+            List of version summary dicts (version, changed_by, created_at, changed_keys).
+        """
+        plural = _kind_plural(kind)
+        return self._send(
+            "GET",
+            f"/api/v1/{plural}/{quote(name, safe='')}/versions",
+            params={"project": project},
+        ).json()["versions"]
+
+    def get_version(
+        self,
+        kind: str,
+        name: str,
+        version: int,
+        project: str = "default",
+    ) -> dict[str, Any]:
+        """Get the full snapshot of a resource at a specific version.
+
+        Args:
+            kind: Resource kind or plural.
+            name: Resource name.
+            version: Version number (1-based).
+            project: Resource project.
+
+        Returns:
+            Version detail dict with spec, labels, changed_by, created_at.
+        """
+        plural = _kind_plural(kind)
+        return self._send(
+            "GET",
+            f"/api/v1/{plural}/{quote(name, safe='')}/versions/{version}",
+            params={"project": project},
+        ).json()
+
+    def rollback(
+        self,
+        kind: str,
+        name: str,
+        to_version: int,
+        project: str = "default",
+    ) -> dict[str, Any]:
+        """Rollback a resource to a previous version.
+
+        Args:
+            kind: Resource kind or plural.
+            name: Resource name.
+            to_version: Version number to restore.
+            project: Resource project.
+
+        Returns:
+            Updated resource dict.
+        """
+        plural = _kind_plural(kind)
+        return self._send(
+            "POST",
+            f"/api/v1/{plural}/{quote(name, safe='')}/rollback",
+            params={"project": project},
+            json={"to_version": to_version},
+        ).json()
 
     def export_all(self, project: str = "default") -> str:
         """Export all resources in a project as a YAML string.

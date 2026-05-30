@@ -20,14 +20,12 @@ const NODE_SPEC_FIELDS: Record<string, readonly string[]> = {
   pii: ['type', 'pii_entities', 'pii_action', 'backend', 'model'],
 }
 
-/** Maps node type to resource kind. Most types use capitalized node type,
- *  but PII nodes map to the Guardrail resource kind. */
+/** PII nodes map to Guardrail kind; all others use capitalized node type. */
 const NODE_KIND: Record<string, string> = {
   pii: 'Guardrail',
 }
 
-/** Maps internal node data keys to YAML spec field names for types that
- *  differ between canvas representation and persisted resource spec. */
+/** Canvas data keys → YAML spec field names where they differ. */
 const FIELD_REMAP: Record<string, Record<string, string>> = {
   pii: { entities: 'pii_entities', action: 'pii_action' },
 }

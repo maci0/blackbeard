@@ -352,6 +352,7 @@ export default function Settings() {
           title="Rotate API Key"
           description="This will invalidate your current API key and generate a new one. Any integrations using the old key will stop working."
           confirmLabel="Rotate Key"
+          confirmVariant="destructive"
           onConfirm={handleRotateKey}
           loading={keyLoading}
         />
@@ -525,7 +526,7 @@ export default function Settings() {
                   type="button"
                   onClick={cycleTheme}
                   className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={`Theme: ${themePreference}. Click to cycle.`}
+                  aria-label={`Theme: ${themePreference}. Switch to ${themePreference === 'light' ? 'dark' : themePreference === 'dark' ? 'system' : 'light'}.`}
                 >
                   {themePreference === 'dark' ? (
                     <Moon className="h-3.5 w-3.5" />

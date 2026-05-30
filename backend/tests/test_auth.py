@@ -10,46 +10,13 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import API_KEY_HEADER
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _register_payload(
-    email: str = "test@example.com",
-    password: str = "securepass123",
-    display_name: str = "Test User",
-) -> dict:
-    return {"email": email, "password": password, "display_name": display_name}
-
-
-def _login_payload(
-    email: str = "test@example.com",
-    password: str = "securepass123",
-) -> dict:
-    return {"email": email, "password": password}
-
-
-async def _register_user(
-    client: AsyncClient,
-    email: str = "test@example.com",
-    password: str = "securepass123",
-    display_name: str = "Test User",
-) -> dict:
-    """Register a user and return the response data."""
-    resp = await client.post(
-        "/api/v1/auth/register",
-        json=_register_payload(email, password, display_name),
-    )
-    assert resp.status_code == 201, resp.text
-    return resp.json()
-
-
-def _bearer(token: str) -> dict:
-    return {"Authorization": f"Bearer {token}"}
-
+from tests.conftest import (
+    API_KEY_HEADER,
+    _bearer,
+    _login_payload,
+    _register_payload,
+    _register_user,
+)
 
 # ---------------------------------------------------------------------------
 # Auth endpoint availability (no API key required)
@@ -97,9 +64,9 @@ async def test_register_success(client: AsyncClient):
     assert "access_token" in data
     assert "refresh_token" in data
     assert isinstance(data["access_token"], str), "access_token must be a string"
-    assert len(data["access_token"]) > 0, "access_token must be non-empty"
+    assert data["access_token"].count(".") == 2, "access_token must be a valid JWT (header.payload.signature)"
     assert isinstance(data["refresh_token"], str), "refresh_token must be a string"
-    assert len(data["refresh_token"]) > 0, "refresh_token must be non-empty"
+    assert data["refresh_token"].count(".") == 2, "refresh_token must be a valid JWT (header.payload.signature)"
     assert data["access_token"] != data["refresh_token"], "Access and refresh tokens must differ"
     user = data["user"]
     assert user["email"] == "test@example.com"
@@ -159,9 +126,9 @@ async def test_login_success(client: AsyncClient):
     assert "access_token" in data
     assert "refresh_token" in data
     assert isinstance(data["access_token"], str)
-    assert len(data["access_token"]) > 0
+    assert data["access_token"].count(".") == 2, "access_token must be a valid JWT"
     assert isinstance(data["refresh_token"], str)
-    assert len(data["refresh_token"]) > 0
+    assert data["refresh_token"].count(".") == 2, "refresh_token must be a valid JWT"
     assert data["user"]["email"] == "test@example.com"
     assert "id" in data["user"], "Login response user should include an id"
     assert data["user"]["is_active"] is True
@@ -230,7 +197,7 @@ async def test_refresh_success(client: AsyncClient):
     refresh_data = resp.json()
     assert "access_token" in refresh_data
     assert isinstance(refresh_data["access_token"], str), "access_token must be a string"
-    assert len(refresh_data["access_token"]) > 0, "access_token must be non-empty"
+    assert refresh_data["access_token"].count(".") == 2, "access_token must be a valid JWT (header.payload.signature)"
     assert refresh_data["access_token"] != data["refresh_token"], (
         "Refreshed access token should differ from the refresh token used"
     )

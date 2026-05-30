@@ -39,19 +39,25 @@ def bearer_401(detail: str) -> HTTPException:
     return HTTPException(status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"})
 
 
-async def _resolve_bearer_user(token: str, session: AsyncSession) -> User:
+async def _resolve_bearer_user(
+    token: str, session: AsyncSession, *, cached_payload: dict[str, Any] | None = None
+) -> User:
     """Decode a JWT Bearer token and return the corresponding active User.
 
     Raises HTTPException(401) on any validation failure.
+    When *cached_payload* is provided (from middleware), skips redundant decode.
     """
-    try:
-        payload = decode_access_token(token)
-    except pyjwt.ExpiredSignatureError:
-        logger.info("JWT expired", extra={"event": "jwt_expired"})
-        raise bearer_401("Token has expired") from None
-    except pyjwt.InvalidTokenError:
-        logger.warning("JWT invalid", extra={"event": "jwt_invalid"})
-        raise bearer_401("Invalid token") from None
+    if cached_payload is not None:
+        payload = cached_payload
+    else:
+        try:
+            payload = decode_access_token(token)
+        except pyjwt.ExpiredSignatureError:
+            logger.info("JWT expired", extra={"event": "jwt_expired"})
+            raise bearer_401("Token has expired") from None
+        except pyjwt.InvalidTokenError:
+            logger.warning("JWT invalid", extra={"event": "jwt_invalid"})
+            raise bearer_401("Invalid token") from None
 
     user_id = payload.get("sub")
     if not user_id:
@@ -87,7 +93,8 @@ async def get_current_user(
     """
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
-        return await _resolve_bearer_user(auth_header[7:], session)
+        cached = getattr(request.state, "jwt_payload", None)
+        return await _resolve_bearer_user(auth_header[7:], session, cached_payload=cached)
 
     # Try resolving the X-API-Key to a user (optional — API key may belong to
     # the global system key rather than a user-specific key).
@@ -141,7 +148,8 @@ async def require_jwt_user(
         )
         raise bearer_401("JWT Bearer token required. API key authentication is not accepted.")
 
-    return await _resolve_bearer_user(auth_header[7:], session)
+    cached = getattr(request.state, "jwt_payload", None)
+    return await _resolve_bearer_user(auth_header[7:], session, cached_payload=cached)
 
 
 def require_permission(

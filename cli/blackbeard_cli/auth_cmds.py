@@ -54,9 +54,8 @@ Examples:
 )
 @json_opt
 @click.pass_context
-def login(ctx: click.Context, email: str, password: str, output_json: bool = False) -> None:
+def login(ctx: click.Context, email: str, password: str) -> None:
     """Log in and store credentials locally."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
 
     try:
@@ -107,9 +106,8 @@ Examples:
 )
 @json_opt
 @click.pass_context
-def logout(ctx: click.Context, output_json: bool = False) -> None:
+def logout(ctx: click.Context) -> None:
     """Clear stored credentials."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     existed = clear_credentials()
 
     if ctx.obj["json"]:
@@ -132,9 +130,8 @@ Examples:
 )
 @json_opt
 @click.pass_context
-def whoami(ctx: click.Context, output_json: bool = False) -> None:
+def whoami(ctx: click.Context) -> None:
     """Show the currently authenticated user."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
@@ -208,10 +205,8 @@ def register(
     email: str,
     password: str,
     display_name: str,
-    output_json: bool = False,
 ) -> None:
     """Register a new user account."""
-    ctx.obj["json"] = ctx.obj.get("json", False) or output_json
     server = ctx.obj["server"]
 
     try:

@@ -85,6 +85,7 @@ _CREW_RELEVANT_KINDS = (
     ResourceKind.TOOL,
     ResourceKind.KNOWLEDGE_SOURCE,
     ResourceKind.AGENT_POLICY,
+    ResourceKind.GUARDRAIL,
     ResourceKind.FLOW,
 )
 
@@ -107,9 +108,7 @@ def _sanitize_error(error_msg: str) -> str:
 _executor: ThreadPoolExecutor | None = None
 _executor_lock = threading.Lock()
 
-# Shared database engine and session factory for background executor threads.
-# Each thread still creates its own event loop, but they all share one
-# connection pool instead of each thread creating a separate engine.
+# Shared DB engine for background executor threads (one pool, not per-thread).
 _bg_engine: AsyncEngine | None = None
 _bg_session_factory: async_sessionmaker[AsyncSession] | None = None
 _bg_engine_lock = threading.Lock()
@@ -218,9 +217,9 @@ def shutdown_executor(wait: bool = False) -> None:
             _executor = None
     logger.info("Execution thread pool shut down", extra={"event": "executor_shutdown"})
 
-    # Running threads use the shared bg engine — wait for them to finish
-    # before disposing it.  The second shutdown(wait=True) only joins
-    # threads; pending futures were already cancelled above.
+    # When wait=False, the first shutdown cancelled pending futures but
+    # didn't join running threads.  Block here so the bg engine isn't
+    # disposed while threads still hold sessions.
     if executor is not None and not wait:
         executor.shutdown(wait=True)
 
@@ -278,6 +277,7 @@ async def _load_crew_resources(
         .where(Resource.project == project)
         .where(Resource.kind.in_(_CREW_RELEVANT_KINDS))
         .options(load_only(Resource.kind, Resource.name, Resource.project, Resource.spec))
+        .order_by(Resource.kind, Resource.name)
         .limit(_NAMESPACE_RESOURCE_LIMIT + 1)
     )
 
@@ -460,7 +460,10 @@ async def _submit_execution(
     def _on_thread_error(fut: asyncio.Future[None]) -> None:
         if fut.cancelled():
             return
-        exc = fut.exception()
+        try:
+            exc = fut.exception()
+        except Exception:
+            return
         if exc is not None:
             logger.error(
                 "Execution %s thread failed: %s",
@@ -754,8 +757,11 @@ def _thread_session_factory() -> async_sessionmaker[AsyncSession]:
     handles cleanup at application shutdown.
     """
     _get_bg_engine()
-    assert _bg_session_factory is not None
-    return _bg_session_factory
+    with _bg_engine_lock:
+        factory = _bg_session_factory
+    if factory is None:
+        raise RuntimeError("Background DB session factory unavailable")
+    return factory
 
 
 def _resolve_eval_llm(
@@ -1530,6 +1536,7 @@ async def cleanup_orphaned_keys() -> int:
                 Execution.status.in_([ExecutionStatus.QUEUED, ExecutionStatus.RUNNING]),
                 Execution.litellm_key.isnot(None),
             )
+            .order_by(Execution.created_at)
             .limit(1000)
         )
         stale_list = list(stale.scalars())

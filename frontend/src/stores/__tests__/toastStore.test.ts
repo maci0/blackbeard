@@ -105,15 +105,15 @@ describe('toastStore', () => {
   })
 
   describe('auto-dismiss', () => {
-    it('auto-dismisses success toast after 5 seconds + exit animation', () => {
+    it('auto-dismisses success toast after 7 seconds + exit animation', () => {
       useToastStore.getState().success('Temporary')
 
       expect(useToastStore.getState().toasts).toHaveLength(1)
 
-      vi.advanceTimersByTime(4999)
+      vi.advanceTimersByTime(6999)
       expect(useToastStore.getState().toasts).toHaveLength(1)
 
-      // Timer fires at 5000ms, sets dismissing=true
+      // Timer fires at 7000ms, sets dismissing=true
       vi.advanceTimersByTime(1)
       expect(useToastStore.getState().toasts[0]?.dismissing).toBe(true)
 
@@ -173,8 +173,8 @@ describe('toastStore', () => {
 
       useToastStore.getState().resume(id)
 
-      // ~3000ms remaining (5000 - 2000)
-      vi.advanceTimersByTime(2999)
+      // ~5000ms remaining (7000 - 2000)
+      vi.advanceTimersByTime(4999)
       expect(useToastStore.getState().toasts).toHaveLength(1)
 
       // Timer fires, sets dismissing

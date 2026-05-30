@@ -3,11 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import { api } from '@/api/client'
 import type { Resource } from '@/lib/types'
-
-interface CrewSettings {
-  onErrorCrew: string
-  onErrorAction: string
-}
+import type { CrewSettings } from '@/stores/studioStore'
 
 interface CrewSettingsDialogProps {
   open: boolean

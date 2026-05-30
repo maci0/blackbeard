@@ -88,6 +88,11 @@ from blackbeard.models.resource import Resource
 API_KEY_HEADER = {"X-API-Key": "change-me-in-production"}
 
 
+def _bearer(token: str) -> dict:
+    """Build Authorization header from a JWT token."""
+    return {"Authorization": f"Bearer {token}"}
+
+
 def has_validation_error(
     errors: list,
     field_contains: str = "",
@@ -163,6 +168,21 @@ def _clear_rate_limit_state() -> None:
 
 
 @pytest.fixture
+def _clean_test_http_clients():
+    """Ensure test-injected entries are removed from shared client dicts."""
+    from blackbeard.http_client import _clients, _lock, _sync_clients
+
+    yield
+    with _lock:
+        for k in list(_clients):
+            if k.startswith("_test"):
+                _clients.pop(k, None)
+        for k in list(_sync_clients):
+            if k.startswith("_test"):
+                _sync_clients.pop(k, None)
+
+
+@pytest.fixture
 async def client(db_session: AsyncSession):
     """HTTP test client wired to the in-memory SQLite session."""
 
@@ -195,6 +215,36 @@ def make_resource(kind: ResourceKind, name: str, spec: dict) -> Resource:
 
 def _resource_map(*resources: Resource) -> dict[str, Resource]:
     return {f"{r.kind.value}/{r.name}": r for r in resources}
+
+
+def _register_payload(
+    email: str = "test@example.com",
+    password: str = "securepass123",
+    display_name: str = "Test User",
+) -> dict:
+    return {"email": email, "password": password, "display_name": display_name}
+
+
+def _login_payload(
+    email: str = "test@example.com",
+    password: str = "securepass123",
+) -> dict:
+    return {"email": email, "password": password}
+
+
+async def _register_user(
+    client: AsyncClient,
+    email: str = "test@example.com",
+    password: str = "securepass123",
+    display_name: str = "Test User",
+) -> dict:
+    """Register a user and return the response data."""
+    resp = await client.post(
+        "/api/v1/auth/register",
+        json=_register_payload(email, password, display_name),
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()
 
 
 def _agent_payload(name: str = "researcher") -> dict:

@@ -197,7 +197,10 @@ class Authorizer:
     ) -> list[dict[str, Any]]:
         """Find all RoleBinding specs where the subject matches."""
         result = await self._session.execute(
-            select(Resource.spec).where(Resource.kind == ResourceKind.ROLE_BINDING).limit(1000)
+            select(Resource.spec)
+            .where(Resource.kind == ResourceKind.ROLE_BINDING)
+            .order_by(Resource.name)
+            .limit(1000)
         )
         rows = result.scalars().all()
         matching: list[dict[str, Any]] = []

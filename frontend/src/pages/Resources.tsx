@@ -886,7 +886,7 @@ export default function Resources() {
                   {submitting && (
                     <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
                   )}
-                  Create
+                  Create Resource
                 </button>
               </div>
             </form>
@@ -955,7 +955,7 @@ export default function Resources() {
                   {pasteImporting && (
                     <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
                   )}
-                  Import
+                  Import YAML
                 </button>
               </div>
             </div>

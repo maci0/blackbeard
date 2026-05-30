@@ -94,13 +94,15 @@ class InMemoryRateLimiter:
 
     Thread-safe.  Tracks request timestamps per key (e.g. user ID) and
     rejects requests that exceed ``max_requests`` within
-    ``window_seconds``.  Stale keys are pruned on every ``check()`` call
-    to prevent unbounded memory growth.
+    ``window_seconds``.  Stale entries are pruned on every ``check()``
+    call, and the oldest keys are evicted when the total exceeds
+    ``_MAX_TRACKED_KEYS`` to prevent unbounded memory growth.
     """
 
-    def __init__(self, max_requests: int, window_seconds: int) -> None:
+    def __init__(self, max_requests: int, window_seconds: int, *, name: str = "") -> None:
         self.max_requests = max_requests
         self.window_seconds = window_seconds
+        self.name = name
         self._buckets: collections.OrderedDict[str, collections.deque[float]] = (
             collections.OrderedDict()
         )
@@ -133,22 +135,51 @@ class InMemoryRateLimiter:
 
 
 # Pre-configured limiters for API endpoints
-mutation_limiter = InMemoryRateLimiter(max_requests=100, window_seconds=60)
-execution_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60)
-marketplace_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=60)
-copilot_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60)
-chat_limiter = InMemoryRateLimiter(max_requests=30, window_seconds=60)
-registration_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=3600)
+mutation_limiter = InMemoryRateLimiter(max_requests=100, window_seconds=60, name="mutation")
+execution_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60, name="execution")
+marketplace_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=60, name="marketplace")
+copilot_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60, name="copilot")
+chat_limiter = InMemoryRateLimiter(max_requests=30, window_seconds=60, name="chat")
+registration_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=3600, name="registration")
 
 
 def check_rate_limit(limiter: InMemoryRateLimiter, user: Any, detail: str) -> None:
     """Raise HTTP 429 if *user* exceeds *limiter*'s rate limit."""
     key = str(user.id) if user is not None else _ANON_KEY
     if not limiter.check(key):
+        logger.warning(
+            "Rate limit exceeded: limiter=%s user=%s max=%d/%ds",
+            limiter.name,
+            key,
+            limiter.max_requests,
+            limiter.window_seconds,
+            extra={
+                "event": "rate_limit_exceeded",
+                "limiter": limiter.name,
+                "max_requests": limiter.max_requests,
+                "window_seconds": limiter.window_seconds,
+            },
+        )
         raise HTTPException(status_code=429, detail=detail, headers=_RATE_LIMIT_HEADERS)
 
 
 def check_rate_limit_by_ip(limiter: InMemoryRateLimiter, ip: str, detail: str) -> None:
     """Raise HTTP 429 if *ip* exceeds *limiter*'s rate limit."""
+    from blackbeard.logging_config import anonymize_ip
+
     if not limiter.check(ip):
+        logger.warning(
+            "Rate limit exceeded: limiter=%s ip=%s max=%d/%ds",
+            limiter.name,
+            anonymize_ip(ip),
+            limiter.max_requests,
+            limiter.window_seconds,
+            extra={
+                "event": "rate_limit_exceeded",
+                "limiter": limiter.name,
+                "client_ip": anonymize_ip(ip),
+                "max_requests": limiter.max_requests,
+                "window_seconds": limiter.window_seconds,
+            },
+        )
         raise HTTPException(status_code=429, detail=detail, headers=_RATE_LIMIT_HEADERS)
