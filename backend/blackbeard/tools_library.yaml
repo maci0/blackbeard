@@ -1,0 +1,206 @@
+## Blackbeard Tools Library — curated tool catalog
+## Each entry becomes installable via POST /api/v1/tools/library/install
+
+- slug: web-search
+  name: Web Search
+  description: Search the web using DuckDuckGo or Google. Returns top results with titles, URLs, and snippets.
+  category: web
+  type: python
+  class_path: crewai_tools.SerperDevTool
+  sandbox: none
+  tags: [search, web, research]
+
+- slug: web-scraper
+  name: Website Scraper
+  description: Scrape and extract content from any website URL. Returns clean text or structured data.
+  category: web
+  type: python
+  class_path: crewai_tools.ScrapeWebsiteTool
+  sandbox: none
+  tags: [web, scrape, extract]
+
+- slug: http-request
+  name: HTTP Request
+  description: Make HTTP requests to APIs and web services. Supports GET, POST, PUT, DELETE with headers and body.
+  category: web
+  type: python
+  class_path: crewai_tools.ScrapeWebsiteTool
+  sandbox: none
+  tags: [http, api, request]
+
+- slug: csv-reader
+  name: CSV Reader
+  description: Read and query CSV files. Supports filtering, column selection, and aggregation.
+  category: data
+  type: python
+  class_path: crewai_tools.CSVSearchTool
+  sandbox: none
+  tags: [csv, data, file]
+
+- slug: json-reader
+  name: JSON Reader
+  description: Read and query JSON files or API responses. Supports JSONPath queries.
+  category: data
+  type: python
+  class_path: crewai_tools.JSONSearchTool
+  sandbox: none
+  tags: [json, data, file]
+
+- slug: pdf-reader
+  name: PDF Reader
+  description: Extract text and structured content from PDF documents.
+  category: data
+  type: python
+  class_path: crewai_tools.PDFSearchTool
+  sandbox: none
+  tags: [pdf, document, extract]
+
+- slug: file-reader
+  name: File Reader
+  description: Read text files from the local filesystem. Supports various encodings.
+  category: file
+  type: python
+  class_path: crewai_tools.FileReadTool
+  sandbox: none
+  tags: [file, read, text]
+
+- slug: file-writer
+  name: File Writer
+  description: Write content to files on the local filesystem.
+  category: file
+  type: python
+  class_path: crewai_tools.FileWriterTool
+  sandbox: none
+  tags: [file, write, output]
+
+- slug: directory-reader
+  name: Directory Reader
+  description: List and search files in a directory. Supports glob patterns and recursive listing.
+  category: file
+  type: python
+  class_path: crewai_tools.DirectoryReadTool
+  sandbox: none
+  tags: [file, directory, list]
+
+- slug: code-interpreter
+  name: Code Interpreter
+  description: Execute Python code in a sandboxed environment. Returns stdout, stderr, and return value.
+  category: code
+  type: python
+  class_path: crewai_tools.CodeInterpreterTool
+  sandbox: docker
+  tags: [code, python, execute]
+
+- slug: github-search
+  name: GitHub Search
+  description: Search GitHub repositories, issues, and code. Useful for finding examples and documentation.
+  category: code
+  type: python
+  class_path: crewai_tools.GithubSearchTool
+  sandbox: none
+  tags: [github, code, search]
+
+- slug: youtube-search
+  name: YouTube Search
+  description: Search YouTube for videos and extract metadata, transcripts, and channel information.
+  category: web
+  type: python
+  class_path: crewai_tools.YoutubeVideoSearchTool
+  sandbox: none
+  tags: [youtube, video, search]
+
+- slug: dalle-image
+  name: DALL-E Image Generator
+  description: Generate images from text descriptions using OpenAI DALL-E.
+  category: ai
+  type: python
+  class_path: crewai_tools.DallETool
+  sandbox: none
+  tags: [image, ai, generate]
+
+- slug: xml-reader
+  name: XML Reader
+  description: Parse and query XML documents using XPath expressions.
+  category: data
+  type: python
+  class_path: crewai_tools.XMLSearchTool
+  sandbox: none
+  tags: [xml, data, parse]
+
+- slug: docx-reader
+  name: DOCX Reader
+  description: Extract text and metadata from Microsoft Word documents.
+  category: data
+  type: python
+  class_path: crewai_tools.DOCXSearchTool
+  sandbox: none
+  tags: [docx, document, extract]
+
+- slug: selenium-scraper
+  name: Browser Automation
+  description: Automate web browser interactions using Selenium. Navigate pages, fill forms, click buttons.
+  category: web
+  type: python
+  class_path: crewai_tools.SeleniumScrapingTool
+  sandbox: docker
+  tags: [browser, selenium, automation]
+
+- slug: rag-search
+  name: RAG Search
+  description: Semantic search over documents using vector embeddings. Supports multiple file types.
+  category: ai
+  type: python
+  class_path: crewai_tools.RagTool
+  sandbox: none
+  tags: [rag, search, embeddings, ai]
+
+- slug: vision-tool
+  name: Vision Analysis
+  description: Analyze images using GPT-4 Vision. Describe contents, extract text, identify objects.
+  category: ai
+  type: python
+  class_path: crewai_tools.VisionTool
+  sandbox: none
+  tags: [vision, image, ai, analyze]
+
+- slug: text-to-speech
+  name: Text to Speech
+  description: Convert text to spoken audio using ElevenLabs or OpenAI TTS.
+  category: ai
+  type: python
+  class_path: crewai_tools.EXASearchTool
+  sandbox: none
+  tags: [tts, audio, speech]
+
+- slug: composio-gmail
+  name: Gmail Integration
+  description: Send, read, and manage Gmail emails. Requires Composio API key.
+  category: communication
+  type: python
+  class_path: composio_crewai.ComposioToolSet
+  config:
+    app: gmail
+  sandbox: none
+  tags: [email, gmail, communication]
+
+- slug: composio-slack
+  name: Slack Integration
+  description: Send messages, read channels, and manage Slack workspaces. Requires Composio API key.
+  category: communication
+  type: python
+  class_path: composio_crewai.ComposioToolSet
+  config:
+    app: slack
+  sandbox: none
+  tags: [slack, messaging, communication]
+
+- slug: composio-github
+  name: GitHub Actions
+  description: Create issues, PRs, manage repos via GitHub API. Requires Composio API key.
+  category: code
+  type: python
+  class_path: composio_crewai.ComposioToolSet
+  config:
+    app: github
+  sandbox: none
+  tags: [github, code, automation]

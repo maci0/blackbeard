@@ -21,6 +21,7 @@ from sqlalchemy import select
 from blackbeard import __version__
 from blackbeard.api.a2a import router as a2a_router
 from blackbeard.api.agency_import import router as agency_import_router
+from blackbeard.api.tools_library import router as tools_library_router
 from blackbeard.api.assistant import router as assistant_router
 from blackbeard.api.audit import router as audit_router
 from blackbeard.api.auth import router as auth_router
@@ -429,6 +430,7 @@ app.include_router(assistant_router, prefix="/api/v1")
 app.include_router(credentials_router, prefix="/api/v1")
 app.include_router(a2a_router)
 app.include_router(agency_import_router, prefix="/api/v1")
+app.include_router(tools_library_router, prefix="/api/v1")
 
 if settings.oidc_issuer:
     from blackbeard.api.oidc import router as oidc_router

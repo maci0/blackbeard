@@ -10,7 +10,9 @@ Provide a centralised catalogue for all tools, integrations, and MCP servers tha
 
 **Implemented (post-MVP):** Agency Agents integration — import agent persona definitions from the [Agency Agents](https://github.com/msitarzewski/agency-agents) markdown library (144+ personas across 12 divisions). Backend parser converts markdown persona files into Blackbeard Agent resources by extracting role, goal, backstory, and tool suggestions from structured markdown sections. Import via API endpoint or Studio UI "Browse Templates" button.
 
-**Deferred to post-MVP:** Composio integration, OAuth connectors (`IntegrationConnector` resource), tool compilation CLI (`blackbeard tool compile`), Registry UI detail views (browse/search drill-down), tool versioning, JIT tool discovery meta-tools, approval workflows.
+**Implemented (post-MVP):** Skills & Tools Library — a curated browsable library of tools and skills accessible from the `/tools/library` page and Studio palette. Categories: Web (search, scrape, HTTP), Data (CSV, JSON, database), Code (interpreter, linter, formatter), Communication (email, Slack, webhook), File (read, write, convert), AI (summarize, translate, classify). Each library entry includes name, description, type (python/mcp/wasm), category, install command, and preview. One-click install creates the Tool resource in Blackbeard. Backend serves the library index from a bundled YAML catalog (`tools/library.yaml`) with support for custom catalogs via URL. API: `GET /api/v1/tools/library` (browse), `POST /api/v1/tools/library/install` (install by slug).
+
+**Deferred to post-MVP:** Composio integration, OAuth connectors (`IntegrationConnector` resource), tool compilation CLI (`blackbeard tool compile`), tool versioning, JIT tool discovery meta-tools, approval workflows.
 
 **Note:** A Tools page (`/tools`) is implemented in the frontend with a filterable table of all registered tools, type badges (Python, WASM, builtin), sandbox tier display, and links to tool resource details.
 
