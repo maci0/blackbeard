@@ -1,4 +1,4 @@
-import { type DragEvent, useState } from 'react'
+import { type DragEvent, useState, useEffect } from 'react'
 import {
   User,
   ListChecks,
@@ -15,8 +15,11 @@ import {
   Filter,
   Lock,
   Repeat,
+  Users,
 } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
+import { useResourceStore } from '@/stores/resourceStore'
+import type { Resource } from '@/lib/types'
 import { getDefaultNodeData } from './defaults'
 
 interface PaletteItem {
@@ -233,11 +236,86 @@ function PaletteCard({ item }: { item: PaletteItem }) {
   )
 }
 
+function CrewComponentCard({ crew }: { crew: Resource }) {
+  const agentCount = ((crew.spec.agents as unknown[]) ?? []).length
+  const taskCount = ((crew.spec.tasks as unknown[]) ?? []).length
+  const inputs = (crew.spec.inputs as Array<{ name: string }>) ?? []
+
+  function onDragStart(event: DragEvent<HTMLDivElement>) {
+    event.dataTransfer.setData('application/reactflow', 'crewComponent')
+    event.dataTransfer.setData(
+      'application/crewdata',
+      JSON.stringify({
+        crew_name: crew.metadata.name,
+        description: (crew.spec.description as string) ?? '',
+        agent_count: agentCount,
+        task_count: taskCount,
+        inputs,
+      }),
+    )
+    event.dataTransfer.effectAllowed = 'move'
+  }
+
+  function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      const { addNode, nodes } = useStudioStore.getState()
+      const offset = nodes.length * 30
+      addNode({
+        id: `crewComponent-${crypto.randomUUID()}`,
+        type: 'crewComponent',
+        position: { x: 250 + offset, y: 150 + offset },
+        data: {
+          crew_name: crew.metadata.name,
+          description: (crew.spec.description as string) ?? '',
+          agent_count: agentCount,
+          task_count: taskCount,
+          inputs,
+        },
+      })
+    }
+  }
+
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onKeyDown={onKeyDown}
+      tabIndex={0}
+      role="button"
+      title={crew.metadata.name}
+      aria-label={`Add crew ${crew.metadata.name} as component`}
+      className="cursor-grab select-none overflow-hidden rounded-lg border-2 border-primary/20 bg-card shadow-sm transition-all duration-150 hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+    >
+      <div className="flex items-center gap-1 bg-gradient-to-r from-primary to-primary/80 px-1.5 py-1.5">
+        <Users className="h-3 w-3 text-white/90" />
+        <span className="truncate text-[9px] font-bold text-white">{crew.metadata.name}</span>
+      </div>
+      <div className="flex items-center gap-1 px-1.5 py-1">
+        <span className="text-[8px] text-muted-foreground">{agentCount}A</span>
+        <span className="text-[8px] text-muted-foreground">{taskCount}T</span>
+      </div>
+    </div>
+  )
+}
+
 export default function Palette() {
   const [filter, setFilter] = useState('')
+  const crews = useResourceStore((s) => s.resources['crews']) ?? []
+  const hasCrew = useResourceStore((s) => 'crews' in s.resources)
+  const fetchResources = useResourceStore((s) => s.fetchResources)
+
+  useEffect(() => {
+    if (!hasCrew) void fetchResources('crews')
+  }, [hasCrew, fetchResources])
+
   const filtered = filter
     ? ITEMS.filter((item) => item.label.toLowerCase().includes(filter.toLowerCase()))
     : ITEMS
+
+  const filteredCrews = filter
+    ? crews.filter((c) => c.metadata.name.toLowerCase().includes(filter.toLowerCase()))
+    : crews
 
   return (
     <aside
@@ -259,10 +337,24 @@ export default function Palette() {
         </div>
       </div>
       <div className="flex flex-col gap-2 overflow-y-auto p-2 pt-2">
-        {filtered.length > 0 ? (
-          filtered.map((item) => <PaletteCard key={item.type} item={item} />)
-        ) : (
-          <p className="py-4 text-center text-[10px] text-muted-foreground">No matches</p>
+        {filtered.length > 0
+          ? filtered.map((item) => <PaletteCard key={item.type} item={item} />)
+          : !filteredCrews.length && (
+              <p className="py-4 text-center text-[10px] text-muted-foreground">No matches</p>
+            )}
+
+        {/* My Components section */}
+        {filteredCrews.length > 0 && (
+          <>
+            <div className="mt-1 border-t pt-2">
+              <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                My Crews
+              </p>
+            </div>
+            {filteredCrews.map((crew) => (
+              <CrewComponentCard key={crew.metadata.name} crew={crew} />
+            ))}
+          </>
         )}
       </div>
       <div className="p-2 pt-0">

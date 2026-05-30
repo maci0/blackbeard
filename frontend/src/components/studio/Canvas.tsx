@@ -241,11 +241,21 @@ function CanvasInner() {
 
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY })
 
+      let nodeData = getDefaultNodeData(type)
+      const crewDataStr = event.dataTransfer.getData('application/crewdata')
+      if (type === 'crewComponent' && crewDataStr) {
+        try {
+          nodeData = { ...nodeData, ...(JSON.parse(crewDataStr) as Record<string, unknown>) }
+        } catch {
+          /* ignore malformed crew data */
+        }
+      }
+
       const newNode: Node = {
         id: `${type}-${crypto.randomUUID()}`,
         type,
         position,
-        data: getDefaultNodeData(type),
+        data: nodeData,
       }
 
       addNode(newNode)
