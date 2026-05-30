@@ -1125,3 +1125,112 @@ async def test_public_config_endpoint(client):
     assert resp.status_code == 200
     data = resp.json()
     assert "oidc_enabled" in data
+
+
+# ---------------------------------------------------------------------------
+# 12. Agency Agents import fuzzing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@given(
+    division=st.one_of(
+        st.none(),
+        st.text(min_size=0, max_size=50),
+        st.sampled_from(["engineering", "design", "marketing", "invalid-div"]),
+    ),
+)
+@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
+async def test_fuzz_agency_agents_list(client, division):
+    """GET /api/v1/import/agency-agents with random division should never 500."""
+    params = {}
+    if division is not None:
+        params["division"] = division
+    resp = await client.get(
+        "/api/v1/import/agency-agents",
+        headers=API_KEY_HEADER,
+        params=params,
+    )
+    _assert_no_500(resp, f"on GET /import/agency-agents?division={division}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "slugs",
+    [
+        [],
+        ["nonexistent-agent"],
+        ["../../../etc/passwd"],
+        ["'; DROP TABLE--"],
+        ["a" * 500],
+    ],
+    ids=["empty", "nonexistent", "path-traversal", "sqli", "long"],
+)
+async def test_evil_agency_import(client, slugs):
+    """POST /api/v1/import/agency-agents with evil slugs should never 500."""
+    resp = await client.post(
+        "/api/v1/import/agency-agents",
+        headers=API_KEY_HEADER,
+        json={"slugs": slugs},
+    )
+    _assert_no_500(resp, f"on POST /import/agency-agents with slugs={slugs!r}")
+
+
+# ---------------------------------------------------------------------------
+# 13. Tools Library fuzzing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_tools_library_list(client):
+    """GET /api/v1/tools/library should return valid catalog."""
+    resp = await client.get("/api/v1/tools/library", headers=API_KEY_HEADER)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "tools" in data
+    assert "categories" in data
+    assert isinstance(data["tools"], list)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"category": "web"},
+        {"category": "nonexistent"},
+        {"search": "search"},
+        {"search": ""},
+        {"search": "a" * 200},
+        {"category": "web", "search": "scrape"},
+    ],
+    ids=["cat-web", "cat-invalid", "search-valid", "search-empty", "search-long", "both"],
+)
+async def test_tools_library_filters(client, params):
+    """GET /api/v1/tools/library with filters should never 500."""
+    resp = await client.get(
+        "/api/v1/tools/library",
+        headers=API_KEY_HEADER,
+        params=params,
+    )
+    _assert_no_500(resp, f"on GET /tools/library with params={params}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "slugs",
+    [
+        ["web-search"],
+        ["nonexistent-tool"],
+        ["../../../etc/passwd"],
+        ["web-search", "csv-reader"],
+    ],
+    ids=["valid", "nonexistent", "path-traversal", "multiple"],
+)
+async def test_tools_library_install(client, slugs):
+    """POST /api/v1/tools/library/install should never 500."""
+    resp = await client.post(
+        "/api/v1/tools/library/install",
+        headers=API_KEY_HEADER,
+        json={"slugs": slugs},
+    )
+    _assert_no_500(resp, f"on POST /tools/library/install with slugs={slugs!r}")

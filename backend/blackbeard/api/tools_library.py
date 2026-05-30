@@ -74,8 +74,8 @@ class InstallResponse(BaseModel):
 async def list_library_tools(
     category: str | None = Query(default=None, description="Filter by category"),
     search: str | None = Query(default=None, max_length=100, description="Search by name or tag"),
-    _current_user: User = Depends(
-        require_permission("list", "Tool", require_identity=True)
+    _current_user: User | None = Depends(
+        require_permission("list", "Tool")
     ),
 ) -> LibraryListResponse:
     """Browse the curated tools library."""
