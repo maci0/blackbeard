@@ -8,6 +8,8 @@ Provide a centralised catalogue for all tools, integrations, and MCP servers tha
 
 **Implemented:** Python tools (`BaseTool`), WASM tools (compiled and executed in Wasmtime sandbox), MCP tools (both stdio and HTTP transports), and builtin tool types are all supported. Tool discovery and the marketplace import from git (`blackbeard apply` from a git-cloned directory) are working. Tools are governed by AgentPolicy allowlist/denylist enforcement.
 
+**Implemented (post-MVP):** Agency Agents integration — import agent persona definitions from the [Agency Agents](https://github.com/msitarzewski/agency-agents) markdown library (144+ personas across 12 divisions). Backend parser converts markdown persona files into Blackbeard Agent resources by extracting role, goal, backstory, and tool suggestions from structured markdown sections. Import via API endpoint or Studio UI "Browse Templates" button.
+
 **Deferred to post-MVP:** Composio integration, OAuth connectors (`IntegrationConnector` resource), tool compilation CLI (`blackbeard tool compile`), Registry UI detail views (browse/search drill-down), tool versioning, JIT tool discovery meta-tools, approval workflows.
 
 **Note:** A Tools page (`/tools`) is implemented in the frontend with a filterable table of all registered tools, type badges (Python, WASM, builtin), sandbox tier display, and links to tool resource details.
