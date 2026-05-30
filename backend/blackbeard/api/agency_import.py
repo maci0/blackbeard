@@ -69,15 +69,26 @@ class AgencyAgentImportResponse(BaseModel):
     errors: list[str]
 
 
+_file_cache: dict[str, tuple[float, str | None]] = {}
+_FILE_CACHE_TTL = 300.0  # 5 minutes
+
+
 async def _fetch_github_file(path: str) -> str | None:
-    """Fetch a raw file from the Agency Agents GitHub repo."""
+    """Fetch a raw file from the Agency Agents GitHub repo (cached 5min)."""
+    import time
+
+    now = time.monotonic()
+    cached = _file_cache.get(path)
+    if cached is not None and (now - cached[0]) < _FILE_CACHE_TTL:
+        return cached[1]
+
     url = f"https://raw.githubusercontent.com/{_REPO_OWNER}/{_REPO_NAME}/main/{path}"
     client = get_client("agency-import", timeout=15.0)
     try:
         resp = await client.get(url)
-        if resp.status_code == 200:
-            return resp.text
-        return None
+        content = resp.text if resp.status_code == 200 else None
+        _file_cache[path] = (now, content)
+        return content
     except Exception as exc:
         logger.warning(
             "Failed to fetch %s: %s",
@@ -88,8 +99,19 @@ async def _fetch_github_file(path: str) -> str | None:
         return None
 
 
+_division_cache: dict[str, tuple[float, list[str]]] = {}
+_DIVISION_CACHE_TTL = 300.0  # 5 minutes
+
+
 async def _list_division_files(division: str) -> list[str]:
-    """List markdown files in a division directory via GitHub API."""
+    """List markdown files in a division directory via GitHub API (cached 5min)."""
+    import time
+
+    now = time.monotonic()
+    cached = _division_cache.get(division)
+    if cached is not None and (now - cached[0]) < _DIVISION_CACHE_TTL:
+        return cached[1]
+
     url = f"{_GITHUB_API}/repos/{_REPO_OWNER}/{_REPO_NAME}/contents/{division}"
     client = get_client("agency-import", timeout=15.0)
     try:
@@ -97,13 +119,15 @@ async def _list_division_files(division: str) -> list[str]:
         if resp.status_code != 200:
             return []
         items = resp.json()
-        return [
+        files = [
             item["path"]
             for item in items
             if isinstance(item, dict)
             and item.get("name", "").endswith(".md")
             and item.get("name") != "README.md"
         ]
+        _division_cache[division] = (now, files)
+        return files
     except Exception:
         logger.debug("Failed to list division files from GitHub: %s", division, exc_info=True)
         return []

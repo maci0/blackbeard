@@ -39,6 +39,25 @@ def test_fuzz_check_url_ssrf(url):
     )
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://169.254.169.254/latest/meta-data/",
+        "http://127.0.0.1/admin",
+        "http://0.0.0.0/",
+        "http://[::1]/",
+        "http://localhost/",
+        "http://10.0.0.1/internal",
+        "http://192.168.1.1/",
+    ],
+)
+def test_check_url_ssrf_blocks_internal_urls(url):
+    """Known internal/metadata URLs must be blocked (return error string)."""
+    result = check_url_ssrf(url)
+    assert result is not None, f"SSRF check should block {url!r} but returned None"
+    assert isinstance(result, str)
+
+
 @given(
     url=st.from_regex(
         r"https?://[a-z0-9._-]{1,50}(:[0-9]{1,5})?(/[a-z0-9._/-]{0,100})?",

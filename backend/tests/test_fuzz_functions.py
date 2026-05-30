@@ -7,8 +7,6 @@ documented invariants.
 
 from __future__ import annotations
 
-import contextlib
-
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
@@ -58,6 +56,7 @@ def test_fuzz_resolve_pii_entities(preset, entities):
     assert isinstance(result, list)
     assert len(result) > 0
     assert all(isinstance(e, str) for e in result)
+    assert len(result) == len(set(result)), "PII entity list should not contain duplicates"
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +72,7 @@ def test_fuzz_redact_query_string_never_crashes(query):
 
     result = _redact_query_string(query)
     assert isinstance(result, str)
+    assert len(result) <= len(query) + 500, "Redacted output should not grow unboundedly"
 
 
 @given(
@@ -254,11 +254,13 @@ def test_fuzz_check_path_safety_safe_paths(safe_path):
 )
 @settings(max_examples=100)
 def test_fuzz_validate_tool_config(config, tool_name):
-    """_validate_tool_config never crashes with an unhandled exception (may raise LoaderError)."""
+    """_validate_tool_config either succeeds or raises LoaderError — never an unhandled exception."""
     from blackbeard.engine.loader import LoaderError, _validate_tool_config
 
-    with contextlib.suppress(LoaderError):
+    try:
         _validate_tool_config(config, tool_name)
+    except LoaderError as exc:
+        assert isinstance(exc.args[0], str)  # noqa: PT017
 
 
 @given(
@@ -372,6 +374,10 @@ def test_fuzz_anonymize_ip_v4_format(ip):
     parts = ip.split(".")
     if len(parts) == 4:
         assert result.endswith(".x")
+        result_parts = result.split(".")
+        assert result_parts[:3] == parts[:3], (
+            f"First 3 octets should be preserved: {ip!r} -> {result!r}"
+        )
 
 
 @given(text=st.text(max_size=500))
@@ -382,6 +388,7 @@ def test_fuzz_scrub_pii(text):
 
     result = scrub_pii(text)
     assert isinstance(result, str)
+    assert len(result) <= len(text) + 200, "Scrubbed output should not grow unboundedly"
 
 
 # ---------------------------------------------------------------------------
