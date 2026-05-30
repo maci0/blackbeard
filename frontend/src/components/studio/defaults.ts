@@ -61,6 +61,14 @@ export function getDefaultNodeData(type: string): Record<string, unknown> {
       return { name: 'filter', condition: '' }
     case 'gate':
       return { name: 'gate', control: '', pass_when: 'true' }
+    case 'crewComponent':
+      return {
+        crew_name: '',
+        description: '',
+        agent_count: 0,
+        task_count: 0,
+        inputs: [],
+      }
     case 'stickyNote':
       return { text: '', color: 'yellow' }
     default:
