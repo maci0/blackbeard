@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Blackbeard
 
-Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Namespace) with a visual graph editor, async execution engine, RBAC, and LiteLLM proxy for model routing (with built-in spend/token/latency tracking).
+Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount) with a visual graph editor, async execution engine, RBAC, and LiteLLM proxy for model routing (with built-in spend/token/latency tracking).
 
 ## Commands
 
@@ -88,7 +88,7 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Resource versioning**: `resource_versions` table stores spec/labels snapshots on every create/update. Endpoints: `GET /{kind}/{name}/versions` (list), `GET /{kind}/{name}/versions/{version}` (detail), `POST /{kind}/{name}/rollback` (restore from snapshot).
 
-**Namespace-level guardrails**: Namespace resources support `spec.guardrails` array. At execution time, namespace guardrails are prepended to task-level guardrails.
+**Namespace-level guardrails**: Namespace resources support `spec.guardrails` array. At execution time, project guardrails are prepended to task-level guardrails.
 
 **OpenTelemetry**: Optional trace export via `OTEL_ENDPOINT` env var. When unset, tracing is disabled with no overhead.
 

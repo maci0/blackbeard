@@ -6,23 +6,25 @@ Define the canonical data model for every first-class resource in Blackbeard. Al
 
 ## 1.1 MVP Scope
 
-**Implemented:** All 11 resource kinds are registered in the kind registry (`kinds.py`) with full CRUD, JSON Schema validation, and `ref:` resolution: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding, Flow, and KnowledgeSource. Role and RoleBinding are fully working with predefined roles and authorization enforcement. Agent spec supports an optional `serviceAccount` field (defaults to `sa-<agent-name>`) for principal chain tracking. Flow supports all step types: crew, function, router, condition, and transform (WASM data massaging). Automation resource kind with cron/webhook/API triggers. Audit logging on all mutations.
+**Implemented:** All 14 resource kinds are registered in the kind registry (`kinds.py`) with full CRUD, JSON Schema validation, and `ref:` resolution: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Role, RoleBinding, Flow, and KnowledgeSource. Role and RoleBinding are fully working with predefined roles and authorization enforcement. Agent spec supports an optional `serviceAccount` field (defaults to `sa-<agent-name>`) for principal chain tracking. Flow supports all step types: crew, function, router, condition, and transform (WASM data massaging). Automation resource kind with cron/webhook/API triggers. Audit logging on all mutations.
 
-**Implemented additionally:** Namespace as a first-class resource kind (13th kind) with description, labels, default_agent_policy, and resource_quota (max_resources, max_executions_per_hour). Default namespace seeded automatically.
+**Implemented additionally:** Project as a first-class resource kind (14th kind) with description, labels, default_agent_policy, and resource_quota (max_resources, max_executions_per_hour). Default project seeded automatically.
 
 **Implementation note — Canvas layouts:** No `canvas_layouts` database table exists. Canvas state (node positions, viewport, zoom) persists in the browser only (Zustand store + localStorage). If no saved layout exists when opening a resource, ELK.js auto-layout runs on first open.
 
 **Implementation note — LiteLLM dynamic sync:** LLMConnection CRUD operations now push configuration changes to the LiteLLM Proxy API in real time. Creating, updating, or deleting an LLMConnection resource triggers a corresponding model add/update/delete call to the co-deployed LiteLLM Proxy, keeping routing config in sync without requiring a proxy restart.
 
-**Deferred to post-MVP:** Nested namespaces (hierarchical namespace tree with inheritance — e.g., `org/team/project`), EnvironmentVariable, ServiceAccount (as a standalone resource kind — note: Agent `spec.serviceAccount` field is implemented and defaults to `sa-<agent-name>` for principal chain tracking; the standalone ServiceAccount resource kind with its own CRUD is deferred), SSOConfig, APIKey. See below for nested namespace design.
+**Implemented (post-MVP):** ServiceAccount as a standalone resource kind with CRUD at `/api/v1/service-accounts`. Schema: description, project, permissions. Referenced by Agent `spec.serviceAccount` (defaults to `sa-<agent-name>`) for principal chain tracking. Project (formerly Namespace) as a resource kind at `/api/v1/projects` with description, labels, resource quotas, and project-level guardrails.
 
-#### Nested Namespaces (Post-MVP)
+**Deferred to post-MVP:** Nested project hierarchy (hierarchical tree with inheritance — e.g., `org/team/project`), EnvironmentVariable, SSOConfig, APIKey.
 
-Namespaces can form a hierarchy using `/`-separated paths:
+#### Nested Projects (Post-MVP)
+
+Projects can form a hierarchy using `/`-separated paths:
 
 ```yaml
 apiVersion: blackbeard/v1
-kind: Namespace
+kind: Project
 metadata:
   name: acme
 spec:
@@ -30,7 +32,7 @@ spec:
 
 ---
 apiVersion: blackbeard/v1
-kind: Namespace
+kind: Project
 metadata:
   name: acme/ml-team
 spec:
@@ -40,7 +42,7 @@ spec:
 
 ---
 apiVersion: blackbeard/v1
-kind: Namespace
+kind: Project
 metadata:
   name: acme/ml-team/research
 spec:
@@ -59,7 +61,7 @@ spec:
 
 **Resolution order:** `acme/ml-team/research` → `acme/ml-team` → `acme` → `default`
 
-**API:** `GET /api/v1/namespaces?parent=acme` returns children. `GET /api/v1/namespaces/acme/ml-team/research` returns the leaf. Namespace deletion requires all child namespaces and resources to be deleted first (no cascade).
+**API:** `GET /api/v1/projects?parent=acme` returns children. `GET /api/v1/projects/acme/ml-team/research` returns the leaf. Project deletion requires all child projects and resources to be deleted first (no cascade).
 
 ---
 
@@ -401,20 +403,20 @@ PRD 01 defines the core **workload resources** above. Additional resource kinds 
 | PIIConfig | PRD 08 | Safety | PII detection and redaction rules |
 | Automation | PRD 09 | Deployment | Deployed instance of a Crew or Flow |
 | WebhookEndpoint | PRD 11 | Integration | External webhook subscription |
-| Namespace | PRD 01 | Configuration | Logical subdivision with default policies |
+| Project | PRD 01 | Configuration | Logical subdivision with default policies |
 | ServiceAccount | PRD 01 | Identity | Machine identity for CI/CD, triggers, A2A |
 | Plugin | PRD 11 | Extensibility | Plugin manifest and configuration |
 
 All resource kinds follow the same `apiVersion/kind/metadata/spec` envelope and are stored in the unified `resources` table (section 7). Each kind has its own JSON Schema for `spec` validation. The kind registry and URL plural mapping are defined in `blackbeard/kinds.py` (single source of truth).
 
-### 2.10 Namespace
+### 2.10 Project
 
-A logical isolation boundary for resources. Namespaces scope RBAC, policies, and guardrails.
+A logical isolation boundary for resources. Projects scope RBAC, policies, and guardrails.
 
 ```yaml
 # namespaces/production.yaml
 apiVersion: blackbeard/v1
-kind: Namespace
+kind: Project
 metadata:
   name: production
 spec:
@@ -432,9 +434,9 @@ spec:
 
 **Design notes:**
 - Every resource belongs to exactly one namespace. The `default` namespace is implicit if not specified.
-- Namespace defaults (`defaults.agent_policy`, `defaults.sandbox_tier`, `defaults.guardrails`) are inherited by all resources in the namespace unless overridden at the resource level.
-- Namespace quotas are enforced at resource creation time.
-- Namespace-scoped RoleBindings (PRD 03) use `scope.namespace` to target a specific namespace.
+- Project defaults (`defaults.agent_policy`, `defaults.sandbox_tier`, `defaults.guardrails`) are inherited by all resources in the namespace unless overridden at the resource level.
+- Project quotas are enforced at resource creation time.
+- Project-scoped RoleBindings (PRD 03) use `scope.namespace` to target a specific namespace.
 
 ### 2.11 ServiceAccount
 
@@ -513,7 +515,7 @@ When a resource is deleted, the system checks for inbound references:
 - **Force delete**: `DELETE /api/v1/agents/{name}?force=true` (replace `agents` with any resource kind in lowercase plural) deletes the resource and marks all inbound references as **broken**. Broken references are tracked via the `status` column in `resource_refs` (set to `broken` on force-delete of the target resource). Broken refs are surfaced in `blackbeard validate` and in the Studio UI as warning badges.
 - **Cascade delete**: Not supported in v1 to prevent accidental data loss.
 
-### Namespace-scoped resolution
+### Project-scoped resolution
 
 References are resolved within the **current namespace** by default:
 
@@ -598,7 +600,7 @@ Replace `agents` with any resource kind in lowercase plural form: `tasks`, `crew
 
 **Convention**: All API paths use lowercase plural kind names: `/api/v1/agents/{name}`, `/api/v1/tasks/{name}`, `/api/v1/crews/{name}`, etc.
 
-Namespace-scoped variant:
+Project-scoped variant:
 ```
 GET    /api/v1/namespaces/{ns}/agents              # list resources in namespace
 GET    /api/v1/namespaces/{ns}/agents/{name}        # get resource in namespace
@@ -619,7 +621,7 @@ All endpoints honour RBAC (PRD 03).
 
 ## 10. Non-Goals (v1)
 
-- Multi-tenancy with full org hierarchy (single org for v1; multi-org deferred). Namespaces exist within the org for logical separation.
+- Multi-tenancy with full org hierarchy (single org for v1; multi-org deferred). Projects exist within the org for logical separation.
 - Git-based GitOps sync (planned for v2, not required for v1 launch).
 - Automatic Python code generation from YAML (YAML references code, never generates it).
 

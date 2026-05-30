@@ -17,7 +17,9 @@ Both classes use the same primitives — Objects, Verbs, Roles, RoleBindings, Ru
 
 **Partial:** Principal chain — policy enforcement exists in the resource loader (tool filtering via AgentPolicy allowlists, delegation control), but full intersection of user permissions with agent permissions (effective permissions = user role ∩ agent role) is not implemented.
 
-**Deferred to post-MVP:** Network/filesystem/code-execution policy enforcement at runtime, Ory Kratos/Hydra (full identity management), SpiceDB for relationship-based access control, OPA for policy-as-code, entity-level fine-grained permissions (`metadata.access`), multi-organization support, ServiceAccount as a standalone resource kind.
+**Implemented (post-MVP):** ServiceAccount as a standalone resource kind (`/api/v1/service-accounts`) with description, project, and permissions fields.
+
+**Deferred to post-MVP:** Network/filesystem/code-execution policy enforcement at runtime, Ory Kratos/Hydra (full identity management), SpiceDB for relationship-based access control, OPA for policy-as-code, entity-level fine-grained permissions (`metadata.access`), multi-organization support.
 
 ---
 
@@ -57,7 +59,7 @@ Every entity in the system is an **Object** with a `kind` and optional `name`:
 | `Sandbox` | `sandboxes/high-isolation` | No (assigned to agents, not used by them) |
 | `User` | `users/alice@example.com` | No |
 | `Organization` | `organizations/acme-corp` | No |
-| `Namespace` | `namespaces/production` | No |
+| `Project` | `projects/production` | No |
 
 ### 2.3 Verbs
 
@@ -309,7 +311,7 @@ spec:
   default_agent_policy: ref:agent-policies/production-baseline
 ```
 
-**Resolution order**: Agent-level > Crew-level > Namespace-level > Organization default.
+**Resolution order**: Agent-level > Crew-level > Project-level > Organization default.
 
 ### 3.2 Predefined Agent Policies
 
