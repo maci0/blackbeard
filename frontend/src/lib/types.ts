@@ -51,6 +51,8 @@ export interface Execution {
   prompt_tokens: number
   completion_tokens: number
   cost_usd: number | string
+  initiated_by: string | null
+  principal_chain: string[]
   created_at: string
   started_at: string | null
   completed_at: string | null

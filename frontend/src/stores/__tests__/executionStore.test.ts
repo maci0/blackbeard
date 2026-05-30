@@ -36,6 +36,8 @@ function makeExecution(overrides: Partial<Execution> = {}): Execution {
     prompt_tokens: 0,
     completion_tokens: 0,
     cost_usd: 0,
+    initiated_by: null,
+    principal_chain: [],
     created_at: '2024-01-01T00:00:00Z',
     started_at: '2024-01-01T00:00:01Z',
     completed_at: null,

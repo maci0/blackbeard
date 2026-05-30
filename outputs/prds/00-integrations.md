@@ -121,7 +121,7 @@ After delegating to the above, Blackbeard's custom code is focused on:
 | Layer | What we build |
 |-------|---------------|
 | **Resource model** | `apiVersion/kind/metadata/spec` envelope, `ref:` resolution, resource loader, YAML↔DB sync |
-| **Studio UI** | Graph canvas, property panel, node types, edge semantics, AI copilot, YAML↔canvas sync |
+| **Studio UI** | Graph canvas, property panel, node types, edge semantics, AI assistant, YAML↔canvas sync |
 | **Execution orchestration** | Resource loader → CrewAI objects, Temporal workflow definitions, sandbox dispatch pipeline, callback resolver |
 | **AgentPolicy → enforcement bridge** | Compile YAML policies → OPA Rego + LiteLLM virtual keys + SpiceDB relationships |
 | **WASM tool format** | WIT contract, `blackbeard tool compile`, tool registry indexing |

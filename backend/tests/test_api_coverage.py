@@ -414,12 +414,12 @@ def test_collaboration_non_dict_message_ignored():
 
 
 # ---------------------------------------------------------------------------
-# Copilot API: edge cases
+# Assistant API: edge cases
 # ---------------------------------------------------------------------------
 
 
-async def test_copilot_endpoint_transport_error(client: AsyncClient, db_session: AsyncSession):
-    """Copilot endpoint with transport error returns 502."""
+async def test_assistant_endpoint_transport_error(client: AsyncClient, db_session: AsyncSession):
+    """Assistant endpoint with transport error returns 502."""
     from blackbeard.kinds import ResourceKind
 
     r = make_resource(
@@ -446,8 +446,8 @@ async def test_copilot_endpoint_transport_error(client: AsyncClient, db_session:
     assert "failed" in resp.json()["detail"].lower()
 
 
-async def test_copilot_endpoint_with_project(client: AsyncClient, db_session: AsyncSession):
-    """Copilot endpoint accepts project parameter."""
+async def test_assistant_endpoint_with_project(client: AsyncClient, db_session: AsyncSession):
+    """Assistant endpoint accepts project parameter."""
     resp = await client.post(
         "/api/v1/assistant/generate",
         json={

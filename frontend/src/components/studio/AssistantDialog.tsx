@@ -104,17 +104,17 @@ export function AssistantDialog({ open, onOpenChange, onApply }: AssistantDialog
           {/* Body */}
           <div className="flex flex-col gap-4 px-6 py-4">
             <Dialog.Description className="text-sm text-muted-foreground">
-              Describe the crew you want to build. The copilot will generate agents, tasks, and a
+              Describe the crew you want to build. The assistant will generate agents, tasks, and a
               crew definition for you.
             </Dialog.Description>
 
             <div>
-              <label htmlFor="copilot-prompt" className="sr-only">
+              <label htmlFor="assistant-prompt" className="sr-only">
                 Describe your crew
               </label>
               <textarea
                 ref={textareaRef}
-                id="copilot-prompt"
+                id="assistant-prompt"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -123,7 +123,7 @@ export function AssistantDialog({ open, onOpenChange, onApply }: AssistantDialog
                 maxLength={5000}
                 disabled={loading}
                 className="w-full resize-none rounded-md border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                aria-describedby={error ? 'copilot-error' : undefined}
+                aria-describedby={error ? 'assistant-error' : undefined}
               />
               <div className="mt-1 flex items-center justify-between">
                 <span className="text-[10px] text-muted-foreground">
@@ -138,7 +138,7 @@ export function AssistantDialog({ open, onOpenChange, onApply }: AssistantDialog
             {/* Error message */}
             {error && (
               <div
-                id="copilot-error"
+                id="assistant-error"
                 role="alert"
                 className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-400"
               >

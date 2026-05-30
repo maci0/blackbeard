@@ -26,7 +26,8 @@ KIND_TO_PLURAL: dict[str, str] = {
     "Role": "roles",
     "RoleBinding": "role-bindings",
     "Automation": "automations",
-    "Namespace": "namespaces",
+    "Project": "projects",
+    "ServiceAccount": "service-accounts",
 }
 
 

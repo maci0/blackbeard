@@ -288,7 +288,7 @@ async def _load_crew_resources(
             project,
             _NAMESPACE_RESOURCE_LIMIT,
             extra={
-                "event": "namespace_resource_limit",
+                "event": "project_resource_limit",
                 "project": project,
                 "limit": _NAMESPACE_RESOURCE_LIMIT,
             },
@@ -311,7 +311,7 @@ async def _load_crew_resources(
             crew_name,
             project,
             extra={
-                "event": "large_namespace_load",
+                "event": "large_project_load",
                 "resource_count": len(resources),
                 "crew_name": crew_name,
                 "project": project,
@@ -404,7 +404,7 @@ async def _submit_execution(
     pool_saturated = pool["saturated"]
     logger.log(
         logging.WARNING if pool_saturated else logging.INFO,
-        "%s: execution_id=%s crew=%s project=%s n_iterations=%s pool=%d/%d queued=%d",
+        "%s: execution_id=%s crew=%s project=%s n_iteratioproject=%s pool=%d/%d queued=%d",
         execution_type.value.capitalize(),
         execution.id,
         crew_name,

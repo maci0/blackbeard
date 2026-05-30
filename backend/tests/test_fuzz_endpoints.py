@@ -1025,7 +1025,7 @@ async def test_readiness_endpoint(client):
     project=st.text(min_size=1, max_size=50),
 )
 @settings(max_examples=30, suppress_health_check=[HealthCheck.function_scoped_fixture])
-async def test_fuzz_copilot_generate(client, prompt, llm_connection, project):
+async def test_fuzz_assistant_generate(client, prompt, llm_connection, project):
     """POST /api/v1/assistant/generate with random prompts should never 500."""
     body: dict = {"prompt": prompt}
     if llm_connection is not None:
@@ -1037,7 +1037,7 @@ async def test_fuzz_copilot_generate(client, prompt, llm_connection, project):
         json=body,
     )
     assert resp.status_code in (_OK_STATUSES_WITH_PROXY | {424}), (
-        f"Copilot returned {resp.status_code}: {resp.text[:200]}"
+        f"Assistant returned {resp.status_code}: {resp.text[:200]}"
     )
 
 
@@ -1063,7 +1063,7 @@ async def test_fuzz_copilot_generate(client, prompt, llm_connection, project):
     ],
 )
 @pytest.mark.asyncio
-async def test_evil_copilot_inputs(client, body):
+async def test_evil_assistant_inputs(client, body):
     """POST /api/v1/assistant/generate with evil inputs should never 500."""
     kwargs: dict = {"headers": {**API_KEY_HEADER, "Content-Type": "application/json"}}
     if isinstance(body, str):

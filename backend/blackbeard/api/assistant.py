@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from blackbeard.api import RETRY_HEADERS_30
 from blackbeard.auth.dependencies import get_current_user
 from blackbeard.engine.assistant import (
-    CopilotError,
+    AssistantError,
     NoLLMConnectionError,
     generate_resources,
 )
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
 
-class CopilotRequest(BaseModel):
+class AssistantRequest(BaseModel):
     """Request body for resource generation."""
 
     prompt: str = Field(
@@ -48,7 +48,7 @@ class CopilotRequest(BaseModel):
     )
 
 
-class CopilotResponse(BaseModel):
+class AssistantResponse(BaseModel):
     """Response with generated resources and explanation."""
 
     resources: list[dict[str, Any]] = Field(
@@ -57,7 +57,7 @@ class CopilotResponse(BaseModel):
     explanation: str = Field(description="Brief explanation of what was generated")
 
 
-class CopilotErrorResponse(BaseModel):
+class AssistantErrorResponse(BaseModel):
     """Error response from Assistant."""
 
     detail: str
@@ -65,25 +65,25 @@ class CopilotErrorResponse(BaseModel):
 
 @router.post(
     "/generate",
-    response_model=CopilotResponse,
+    response_model=AssistantResponse,
     responses={
         422: {"description": "Validation error (prompt too short/long)"},
         424: {
-            "model": CopilotErrorResponse,
+            "model": AssistantErrorResponse,
             "description": "No LLMConnection available in the specified project",
         },
         429: {"description": "Too many AI assist requests"},
         502: {
-            "model": CopilotErrorResponse,
+            "model": AssistantErrorResponse,
             "description": "LiteLLM proxy unreachable or model error",
         },
     },
 )
 async def generate_crew(
-    body: CopilotRequest,
+    body: AssistantRequest,
     session: AsyncSession = Depends(get_session),
     user: User | None = Depends(get_current_user),
-) -> CopilotResponse:
+) -> AssistantResponse:
     """Generate agents, tasks, and crew from a natural language prompt.
 
     Uses a configured LLMConnection via the LiteLLM proxy. If no
@@ -93,13 +93,13 @@ async def generate_crew(
     check_rate_limit(assistant_limiter, user, "Too many AI assist requests. Try again later.")
 
     logger.info(
-        "Copilot request: prompt_len=%d llm=%s ns=%s user=%s",
+        "Assistant request: prompt_len=%d llm=%s project=%s user=%s",
         len(body.prompt),
         body.llm_connection or "(auto)",
         body.project,
         str(user.id) if user else "api-key",
         extra={
-            "event": "copilot_api_request",
+            "event": "assistant_api_request",
             "prompt_length": len(body.prompt),
             "llm_connection": body.llm_connection,
             "project": body.project,
@@ -116,22 +116,22 @@ async def generate_crew(
         )
     except NoLLMConnectionError as e:
         logger.warning(
-            "Copilot no LLMConnection: %s",
+            "Assistant no LLMConnection: %s",
             e,
             exc_info=True,
-            extra={"event": "copilot_no_llm"},
+            extra={"event": "assistant_no_llm"},
         )
         raise HTTPException(
             status_code=424,
             detail="No LLM connection available in the specified project.",
         ) from e
-    except CopilotError as e:
+    except AssistantError as e:
         logger.warning(
-            "Copilot error: %s",
+            "Assistant error: %s",
             e,
             exc_info=True,
             extra={
-                "event": "copilot_error",
+                "event": "assistant_error",
                 "error": str(e)[:500],
             },
         )
@@ -141,4 +141,4 @@ async def generate_crew(
             headers=RETRY_HEADERS_30,
         ) from e
 
-    return CopilotResponse(resources=resources, explanation=explanation)
+    return AssistantResponse(resources=resources, explanation=explanation)

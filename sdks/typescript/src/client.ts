@@ -293,14 +293,14 @@ export class BlackbeardClient {
   async rollback(
     kind: string,
     name: string,
-    toVersion: number,
+    version: number,
     project?: string
   ): Promise<Resource> {
     const params = new URLSearchParams({ project: project ?? "default" });
     return this.request<Resource>(
       "POST",
       `/api/v1/${this.plural(kind)}/${encodeURIComponent(name)}/rollback?${params}`,
-      { to_version: toVersion }
+      { version: version }
     );
   }
 

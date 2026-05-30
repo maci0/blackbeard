@@ -226,10 +226,14 @@ function CreateAutomationDialog({
         kind: 'Automation',
         metadata: { name: name.toLowerCase().replace(/\s+/g, '-') },
         spec: {
-          target_kind: targetKind,
-          target_name: targetName.toLowerCase().replace(/\s+/g, '-'),
-          trigger_type: triggerType,
-          ...(triggerType === 'cron' ? { schedule } : {}),
+          target: {
+            kind: targetKind,
+            name: targetName.toLowerCase().replace(/\s+/g, '-'),
+          },
+          trigger: {
+            type: triggerType,
+            ...(triggerType === 'cron' ? { cron: schedule } : {}),
+          },
           ...(Object.keys(parsedInputs).length > 0 ? { inputs: parsedInputs } : {}),
           enabled,
         },

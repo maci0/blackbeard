@@ -81,14 +81,14 @@ spec:
 """
 
 _MAX_RESPONSE_LEN = 50_000
-_ALLOWED_COPILOT_KINDS = frozenset({"Agent", "Task", "Crew"})
+_ALLOWED_ASSISTANT_KINDS = frozenset({"Agent", "Task", "Crew"})
 
 
-class CopilotError(Exception):
+class AssistantError(Exception):
     """Raised when the AI assist engine encounters an error."""
 
 
-class NoLLMConnectionError(CopilotError):
+class NoLLMConnectionError(AssistantError):
     """Raised when no LLMConnection is available."""
 
 
@@ -178,12 +178,12 @@ def _parse_yaml_response(raw: str) -> list[dict[str, Any]]:
         logger.warning(
             "Assistant YAML parse error: %s",
             e,
-            extra={"event": "copilot_yaml_parse_error", "error_type": type(e).__name__},
+            extra={"event": "assistant_yaml_parse_error", "error_type": type(e).__name__},
         )
-        raise CopilotError("Failed to parse the generated YAML. Try rephrasing your prompt.") from e
+        raise AssistantError("Failed to parse the generated YAML. Try rephrasing your prompt.") from e
 
     if not docs:
-        raise CopilotError(
+        raise AssistantError(
             "The LLM did not return any valid YAML resource documents. "
             "Try rephrasing your prompt with more detail."
         )
@@ -201,20 +201,20 @@ def _validate_and_filter(docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for doc in docs:
         kind = doc.get("kind", "")
 
-        if kind not in _ALLOWED_COPILOT_KINDS:
+        if kind not in _ALLOWED_ASSISTANT_KINDS:
             logger.debug(
-                "Copilot skipping non-allowed kind: %s",
+                "Assistant skipping non-allowed kind: %s",
                 kind,
-                extra={"event": "copilot_skip_kind", "kind": kind},
+                extra={"event": "assistant_skip_kind", "kind": kind},
             )
             continue
 
         spec = doc.get("spec", {})
         if not isinstance(spec, dict):
             logger.debug(
-                "Copilot skipping doc with non-dict spec: kind=%s",
+                "Assistant skipping doc with non-dict spec: kind=%s",
                 kind,
-                extra={"event": "copilot_skip_bad_spec", "kind": kind},
+                extra={"event": "assistant_skip_bad_spec", "kind": kind},
             )
             continue
 
@@ -222,11 +222,11 @@ def _validate_and_filter(docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if errors:
             error_msgs = [f"{e.field}: {e.message}" for e in errors]
             logger.info(
-                "Copilot validation errors for %s: %s",
+                "Assistant validation errors for %s: %s",
                 kind,
                 "; ".join(error_msgs),
                 extra={
-                    "event": "copilot_validation_errors",
+                    "event": "assistant_validation_errors",
                     "kind": kind,
                     "error_count": len(errors),
                 },
@@ -281,7 +281,7 @@ async def generate_resources(
 
     Raises:
         NoLLMConnectionError: No LLMConnection available.
-        CopilotError: LLM call or parsing failed.
+        AssistantError: LLM call or parsing failed.
     """
     model_name = await _resolve_model_name(llm_connection_name, project, session)
 
@@ -290,7 +290,7 @@ async def generate_resources(
         model_name,
         len(prompt),
         extra={
-            "event": "copilot_generate_start",
+            "event": "assistant_generate_start",
             "model": model_name,
             "prompt_length": len(prompt),
             "project": project,
@@ -325,13 +325,13 @@ async def generate_resources(
             e,
             latency_ms,
             extra={
-                "event": "copilot_litellm_unreachable",
+                "event": "assistant_litellm_unreachable",
                 "model": model_name,
                 "error_type": type(e).__name__,
                 "latency_ms": latency_ms,
             },
         )
-        raise CopilotError(
+        raise AssistantError(
             "Model proxy is unreachable. Check that LiteLLM is running and the "
             "LLMConnection is correctly configured."
         ) from e
@@ -347,15 +347,15 @@ async def generate_resources(
             latency_ms,
             error_body[:200],
             extra={
-                "event": "copilot_litellm_error",
+                "event": "assistant_litellm_error",
                 "model": model_name,
                 "http_status": resp.status_code,
                 "latency_ms": latency_ms,
             },
         )
         if resp.status_code == 429:
-            raise CopilotError("Model rate limit exceeded. Try again later.")
-        raise CopilotError(f"Model request failed with status {resp.status_code}.")
+            raise AssistantError("Model rate limit exceeded. Try again later.")
+        raise AssistantError(f"Model request failed with status {resp.status_code}.")
 
     try:
         data = resp.json()
@@ -367,14 +367,14 @@ async def generate_resources(
             resp.headers.get("content-type", "unknown"),
             exc_info=True,
             extra={
-                "event": "copilot_litellm_unparseable",
+                "event": "assistant_litellm_unparseable",
                 "model": model_name,
                 "http_status": resp.status_code,
                 "latency_ms": latency_ms,
                 "content_type": resp.headers.get("content-type", "unknown"),
             },
         )
-        raise CopilotError("Model proxy returned an unparseable response.") from None
+        raise AssistantError("Model proxy returned an unparseable response.") from None
 
     # Extract content from the chat completion response
     choices = data.get("choices") or []
@@ -383,7 +383,7 @@ async def generate_resources(
     raw_content = message.get("content", "")
 
     if not raw_content:
-        raise CopilotError("The model returned an empty response. Try rephrasing your prompt.")
+        raise AssistantError("The model returned an empty response. Try rephrasing your prompt.")
 
     if len(raw_content) > _MAX_RESPONSE_LEN:
         raw_content = raw_content[:_MAX_RESPONSE_LEN]
@@ -398,7 +398,7 @@ async def generate_resources(
         latency_ms,
         len(raw_content),
         extra={
-            "event": "copilot_llm_response",
+            "event": "assistant_llm_response",
             "model": model_name,
             "total_tokens": total_tokens,
             "latency_ms": latency_ms,
@@ -411,7 +411,7 @@ async def generate_resources(
     validated = _validate_and_filter(docs)
 
     if not validated:
-        raise CopilotError(
+        raise AssistantError(
             "None of the generated resources passed validation. "
             "Try rephrasing your prompt with more specific requirements."
         )
@@ -430,7 +430,7 @@ async def generate_resources(
         len(validated),
         ", ".join(f"{k}={v}" for k, v in kind_counts.items()),
         extra={
-            "event": "copilot_generate_complete",
+            "event": "assistant_generate_complete",
             "resource_count": len(validated),
             "kind_counts": kind_counts,
             "model": model_name,
