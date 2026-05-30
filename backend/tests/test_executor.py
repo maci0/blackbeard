@@ -127,7 +127,7 @@ async def test_kickoff_crew(client: AsyncClient):
     parsed_id = uuid.UUID(data["id"])
     assert isinstance(parsed_id, uuid.UUID)
     assert data["inputs"] == {"topic": "AI"}
-    assert data["created_at"] is not None
+    assert isinstance(data["created_at"], str) and len(data["created_at"]) > 0
     assert data["error"] is None, "New execution should have no error"
     assert data["outputs"] is None, "New execution should have no outputs"
 
@@ -961,16 +961,12 @@ async def test_kickoff_without_user_has_principal_chain(client: AsyncClient):
     assert response.status_code == 202
     data = response.json()
     chain = data["principal_chain"]
-    assert chain is not None
     assert chain["crew"] == "test-crew"
-    assert "agents" in chain
     assert isinstance(chain["agents"], list)
     assert len(chain["agents"]) >= 1
-    # Agent should have default serviceAccount
     agent_entry = chain["agents"][0]
     assert agent_entry["name"] == "test-agent"
     assert agent_entry["serviceAccount"] == "sa-test-agent"
-    # No user in chain when authenticating with API key only
     assert "user" not in chain
 
 
@@ -1046,8 +1042,7 @@ async def test_principal_chain_uses_custom_service_account(client: AsyncClient):
     assert response.status_code == 202
     data = response.json()
     chain = data["principal_chain"]
-    assert chain is not None
-    # Find the agent with the custom service account
+    assert isinstance(chain, dict)
     agent_entry = next(a for a in chain["agents"] if a["name"] == "sa-agent")
     assert agent_entry["serviceAccount"] == "custom-sa"
 

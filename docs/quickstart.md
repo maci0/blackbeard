@@ -246,7 +246,7 @@ The Marketplace lets you import pre-built crews from git repositories or the bun
 ### From the UI
 
 1. Navigate to **http://localhost:3000/marketplace**
-2. Click **Import Built-in** to load all bundled example crews (research, code-review, content-pipeline, data-analysis, seo-writer, simple-crew, support-triage, and shared tools)
+2. Click **Import Built-in** to load all bundled example crews (research, code-review, content-pipeline, data-analysis, seo-writer, simple-crew, support-triage, chained-crews, and shared tools)
 3. Or paste an HTTPS git URL to import resources from any public repository
 
 ### From the API

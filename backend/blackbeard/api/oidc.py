@@ -25,7 +25,7 @@ from blackbeard.audit import get_client_ip, log_audit
 from blackbeard.auth.jwt import create_access_token, create_refresh_token
 from blackbeard.auth.passwords import hash_password
 from blackbeard.config import settings
-from blackbeard.logging_config import request_id_var
+from blackbeard.logging_config import anonymize_ip, request_id_var
 from blackbeard.models import User, get_session
 
 logger = logging.getLogger(__name__)
@@ -204,9 +204,14 @@ async def oidc_callback(
     refresh_token = create_refresh_token(str(user.id))
 
     logger.info(
-        "OIDC login: user_id=%s",
+        "OIDC login: user_id=%s from %s",
         user.id,
-        extra={"event": "oidc_login", "user_id": str(user.id)},
+        anonymize_ip(ip),
+        extra={
+            "event": "oidc_login",
+            "user_id": str(user.id),
+            "client_ip": anonymize_ip(ip),
+        },
     )
 
     # Build a same-origin fragment redirect.  The frontend reads the

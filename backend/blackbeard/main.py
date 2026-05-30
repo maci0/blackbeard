@@ -20,12 +20,12 @@ from sqlalchemy import select
 
 from blackbeard import __version__
 from blackbeard.api.a2a import router as a2a_router
+from blackbeard.api.assistant import router as assistant_router
 from blackbeard.api.audit import router as audit_router
 from blackbeard.api.auth import router as auth_router
 from blackbeard.api.automations import router as automations_router
 from blackbeard.api.chat import router as chat_router
 from blackbeard.api.collaboration import router as collaboration_router
-from blackbeard.api.copilot import router as copilot_router
 from blackbeard.api.credentials import router as credentials_router
 from blackbeard.api.executions import router as executions_router
 from blackbeard.api.health import router as health_router
@@ -382,7 +382,7 @@ app = FastAPI(
             "description": "Real-time canvas collaboration via WebSocket",
         },
         {
-            "name": "copilot",
+            "name": "assistant",
             "description": "AI-powered resource generation from natural language prompts",
         },
         {
@@ -424,7 +424,7 @@ app.include_router(marketplace_router, prefix="/api/v1")
 app.include_router(webhooks_router, prefix="/api/v1")
 app.include_router(automations_router, prefix="/api/v1")
 app.include_router(collaboration_router, prefix="/api/v1")
-app.include_router(copilot_router, prefix="/api/v1")
+app.include_router(assistant_router, prefix="/api/v1")
 app.include_router(credentials_router, prefix="/api/v1")
 app.include_router(a2a_router)
 

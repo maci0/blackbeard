@@ -3,7 +3,7 @@
 Targets uncovered lines in:
   - api/webhooks.py: create, list, delete REST endpoints
   - api/audit.py: total count path (line 95-104)
-  - api/copilot.py: success path through endpoint
+  - api/assistant.py: success path through endpoint
   - api/automations.py: disabled webhook, flow target
   - api/marketplace.py: git clone error paths, validation error import
   - api/collaboration.py: non-dict message, room already gone
@@ -435,9 +435,9 @@ async def test_copilot_endpoint_transport_error(client: AsyncClient, db_session:
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(side_effect=httpx.ConnectError("refused"))
 
-    with patch("blackbeard.engine.copilot._get_copilot_client", return_value=mock_client):
+    with patch("blackbeard.engine.assistant._get_assistant_client", return_value=mock_client):
         resp = await client.post(
-            "/api/v1/copilot/generate",
+            "/api/v1/assistant/generate",
             json={"prompt": "Build me a research crew that finds facts about topics"},
             headers=API_KEY_HEADER,
         )
@@ -449,7 +449,7 @@ async def test_copilot_endpoint_transport_error(client: AsyncClient, db_session:
 async def test_copilot_endpoint_with_project(client: AsyncClient, db_session: AsyncSession):
     """Copilot endpoint accepts project parameter."""
     resp = await client.post(
-        "/api/v1/copilot/generate",
+        "/api/v1/assistant/generate",
         json={
             "prompt": "Build me a research crew that finds facts about topics",
             "project": "custom-ns",

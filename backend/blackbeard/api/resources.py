@@ -19,7 +19,7 @@ from sqlalchemy.orm import load_only
 from blackbeard.api import MUTATION_RATE_MSG as _MUTATION_RATE_MSG
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.authorizer import clear_cache as _clear_authz_cache
-from blackbeard.auth.dependencies import check_resource_permission, get_current_user
+from blackbeard.auth.dependencies import check_resource_permission, require_permission
 from blackbeard.kinds import API_VERSION, NAME_PATTERN, PLURAL_TO_KIND, ResourceKind
 from blackbeard.litellm import model_sync
 from blackbeard.logging_config import log_task_exception
@@ -29,6 +29,7 @@ from blackbeard.models.resource_schemas import (
     ResourceListResponse,
     ResourceResponse,
     ResourceUpdate,
+    redact_automation_spec,
 )
 from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
 from blackbeard.resources import (
@@ -184,13 +185,7 @@ def _resolve_kind(kind_plural: str) -> str:
 
 def _resource_to_document(resource: Any) -> dict[str, Any]:
     """Convert a Resource ORM object to a YAML-serializable document."""
-    spec = resource.spec
-    if resource.kind.value == "Automation" and spec:
-        spec = dict(spec)
-        trigger = spec.get("trigger")
-        if isinstance(trigger, dict) and "webhook_secret" in trigger:
-            trigger = {**trigger, "webhook_secret": "**REDACTED**"}  # nosec B105
-            spec["trigger"] = trigger
+    spec = redact_automation_spec(resource.kind.value, resource.spec)
     metadata: dict[str, Any] = {
         "name": resource.name,
         "project": resource.project,
@@ -225,7 +220,7 @@ async def export_resources(
         description="Filter by project (omit for all projects)",
     ),
     session: AsyncSession = Depends(get_session),
-    _user: User | None = Depends(get_current_user),
+    _user: User | None = Depends(require_permission("list", "Resource")),
 ) -> StreamingResponse:
     """Export all resources as a multi-document YAML stream.
 

@@ -9,9 +9,10 @@ from rich.table import Table
 
 from blackbeard_cli.helpers import (
     HelpCommand,
-    console,
+    confirm_destructive,
     extract_items,
     extract_total,
+    format_timestamp,
     handle_http_error,
     handle_request_error,
     json_opt,
@@ -100,7 +101,7 @@ def user_list(ctx: click.Context, limit: int) -> None:
             escape(str(u.get("email", "—"))),
             escape(str(u.get("display_name", "—"))),
             active,
-            str(u.get("created_at", "—"))[:19],
+            format_timestamp(u.get("created_at")),
         )
 
     out.print(table)
@@ -251,7 +252,7 @@ def group_list(ctx: click.Context, limit: int) -> None:
             str(g.get("id", "—")),
             escape(str(g.get("name", "—"))),
             escape(str(g.get("description", "—") or "—")),
-            str(g.get("created_at", "—"))[:19],
+            format_timestamp(g.get("created_at")),
         )
 
     out.print(table)
@@ -321,12 +322,7 @@ def group_delete(ctx: click.Context, group_id: str, yes: bool) -> None:
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
-    if (
-        not yes
-        and not ctx.obj["json"]
-        and not click.confirm(f"Delete group {group_id} on {server}?", default=False)
-    ):
-        console.print("[yellow]Aborted.[/]")
+    if not confirm_destructive(ctx, f"Delete group {group_id} on {server}?", yes=yes):
         return
 
     try:

@@ -55,6 +55,9 @@ cd cli
 uv sync
 
 # Apply the research-crew example (path relative to repo root)
+# Note: this example uses Vertex AI (claude-sonnet-4-6). Update the
+# LLMConnection in examples/research-crew/llm-connections/ to match
+# your LLM provider, or use `bash deploy/seed.sh` instead (uses Ollama).
 uv run blackbeard apply -f ../examples/research-crew/
 
 # Verify resources were created (via API)

@@ -14,7 +14,11 @@ from blackbeard_cli.helpers import (
     STATUS_COLORS,
     TERMINAL_STATUSES,
     HelpCommand,
+    confirm_destructive,
     console,
+    extract_items,
+    extract_total,
+    format_timestamp,
     handle_http_error,
     handle_request_error,
     json_opt,
@@ -39,7 +43,7 @@ Examples:
 """,
 )
 @click.option("--crew", "-c", default=None, metavar="NAME", help="Filter by crew name")
-@click.option("--project", "-n", default=None, metavar="NAME", help="Filter by project")
+@click.option("--project", default=None, metavar="NAME", help="Filter by project")
 @click.option(
     "--status",
     "status_filter",
@@ -104,7 +108,7 @@ def executions_list(
         print_json(data)
         return
 
-    items = data.get("items", [])
+    items = extract_items(data)
     if not items:
         msg = "No executions found"
         filters = []
@@ -143,13 +147,13 @@ def executions_list(
             ex_id,
             escape(str(ex.get("crew_name", "—"))),
             f"[{color}]{status_val}[/]",
-            str(ex.get("created_at", "—"))[:19],
+            format_timestamp(ex.get("created_at")),
             f"{tokens:,}" if tokens else "—",
             cost_str,
         )
 
     out.print(table)
-    total = data.get("total", len(items))
+    total = extract_total(data, items)
     if total > len(items):
         out.print(f"[dim]Showing {len(items)} of {total} (increase --limit to see more)[/]")
     else:
@@ -331,12 +335,7 @@ def cancel(ctx: click.Context, execution_id: str, yes: bool) -> None:
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
-    if (
-        not yes
-        and not ctx.obj["json"]
-        and not click.confirm(f"Cancel execution {execution_id} on {server}?", default=False)
-    ):
-        console.print("[yellow]Aborted.[/]")
+    if not confirm_destructive(ctx, f"Cancel execution {execution_id} on {server}?", yes=yes):
         return
 
     try:

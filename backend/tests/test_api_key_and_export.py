@@ -142,7 +142,8 @@ async def test_revoked_api_key_is_cleared_on_user(client: AsyncClient, db_sessio
 
     # Verify it's stored
     result = await db_session.execute(select(User).where(User.api_key == api_key))
-    assert result.scalar_one_or_none() is not None
+    stored_user = result.scalar_one_or_none()
+    assert stored_user is not None and stored_user.email == _APIKEY_EMAIL
 
     # Revoke it
     del_resp = await client.delete("/api/v1/auth/api-key", headers=_bearer(token))
@@ -171,7 +172,8 @@ async def test_rotated_key_invalidates_previous(client: AsyncClient, db_session:
 
     # New key should resolve
     result_new = await db_session.execute(select(User).where(User.api_key == key2))
-    assert result_new.scalar_one_or_none() is not None, "New key should resolve"
+    new_user = result_new.scalar_one_or_none()
+    assert new_user is not None and new_user.api_key == key2, "New key should resolve"
 
 
 # ---------------------------------------------------------------------------

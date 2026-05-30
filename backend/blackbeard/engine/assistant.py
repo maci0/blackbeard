@@ -1,4 +1,4 @@
-"""Copilot engine: generate Blackbeard resources from natural language.
+"""Assistant engine: generate Blackbeard resources from natural language.
 
 Uses a configured LLMConnection via the LiteLLM proxy to generate
 structured YAML resource definitions (Agent, Task, Crew).
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 _yaml_loader: Any = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 
 SYSTEM_PROMPT = f"""\
-You are Blackbeard Copilot. Generate CrewAI agent/task/crew definitions as YAML.
+You are Blackbeard Assistant. Generate CrewAI agent/task/crew definitions as YAML.
 
 Available resource kinds:
 - Agent: {{ role, goal, backstory, llm: "ref:llm-connections/<name>", tools: [...], \
@@ -85,16 +85,16 @@ _ALLOWED_COPILOT_KINDS = frozenset({"Agent", "Task", "Crew"})
 
 
 class CopilotError(Exception):
-    """Raised when the copilot engine encounters an error."""
+    """Raised when the AI assist engine encounters an error."""
 
 
 class NoLLMConnectionError(CopilotError):
     """Raised when no LLMConnection is available."""
 
 
-def _get_copilot_client() -> httpx.AsyncClient:
-    """Return a shared httpx client for copilot LiteLLM requests."""
-    return get_litellm_client("litellm-copilot", timeout=120.0)
+def _get_assistant_client() -> httpx.AsyncClient:
+    """Return a shared httpx client for AI assist LiteLLM requests."""
+    return get_litellm_client("litellm-assistant", timeout=120.0)
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -149,7 +149,7 @@ async def _resolve_model_name(
         if resource is None:
             raise NoLLMConnectionError(
                 f"No LLMConnection found in project '{project}'. "
-                "Create an LLMConnection resource first so the copilot knows which model to use. "
+                "Create an LLMConnection resource first so Assistant knows which model to use. "
                 "Example: POST /api/v1/llm-connections with provider='ollama' and model='llama3'."
             )
 
@@ -176,7 +176,7 @@ def _parse_yaml_response(raw: str) -> list[dict[str, Any]]:
                 docs.append(doc)
     except yaml.YAMLError as e:
         logger.warning(
-            "Copilot YAML parse error: %s",
+            "Assistant YAML parse error: %s",
             e,
             extra={"event": "copilot_yaml_parse_error", "error_type": type(e).__name__},
         )
@@ -309,7 +309,7 @@ async def generate_resources(
 
     t0 = time.monotonic()
     try:
-        client = _get_copilot_client()
+        client = _get_assistant_client()
         resp = await client.post(
             f"{settings.litellm_proxy_url}/chat/completions",
             json=payload,

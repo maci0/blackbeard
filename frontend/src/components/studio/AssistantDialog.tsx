@@ -4,31 +4,31 @@ import { X, Sparkles, AlertCircle, Check } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { api } from '@/api/client'
 
-interface CopilotResource {
+interface AssistantResource {
   apiVersion: string
   kind: string
   metadata: { name: string; [k: string]: unknown }
   spec: Record<string, unknown>
 }
 
-interface CopilotResponse {
-  resources: CopilotResource[]
+interface AssistantResponse {
+  resources: AssistantResource[]
   explanation: string
 }
 
-interface CopilotDialogProps {
+interface AssistantDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onApply: (resources: CopilotResource[]) => void
+  onApply: (resources: AssistantResource[]) => void
 }
 
-export type { CopilotResource }
+export type { AssistantResource }
 
-export function CopilotDialog({ open, onOpenChange, onApply }: CopilotDialogProps) {
+export function AssistantDialog({ open, onOpenChange, onApply }: AssistantDialogProps) {
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<CopilotResponse | null>(null)
+  const [result, setResult] = useState<AssistantResponse | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Focus textarea when dialog opens
@@ -59,7 +59,7 @@ export function CopilotDialog({ open, onOpenChange, onApply }: CopilotDialogProp
     setResult(null)
 
     try {
-      const response = await api.post<CopilotResponse>('/api/v1/copilot/generate', {
+      const response = await api.post<AssistantResponse>('/api/v1/assistant/generate', {
         prompt: prompt.trim(),
       })
       setResult(response)
@@ -98,7 +98,7 @@ export function CopilotDialog({ open, onOpenChange, onApply }: CopilotDialogProp
           {/* Header */}
           <div className="flex items-center gap-2 border-b px-6 py-4">
             <Sparkles className="h-5 w-5 text-amber-400" aria-hidden="true" />
-            <Dialog.Title className="text-lg font-semibold">AI Copilot</Dialog.Title>
+            <Dialog.Title className="text-lg font-semibold">AI Assistant</Dialog.Title>
           </div>
 
           {/* Body */}

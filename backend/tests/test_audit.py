@@ -57,6 +57,7 @@ async def test_audit_log_creation(db_session: AsyncSession):
     assert saved.request_id == "req-abc"
     assert saved.ip_address == "10.0.0.1"
     assert saved.timestamp is not None
+    assert saved.timestamp.year >= 2024
 
 
 async def test_audit_log_minimal_fields(db_session: AsyncSession):
@@ -313,7 +314,6 @@ async def test_login_failure_creates_audit_entry(client: AsyncClient, db_session
     result = await db_session.execute(select(AuditLog).where(AuditLog.action == "login_failed"))
     entry = result.scalar_one()
     assert entry.actor_type == "user"
-    assert entry.detail is not None
     assert entry.detail["reason"] == "invalid_credentials"
 
 

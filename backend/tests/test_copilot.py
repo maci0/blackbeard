@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from blackbeard.engine.copilot import (
+from blackbeard.engine.assistant import (
     CopilotError,
     NoLLMConnectionError,
     _parse_yaml_response,
@@ -290,7 +290,7 @@ async def test_generate_resources_success(db_session, llm_connection_resource):
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(return_value=_mock_llm_response())
 
-    with patch("blackbeard.engine.copilot._get_copilot_client", return_value=mock_client):
+    with patch("blackbeard.engine.assistant._get_assistant_client", return_value=mock_client):
         resources, explanation = await generate_resources(
             prompt="Build me a research crew",
             llm_connection_name="test-llm",
@@ -330,7 +330,7 @@ async def test_generate_resources_llm_error(db_session, llm_connection_resource)
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(return_value=_mock_llm_response(status=500))
 
-    with patch("blackbeard.engine.copilot._get_copilot_client", return_value=mock_client):
+    with patch("blackbeard.engine.assistant._get_assistant_client", return_value=mock_client):
         with pytest.raises(CopilotError, match="status 500"):
             await generate_resources(
                 prompt="Build me a research crew",
@@ -346,7 +346,7 @@ async def test_generate_resources_rate_limited(db_session, llm_connection_resour
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(return_value=_mock_llm_response(status=429))
 
-    with patch("blackbeard.engine.copilot._get_copilot_client", return_value=mock_client):
+    with patch("blackbeard.engine.assistant._get_assistant_client", return_value=mock_client):
         with pytest.raises(CopilotError, match="rate limit"):
             await generate_resources(
                 prompt="Build me a research crew",
@@ -362,7 +362,7 @@ async def test_generate_resources_empty_response(db_session, llm_connection_reso
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(return_value=_mock_llm_response(content=""))
 
-    with patch("blackbeard.engine.copilot._get_copilot_client", return_value=mock_client):
+    with patch("blackbeard.engine.assistant._get_assistant_client", return_value=mock_client):
         with pytest.raises(CopilotError, match="empty response"):
             await generate_resources(
                 prompt="Build me a research crew",
@@ -378,7 +378,7 @@ async def test_generate_resources_transport_error(db_session, llm_connection_res
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
 
-    with patch("blackbeard.engine.copilot._get_copilot_client", return_value=mock_client):
+    with patch("blackbeard.engine.assistant._get_assistant_client", return_value=mock_client):
         with pytest.raises(CopilotError, match="unreachable"):
             await generate_resources(
                 prompt="Build me a research crew",
@@ -395,7 +395,7 @@ async def test_generate_resources_auto_selects_llm(db_session, llm_connection_re
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(return_value=_mock_llm_response())
 
-    with patch("blackbeard.engine.copilot._get_copilot_client", return_value=mock_client):
+    with patch("blackbeard.engine.assistant._get_assistant_client", return_value=mock_client):
         resources, _ = await generate_resources(
             prompt="Build me a research crew",
             llm_connection_name=None,
@@ -423,7 +423,7 @@ async def test_generate_resources_openai_provider(db_session):
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(return_value=_mock_llm_response())
 
-    with patch("blackbeard.engine.copilot._get_copilot_client", return_value=mock_client):
+    with patch("blackbeard.engine.assistant._get_assistant_client", return_value=mock_client):
         await generate_resources(
             prompt="Build me a research crew",
             llm_connection_name="openai-llm",
@@ -444,7 +444,7 @@ async def test_generate_resources_openai_provider(db_session):
 async def test_copilot_endpoint_short_prompt(client):
     """Prompt shorter than 10 chars should return 422."""
     resp = await client.post(
-        "/api/v1/copilot/generate",
+        "/api/v1/assistant/generate",
         json={"prompt": "short"},
         headers=API_KEY_HEADER,
     )
@@ -454,7 +454,7 @@ async def test_copilot_endpoint_short_prompt(client):
 async def test_copilot_endpoint_no_llm(client):
     """No LLMConnection in DB should return 424."""
     resp = await client.post(
-        "/api/v1/copilot/generate",
+        "/api/v1/assistant/generate",
         json={"prompt": "Build me a research crew that finds facts about topics"},
         headers=API_KEY_HEADER,
     )
@@ -477,9 +477,9 @@ async def test_copilot_endpoint_success(client, db_session):
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(return_value=_mock_llm_response())
 
-    with patch("blackbeard.engine.copilot._get_copilot_client", return_value=mock_client):
+    with patch("blackbeard.engine.assistant._get_assistant_client", return_value=mock_client):
         resp = await client.post(
-            "/api/v1/copilot/generate",
+            "/api/v1/assistant/generate",
             json={"prompt": "Build me a research crew that finds facts about topics"},
             headers=API_KEY_HEADER,
         )
@@ -506,9 +506,9 @@ async def test_copilot_endpoint_llm_error(client, db_session):
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(return_value=_mock_llm_response(status=500))
 
-    with patch("blackbeard.engine.copilot._get_copilot_client", return_value=mock_client):
+    with patch("blackbeard.engine.assistant._get_assistant_client", return_value=mock_client):
         resp = await client.post(
-            "/api/v1/copilot/generate",
+            "/api/v1/assistant/generate",
             json={"prompt": "Build me a research crew that finds facts about topics"},
             headers=API_KEY_HEADER,
         )
@@ -529,9 +529,9 @@ async def test_copilot_endpoint_specific_llm(client, db_session):
     mock_client = AsyncMock()
     mock_client.post = AsyncMock(return_value=_mock_llm_response())
 
-    with patch("blackbeard.engine.copilot._get_copilot_client", return_value=mock_client):
+    with patch("blackbeard.engine.assistant._get_assistant_client", return_value=mock_client):
         resp = await client.post(
-            "/api/v1/copilot/generate",
+            "/api/v1/assistant/generate",
             json={
                 "prompt": "Build me a research crew that finds facts about topics",
                 "llm_connection": "my-special-llm",
@@ -549,7 +549,7 @@ async def test_copilot_endpoint_specific_llm(client, db_session):
 async def test_copilot_endpoint_nonexistent_llm(client):
     """Requesting a nonexistent LLMConnection should return 424."""
     resp = await client.post(
-        "/api/v1/copilot/generate",
+        "/api/v1/assistant/generate",
         json={
             "prompt": "Build me a research crew that finds facts about topics",
             "llm_connection": "does-not-exist",

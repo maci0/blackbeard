@@ -142,8 +142,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       } else {
         set({ token: result.access_token })
       }
-    } catch (err) {
-      console.warn('[auth] token refresh failed:', getErrorMessage(err, 'unknown'))
+    } catch {
+      console.warn('[auth] token refresh failed')
       get().logout()
     }
   },
@@ -163,8 +163,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             set({ user, loading: false })
             return
           }
-        } catch (refreshErr) {
-          console.warn('[auth] token refresh failed, showing session expired dialog', refreshErr)
+        } catch {
+          console.warn('[auth] token refresh failed, showing session expired dialog')
         }
         set({ sessionExpired: true })
       }

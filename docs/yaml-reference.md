@@ -348,6 +348,10 @@ spec:
   # Generic provider settings
   api_key_env: "OPENAI_API_KEY"           # Env var containing the API key
   base_url: "https://api.openai.com/v1"  # Override the provider base URL
+
+  # Model fallback chain
+  fallbacks:                               # Fallback models tried on provider error (max 5)
+    - "openai/gpt-4o"
 ```
 
 > **Note:** The `api_key_env` value is read by the LiteLLM proxy at runtime, not at resource creation time. The proxy must have the specified environment variable set.
@@ -366,6 +370,7 @@ spec:
 | `vertex.location` | string | — | GCP region (Vertex AI only) |
 | `api_key_env` | string | — | Env var name holding the API key (must be uppercase, ending in `_API_KEY`, `_KEY`, or `_SECRET`) |
 | `base_url` | string | — | Custom API base URL |
+| `fallbacks` | string[] | — | Fallback model names to try if this model fails (max 5). LiteLLM retries with each in order on provider errors |
 
 > **Note:** The `vertex` section is optional. If `vertex.project` or `vertex.location` are omitted, they fall back to the global `GOOGLE_CLOUD_PROJECT` and `CLOUD_ML_REGION` environment variables.
 
@@ -395,6 +400,17 @@ spec:
   budget:
     max_usd: 1.00                          # Maximum spend in USD per execution
     max_tokens: 100000                     # Maximum total tokens per execution
+    alerts:                                # Warning thresholds (triggers cost_alert event)
+      warn_at_usd: 0.75                   # Warn when spend exceeds this amount
+      warn_at_tokens: 80000               # Warn when tokens exceed this count
+
+  # PII redaction (via Presidio)
+  pii:
+    enabled: true                          # Enable PII redaction on outputs/events
+    backend: default                       # "default", "presidio-nlp", or "litellm"
+    preset: hipaa                          # "hipaa", "gdpr", "pci-dss", "ccpa", or "custom"
+    redact_outputs: true                   # Redact execution outputs (default true)
+    redact_events: true                    # Redact execution events (default true)
 
   # Sandbox enforcement
   sandbox:
@@ -415,9 +431,18 @@ spec:
 | `tools.deny` | string[] | — | Denied tool refs (used with `denylist`) |
 | `budget.max_usd` | number ≥ 0 | — | Max spend in USD per execution |
 | `budget.max_tokens` | integer ≥ 1 | — | Max total tokens per execution |
+| `budget.alerts.warn_at_usd` | number ≥ 0 | — | Triggers `cost_alert` event when spend crosses this threshold |
+| `budget.alerts.warn_at_tokens` | integer ≥ 0 | — | Triggers `cost_alert` event when token count crosses this threshold |
 | `sandbox.minimum_tier` | `none`\|`wasm`\|`docker`\|`podman`\|`gvisor`\|`microvm` | — | Minimum sandbox isolation required |
 | `delegation.allowed` | boolean | — | Whether agent-to-agent delegation is permitted |
 | `delegation.targets` | string[] | — | Restrict which agents can receive delegated work (refs) |
+| `pii.enabled` | boolean | — | Enable PII redaction (default `false`) |
+| `pii.backend` | `default`\|`presidio-nlp`\|`litellm` | — | Recognizer backend (default `default`) |
+| `pii.model` | string | — | Model name for `litellm` backend |
+| `pii.preset` | `hipaa`\|`gdpr`\|`pci-dss`\|`ccpa`\|`custom` | — | Predefined entity set (default `custom`) |
+| `pii.entities` | string[] | — | Explicit PII entity types to detect (merged with preset) |
+| `pii.redact_outputs` | boolean | — | Redact execution outputs (default `true`) |
+| `pii.redact_events` | boolean | — | Redact execution events (default `true`) |
 
 > **Sandbox tiers:** `none`, `wasm`, `docker`/`podman`, `gvisor`, and `microvm` (Firecracker or libkrun). Higher tiers provide stronger isolation. If a policy minimum exceeds a tool's declared tier, the tool is promoted to the policy minimum.
 
@@ -435,7 +460,7 @@ metadata:
   project: default
 spec:
   # --- Required ---
-  type: function                           # "function", "llm", or "schema"
+  type: function                           # "function", "llm", "schema", or "pii"
 
   # --- Optional ---
   description: "Reject outputs containing personally identifiable information"
@@ -467,7 +492,7 @@ spec:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | `function`\|`llm`\|`schema` | ✅ | Guardrail implementation strategy |
+| `type` | `function`\|`llm`\|`schema`\|`pii` | ✅ | Guardrail implementation strategy |
 | `description` | string | — | Human-readable description of what is being checked |
 | `on_fail` | `reject`\|`warn`\|`log` | — | Action on validation failure (default `reject`) |
 | `function_path` | string | — | Dotted path to Python callable `(output: str) -> bool` (required for `function`) |

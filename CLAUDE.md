@@ -80,9 +80,9 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Chat streaming**: `POST /api/v1/chat/stream` provides real SSE streaming endpoint. Backend proxies through LiteLLM with `stream=True`, forwarding SSE chunks to the client.
 
-**Model fallback chains**: Configured per `LLMConnection` via `spec.fallback_to` refs. LiteLLM automatically retries with fallback models on provider errors.
+**Model fallback chains**: Configured per `LLMConnection` via `spec.fallbacks` (array of model strings). LiteLLM automatically retries with fallback models on provider errors.
 
-**Cost alert thresholds**: AgentPolicy supports `warn_at_usd` and `warn_at_tokens` fields. Triggers `cost_alert` event when spend crosses warning thresholds during execution, before the hard budget limit.
+**Cost alert thresholds**: AgentPolicy supports `budget.alerts.warn_at_usd` and `budget.alerts.warn_at_tokens` fields. Triggers `cost_alert` event when spend crosses warning thresholds during execution, before the hard budget limit.
 
 **A2A Protocol**: `GET /.well-known/agent-card.json` auto-generates agent cards from Crew resources with `spec.a2a.enabled: true`. Public endpoint (no auth). Cards include skills from task refs, auth schemes, capabilities. Cached 60s in-memory.
 
@@ -116,7 +116,7 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Health indicator**: Sidebar displays a live health status indicator for the backend API connection.
 
-**Marketplace**: `/marketplace` page for importing resources from git repos. Backend clones repos, validates YAML, upserts resources. 7 built-in example crews plus a shared tools collection available. Enhanced template gallery with search, category chips, preview dialog, and resource summaries.
+**Marketplace**: `/marketplace` page for importing resources from git repos. Backend clones repos, validates YAML, upserts resources. 8 built-in example crews plus a shared tools collection available. Enhanced template gallery with search, category chips, preview dialog, and resource summaries.
 
 **Knowledge Sources**: `/knowledge` page with card grid showing knowledge sources and source type badges.
 

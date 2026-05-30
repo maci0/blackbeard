@@ -16,7 +16,7 @@ import type { RunStatus, Execution, ExecutionTask } from '@/lib/types'
 import { TERMINAL_STATUSES } from '@/lib/types'
 import { RunDialog, type RunParams } from '@/components/studio/RunDialog'
 import { Toolbar } from '@/components/studio/Toolbar'
-import { CopilotDialog, type CopilotResource } from '@/components/studio/CopilotDialog'
+import { AssistantDialog, type AssistantResource } from '@/components/studio/AssistantDialog'
 import { CrewSettingsDialog } from '@/components/studio/CrewSettingsDialog'
 import type { CrewSettings } from '@/stores/studioStore'
 import { CursorOverlay } from '@/components/studio/CursorOverlay'
@@ -159,7 +159,7 @@ function StudioInner() {
   const [pendingLoadCrew, setPendingLoadCrew] = useState<string | null>(null)
   const [yamlOpen, setYamlOpen] = useState(false)
   const [layouting, setLayouting] = useState(false)
-  const [copilotOpen, setCopilotOpen] = useState(false)
+  const [aiAssistOpen, setAssistantOpen] = useState(false)
   const [collabEnabled, setCollabEnabled] = useState(false)
   const [crewSettingsOpen, setCrewSettingsOpen] = useState(false)
 
@@ -805,9 +805,9 @@ function StudioInner() {
     }
   }, [applyStatus, setNodes, setEdges])
 
-  /* ── Apply copilot-generated resources to the canvas ── */
-  const handleCopilotApply = useCallback(
-    (resources: CopilotResource[]) => {
+  /* ── Apply Assistant-generated resources to the canvas ── */
+  const handleAssistantApply = useCallback(
+    (resources: AssistantResource[]) => {
       const agentResources = resources.filter((r) => r.kind === 'Agent')
       const taskResources = resources.filter((r) => r.kind === 'Task')
       const crewResource = resources.find((r) => r.kind === 'Crew')
@@ -878,7 +878,7 @@ function StudioInner() {
         setCrewName(crewResource.metadata.name)
       }
 
-      applyStatus('success', `Copilot generated ${resources.length} resources`)
+      applyStatus('success', `Assistant generated ${resources.length} resources`)
     },
     [applyStatus, crewName, setCrewName, setEdges, setNodes],
   )
@@ -909,7 +909,7 @@ function StudioInner() {
         redo={redo}
         yamlOpen={yamlOpen}
         onYamlToggle={() => setYamlOpen((v) => !v)}
-        onCopilotClick={() => setCopilotOpen(true)}
+        onAssistantClick={() => setAssistantOpen(true)}
         onAutoLayout={() => void handleAutoLayout()}
         layouting={layouting}
         collabEnabled={collabEnabled}
@@ -962,10 +962,10 @@ function StudioInner() {
         }}
       />
 
-      <CopilotDialog
-        open={copilotOpen}
-        onOpenChange={setCopilotOpen}
-        onApply={handleCopilotApply}
+      <AssistantDialog
+        open={aiAssistOpen}
+        onOpenChange={setAssistantOpen}
+        onApply={handleAssistantApply}
       />
 
       <CrewSettingsDialog

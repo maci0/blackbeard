@@ -225,10 +225,36 @@ def parse_key_value_inputs(items: tuple[str, ...], flag_name: str = "--input") -
     return result
 
 
+def confirm_destructive(ctx: click.Context, prompt_msg: str, *, yes: bool) -> bool:
+    """Check destructive-op confirmation; returns True to proceed, False to abort.
+
+    In JSON mode without --yes, prints an error and exits.
+    In interactive mode, prompts the user.
+    """
+    if yes:
+        return True
+    if ctx.obj["json"]:
+        console.print("[red bold]Error:[/] Destructive operation requires -y/--yes with --json.")
+        raise SystemExit(2)
+    if not click.confirm(prompt_msg, default=False):
+        console.print("[yellow]Aborted.[/]")
+        return False
+    return True
+
+
+def format_timestamp(value: object, fallback: str = "—") -> str:
+    """Format an API timestamp to 'YYYY-MM-DDTHH:MM:SS' (19 chars)."""
+    raw = str(value) if value else fallback
+    return raw[:19] if raw != fallback else fallback
+
+
 def extract_items(data: Any) -> list[Any]:
     """Normalise a list-or-paginated API response into a plain list."""
-    return data if isinstance(data, list) else data.get("items", [])
+    return data if isinstance(data, list) else data.get("items") or []
 
 
 def extract_total(data: Any, items: list[Any]) -> int:
-    return len(items) if isinstance(data, list) else data.get("total", len(items))
+    if isinstance(data, list):
+        return len(items)
+    total = data.get("total")
+    return total if isinstance(total, int) else len(items)

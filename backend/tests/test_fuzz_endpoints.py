@@ -1011,3 +1011,117 @@ async def test_readiness_endpoint(client):
     """GET /api/v1/health/ready should return 200 or 503 (degraded), never 500."""
     resp = await client.get("/api/v1/health/ready")
     assert resp.status_code in (200, 503), f"Readiness check returned {resp.status_code}"
+
+
+# ---------------------------------------------------------------------------
+# 10. Copilot API fuzzing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@given(
+    prompt=st.text(min_size=10, max_size=200),
+    llm_connection=st.one_of(st.none(), st.text(min_size=1, max_size=50)),
+    project=st.text(min_size=1, max_size=50),
+)
+@settings(max_examples=30, suppress_health_check=[HealthCheck.function_scoped_fixture])
+async def test_fuzz_copilot_generate(client, prompt, llm_connection, project):
+    """POST /api/v1/assistant/generate with random prompts should never 500."""
+    body: dict = {"prompt": prompt}
+    if llm_connection is not None:
+        body["llm_connection"] = llm_connection
+    body["project"] = project
+    resp = await client.post(
+        "/api/v1/assistant/generate",
+        headers=API_KEY_HEADER,
+        json=body,
+    )
+    assert resp.status_code in (_OK_STATUSES_WITH_PROXY | {424}), (
+        f"Copilot returned {resp.status_code}: {resp.text[:200]}"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        {"prompt": ""},
+        {"prompt": "x" * 3},
+        {"prompt": "a" * 10001},
+        {"prompt": 123},
+        {"prompt": None},
+        {"prompt": "Build a crew", "llm_connection": "../../../etc/passwd"},
+        {"prompt": "Build a crew", "llm_connection": "'; DROP TABLE--"},
+        {"prompt": "Build a crew", "project": ""},
+        "not json",
+    ],
+    ids=[
+        "empty", "empty-prompt", "too-short", "too-long",
+        "int-prompt", "null-prompt", "path-traversal-llm",
+        "sqli-llm", "empty-project", "not-json",
+    ],
+)
+@pytest.mark.asyncio
+async def test_evil_copilot_inputs(client, body):
+    """POST /api/v1/assistant/generate with evil inputs should never 500."""
+    kwargs: dict = {"headers": {**API_KEY_HEADER, "Content-Type": "application/json"}}
+    if isinstance(body, str):
+        kwargs["content"] = body
+    else:
+        kwargs["json"] = body
+    resp = await client.post("/api/v1/assistant/generate", **kwargs)
+    assert resp.status_code in _OK_STATUSES_WITH_PROXY
+
+
+# ---------------------------------------------------------------------------
+# 11. OIDC / SSO endpoint fuzzing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_oidc_login_without_config(client):
+    """GET /api/v1/auth/oidc/login should return 404 when OIDC is not configured."""
+    resp = await client.get("/api/v1/auth/oidc/login")
+    # OIDC router is only mounted when OIDC_ISSUER is set; otherwise 404
+    assert resp.status_code in (200, 302, 307, 404, 422)
+
+
+@pytest.mark.asyncio
+async def test_oidc_callback_without_config(client):
+    """GET /api/v1/auth/oidc/callback should return 404 when OIDC is not configured."""
+    resp = await client.get("/api/v1/auth/oidc/callback")
+    assert resp.status_code in (200, 302, 307, 400, 404, 422)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "params",
+    [
+        {},
+        {"code": ""},
+        {"code": "fake-code-12345"},
+        {"code": "a" * 5000},
+        {"code": "<script>alert(1)</script>"},
+        {"code": "'; DROP TABLE users--"},
+        {"state": "evil-state", "code": "evil-code"},
+        {"error": "access_denied", "error_description": "User denied"},
+    ],
+    ids=[
+        "no-params", "empty-code", "fake-code", "long-code",
+        "xss-code", "sqli-code", "evil-state", "error-response",
+    ],
+)
+async def test_evil_oidc_callback_params(client, params):
+    """GET /api/v1/auth/oidc/callback with evil params should never 500."""
+    resp = await client.get("/api/v1/auth/oidc/callback", params=params)
+    assert resp.status_code in (200, 302, 307, 400, 401, 403, 404, 422)
+
+
+@pytest.mark.asyncio
+async def test_public_config_endpoint(client):
+    """GET /api/v1/config/public should return 200 with oidc_enabled field."""
+    resp = await client.get("/api/v1/config/public")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "oidc_enabled" in data

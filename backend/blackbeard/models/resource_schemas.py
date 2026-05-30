@@ -13,6 +13,20 @@ if TYPE_CHECKING:
 
 from blackbeard.kinds import ALL_KINDS, API_VERSION, NAME_PATTERN
 
+_REDACTED_SECRET = "**REDACTED**"  # nosec B105 -- redaction-placeholder
+
+
+def redact_automation_spec(kind_value: str, spec: dict[str, Any]) -> dict[str, Any]:
+    """Return spec with webhook_secret redacted for Automation resources."""
+    if kind_value != "Automation" or not spec:
+        return spec
+    trigger = spec.get("trigger")
+    if not isinstance(trigger, dict) or "webhook_secret" not in trigger:
+        return spec
+    spec = dict(spec)
+    spec["trigger"] = {**trigger, "webhook_secret": _REDACTED_SECRET}
+    return spec
+
 __all__ = [
     "ResourceCreate",
     "ResourceListResponse",
@@ -102,13 +116,7 @@ class ResourceResponse(BaseModel):
     @classmethod
     def from_db(cls, resource: Resource) -> ResourceResponse:
         """Build response from a SQLAlchemy Resource model."""
-        spec = resource.spec
-        if resource.kind.value == "Automation" and spec:
-            spec = dict(spec)
-            trigger = spec.get("trigger")
-            if isinstance(trigger, dict) and "webhook_secret" in trigger:
-                trigger = {**trigger, "webhook_secret": "**REDACTED**"}  # nosec B105 -- redaction-placeholder
-                spec["trigger"] = trigger
+        spec = redact_automation_spec(resource.kind.value, resource.spec)
         return cls.model_construct(
             id=resource.id,
             apiVersion=API_VERSION,

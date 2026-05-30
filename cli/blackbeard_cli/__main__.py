@@ -23,8 +23,11 @@ from blackbeard_cli.helpers import (
     STATUS_COLORS,
     TERMINAL_STATUSES,
     HelpCommand,
+    confirm_destructive,
     console,
     extract_detail,
+    extract_items,
+    extract_total,
     handle_http_error,
     handle_request_error,
     json_opt,
@@ -732,7 +735,7 @@ def list_resources_cmd(ctx: click.Context, kind: str, labels: tuple[str, ...], l
         print_json(data)
         return
 
-    items = data.get("items", [])
+    items = extract_items(data)
     if not items:
         msg = f"No {kind} resources found in project '{escape(namespace)}'"
         if labels:
@@ -758,7 +761,7 @@ def list_resources_cmd(ctx: click.Context, kind: str, labels: tuple[str, ...], l
         )
 
     out.print(table)
-    total = data.get("total", len(items))
+    total = extract_total(data, items)
     if total > len(items):
         out.print(f"[dim]Showing {len(items)} of {total} (increase --limit to see more)[/]")
     else:
@@ -791,14 +794,9 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool) -> None:
     namespace = ctx.obj["project"]
     plural = KIND_TO_PLURAL[kind]
 
-    if (
-        not yes
-        and not ctx.obj["json"]
-        and not click.confirm(
-            f"Delete {kind}/{name} in project '{namespace}' on {server}?", default=False
-        )
+    if not confirm_destructive(
+        ctx, f"Delete {kind}/{name} in project '{namespace}' on {server}?", yes=yes
     ):
-        console.print("[yellow]Aborted.[/]")
         return
 
     url = f"{server}/api/v1/{plural}/{name}"

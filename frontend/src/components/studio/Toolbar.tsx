@@ -52,7 +52,7 @@ export function Toolbar({
   onYamlToggle,
   onAutoLayout,
   layouting,
-  onCopilotClick,
+  onAssistantClick,
   collabEnabled,
   onCollabToggle,
   collabConnected,
@@ -84,7 +84,7 @@ export function Toolbar({
   onYamlToggle: () => void
   onAutoLayout: () => void
   layouting?: boolean
-  onCopilotClick: () => void
+  onAssistantClick: () => void
   collabEnabled?: boolean
   onCollabToggle?: () => void
   collabConnected?: boolean
@@ -320,16 +320,16 @@ export function Toolbar({
           <Settings className="h-3.5 w-3.5" />
         </button>
 
-        {/* AI Copilot */}
+        {/* AI Assistant */}
         <button
-          onClick={onCopilotClick}
+          onClick={onAssistantClick}
           disabled={status === 'saving' || status === 'loading'}
-          aria-label="AI Copilot — generate crew from prompt"
-          title="AI Copilot"
+          aria-label="AI Assistant — generate crew from prompt"
+          title="AI Assistant"
           className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-950"
         >
           <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-          Copilot
+          Assistant
         </button>
 
         {/* Export dropdown */}

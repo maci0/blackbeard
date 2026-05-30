@@ -477,5 +477,5 @@ class TestResetEngines:
     def test_reset_clears_singletons(self):
         import blackbeard.pii as pii_mod
 
-        assert pii_mod._analyzer is None
+        assert len(pii_mod._analyzers) == 0
         assert pii_mod._anonymizer is None

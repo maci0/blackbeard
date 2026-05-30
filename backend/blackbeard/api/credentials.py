@@ -154,11 +154,13 @@ async def create_credential(
     },
 )
 async def list_credentials(
+    response: Response,
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     _current_user: User = Depends(require_permission("list", "Credential", require_identity=True)),
 ) -> CredentialListResponse:
     """List all credentials (masked values only)."""
+    response.headers["Cache-Control"] = "no-store"
     with _credentials_lock:
         all_creds = sorted(_credentials.values(), key=lambda x: x["created_at"], reverse=True)
     total = len(all_creds)

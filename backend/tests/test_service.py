@@ -67,6 +67,7 @@ async def test_service_create_returns_resource(db_session: AsyncSession):
     assert resource.version == 1
     assert resource.spec["role"] == "Test Agent"
     assert resource.id is not None
+    assert str(resource.id).count("-") == 4, "Resource id should be a UUID"
 
 
 async def test_service_create_upsert_on_duplicate(db_session: AsyncSession):

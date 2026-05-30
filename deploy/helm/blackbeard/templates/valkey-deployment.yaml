@@ -93,6 +93,10 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.valkey.resources | nindent 12 }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "REDISCLI_AUTH=$VALKEY_PASSWORD valkey-cli bgsave && sleep 3"]
           volumeMounts:
             - name: data
               mountPath: /data

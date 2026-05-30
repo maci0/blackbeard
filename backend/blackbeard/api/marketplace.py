@@ -185,6 +185,16 @@ async def _clone_repo(url: str, target: Path) -> None:
     except TimeoutError:
         proc.kill()
         await proc.wait()
+        logger.warning(
+            "Git clone timed out: url=%s timeout=%ds",
+            url[:200],
+            _MAX_CLONE_TIMEOUT_S,
+            extra={
+                "event": "marketplace_git_clone_timeout",
+                "url": url[:200],
+                "timeout_s": _MAX_CLONE_TIMEOUT_S,
+            },
+        )
         raise HTTPException(
             status_code=504,
             detail=f"Git clone timed out after {_MAX_CLONE_TIMEOUT_S}s",

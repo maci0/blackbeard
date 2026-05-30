@@ -6,7 +6,7 @@ use from both async middleware and sync background tasks.
 
 Also provides ``InMemoryRateLimiter`` — a reusable sliding-window counter
 for per-user mutation rate limiting on resource, execution, marketplace,
-copilot, and chat endpoints.
+AI assist, and chat endpoints.
 """
 
 from __future__ import annotations
@@ -24,14 +24,13 @@ from blackbeard.config import settings
 logger = logging.getLogger(__name__)
 
 _ANON_KEY = "__anonymous__"
-_RATE_LIMIT_HEADERS = {"Retry-After": "60"}
 
 __all__ = [
     "InMemoryRateLimiter",
+    "assistant_limiter",
     "chat_limiter",
     "check_rate_limit",
     "check_rate_limit_by_ip",
-    "copilot_limiter",
     "execution_limiter",
     "is_rate_limited",
     "is_rate_limited_with_count",
@@ -138,7 +137,7 @@ class InMemoryRateLimiter:
 mutation_limiter = InMemoryRateLimiter(max_requests=100, window_seconds=60, name="mutation")
 execution_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60, name="execution")
 marketplace_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=60, name="marketplace")
-copilot_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60, name="copilot")
+assistant_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60, name="assistant")
 chat_limiter = InMemoryRateLimiter(max_requests=30, window_seconds=60, name="chat")
 registration_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=3600, name="registration")
 
@@ -160,7 +159,11 @@ def check_rate_limit(limiter: InMemoryRateLimiter, user: Any, detail: str) -> No
                 "window_seconds": limiter.window_seconds,
             },
         )
-        raise HTTPException(status_code=429, detail=detail, headers=_RATE_LIMIT_HEADERS)
+        raise HTTPException(
+            status_code=429,
+            detail=detail,
+            headers={"Retry-After": str(limiter.window_seconds)},
+        )
 
 
 def check_rate_limit_by_ip(limiter: InMemoryRateLimiter, ip: str, detail: str) -> None:
@@ -182,4 +185,8 @@ def check_rate_limit_by_ip(limiter: InMemoryRateLimiter, ip: str, detail: str) -
                 "window_seconds": limiter.window_seconds,
             },
         )
-        raise HTTPException(status_code=429, detail=detail, headers=_RATE_LIMIT_HEADERS)
+        raise HTTPException(
+            status_code=429,
+            detail=detail,
+            headers={"Retry-After": str(limiter.window_seconds)},
+        )

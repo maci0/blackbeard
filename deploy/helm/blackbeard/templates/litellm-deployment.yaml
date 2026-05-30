@@ -107,6 +107,8 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            - name: home
+              mountPath: /home/litellm
       volumes:
         - name: config
           configMap:
@@ -114,4 +116,7 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 100Mi
+        - name: home
+          emptyDir:
+            sizeLimit: 50Mi
 {{- end }}

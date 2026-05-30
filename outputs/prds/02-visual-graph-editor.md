@@ -6,7 +6,7 @@ Provide a browser-based drag-and-drop canvas where users compose agents, tasks, 
 
 ### 1.1 MVP Scope
 
-**Implemented:** Canvas with Agent/Task/Tool nodes, edges for context and tool assignment, property panel with spec fields, YAML editor with bidirectional sync (Monaco), save to API, Run/Train/Test mode selector, FlowStep nodes, CrewGroup compound nodes (bounding box), ELK.js auto-layout, undo/redo (30 snapshots), execution view with status badges. AI Copilot (prompt-to-crew via LiteLLM, Sparkles button + dialog, `api/copilot.py` + `engine/copilot.py`). Live collaboration (WebSocket rooms, participant count, node/edge sync, auto-reconnect). Cursor presence (colored cursors + names for collaborating users).
+**Implemented:** Canvas with Agent/Task/Tool nodes, edges for context and tool assignment, property panel with spec fields, YAML editor with bidirectional sync (Monaco), save to API, Run/Train/Test mode selector, FlowStep nodes, CrewGroup compound nodes (bounding box), ELK.js auto-layout, undo/redo (30 snapshots), execution view with status badges. Assistant (prompt-to-crew via LiteLLM, Sparkles button + dialog, `api/copilot.py` + `engine/copilot.py`). Live collaboration (WebSocket rooms, participant count, node/edge sync, auto-reconnect). Cursor presence (colored cursors + names for collaborating users).
 
 **Implemented additionally:** Command palette (Cmd+K) for global search across resources. Resource clone/duplicate. YAML file import on Resources page. Resource creation dialog on Resources page. Execution retry button. HITL response panel (frontend polls for `hitl_request` events, submits responses via API). Studio state persists to `localStorage`. Execution filtering (status, crew, type) with sortable columns. Sticky notes on canvas (4 color variants, editable inline text). Execution data overlay on nodes (green/red borders for success/failure, output preview on hover, "Clear Results" button). Per-node testing ("Test Agent" / "Test Task" buttons in PropertyPanel, uses first available LLMConnection). Condition, Router, and Parallel node types with dedicated property forms. Expression editor with syntax validation and variable autocomplete for condition/router expressions. Crew Settings dialog (error workflow: run error crew / retry N times / ignore). Canvas JSON export (toolbar "Export" + "Copy as JSON" buttons). Execution timeline / Gantt chart (horizontal bars per task, status-colored, time scale axis). Grouped/collapsible execution logs (group by task with expand/collapse, similar to GitHub Actions log groups).
 
@@ -284,7 +284,7 @@ When viewing an Agent resource detail page (navigated from Studio or Resources l
 - Test results display per-task scores with a simple bar chart.
 - "Train" button in Studio Property Panel navigates correctly.
 
-## 8. AI Copilot
+## 8. Assistant
 
 An optional chat sidebar (left panel) for prompt-based creation:
 
@@ -293,9 +293,9 @@ An optional chat sidebar (left panel) for prompt-based creation:
 - **"Connect agent A to task B"** → AI creates the edge.
 - **"Explain this flow"** → AI describes the current canvas state in natural language.
 
-Copilot always generates YAML that passes validation. User can accept/reject each change.
+Assistant always generates YAML that passes validation. User can accept/reject each change.
 
-*AI Copilot is implemented. Prompt-to-crew generation via LiteLLM with Sparkles button + dialog (`api/copilot.py`, `engine/copilot.py`).*
+*Assistant is implemented. Prompt-to-crew generation via LiteLLM with Sparkles button + dialog (`api/copilot.py`, `engine/copilot.py`).*
 
 ## 9. Import / Export
 
@@ -317,7 +317,7 @@ Copilot always generates YAML that passes validation. User can accept/reject eac
 | Property forms | **React Hook Form** + JSON Schema | Auto-generated from resource schemas |
 | Code editor | **Monaco Editor** | Syntax highlighting for YAML and Python paths |
 | State management | **Zustand** | Lightweight, good for undo/redo ring buffer |
-| Copilot | Streaming LLM via backend API | Uses whatever LLM the user has configured |
+| Assistant | Streaming LLM via backend API | Uses whatever LLM the user has configured |
 
 ## 11. YAML ↔ Canvas Synchronisation
 

@@ -28,7 +28,7 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-_analyzer: AnalyzerEngine | None = None
+_analyzers: dict[str, AnalyzerEngine] = {}
 _anonymizer: AnonymizerEngine | None = None
 _analyzer_lock = threading.Lock()
 _anonymizer_lock = threading.Lock()
@@ -106,23 +106,22 @@ def resolve_pii_entities(
 
 
 def _get_analyzer(config: dict[str, Any] | None = None) -> AnalyzerEngine:
-    """Return (or create) a singleton AnalyzerEngine.
+    """Return (or create) an AnalyzerEngine for the requested backend.
 
-    On the ``"litellm"`` backend the LLM recognizer is added to the
-    registry so that it participates in every ``analyze()`` call.
+    Engines are cached per backend type so that crews using ``"default"``
+    and ``"litellm"`` PII backends each get their own engine instance.
     Uses lock-always pattern (safe under both GIL and free-threaded Python).
     """
+    backend = config.get("backend", "default") if config else "default"
     with _analyzer_lock:
-        global _analyzer
-        if _analyzer is not None:
-            return _analyzer
+        engine = _analyzers.get(backend)
+        if engine is not None:
+            return engine
         engine = AnalyzerEngine()
-        if config:
-            backend = config.get("backend", "default")
-            if backend == "litellm":
-                _add_llm_recognizer(engine, config)
-        _analyzer = engine
-        return _analyzer
+        if backend == "litellm" and config:
+            _add_llm_recognizer(engine, config)
+        _analyzers[backend] = engine
+        return engine
 
 
 def _get_anonymizer() -> AnonymizerEngine:
@@ -415,8 +414,8 @@ def _redact_value(
 
 def reset_engines() -> None:
     """Reset singleton engines (useful for testing)."""
-    global _analyzer, _anonymizer
+    global _anonymizer
     with _analyzer_lock:
-        _analyzer = None
+        _analyzers.clear()
     with _anonymizer_lock:
         _anonymizer = None

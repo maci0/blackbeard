@@ -1,4 +1,4 @@
-"""Copilot API: generate resources from natural language prompts."""
+"""Assistant API: generate resources from natural language prompts."""
 
 from __future__ import annotations
 
@@ -11,18 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.api import RETRY_HEADERS_30
 from blackbeard.auth.dependencies import get_current_user
-from blackbeard.engine.copilot import (
+from blackbeard.engine.assistant import (
     CopilotError,
     NoLLMConnectionError,
     generate_resources,
 )
 from blackbeard.kinds import NAME_PATTERN
 from blackbeard.models import User, get_session
-from blackbeard.rate_limiter import check_rate_limit, copilot_limiter
+from blackbeard.rate_limiter import assistant_limiter, check_rate_limit
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/copilot", tags=["copilot"])
+router = APIRouter(prefix="/assistant", tags=["assistant"])
 
 
 class CopilotRequest(BaseModel):
@@ -58,7 +58,7 @@ class CopilotResponse(BaseModel):
 
 
 class CopilotErrorResponse(BaseModel):
-    """Error response from copilot."""
+    """Error response from Assistant."""
 
     detail: str
 
@@ -72,7 +72,7 @@ class CopilotErrorResponse(BaseModel):
             "model": CopilotErrorResponse,
             "description": "No LLMConnection available in the specified project",
         },
-        429: {"description": "Too many copilot requests"},
+        429: {"description": "Too many AI assist requests"},
         502: {
             "model": CopilotErrorResponse,
             "description": "LiteLLM proxy unreachable or model error",
@@ -90,7 +90,7 @@ async def generate_crew(
     llm_connection is specified, uses the first available LLMConnection
     in the given project.
     """
-    check_rate_limit(copilot_limiter, user, "Too many copilot requests. Try again later.")
+    check_rate_limit(assistant_limiter, user, "Too many AI assist requests. Try again later.")
 
     logger.info(
         "Copilot request: prompt_len=%d llm=%s ns=%s user=%s",

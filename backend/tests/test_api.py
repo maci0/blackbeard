@@ -186,7 +186,7 @@ async def test_update_agent(client: AsyncClient):
     assert data["version"] == 2
     assert data["spec"]["role"] == "Senior Research Analyst"
     assert data["id"] == create_resp.json()["id"], "Update should preserve resource id"
-    assert data["updated_at"] is not None
+    assert isinstance(data["updated_at"], str) and len(data["updated_at"]) > 0
 
 
 async def test_update_agent_version_conflict(client: AsyncClient):

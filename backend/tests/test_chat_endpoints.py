@@ -100,7 +100,7 @@ async def test_chat_litellm_500_error(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 502
-    assert resp.json()["detail"], "502 must include non-empty detail message"
+    assert "failed" in resp.json()["detail"].lower()
 
 
 async def test_chat_litellm_429_rate_limit(client: AsyncClient):
@@ -124,7 +124,7 @@ async def test_chat_litellm_429_rate_limit(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 429
-    assert resp.json()["detail"], "429 must include non-empty detail message"
+    assert "rate limit" in resp.json()["detail"].lower()
 
 
 async def test_chat_connection_error(client: AsyncClient):
@@ -142,7 +142,7 @@ async def test_chat_connection_error(client: AsyncClient):
             headers=API_KEY_HEADER,
         )
     assert resp.status_code == 502
-    assert resp.json()["detail"], "502 must include non-empty detail message"
+    assert "unreachable" in resp.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +186,7 @@ async def test_list_models_litellm_error(client: AsyncClient):
     with patch("blackbeard.api.chat._get_litellm_client", return_value=mock_client):
         resp = await client.get("/api/v1/models/available", headers=API_KEY_HEADER)
     assert resp.status_code == 502
-    assert resp.json()["detail"], "502 must include non-empty detail message"
+    assert "error" in resp.json()["detail"].lower()
 
 
 async def test_list_models_connection_error(client: AsyncClient):
@@ -197,7 +197,7 @@ async def test_list_models_connection_error(client: AsyncClient):
     with patch("blackbeard.api.chat._get_litellm_client", return_value=mock_client):
         resp = await client.get("/api/v1/models/available", headers=API_KEY_HEADER)
     assert resp.status_code == 502
-    assert resp.json()["detail"], "502 must include non-empty detail message"
+    assert "unreachable" in resp.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Any
 
 import click
@@ -11,6 +12,7 @@ from rich.table import Table
 
 from blackbeard_cli.helpers import (
     HelpCommand,
+    confirm_destructive,
     console,
     extract_items,
     extract_total,
@@ -163,13 +165,11 @@ def role_describe(ctx: click.Context, name: str) -> None:
     if desc:
         out.print(f"[dim]{desc}[/]\n")
 
-    resource_verbs: dict[str, set[str]] = {}
+    resource_verbs: dict[str, set[str]] = defaultdict(set)
     for rule in rules:
         resources = rule.get("resources", [])
         verbs = rule.get("verbs", [])
         for res in resources:
-            if res not in resource_verbs:
-                resource_verbs[res] = set()
             for v in verbs:
                 if v == "*":
                     resource_verbs[res].update(ALL_VERBS)
@@ -300,7 +300,7 @@ Examples:
 """,
 )
 @click.argument("name")
-@click.option("--role", "-r", "role_name", required=True, help="Role to bind")
+@click.option("--role", "-r", "role_name", required=True, metavar="ROLE", help="Role to bind")
 @click.option(
     "--subject",
     "subjects",
@@ -407,14 +407,9 @@ def rolebinding_delete(ctx: click.Context, name: str, yes: bool) -> None:
 
     namespace = ctx.obj["project"]
 
-    if (
-        not yes
-        and not ctx.obj["json"]
-        and not click.confirm(
-            f"Delete rolebinding {name} in project '{namespace}' on {server}?", default=False
-        )
+    if not confirm_destructive(
+        ctx, f"Delete rolebinding {name} in project '{namespace}' on {server}?", yes=yes
     ):
-        console.print("[yellow]Aborted.[/]")
         return
 
     try:

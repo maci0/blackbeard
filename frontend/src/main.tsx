@@ -14,7 +14,10 @@ if (import.meta.env.VITE_API_KEY) {
 }
 
 window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
-  console.error('[Unhandled Rejection]', event.reason)
+  console.error(
+    '[Unhandled Rejection]',
+    event.reason instanceof Error ? event.reason.message : 'promise rejected',
+  )
   event.preventDefault()
 })
 

@@ -574,7 +574,7 @@ The Studio visual editor uses [ELK.js](https://github.com/kieler/elkjs) for auto
 
 The Marketplace (`/marketplace` page) allows importing resources from external git repositories or the bundled example library.
 
-**Built-in examples:** Seven example crews (research, code-review, content-pipeline, data-analysis, seo-writer, simple-crew, support-triage) plus a shared tools collection are bundled with the platform and can be imported without any external connectivity.
+**Built-in examples:** Eight example crews (research, code-review, content-pipeline, data-analysis, seo-writer, simple-crew, support-triage, chained-crews) plus a shared tools collection are bundled with the platform and can be imported without any external connectivity.
 
 **Git import:** The backend clones repositories (shallow, HTTPS only), finds all YAML files, validates them against resource schemas, and upserts them via the standard ResourceService. Safety limits apply: 60-second clone timeout, max 200 YAML files, max 256KB per file, symlinks are skipped, and path traversal is prevented.
 

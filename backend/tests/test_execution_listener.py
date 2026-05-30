@@ -53,6 +53,7 @@ class TestExecutionListenerSequencing:
             t.join()
 
         assert len(results) == 400
+        assert len(set(results)) == 400, "All sequence numbers must be unique"
         assert set(results) == set(range(400))
 
     def test_task_order_independent_of_seq(self):

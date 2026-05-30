@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,6 +58,7 @@ class AuditLogListResponse(BaseModel):
     },
 )
 async def list_audit_logs(
+    response: Response,
     action: str | None = Query(
         default=None,
         max_length=50,
@@ -92,6 +93,7 @@ async def list_audit_logs(
     session: AsyncSession = Depends(get_session),
 ) -> AuditLogListResponse:
     """List audit log entries with optional filters. Requires authentication."""
+    response.headers["Cache-Control"] = "no-store"
     filters = []
     if action is not None:
         filters.append(AuditLog.action == action)

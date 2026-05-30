@@ -21,7 +21,12 @@ from blackbeard.kinds import NAME_PATTERN
 from blackbeard.logging_config import anonymize_ip
 from blackbeard.models import User, get_session
 from blackbeard.models.execution_schemas import ExecutionResponse, validate_inputs
-from blackbeard.rate_limiter import check_rate_limit, execution_limiter, record_auth_failure
+from blackbeard.rate_limiter import (
+    check_rate_limit,
+    check_rate_limit_by_ip,
+    execution_limiter,
+    record_auth_failure,
+)
 from blackbeard.resources import ResourceNotFoundError, ResourceService
 
 logger = logging.getLogger(__name__)
@@ -187,6 +192,8 @@ async def webhook_trigger(
     session: AsyncSession = Depends(get_session),
 ) -> TriggerResponse:
     """Trigger an automation via external webhook (validates secret)."""
+    client_ip = get_client_ip(request) or "unknown"
+    check_rate_limit_by_ip(execution_limiter, client_ip, _TRIGGER_RATE_MSG)
     spec = await _get_automation_spec(session, name, project)
     _require_enabled(spec, name)
 

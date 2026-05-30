@@ -147,8 +147,8 @@ def _clear_rate_limit_state() -> None:
     """Reset all rate-limiter state so tests start clean."""
     from blackbeard.rate_limiter import (
         _auth_failures,
+        assistant_limiter,
         chat_limiter,
-        copilot_limiter,
         execution_limiter,
         marketplace_limiter,
         mutation_limiter,
@@ -160,7 +160,7 @@ def _clear_rate_limit_state() -> None:
         mutation_limiter,
         execution_limiter,
         marketplace_limiter,
-        copilot_limiter,
+        assistant_limiter,
         chat_limiter,
         registration_limiter,
     ):

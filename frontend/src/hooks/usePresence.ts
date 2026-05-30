@@ -69,8 +69,8 @@ export function usePresence(roomId: string | null): UsePresenceReturn {
             }
             id = payload.sub ?? 'anonymous'
             name = payload.display_name ?? 'Anonymous'
-          } catch (err) {
-            console.warn('[presence] malformed JWT token:', err)
+          } catch {
+            console.warn('[presence] malformed JWT token')
           }
         }
 
