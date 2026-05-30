@@ -11,7 +11,6 @@ Covers the actual HTTP endpoints via the test client for:
 
 from __future__ import annotations
 
-import logging
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
