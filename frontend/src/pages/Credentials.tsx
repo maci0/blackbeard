@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useCopyToClipboard } from '@/hooks'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   KeyRound,
@@ -294,12 +295,10 @@ function CredentialCard({
   credential: Credential
   onDelete: (id: string) => void
 }) {
-  const [copied, setCopied] = useState(false)
+  const { copied, copy } = useCopyToClipboard()
 
   const handleCopy = () => {
-    void navigator.clipboard.writeText(credential.masked_value)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    void copy(credential.masked_value)
   }
 
   return (

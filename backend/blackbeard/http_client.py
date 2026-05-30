@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any, TypeVar
-
-_T = TypeVar("_T")
+from typing import Any
 
 import httpx
 
@@ -32,13 +30,13 @@ _lock = threading.Lock()
 _DEFAULT_TIMEOUT = 30.0
 
 
-def _get_or_create(
-    cache: dict[str, _T],
+def _get_or_create[T](
+    cache: dict[str, T],
     name: str,
-    factory: type[_T],
+    factory: type[T],
     client_type: str,
     kwargs: dict[str, Any],
-) -> _T:
+) -> T:
     """Shared lock-always factory for sync/async httpx clients."""
     with _lock:
         client = cache.get(name)

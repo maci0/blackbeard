@@ -30,7 +30,7 @@ import { useResourceStore } from '@/stores/resourceStore'
 import type { Resource, Execution } from '@/lib/types'
 import { api } from '@/api/client'
 import { cn, getErrorMessage } from '@/lib/utils'
-import { useDocumentTitle, usePresence, useDeleteError } from '@/hooks'
+import { useDocumentTitle, usePresence, useDeleteError, useCopyToClipboard } from '@/hooks'
 import { resourceToYaml, parseYaml } from '@/lib/yaml'
 import { formatDate, getDuration, formatCost, parseCost } from '@/lib/formatters'
 import { KindBadge } from '@/components/ui/KindBadge'
@@ -639,20 +639,13 @@ export default function ResourceDetail() {
     URL.revokeObjectURL(url)
   }
 
-  const [yamlCopied, setYamlCopied] = useState(false)
+  const { copied: yamlCopied, copy: copyYaml } = useCopyToClipboard()
   const handleCopyYaml = () => {
     if (!resource) return
     const yaml = resourceToYaml(resource)
-    void navigator.clipboard
-      .writeText(yaml)
-      .then(() => {
-        setYamlCopied(true)
-        toasts.success('YAML copied to clipboard')
-        setTimeout(() => setYamlCopied(false), 2000)
-      })
-      .catch(() => {
-        toasts.error('Failed to copy to clipboard')
-      })
+    void copyYaml(yaml)
+      .then(() => toasts.success('YAML copied to clipboard'))
+      .catch(() => toasts.error('Failed to copy to clipboard'))
   }
 
   const handleRun = async (params: RunParams) => {

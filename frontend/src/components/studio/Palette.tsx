@@ -267,7 +267,7 @@ function CrewComponentCard({ crew }: { crew: Resource }) {
         position: { x: 250 + offset, y: 150 + offset },
         data: {
           crew_name: crew.metadata.name,
-          description: (crew.spec.description as string) ?? '',
+          description: crew.spec.description ?? '',
           agent_count: agentCount,
           task_count: taskCount,
           inputs,

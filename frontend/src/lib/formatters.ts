@@ -56,6 +56,15 @@ export function getDuration(
   return `${hrs}h ${remMin}m`
 }
 
+export function formatDurationMs(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  const sec = ms / 1000
+  if (sec < 60) return `${sec.toFixed(1)}s`
+  const min = Math.floor(sec / 60)
+  const rem = sec % 60
+  return `${min}m ${Math.round(rem)}s`
+}
+
 export function parseCost(cost: number | string | null | undefined): number {
   const n = typeof cost === 'string' ? parseFloat(cost) : cost
   return n != null && !isNaN(n) ? n : 0

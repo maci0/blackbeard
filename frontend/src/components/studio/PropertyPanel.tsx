@@ -22,6 +22,7 @@ import { ExpressionEditor } from './ExpressionEditor'
 import { Spinner } from '@/components/ui/Spinner'
 import { api } from '@/api/client'
 import { getErrorMessage } from '@/lib/utils'
+import { useCopyToClipboard } from '@/hooks'
 
 /** Context providing a generated field id from the enclosing FieldGroup */
 const FieldIdContext = createContext<string>('')
@@ -1261,7 +1262,7 @@ function NodeTestSection({
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(true)
-  const [copied, setCopied] = useState(false)
+  const { copied, copy } = useCopyToClipboard()
 
   const handleTest = async () => {
     setTesting(true)
@@ -1320,10 +1321,7 @@ function NodeTestSection({
 
   const handleCopy = () => {
     if (!result) return
-    void navigator.clipboard.writeText(result).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
+    void copy(result)
   }
 
   const hasEnoughData =

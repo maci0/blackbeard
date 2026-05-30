@@ -180,7 +180,9 @@ def _parse_yaml_response(raw: str) -> list[dict[str, Any]]:
             e,
             extra={"event": "assistant_yaml_parse_error", "error_type": type(e).__name__},
         )
-        raise AssistantError("Failed to parse the generated YAML. Try rephrasing your prompt.") from e
+        raise AssistantError(
+            "Failed to parse the generated YAML. Try rephrasing your prompt."
+        ) from e
 
     if not docs:
         raise AssistantError(

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+import { useCopyToClipboard } from '@/hooks'
 import {
   Timer,
   Search,
@@ -487,18 +488,8 @@ function CreateAutomationDialog({
 /* ------------------------------------------------------------------ */
 
 function WebhookDetails({ url, secret }: { url?: string; secret?: string }) {
-  const [copiedUrl, setCopiedUrl] = useState(false)
-  const [copiedSecret, setCopiedSecret] = useState(false)
-
-  const copyToClipboard = useCallback(async (text: string, setCopied: (v: boolean) => void) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 3000)
-    } catch {
-      useToastStore.getState().error('Failed to copy to clipboard')
-    }
-  }, [])
+  const { copied: copiedUrl, copy: copyUrl } = useCopyToClipboard()
+  const { copied: copiedSecret, copy: copySecret } = useCopyToClipboard()
 
   if (!url && !secret) return null
 
@@ -519,7 +510,7 @@ function WebhookDetails({ url, secret }: { url?: string; secret?: string }) {
             type="button"
             onClick={(e) => {
               e.stopPropagation()
-              void copyToClipboard(url, setCopiedUrl)
+              void copyUrl(url)
             }}
             aria-label={copiedUrl ? 'Webhook URL copied' : 'Copy webhook URL'}
             className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -544,7 +535,7 @@ function WebhookDetails({ url, secret }: { url?: string; secret?: string }) {
             type="button"
             onClick={(e) => {
               e.stopPropagation()
-              void copyToClipboard(secret, setCopiedSecret)
+              void copySecret(secret)
             }}
             aria-label={copiedSecret ? 'Webhook secret copied' : 'Copy webhook secret'}
             className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

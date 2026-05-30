@@ -29,7 +29,7 @@ import { statusLabel } from '@/lib/formatters'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { CodeBlock } from '@/components/ui/CodeBlock'
-import { getDuration, formatDate, formatCost } from '@/lib/formatters'
+import { getDuration, formatDate, formatCost, formatDurationMs } from '@/lib/formatters'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { api } from '@/api/client'
 import { CopyButton } from '@/components/ui/CopyButton'
@@ -162,15 +162,6 @@ const STATUS_BAR_COLORS: Record<string, string> = {
   running: 'bg-blue-500',
   pending: 'bg-gray-400',
   queued: 'bg-gray-400',
-}
-
-function formatDurationMs(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  const sec = ms / 1000
-  if (sec < 60) return `${sec.toFixed(1)}s`
-  const min = Math.floor(sec / 60)
-  const rem = sec % 60
-  return `${min}m ${Math.round(rem)}s`
 }
 
 const TaskTimeline = memo(function TaskTimeline({

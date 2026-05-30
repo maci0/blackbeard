@@ -105,9 +105,9 @@ export default memo(function DataFlowEdge({
           aria-label={hasExecData ? 'Show wire data' : undefined}
         >
           {/* Label badge */}
-          {data?.label != null && (
+          {typeof data?.label === 'string' && (
             <div className="rounded-full border border-border bg-card px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-muted-foreground shadow-sm">
-              {typeof data.label === 'string' ? data.label : String(data.label)}
+              {data.label}
             </div>
           )}
 

@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { useCopyToClipboard } from '@/hooks'
 import {
   Webhook,
   Plus,
@@ -104,13 +105,11 @@ function EventBadge({ event }: { event: string }) {
 
 function SecretReveal({ secret }: { secret: string }) {
   const [visible, setVisible] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const { copied, copy } = useCopyToClipboard()
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(secret)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 3000)
+      await copy(secret)
     } catch {
       useToastStore.getState().error('Failed to copy to clipboard')
     }
@@ -399,9 +398,8 @@ export default function Webhooks() {
   const [deleting, setDeleting] = useState(false)
   const { deleteError, showDeleteError, clearDeleteError } = useDeleteError()
   const [testingId, setTestingId] = useState<string | null>(null)
-  const [testTick, setTestTick] = useState(0)
+  const [testRecords, setTestRecords] = useState(() => getWebhookTestRecord())
   const toasts = useToastStore()
-  const testRecords = useMemo(() => getWebhookTestRecord(), [testTick])
 
   const handleTest = useCallback(
     async (webhook: WebhookRecord) => {
@@ -409,13 +407,13 @@ export default function Webhooks() {
       try {
         await api.post(`/api/v1/webhooks/${webhook.id}/test`, {})
         setWebhookTested(webhook.id)
-        setTestTick((t) => t + 1)
+        setTestRecords(getWebhookTestRecord())
         toasts.success('Test event sent')
       } catch (err) {
         const msg = getErrorMessage(err, '')
         if (msg.includes('404') || msg.includes('Not Found') || msg.includes('405')) {
           setWebhookTested(webhook.id)
-          setTestTick((t) => t + 1)
+          setTestRecords(getWebhookTestRecord())
           toasts.info('Test recorded locally (backend test endpoint not available)')
         } else {
           toasts.error(getErrorMessage(err, 'Failed to send test event'))

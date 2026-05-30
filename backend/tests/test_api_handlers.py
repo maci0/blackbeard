@@ -417,6 +417,9 @@ class TestAgencyImportList:
 
     @pytest.mark.asyncio
     async def test_list_agency_agents_empty_division(self, client: AsyncClient) -> None:
+        import blackbeard.api.agency_import as _aim
+        _aim._division_cache.clear()
+        _aim._file_cache.clear()
         headers = await _get_user_headers(client, "agency-empty@test.com")
 
         mock_client = AsyncMock()

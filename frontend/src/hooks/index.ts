@@ -1,4 +1,5 @@
 export { useCollaboration } from './useCollaboration'
+export { useCopyToClipboard } from './useCopyToClipboard'
 export { useDarkMode } from './useDarkMode'
 export type { ThemePreference } from './useDarkMode'
 export { useDeleteError } from './useDeleteError'
