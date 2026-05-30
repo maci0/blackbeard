@@ -25,30 +25,10 @@ from tests.conftest import API_KEY_HEADER, _bearer, _register_user
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(autouse=True)
-def _tolerate_logger_extra_name_collision():
-    """Work around a pre-existing bug in credentials.py where logger.info()
-    uses extra={"name": ...} which collides with LogRecord.name.
 
-    This patches makeRecord to silently drop conflicting built-in keys
-    instead of raising KeyError, so tests can exercise the endpoints.
-    """
-    original_make_record = logging.Logger.makeRecord
-
-    def _safe_make_record(
-        self, name, level, fn, lno, msg, args, exc_info, func=None, extra=None, sinfo=None
-    ):
-        if extra:
-            from logging import LogRecord
-
-            builtin = set(LogRecord("", 0, "", 0, "", (), None).__dict__)
-            extra = {k: v for k, v in extra.items() if k not in builtin}
-        return original_make_record(
-            self, name, level, fn, lno, msg, args, exc_info, func, extra, sinfo
-        )
-
-    with patch.object(logging.Logger, "makeRecord", _safe_make_record):
-        yield
+# Bug fix applied: credentials.py no longer uses extra={"name": ...}
+# which collided with Python's LogRecord.name attribute.
+# See commit fixing "name" → "credential_name" in logger.info() calls.
 
 
 def _clear_credentials_store() -> None:

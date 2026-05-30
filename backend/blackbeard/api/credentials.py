@@ -128,8 +128,8 @@ async def create_credential(
         body.name,
         extra={
             "event": "credential_created",
-            "name": body.name,
-            "type": body.type,
+            "credential_name": body.name,
+            "credential_type": body.type,
         },
     )
 
@@ -232,5 +232,5 @@ async def delete_credential(
     logger.info(
         "Credential deleted: %s",
         target,
-        extra={"event": "credential_deleted", "name": target},
+        extra={"event": "credential_deleted", "credential_name": target},
     )
