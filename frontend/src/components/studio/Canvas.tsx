@@ -45,6 +45,7 @@ import MergeNode from './nodes/MergeNode'
 import FilterNode from './nodes/FilterNode'
 import GateNode from './nodes/GateNode'
 import CrewComponentNode from './nodes/CrewComponentNode'
+import LoopNode from './nodes/LoopNode'
 import DataFlowEdge from './edges/DataFlowEdge'
 import ToolAssignEdge from './edges/ToolAssignEdge'
 
@@ -69,6 +70,7 @@ const NODE_TYPES: NodeTypes = {
   filter: FilterNode,
   gate: GateNode,
   crewComponent: CrewComponentNode,
+  loop: LoopNode,
 }
 
 const DROPPABLE_TYPES = new Set([
@@ -87,6 +89,7 @@ const DROPPABLE_TYPES = new Set([
   'filter',
   'gate',
   'crewComponent',
+  'loop',
 ])
 
 const EDGE_TYPES: EdgeTypes = {

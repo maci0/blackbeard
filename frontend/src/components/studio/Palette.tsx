@@ -14,6 +14,7 @@ import {
   Combine,
   Filter,
   Lock,
+  Repeat,
 } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
 import { getDefaultNodeData } from './defaults'
@@ -169,6 +170,16 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-teal-700 dark:text-teal-300',
     borderColor:
       'border-teal-200 hover:border-teal-400 dark:border-teal-800 dark:hover:border-teal-600',
+  },
+  {
+    type: 'loop',
+    label: 'Loop',
+    icon: Repeat,
+    headerBg: 'bg-gradient-to-r from-pink-500 to-pink-400',
+    iconBg: 'bg-white/20',
+    textColor: 'text-pink-700 dark:text-pink-300',
+    borderColor:
+      'border-pink-200 hover:border-pink-400 dark:border-pink-800 dark:hover:border-pink-600',
   },
   {
     type: 'stickyNote',

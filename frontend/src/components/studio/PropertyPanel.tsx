@@ -926,6 +926,323 @@ function StickyNoteForm({
   )
 }
 
+/* ------------------------------------------------------------------ */
+/* Logic Block Forms                                                    */
+/* ------------------------------------------------------------------ */
+
+function IfElseForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Name">
+        <TextInput
+          value={str(data, 'name')}
+          onChange={(v) => onChange('name', v)}
+          placeholder="check-quality"
+        />
+      </FieldGroup>
+      <FieldGroup label="Condition Expression">
+        <TextInput
+          value={str(data, 'condition')}
+          onChange={(v) => onChange('condition', v)}
+          placeholder="score >= 0.8"
+        />
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Supports: ==, !=, &gt;, &lt;, &gt;=, &lt;=, in. Variables from upstream outputs.
+        </p>
+      </FieldGroup>
+      <FieldGroup label="True Branch Label">
+        <TextInput
+          value={str(data, 'true_label') || 'True'}
+          onChange={(v) => onChange('true_label', v)}
+        />
+      </FieldGroup>
+      <FieldGroup label="False Branch Label">
+        <TextInput
+          value={str(data, 'false_label') || 'False'}
+          onChange={(v) => onChange('false_label', v)}
+        />
+      </FieldGroup>
+    </div>
+  )
+}
+
+function SwitchForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  const cases = (data['cases'] as string[] | undefined) ?? []
+  const [newCase, setNewCase] = useState('')
+
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Name">
+        <TextInput
+          value={str(data, 'name')}
+          onChange={(v) => onChange('name', v)}
+          placeholder="route-by-type"
+        />
+      </FieldGroup>
+      <FieldGroup label="Expression">
+        <TextInput
+          value={str(data, 'expression')}
+          onChange={(v) => onChange('expression', v)}
+          placeholder="result.category"
+        />
+      </FieldGroup>
+      <FieldGroup label={`Cases (${cases.length})`}>
+        <div className="space-y-1">
+          {cases.map((c, i) => (
+            <div key={i} className="flex items-center gap-1">
+              <span className="flex-1 truncate rounded border bg-muted/30 px-2 py-1 text-xs">
+                {c}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  onChange(
+                    'cases',
+                    cases.filter((_, j) => j !== i),
+                  )
+                }
+                className="rounded p-1 text-xs text-muted-foreground hover:text-destructive"
+                aria-label={`Remove case ${c}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <div className="flex gap-1">
+            <input
+              type="text"
+              value={newCase}
+              onChange={(e) => setNewCase(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newCase.trim()) {
+                  onChange('cases', [...cases, newCase.trim()])
+                  setNewCase('')
+                }
+              }}
+              placeholder="Add case…"
+              className="flex-1 rounded border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (newCase.trim()) {
+                  onChange('cases', [...cases, newCase.trim()])
+                  setNewCase('')
+                }
+              }}
+              className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      </FieldGroup>
+    </div>
+  )
+}
+
+function MergeForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Name">
+        <TextInput
+          value={str(data, 'name')}
+          onChange={(v) => onChange('name', v)}
+          placeholder="merge-results"
+        />
+      </FieldGroup>
+      <FieldGroup label="Input Count">
+        <input
+          type="number"
+          min={2}
+          max={10}
+          value={(data['input_count'] as number | undefined) ?? 2}
+          onChange={(e) => onChange('input_count', parseInt(e.target.value, 10) || 2)}
+          className="w-full rounded border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+      </FieldGroup>
+      <FieldGroup label="Strategy">
+        <SelectInput
+          value={str(data, 'strategy') || 'wait_all'}
+          onChange={(v) => onChange('strategy', v)}
+          options={[
+            { label: 'Wait for all inputs', value: 'wait_all' },
+            { label: 'First input wins', value: 'first' },
+          ]}
+        />
+      </FieldGroup>
+    </div>
+  )
+}
+
+function FilterForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Name">
+        <TextInput
+          value={str(data, 'name')}
+          onChange={(v) => onChange('name', v)}
+          placeholder="filter-results"
+        />
+      </FieldGroup>
+      <FieldGroup label="Filter Condition">
+        <TextInput
+          value={str(data, 'condition')}
+          onChange={(v) => onChange('condition', v)}
+          placeholder="item.score > 0.5"
+        />
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Items matching go to &quot;Passed&quot; port, others to &quot;Rejected&quot;.
+        </p>
+      </FieldGroup>
+    </div>
+  )
+}
+
+function GateForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Name">
+        <TextInput
+          value={str(data, 'name')}
+          onChange={(v) => onChange('name', v)}
+          placeholder="quality-gate"
+        />
+      </FieldGroup>
+      <FieldGroup label="Control Expression">
+        <TextInput
+          value={str(data, 'control')}
+          onChange={(v) => onChange('control', v)}
+          placeholder="approval_status == approved"
+        />
+      </FieldGroup>
+      <FieldGroup label="Pass When">
+        <SelectInput
+          value={str(data, 'pass_when') || 'true'}
+          onChange={(v) => onChange('pass_when', v)}
+          options={[
+            { label: 'Control is True', value: 'true' },
+            { label: 'Control is False', value: 'false' },
+          ]}
+        />
+      </FieldGroup>
+    </div>
+  )
+}
+
+function LoopForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Name">
+        <TextInput
+          value={str(data, 'name')}
+          onChange={(v) => onChange('name', v)}
+          placeholder="process-items"
+        />
+      </FieldGroup>
+      <FieldGroup label="Items Expression">
+        <TextInput
+          value={str(data, 'items_expr')}
+          onChange={(v) => onChange('items_expr', v)}
+          placeholder="results.items"
+        />
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Expression that resolves to a list. Each item is passed to the connected subgraph.
+        </p>
+      </FieldGroup>
+      <FieldGroup label="Max Iterations">
+        <input
+          type="number"
+          min={1}
+          max={1000}
+          value={(data['max_iterations'] as number | undefined) ?? 100}
+          onChange={(e) => onChange('max_iterations', parseInt(e.target.value, 10) || 100)}
+          className="w-full rounded border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+      </FieldGroup>
+      <FieldGroup label="Parallel">
+        <CheckboxInput
+          label="Execute iterations in parallel"
+          checked={(data['parallel'] as boolean | undefined) ?? false}
+          onChange={(v) => onChange('parallel', v)}
+        />
+      </FieldGroup>
+    </div>
+  )
+}
+
+function CrewComponentForm({
+  data,
+  onChange,
+}: {
+  data: Record<string, unknown>
+  onChange: (field: string, value: unknown) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <FieldGroup label="Crew Name">
+        <TextInput
+          value={str(data, 'crew_name')}
+          onChange={(v) => onChange('crew_name', v)}
+          placeholder="research-crew"
+        />
+      </FieldGroup>
+      <FieldGroup label="Description">
+        <TextInput
+          value={str(data, 'description')}
+          onChange={(v) => onChange('description', v)}
+          placeholder="Researches topics and produces reports"
+        />
+      </FieldGroup>
+      <FieldGroup label="Info">
+        <div className="flex gap-2 text-[10px] text-muted-foreground">
+          <span>{(data['agent_count'] as number) ?? 0} agents</span>
+          <span>{(data['task_count'] as number) ?? 0} tasks</span>
+        </div>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Double-click the node on canvas to drill into the crew&apos;s internal graph.
+        </p>
+      </FieldGroup>
+    </div>
+  )
+}
+
 interface ChatResponse {
   content: string
 }
@@ -1076,6 +1393,13 @@ const TYPE_META: Record<string, { label: string; accent: string; border: string 
   parallel: { label: 'Parallel', accent: 'bg-purple-500', border: 'border-purple-200' },
   crewGroup: { label: 'Crew Group', accent: 'bg-slate-500', border: 'border-slate-200' },
   stickyNote: { label: 'Note', accent: 'bg-amber-400', border: 'border-amber-200' },
+  ifElse: { label: 'IF / ELSE', accent: 'bg-amber-500', border: 'border-amber-200' },
+  switch: { label: 'Switch', accent: 'bg-cyan-500', border: 'border-cyan-200' },
+  merge: { label: 'Merge', accent: 'bg-indigo-500', border: 'border-indigo-200' },
+  filter: { label: 'Filter', accent: 'bg-orange-500', border: 'border-orange-200' },
+  gate: { label: 'Gate', accent: 'bg-teal-500', border: 'border-teal-200' },
+  loop: { label: 'Loop', accent: 'bg-pink-500', border: 'border-pink-200' },
+  crewComponent: { label: 'Crew', accent: 'bg-primary', border: 'border-primary/30' },
 }
 
 export default function PropertyPanel() {
@@ -1207,6 +1531,20 @@ export default function PropertyPanel() {
             <CrewGroupForm data={data} onChange={onChange} />
           ) : nodeType === 'stickyNote' ? (
             <StickyNoteForm data={data} onChange={onChange} />
+          ) : nodeType === 'ifElse' ? (
+            <IfElseForm data={data} onChange={onChange} />
+          ) : nodeType === 'switch' ? (
+            <SwitchForm data={data} onChange={onChange} />
+          ) : nodeType === 'merge' ? (
+            <MergeForm data={data} onChange={onChange} />
+          ) : nodeType === 'filter' ? (
+            <FilterForm data={data} onChange={onChange} />
+          ) : nodeType === 'gate' ? (
+            <GateForm data={data} onChange={onChange} />
+          ) : nodeType === 'loop' ? (
+            <LoopForm data={data} onChange={onChange} />
+          ) : nodeType === 'crewComponent' ? (
+            <CrewComponentForm data={data} onChange={onChange} />
           ) : (
             <p className="text-xs text-muted-foreground">No properties for this node type.</p>
           )}

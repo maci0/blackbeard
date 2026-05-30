@@ -61,6 +61,8 @@ export function getDefaultNodeData(type: string): Record<string, unknown> {
       return { name: 'filter', condition: '' }
     case 'gate':
       return { name: 'gate', control: '', pass_when: 'true' }
+    case 'loop':
+      return { name: 'loop', items_expr: '', max_iterations: 100, parallel: false }
     case 'crewComponent':
       return {
         crew_name: '',
