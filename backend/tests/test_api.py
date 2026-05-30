@@ -466,29 +466,29 @@ async def test_create_task_with_dangling_ref_succeeds(client: AsyncClient):
 def _namespace_payload(name: str = "default", description: str = "Default project") -> dict:
     return {
         "apiVersion": "blackbeard/v1",
-        "kind": "Namespace",
+        "kind": "Project",
         "metadata": {"name": name},
         "spec": {"description": description},
     }
 
 
 async def test_create_namespace(client: AsyncClient):
-    """POST /namespaces with a valid body should return 201."""
+    """POST /projects with a valid body should return 201."""
     response = await client.post(
-        "/api/v1/namespaces", json=_namespace_payload(), headers=API_KEY_HEADER
+        "/api/v1/projects", json=_namespace_payload(), headers=API_KEY_HEADER
     )
     assert response.status_code == 201
     data = response.json()
-    assert data["kind"] == "Namespace"
+    assert data["kind"] == "Project"
     assert data["metadata"]["name"] == "default"
     assert data["spec"]["description"] == "Default project"
 
 
 async def test_create_namespace_full_spec(client: AsyncClient):
-    """POST /namespaces with all spec fields should return 201."""
+    """POST /projects with all spec fields should return 201."""
     payload = {
         "apiVersion": "blackbeard/v1",
-        "kind": "Namespace",
+        "kind": "Project",
         "metadata": {"name": "production"},
         "spec": {
             "description": "Production project",
@@ -500,36 +500,36 @@ async def test_create_namespace_full_spec(client: AsyncClient):
             },
         },
     }
-    response = await client.post("/api/v1/namespaces", json=payload, headers=API_KEY_HEADER)
+    response = await client.post("/api/v1/projects", json=payload, headers=API_KEY_HEADER)
     assert response.status_code == 201
     data = response.json()
     assert data["spec"]["resource_quota"]["max_resources"] == 500
 
 
 async def test_get_namespace(client: AsyncClient):
-    """GET /namespaces/{name} should return the created project."""
-    await client.post("/api/v1/namespaces", json=_namespace_payload(), headers=API_KEY_HEADER)
-    response = await client.get("/api/v1/namespaces/default", headers=API_KEY_HEADER)
+    """GET /projects/{name} should return the created project."""
+    await client.post("/api/v1/projects", json=_namespace_payload(), headers=API_KEY_HEADER)
+    response = await client.get("/api/v1/projects/default", headers=API_KEY_HEADER)
     assert response.status_code == 200
     assert response.json()["metadata"]["name"] == "default"
 
 
-async def test_list_namespaces(client: AsyncClient):
-    """GET /namespaces should list created namespaces."""
+async def test_list_projects(client: AsyncClient):
+    """GET /projects should list created projects."""
     await client.post(
-        "/api/v1/namespaces", json=_namespace_payload("ns-a", "A"), headers=API_KEY_HEADER
+        "/api/v1/projects", json=_namespace_payload("ns-a", "A"), headers=API_KEY_HEADER
     )
     await client.post(
-        "/api/v1/namespaces", json=_namespace_payload("ns-b", "B"), headers=API_KEY_HEADER
+        "/api/v1/projects", json=_namespace_payload("ns-b", "B"), headers=API_KEY_HEADER
     )
-    response = await client.get("/api/v1/namespaces", headers=API_KEY_HEADER)
+    response = await client.get("/api/v1/projects", headers=API_KEY_HEADER)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 2
 
 
 async def test_delete_namespace(client: AsyncClient):
-    """DELETE /namespaces/{name} should return 204."""
-    await client.post("/api/v1/namespaces", json=_namespace_payload(), headers=API_KEY_HEADER)
-    response = await client.delete("/api/v1/namespaces/default", headers=API_KEY_HEADER)
+    """DELETE /projects/{name} should return 204."""
+    await client.post("/api/v1/projects", json=_namespace_payload(), headers=API_KEY_HEADER)
+    response = await client.delete("/api/v1/projects/default", headers=API_KEY_HEADER)
     assert response.status_code == 204

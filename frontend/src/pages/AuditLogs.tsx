@@ -50,7 +50,7 @@ const RESOURCE_TYPE_OPTIONS = [
   'Role',
   'RoleBinding',
   'Automation',
-  'Namespace',
+  'Project',
 ] as const
 
 const PAGE_SIZE = 25

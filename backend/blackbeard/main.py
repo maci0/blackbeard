@@ -21,7 +21,6 @@ from sqlalchemy import select
 from blackbeard import __version__
 from blackbeard.api.a2a import router as a2a_router
 from blackbeard.api.agency_import import router as agency_import_router
-from blackbeard.api.tools_library import router as tools_library_router
 from blackbeard.api.assistant import router as assistant_router
 from blackbeard.api.audit import router as audit_router
 from blackbeard.api.auth import router as auth_router
@@ -42,6 +41,7 @@ from blackbeard.api.middleware import (
     validation_exception_handler,
 )
 from blackbeard.api.resources import router as resources_router
+from blackbeard.api.tools_library import router as tools_library_router
 from blackbeard.api.users import router as users_router
 from blackbeard.api.webhooks import router as webhooks_router
 from blackbeard.auth.api_key import set_api_key

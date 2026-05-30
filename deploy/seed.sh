@@ -65,11 +65,11 @@ seed() {
 
 echo "Seeding Blackbeard at $API ..."
 
-# ── Default Namespace ──────────────────────────────────────────────
+# ── Default Project ───────────────────────────────────────────────
 
-seed "Namespace/default" -X POST "$API/api/v1/namespaces" "${H[@]}" -d '{
+seed "Project/default" -X POST "$API/api/v1/projects" "${H[@]}" -d '{
   "apiVersion": "blackbeard/v1",
-  "kind": "Namespace",
+  "kind": "Project",
   "metadata": {"name": "default"},
   "spec": {"description": "Default project"}
 }'

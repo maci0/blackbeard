@@ -636,7 +636,7 @@ class ResourceLoader:
 
     def _get_project_guardrails(self, project: str) -> list[str]:
         """Return guardrail refs from the project resource, if any."""
-        ns_resource = self._resources.get(f"Namespace/{project}")
+        ns_resource = self._resources.get(f"Project/{project}")
         if ns_resource is None:
             return []
         return list(ns_resource.spec.get("guardrails", []))

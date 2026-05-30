@@ -376,7 +376,7 @@ function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
                   type="button"
                   onClick={() => {
                     setOpen(false)
-                    void navigate('/resources?kind=namespaces')
+                    void navigate('/resources?kind=projects')
                   }}
                   className="flex items-center gap-2 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >

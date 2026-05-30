@@ -28,7 +28,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     if (get().loading) return
     set({ loading: true, error: null })
     try {
-      const result = await api.get<{ items: Resource[]; total: number }>('/api/v1/namespaces')
+      const result = await api.get<{ items: Resource[]; total: number }>('/api/v1/projects')
       const names = result.items.map((r) => r.metadata.name)
       if (!names.includes('default')) {
         names.unshift('default')
@@ -40,9 +40,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   createProject: async (name: string) => {
-    await api.post<Resource>('/api/v1/namespaces', {
+    await api.post<Resource>('/api/v1/projects', {
       apiVersion: 'blackbeard/v1',
-      kind: 'Namespace',
+      kind: 'Project',
       metadata: { name, project: 'default' },
       spec: {},
     })

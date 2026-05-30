@@ -641,12 +641,11 @@ AUTOMATION_SCHEMA: dict[str, Any] = {
         "inputs": {"type": "object", "maxProperties": 100},
         "enabled": {"type": "boolean", "default": True},
         "max_concurrent": {"type": "integer", "minimum": 1, "maximum": 10, "default": 1},
-        "project": {"type": "string", "maxLength": 255},
     },
     "additionalProperties": False,
 }
 
-NAMESPACE_SCHEMA: dict[str, Any] = {
+PROJECT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "description": {"type": "string", "maxLength": 5000},
@@ -673,6 +672,20 @@ NAMESPACE_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+SERVICE_ACCOUNT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "description": {"type": "string", "maxLength": 5000},
+        "project": {"type": "string", "maxLength": 255},
+        "permissions": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 255},
+            "maxItems": 50,
+        },
+    },
+    "additionalProperties": False,
+}
+
 KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "Agent": AGENT_SCHEMA,
     "Task": TASK_SCHEMA,
@@ -686,7 +699,8 @@ KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "Role": ROLE_SCHEMA,
     "RoleBinding": ROLE_BINDING_SCHEMA,
     "Automation": AUTOMATION_SCHEMA,
-    "Namespace": NAMESPACE_SCHEMA,
+    "Project": PROJECT_SCHEMA,
+    "ServiceAccount": SERVICE_ACCOUNT_SCHEMA,
 }
 
 # Verify all kinds have schemas — catches missing schemas at import time

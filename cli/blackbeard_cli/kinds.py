@@ -39,7 +39,8 @@ class ResourceKind(enum.StrEnum):
     ROLE = "Role"
     ROLE_BINDING = "RoleBinding"
     AUTOMATION = "Automation"
-    NAMESPACE = "Namespace"
+    PROJECT = "Project"
+    SERVICE_ACCOUNT = "ServiceAccount"
 
 
 KIND_TO_PLURAL: dict[str, str] = {
@@ -55,7 +56,8 @@ KIND_TO_PLURAL: dict[str, str] = {
     ResourceKind.ROLE.value: "roles",
     ResourceKind.ROLE_BINDING.value: "role-bindings",
     ResourceKind.AUTOMATION.value: "automations",
-    ResourceKind.NAMESPACE.value: "namespaces",
+    ResourceKind.PROJECT.value: "projects",
+    ResourceKind.SERVICE_ACCOUNT.value: "service-accounts",
 }
 
 assert set(KIND_TO_PLURAL.keys()) == {k.value for k in ResourceKind}, (
