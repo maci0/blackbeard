@@ -393,6 +393,19 @@ export function RunDialog({
                     }
                   }, 300)
                 }}
+                onBlur={() => {
+                  if (validateTimer.current) clearTimeout(validateTimer.current)
+                  if (inputs.trim()) {
+                    try {
+                      JSON.parse(inputs)
+                      setError('')
+                    } catch {
+                      setError('Invalid JSON — check for missing quotes, commas, or brackets')
+                    }
+                  } else {
+                    setError('')
+                  }
+                }}
                 onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
                   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                     e.preventDefault()
@@ -405,7 +418,7 @@ export function RunDialog({
                 autoCapitalize="off"
                 autoCorrect="off"
               />
-              <p id="run-dialog-hint" className="mt-1 text-xs text-muted-foreground/70">
+              <p id="run-dialog-hint" className="mt-1 text-xs text-muted-foreground">
                 Press {modKey}+Enter to {config.verb.toLowerCase()}
               </p>
               {error && (
@@ -422,11 +435,12 @@ export function RunDialog({
 
             <div className="flex justify-end gap-2">
               <Dialog.Close asChild>
-                <button className="rounded-md border border-border px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <button type="button" className="rounded-md border border-border px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   Cancel
                 </button>
               </Dialog.Close>
               <button
+                type="button"
                 onClick={handleRun}
                 disabled={!!error || loading}
                 aria-busy={loading}

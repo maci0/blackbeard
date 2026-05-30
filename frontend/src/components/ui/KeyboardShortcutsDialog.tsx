@@ -30,7 +30,7 @@ const SECTIONS = [
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-flex h-6 min-w-[24px] items-center justify-center rounded border border-border bg-muted px-1.5 text-[11px] font-semibold text-muted-foreground shadow-sm">
+    <kbd className="inline-flex h-6 min-w-[24px] items-center justify-center rounded border border-border bg-muted px-1.5 text-[11px] font-semibold text-foreground/70 shadow-sm">
       {children}
     </kbd>
   )
@@ -78,9 +78,9 @@ export function KeyboardShortcutsDialog({
           </div>
           <Dialog.Close asChild>
             <button
+              type="button"
               className="absolute right-3 top-3 flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Close"
-              title="Close"
             >
               <X className="h-4 w-4" />
             </button>

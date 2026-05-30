@@ -99,6 +99,7 @@ export function OnboardingWizard({ onDismiss }: { onDismiss: () => void }) {
           {/* Close button */}
           <Dialog.Close asChild>
             <button
+              type="button"
               className="absolute right-3 top-3 flex h-[44px] w-[44px] items-center justify-center rounded-md p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Skip onboarding"
             >

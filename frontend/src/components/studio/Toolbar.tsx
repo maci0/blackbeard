@@ -175,6 +175,7 @@ export function Toolbar({
         >
           <DropdownMenu.Trigger asChild>
             <button
+              type="button"
               aria-label="Load saved crew"
               className="text-2xs flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
@@ -336,8 +337,8 @@ export function Toolbar({
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
             <button
+              type="button"
               aria-label="Export crew"
-              title="Export"
               className="flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Download className="h-3.5 w-3.5" />

@@ -6,11 +6,15 @@ import logging
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.auth.dependencies import require_permission
 from blackbeard.engine.agency_import import parse_agency_agent_markdown
 from blackbeard.http_client import get_client
-from blackbeard.models import User
+from blackbeard.kinds import API_VERSION
+from blackbeard.models import User, get_session
+from blackbeard.models.resource_schemas import ResourceCreate, ResourceMetadata
+from blackbeard.resources import ResourceService
 
 logger = logging.getLogger(__name__)
 
@@ -157,26 +161,19 @@ async def list_agency_agents(
 )
 async def import_agency_agents(
     body: AgencyAgentImportRequest,
+    session: AsyncSession = Depends(get_session),
     _current_user: User = Depends(
         require_permission("create", "Agent", require_identity=True)
     ),
 ) -> AgencyAgentImportResponse:
     """Import selected agent personas as Blackbeard Agent resources."""
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    from blackbeard.kinds import API_VERSION
-    from blackbeard.models import get_session
-    from blackbeard.resources import ResourceService
-
     imported = 0
     skipped = 0
     errors: list[str] = []
 
-    session: AsyncSession = await get_session().__anext__()
     service = ResourceService(session)
 
     for slug in body.slugs:
-        # Search across all divisions for the slug
         found = False
         for div in _DIVISIONS:
             files = await _list_division_files(div)
@@ -202,21 +199,24 @@ async def import_agency_agents(
                     break
 
                 try:
-                    await service.create(
+                    data = ResourceCreate(
+                        apiVersion=API_VERSION,
                         kind="Agent",
-                        name=parsed["name"],
-                        project="default",
+                        metadata=ResourceMetadata(
+                            name=parsed["name"],
+                            project="default",
+                            labels={
+                                "source": "agency-agents",
+                                "division": parsed.get("source_division", ""),
+                            },
+                        ),
                         spec={
                             "role": parsed["role"],
                             "goal": parsed["goal"],
                             "backstory": parsed["backstory"],
                         },
-                        labels={
-                            "source": "agency-agents",
-                            "division": parsed.get("source_division", ""),
-                        },
-                        api_version=API_VERSION,
                     )
+                    await service.create(data)
                     imported += 1
                 except Exception as exc:
                     if "already exists" in str(exc).lower():
@@ -231,7 +231,8 @@ async def import_agency_agents(
         if not found:
             errors.append(f"{slug}: not found in any division")
 
-    await session.close()
+    if imported > 0:
+        await session.commit()
 
     return AgencyAgentImportResponse(
         imported=imported, skipped=skipped, errors=errors

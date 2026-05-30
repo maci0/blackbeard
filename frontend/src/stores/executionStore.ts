@@ -169,10 +169,10 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       if (unique.length === 0) return state
       const total = state.events.length + unique.length
       if (total <= MAX_EVENTS) {
-        return { events: [...state.events, ...unique] }
+        return { events: state.events.concat(unique) }
       }
       const drop = total - MAX_EVENTS
-      return { events: [...state.events.slice(drop), ...unique] }
+      return { events: state.events.slice(drop).concat(unique) }
     })
   },
 

@@ -596,18 +596,11 @@ _CREDENTIAL_CONFIG_KEYS = frozenset(
 )
 
 
-def _build_env_expansion_re() -> re.Pattern[str]:
-    """Build a compiled regex matching $VAR or ${VAR} for all blocked env names/prefixes."""
-    prefix_alts = "|".join(re.escape(p) for p in _BLOCKED_ENV_PREFIXES)
-    exact_alts = "|".join(re.escape(e) for e in _BLOCKED_ENV_EXACT)
-    pattern = rf"\$\{{?(?:{prefix_alts}|(?:{exact_alts})(?:\}}|[^A-Z0-9_]|$))"
-    return re.compile(pattern, re.IGNORECASE)
-
-
-_BLOCKED_ENV_EXPANSION_RE = _build_env_expansion_re()
-
-
 _INDIRECT_EXPANSION_RE = re.compile(r"\$\{!")
+
+# Matches $VAR or ${VAR patterns and captures the variable name.
+# Replaces a 150-alternation regex that enumerated every blocked prefix/name.
+_ENV_VAR_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
 
 
 def _has_blocked_env_expansion(val: str) -> bool:
@@ -616,7 +609,7 @@ def _has_blocked_env_expansion(val: str) -> bool:
         return False
     if _INDIRECT_EXPANSION_RE.search(val):
         return True
-    return _BLOCKED_ENV_EXPANSION_RE.search(val) is not None
+    return any(is_blocked_env_name(match.group(1)) for match in _ENV_VAR_RE.finditer(val))
 
 
 def _is_blocked_env_reference(val: str) -> bool:

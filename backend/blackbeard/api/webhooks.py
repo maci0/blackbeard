@@ -106,7 +106,7 @@ async def create_webhook(
     response: Response,
     body: WebhookCreateRequest = Body(...),
     session: AsyncSession = Depends(get_session),
-    user: User = Depends(require_permission("create", "Webhook")),
+    user: User | None = Depends(require_permission("create", "Webhook")),
 ) -> WebhookCreateResponse:
     """Register a new webhook for execution event delivery."""
     check_rate_limit(mutation_limiter, user, _MUTATION_RATE_MSG)
@@ -183,7 +183,7 @@ async def list_webhooks(
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     session: AsyncSession = Depends(get_session),
-    _user: User = Depends(require_permission("list", "Webhook")),
+    _user: User | None = Depends(require_permission("list", "Webhook")),
 ) -> WebhookListResponse:
     """List all registered webhooks (secrets are not returned)."""
     result = await session.execute(
@@ -228,7 +228,7 @@ async def delete_webhook(
     request: Request,
     webhook_id: UUID = Path(..., description="Webhook UUID"),
     session: AsyncSession = Depends(get_session),
-    user: User = Depends(require_permission("delete", "Webhook")),
+    user: User | None = Depends(require_permission("delete", "Webhook")),
 ) -> None:
     """Remove a registered webhook."""
     check_rate_limit(mutation_limiter, user, _MUTATION_RATE_MSG)

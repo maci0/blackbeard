@@ -191,13 +191,14 @@ export function AssistantDialog({ open, onOpenChange, onApply }: AssistantDialog
           {/* Footer */}
           <div className="flex items-center justify-end gap-3 border-t px-6 py-4">
             <Dialog.Close asChild>
-              <button className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <button type="button" className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 Cancel
               </button>
             </Dialog.Close>
 
             {result ? (
               <button
+                type="button"
                 onClick={handleApply}
                 className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-emerald-500 dark:hover:bg-emerald-600"
               >
@@ -206,6 +207,7 @@ export function AssistantDialog({ open, onOpenChange, onApply }: AssistantDialog
               </button>
             ) : (
               <button
+                type="button"
                 onClick={() => void handleGenerate()}
                 disabled={loading || prompt.trim().length < 10}
                 aria-busy={loading}
@@ -224,9 +226,9 @@ export function AssistantDialog({ open, onOpenChange, onApply }: AssistantDialog
           {/* Close button */}
           <Dialog.Close asChild>
             <button
+              type="button"
               className="absolute right-3 top-3 flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Close"
-              title="Close"
             >
               <X className="h-4 w-4" />
             </button>

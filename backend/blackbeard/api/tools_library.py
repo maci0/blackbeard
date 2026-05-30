@@ -9,9 +9,13 @@ from typing import Any
 import yaml
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.auth.dependencies import require_permission
-from blackbeard.models import User
+from blackbeard.kinds import API_VERSION
+from blackbeard.models import User, get_session
+from blackbeard.models.resource_schemas import ResourceCreate, ResourceMetadata
+from blackbeard.resources import ResourceService
 
 logger = logging.getLogger(__name__)
 
@@ -114,17 +118,12 @@ async def list_library_tools(
 @router.post("/install", response_model=InstallResponse)
 async def install_library_tools(
     body: InstallRequest,
+    session: AsyncSession = Depends(get_session),
     _current_user: User = Depends(
         require_permission("create", "Tool", require_identity=True)
     ),
 ) -> InstallResponse:
     """Install tools from the library as Blackbeard Tool resources."""
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    from blackbeard.kinds import API_VERSION
-    from blackbeard.models import get_session
-    from blackbeard.resources import ResourceService
-
     catalog = _load_catalog()
     by_slug = {e["slug"]: e for e in catalog}
 
@@ -132,7 +131,6 @@ async def install_library_tools(
     skipped = 0
     errors: list[str] = []
 
-    session: AsyncSession = await get_session().__anext__()
     service = ResourceService(session)
 
     for slug in body.slugs:
@@ -151,17 +149,20 @@ async def install_library_tools(
             spec["config"] = entry["config"]
 
         try:
-            await service.create(
+            data = ResourceCreate(
+                apiVersion=API_VERSION,
                 kind="Tool",
-                name=slug,
-                project="default",
+                metadata=ResourceMetadata(
+                    name=slug,
+                    project="default",
+                    labels={
+                        "source": "library",
+                        "category": entry.get("category", "other"),
+                    },
+                ),
                 spec=spec,
-                labels={
-                    "source": "library",
-                    "category": entry.get("category", "other"),
-                },
-                api_version=API_VERSION,
             )
+            await service.create(data)
             installed += 1
         except Exception as exc:
             if "already exists" in str(exc).lower() or "conflict" in str(exc).lower():
@@ -169,6 +170,7 @@ async def install_library_tools(
             else:
                 errors.append(f"{slug}: {str(exc)[:100]}")
 
-    await session.close()
+    if installed > 0:
+        await session.commit()
 
     return InstallResponse(installed=installed, skipped=skipped, errors=errors)
