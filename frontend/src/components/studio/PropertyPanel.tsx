@@ -570,8 +570,8 @@ function PIIForm({
         />
         {preset !== 'custom' && PII_PRESETS[preset] && (
           <p className="mt-1 text-[10px] text-muted-foreground">
-            {PII_PRESETS[preset].entities.length} entities selected by{' '}
-            {PII_PRESETS[preset].label} standard
+            {PII_PRESETS[preset].entities.length} entities selected by {PII_PRESETS[preset].label}{' '}
+            standard
           </p>
         )}
       </FieldGroup>

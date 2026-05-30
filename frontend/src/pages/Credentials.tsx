@@ -430,7 +430,9 @@ export default function Credentials() {
                 aria-label="Refresh credentials"
                 className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin motion-reduce:animate-none')} />
+                <RefreshCw
+                  className={cn('h-4 w-4', loading && 'animate-spin motion-reduce:animate-none')}
+                />
               </button>
               <button
                 type="button"
@@ -448,7 +450,10 @@ export default function Credentials() {
         {credentials.length > 0 && (
           <div className="mt-6 flex items-center gap-3">
             <div className="relative max-w-xs flex-1">
-              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              />
               <input
                 type="search"
                 value={filter}

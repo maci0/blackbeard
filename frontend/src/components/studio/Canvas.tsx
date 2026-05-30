@@ -39,6 +39,11 @@ import RouterNode from './nodes/RouterNode'
 import ParallelNode from './nodes/ParallelNode'
 import CrewGroupNode from './nodes/CrewGroupNode'
 import StickyNoteNode from './nodes/StickyNoteNode'
+import IfElseNode from './nodes/IfElseNode'
+import SwitchNode from './nodes/SwitchNode'
+import MergeNode from './nodes/MergeNode'
+import FilterNode from './nodes/FilterNode'
+import GateNode from './nodes/GateNode'
 import DataFlowEdge from './edges/DataFlowEdge'
 import ToolAssignEdge from './edges/ToolAssignEdge'
 
@@ -57,6 +62,11 @@ const NODE_TYPES: NodeTypes = {
   parallel: ParallelNode,
   crewGroup: CrewGroupNode,
   stickyNote: StickyNoteNode,
+  ifElse: IfElseNode,
+  switch: SwitchNode,
+  merge: MergeNode,
+  filter: FilterNode,
+  gate: GateNode,
 }
 
 const DROPPABLE_TYPES = new Set([
@@ -69,6 +79,11 @@ const DROPPABLE_TYPES = new Set([
   'router',
   'parallel',
   'stickyNote',
+  'ifElse',
+  'switch',
+  'merge',
+  'filter',
+  'gate',
 ])
 
 const EDGE_TYPES: EdgeTypes = {

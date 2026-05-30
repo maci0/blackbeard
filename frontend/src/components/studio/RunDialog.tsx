@@ -142,7 +142,10 @@ export function RunDialog({
     }
   }, [])
 
-  const crewPresets = useMemo(() => presets.filter((p) => p.crewName === crewName), [presets, crewName])
+  const crewPresets = useMemo(
+    () => presets.filter((p) => p.crewName === crewName),
+    [presets, crewName],
+  )
 
   const handleSelectPreset = useCallback(
     (name: string) => {

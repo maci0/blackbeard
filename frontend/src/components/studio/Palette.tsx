@@ -10,6 +10,10 @@ import {
   Columns3,
   StickyNote,
   Search,
+  ToggleLeft,
+  Combine,
+  Filter,
+  Lock,
 } from 'lucide-react'
 import { useStudioStore } from '@/stores/studioStore'
 import { getDefaultNodeData } from './defaults'
@@ -115,6 +119,56 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-purple-700 dark:text-purple-300',
     borderColor:
       'border-purple-200 hover:border-purple-400 dark:border-purple-800 dark:hover:border-purple-600',
+  },
+  {
+    type: 'ifElse',
+    label: 'IF/ELSE',
+    icon: GitBranch,
+    headerBg: 'bg-gradient-to-r from-amber-500 to-yellow-400',
+    iconBg: 'bg-white/20',
+    textColor: 'text-amber-700 dark:text-amber-300',
+    borderColor:
+      'border-amber-200 hover:border-amber-400 dark:border-amber-800 dark:hover:border-amber-600',
+  },
+  {
+    type: 'switch',
+    label: 'Switch',
+    icon: ToggleLeft,
+    headerBg: 'bg-gradient-to-r from-cyan-600 to-cyan-400',
+    iconBg: 'bg-white/20',
+    textColor: 'text-cyan-700 dark:text-cyan-300',
+    borderColor:
+      'border-cyan-200 hover:border-cyan-400 dark:border-cyan-800 dark:hover:border-cyan-600',
+  },
+  {
+    type: 'merge',
+    label: 'Merge',
+    icon: Combine,
+    headerBg: 'bg-gradient-to-r from-indigo-600 to-indigo-400',
+    iconBg: 'bg-white/20',
+    textColor: 'text-indigo-700 dark:text-indigo-300',
+    borderColor:
+      'border-indigo-200 hover:border-indigo-400 dark:border-indigo-800 dark:hover:border-indigo-600',
+  },
+  {
+    type: 'filter',
+    label: 'Filter',
+    icon: Filter,
+    headerBg: 'bg-gradient-to-r from-orange-500 to-orange-400',
+    iconBg: 'bg-white/20',
+    textColor: 'text-orange-700 dark:text-orange-300',
+    borderColor:
+      'border-orange-200 hover:border-orange-400 dark:border-orange-800 dark:hover:border-orange-600',
+  },
+  {
+    type: 'gate',
+    label: 'Gate',
+    icon: Lock,
+    headerBg: 'bg-gradient-to-r from-teal-600 to-teal-400',
+    iconBg: 'bg-white/20',
+    textColor: 'text-teal-700 dark:text-teal-300',
+    borderColor:
+      'border-teal-200 hover:border-teal-400 dark:border-teal-800 dark:hover:border-teal-600',
   },
   {
     type: 'stickyNote',

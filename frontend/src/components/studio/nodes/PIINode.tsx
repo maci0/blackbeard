@@ -107,9 +107,7 @@ export default memo(function PIINode({ data, selected }: NodeProps) {
           )}
         </div>
       ) : preset !== 'custom' ? (
-        <p className="text-[10px] text-muted-foreground/80">
-          {preset.toUpperCase()} defaults
-        </p>
+        <p className="text-[10px] text-muted-foreground/80">{preset.toUpperCase()} defaults</p>
       ) : (
         <p className="text-[10px] italic text-muted-foreground/60">No entities</p>
       )}

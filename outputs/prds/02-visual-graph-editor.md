@@ -16,6 +16,70 @@ Provide a browser-based drag-and-drop canvas where users compose agents, tasks, 
 
 ---
 
+## 1.2 Component Library & Logic Blocks (Post-MVP)
+
+Inspired by digital logic simulators (Logisim, Digital), the Studio gains a component library system and logic blocks for reusable, composable crew design.
+
+### Crew-as-Component (Subcircuit Pattern)
+
+Any saved Crew can be used as a single node inside another Crew or Flow — like a subcircuit in Logisim. The crew-component node shows the crew's `spec.inputs` as labeled input ports on the left edge and a single output port on the right.
+
+- **Save as component**: Right-click a CrewGroup → "Save as Component". The crew is saved to the API and appears in the palette under "My Components".
+- **Drag to canvas**: Drag a crew-component from the palette. It renders as a compact node with the crew name, agent/task count badge, and input/output ports.
+- **Drill-in editing**: Double-click a crew-component node to navigate into its internal canvas. A breadcrumb bar shows the navigation depth (e.g., `Pipeline > Research Stage`). Click breadcrumb to navigate back up.
+- **Data flow**: The output of one crew-component feeds into the next crew-component's inputs via edges. At execution time, the engine chains crew kickoffs sequentially, passing outputs as inputs.
+
+### Typed Ports
+
+Nodes gain explicit named input/output handles (ports) on their edges, replacing the current untyped connection model:
+
+- **Task nodes**: Left port = `context` (input from upstream tasks/agents), right port = `output` (task result text).
+- **Agent nodes**: Bottom port = `tasks` (connects to assigned tasks), top port = `tools` (connects to tool nodes).
+- **Crew-component nodes**: Left ports = one per `spec.inputs[].name`, right port = `output`.
+- **Logic block nodes**: Left ports = input values, right ports = output per branch.
+- **Port labels**: Visible on hover (300ms delay) or always visible at zoom > 100%.
+- **Type validation**: Ports carry a type hint (`text`, `json`, `boolean`, `number`). Invalid connections (e.g., boolean port → text port) show a red indicator.
+
+### Logic Blocks for Decision Making
+
+New node types for branching and control flow, inspired by digital logic gates:
+
+| Node | Inputs | Outputs | Behavior |
+|------|--------|---------|----------|
+| **IF/ELSE** | `condition` (expression), `input` (data) | `true` branch, `false` branch | Evaluates condition expression against input data. Routes to true or false output port. |
+| **Switch** | `value` (data), `cases` (configured values) | One output port per case + `default` | Matches value against case labels. Routes to matching output port. Like a Router but visual with explicit output ports per case. |
+| **Merge** | Multiple inputs | Single output | Waits for all inputs to arrive, then merges them into a single output dict. For parallel-to-sequential convergence. |
+| **Filter** | `input` (list/array), `condition` (expression) | `passed`, `rejected` | Filters input items by condition. Items matching go to `passed` port, others to `rejected`. |
+| **Loop** | `items` (list), `body` (connected subgraph) | `results` (list) | Iterates over items, executing the connected subgraph for each. Collects results. |
+| **Gate** | `input`, `control` (boolean) | `output` | Passes input through only when control is true. Otherwise blocks (returns null). Like a digital AND gate for data flow. |
+
+Each logic block:
+- Has a distinct visual shape (diamond for IF/ELSE, hexagon for Switch, circle for Merge)
+- Shows the condition/expression inline on the node
+- Supports the expression editor with variable autocomplete
+- Can be tested individually via "Test Node" in PropertyPanel
+
+### Saved Component Library
+
+The palette gains a "My Components" section:
+
+- **Save**: Right-click any node group → "Save as Component" → name + description dialog
+- **Categories**: Components are tagged (e.g., "Research", "Content", "Data") for filtering
+- **Versioning**: Each save creates a new version. Old versions remain usable.
+- **Import/Export**: Components can be exported as YAML and imported into other Blackbeard instances via the Marketplace.
+- **Parameters**: Components define `parameters` that are configurable when dragged onto the canvas (like component properties in Logisim).
+
+### Execution Wire Values
+
+During and after execution, edges (wires) display the data that flowed through them:
+
+- **Live**: Edges animate with a flowing dot pattern during execution (CSS animation on the SVG path).
+- **Completed**: Click any edge to see a tooltip with the data payload (truncated to 500 chars, "Show full" button for expansion).
+- **Token count**: Edge tooltip shows token count for the upstream task's LLM calls.
+- **Error propagation**: If an upstream task fails, downstream edges turn red with an error icon.
+
+---
+
 ## 2. Core Concepts
 
 | Concept | Definition |

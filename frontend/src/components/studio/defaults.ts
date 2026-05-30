@@ -51,6 +51,16 @@ export function getDefaultNodeData(type: string): Record<string, unknown> {
         type: 'parallel',
         branches: [],
       }
+    case 'ifElse':
+      return { name: 'check', condition: '', true_label: 'True', false_label: 'False' }
+    case 'switch':
+      return { name: 'switch', expression: '', cases: [] }
+    case 'merge':
+      return { name: 'merge', input_count: 2, strategy: 'wait_all' }
+    case 'filter':
+      return { name: 'filter', condition: '' }
+    case 'gate':
+      return { name: 'gate', control: '', pass_when: 'true' }
     case 'stickyNote':
       return { text: '', color: 'yellow' }
     default:

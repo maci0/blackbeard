@@ -52,7 +52,7 @@ function ToastItem({ toast }: { toast: Toast }) {
       onBlur={() => resume(toast.id)}
       tabIndex={0}
       className={cn(
-        'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border p-4 shadow-lg transition-all duration-300 ease-out motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border p-4 shadow-lg transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
         'translate-y-2 opacity-0 sm:translate-x-full sm:translate-y-0',
         STYLE_MAP[toast.type],
       )}

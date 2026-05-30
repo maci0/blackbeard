@@ -43,7 +43,6 @@ function setWebhookTested(webhookId: string) {
   localStorage.setItem(WEBHOOK_TEST_KEY, JSON.stringify(record))
 }
 
-
 interface WebhookRecord {
   id: string
   url: string

@@ -356,7 +356,9 @@ export function CommandPalette({
                 close
               </span>
             </div>
-            <span aria-live="polite" aria-atomic="true">{filtered.length} results</span>
+            <span aria-live="polite" aria-atomic="true">
+              {filtered.length} results
+            </span>
           </div>
         </Dialog.Content>
       </Dialog.Portal>
