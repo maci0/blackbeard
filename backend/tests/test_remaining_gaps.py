@@ -150,10 +150,16 @@ def test_request_id_filter_injects_request_id():
 
 def test_request_id_filter_default_value():
     """Filter should use '-' when no request_id is set in context."""
-    f = _RequestIdFilter()
-    record = logging.LogRecord("test", logging.INFO, "", 0, "msg", (), None)
-    f.filter(record)
-    assert record.request_id == "-"
+    from blackbeard.logging_config import request_id_var
+
+    token = request_id_var.set("-")
+    try:
+        f = _RequestIdFilter()
+        record = logging.LogRecord("test", logging.INFO, "", 0, "msg", (), None)
+        f.filter(record)
+        assert record.request_id == "-"
+    finally:
+        request_id_var.reset(token)
 
 
 # ---------------------------------------------------------------------------
