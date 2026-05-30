@@ -89,7 +89,7 @@ _CREW_RELEVANT_KINDS = (
     ResourceKind.FLOW,
 )
 
-_NAMESPACE_RESOURCE_LIMIT = 500
+_PROJECT_RESOURCE_LIMIT = 500
 _MAX_ERROR_LENGTH = 500
 
 
@@ -267,7 +267,7 @@ async def _load_crew_resources(
 
     Loads by project+kind filter rather than resolving refs recursively.
     Returns a dict keyed by 'Kind/name' for the ResourceLoader.
-    Silently truncates at ``_NAMESPACE_RESOURCE_LIMIT`` (500) with a warning.
+    Silently truncates at ``_PROJECT_RESOURCE_LIMIT`` (500) with a warning.
 
     Raises:
         ExecutionNotFoundError: If the target crew/flow is not in the project.
@@ -278,22 +278,22 @@ async def _load_crew_resources(
         .where(Resource.kind.in_(_CREW_RELEVANT_KINDS))
         .options(load_only(Resource.kind, Resource.name, Resource.project, Resource.spec))
         .order_by(Resource.kind, Resource.name)
-        .limit(_NAMESPACE_RESOURCE_LIMIT + 1)
+        .limit(_PROJECT_RESOURCE_LIMIT + 1)
     )
 
     rows = list(result.scalars())
-    if len(rows) > _NAMESPACE_RESOURCE_LIMIT:
+    if len(rows) > _PROJECT_RESOURCE_LIMIT:
         logger.warning(
             "Project '%s' has >%d resources; some refs may not resolve",
             project,
-            _NAMESPACE_RESOURCE_LIMIT,
+            _PROJECT_RESOURCE_LIMIT,
             extra={
                 "event": "project_resource_limit",
                 "project": project,
-                "limit": _NAMESPACE_RESOURCE_LIMIT,
+                "limit": _PROJECT_RESOURCE_LIMIT,
             },
         )
-        rows = rows[:_NAMESPACE_RESOURCE_LIMIT]
+        rows = rows[:_PROJECT_RESOURCE_LIMIT]
 
     resources = {f"{r.kind.value}/{r.name}": r for r in rows}
     root_key = f"{target_kind}/{crew_name}"
@@ -404,7 +404,7 @@ async def _submit_execution(
     pool_saturated = pool["saturated"]
     logger.log(
         logging.WARNING if pool_saturated else logging.INFO,
-        "%s: execution_id=%s crew=%s project=%s n_iteratioproject=%s pool=%d/%d queued=%d",
+        "%s: execution_id=%s crew=%s project=%s n_iterations=%s pool=%d/%d queued=%d",
         execution_type.value.capitalize(),
         execution.id,
         crew_name,

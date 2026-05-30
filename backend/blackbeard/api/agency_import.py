@@ -60,9 +60,7 @@ class AgencyAgentListResponse(BaseModel):
 
 
 class AgencyAgentImportRequest(BaseModel):
-    slugs: list[str] = Field(
-        ..., min_length=1, max_length=50, description="Agent slugs to import"
-    )
+    slugs: list[str] = Field(..., min_length=1, max_length=50, description="Agent slugs to import")
 
 
 class AgencyAgentImportResponse(BaseModel):
@@ -95,9 +93,7 @@ async def _list_division_files(division: str) -> list[str]:
     url = f"{_GITHUB_API}/repos/{_REPO_OWNER}/{_REPO_NAME}/contents/{division}"
     client = get_client("agency-import", timeout=15.0)
     try:
-        resp = await client.get(
-            url, headers={"Accept": "application/vnd.github.v3+json"}
-        )
+        resp = await client.get(url, headers={"Accept": "application/vnd.github.v3+json"})
         if resp.status_code != 200:
             return []
         items = resp.json()
@@ -109,6 +105,7 @@ async def _list_division_files(division: str) -> list[str]:
             and item.get("name") != "README.md"
         ]
     except Exception:
+        logger.debug("Failed to list division files from GitHub: %s", division, exc_info=True)
         return []
 
 
@@ -120,9 +117,7 @@ async def list_agency_agents(
     division: str | None = Query(
         default=None, description="Filter by division (e.g., engineering, design)"
     ),
-    _current_user: User = Depends(
-        require_permission("list", "Agent", require_identity=True)
-    ),
+    _current_user: User = Depends(require_permission("list", "Agent", require_identity=True)),
 ) -> AgencyAgentListResponse:
     """List available agent personas from the Agency Agents library."""
     divisions = [division] if division else _DIVISIONS
@@ -162,11 +157,13 @@ async def list_agency_agents(
 async def import_agency_agents(
     body: AgencyAgentImportRequest,
     session: AsyncSession = Depends(get_session),
-    _current_user: User = Depends(
-        require_permission("create", "Agent", require_identity=True)
-    ),
+    _current_user: User = Depends(require_permission("create", "Agent", require_identity=True)),
 ) -> AgencyAgentImportResponse:
     """Import selected agent personas as Blackbeard Agent resources."""
+    from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
+
+    check_rate_limit(mutation_limiter, _current_user, "Too many import requests. Try again later.")
+
     imported = 0
     skipped = 0
     errors: list[str] = []
@@ -178,11 +175,7 @@ async def import_agency_agents(
         for div in _DIVISIONS:
             files = await _list_division_files(div)
             for file_path in files:
-                file_slug = (
-                    file_path.split("/")[-1]
-                    .replace(".md", "")
-                    .replace(f"{div}-", "")
-                )
+                file_slug = file_path.split("/")[-1].replace(".md", "").replace(f"{div}-", "")
                 if file_slug != slug and file_path.split("/")[-1].replace(".md", "") != slug:
                     continue
 
@@ -234,6 +227,18 @@ async def import_agency_agents(
     if imported > 0:
         await session.commit()
 
-    return AgencyAgentImportResponse(
-        imported=imported, skipped=skipped, errors=errors
-    )
+    if imported > 0:
+        from blackbeard.audit import log_audit
+
+        await log_audit(
+            session=session,
+            action="import",
+            resource_type="Agent",
+            resource_id=f"agency-agents:{imported}",
+            actor_type="user",
+            actor_id=str(_current_user.id) if _current_user else None,
+            detail={"source": "agency-agents", "imported": imported, "skipped": skipped},
+        )
+        await session.commit()
+
+    return AgencyAgentImportResponse(imported=imported, skipped=skipped, errors=errors)

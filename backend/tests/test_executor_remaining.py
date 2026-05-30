@@ -256,11 +256,11 @@ class TestLoadCrewResources:
 
     @pytest.mark.asyncio
     async def test_truncates_at_namespace_limit(self) -> None:
-        from blackbeard.engine.executor import _NAMESPACE_RESOURCE_LIMIT, _load_crew_resources
+        from blackbeard.engine.executor import _PROJECT_RESOURCE_LIMIT, _load_crew_resources
 
         crew = _make_resource(ResourceKind.CREW, "my-crew", spec={"agents": [], "tasks": []})
         resources_list = [crew]
-        for i in range(_NAMESPACE_RESOURCE_LIMIT + 1):
+        for i in range(_PROJECT_RESOURCE_LIMIT + 1):
             resources_list.append(
                 _make_resource(ResourceKind.AGENT, f"agent-{i}", spec={"role": "R", "goal": "G", "backstory": "B"})
             )
@@ -273,7 +273,7 @@ class TestLoadCrewResources:
         with patch("blackbeard.engine.executor.logger"):
             result = await _load_crew_resources(session, "my-crew", "default")
 
-        assert len(result) <= _NAMESPACE_RESOURCE_LIMIT
+        assert len(result) <= _PROJECT_RESOURCE_LIMIT
 
 
 # ===========================================================================

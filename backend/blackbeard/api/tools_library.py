@@ -124,6 +124,10 @@ async def install_library_tools(
     ),
 ) -> InstallResponse:
     """Install tools from the library as Blackbeard Tool resources."""
+    from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
+
+    check_rate_limit(mutation_limiter, _current_user, "Too many install requests. Try again later.")
+
     catalog = _load_catalog()
     by_slug = {e["slug"]: e for e in catalog}
 
@@ -171,6 +175,17 @@ async def install_library_tools(
                 errors.append(f"{slug}: {str(exc)[:100]}")
 
     if installed > 0:
+        from blackbeard.audit import log_audit
+
+        await log_audit(
+            session=session,
+            action="import",
+            resource_type="Tool",
+            resource_id=f"library:{installed}",
+            actor_type="user",
+            actor_id=str(_current_user.id) if _current_user else None,
+            detail={"source": "library", "installed": installed, "skipped": skipped},
+        )
         await session.commit()
 
     return InstallResponse(installed=installed, skipped=skipped, errors=errors)

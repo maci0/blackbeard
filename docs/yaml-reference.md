@@ -704,13 +704,13 @@ spec:
 
 ---
 
-## Namespace
+## Project
 
-A Namespace provides logical grouping and resource isolation. Resources belong to a project (default: `"default"`).
+A Project provides logical grouping and resource isolation. Resources belong to a project (default: `"default"`).
 
 ```yaml
 apiVersion: blackbeard/v1
-kind: Namespace
+kind: Project
 metadata:
   name: production
 spec:

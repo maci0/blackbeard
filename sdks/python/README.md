@@ -31,7 +31,7 @@ client.login("user@example.com", "password123")
 
 ### Resource CRUD
 
-All 13 resource kinds are supported: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Namespace.
+All 14 resource kinds are supported: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount.
 
 ```python
 # List agents

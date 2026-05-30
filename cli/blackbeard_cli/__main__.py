@@ -481,12 +481,12 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
             f"[yellow]Warning:[/] Could not sort by dependencies ({exc}), applying in file order."
         )
 
-    # Inject CLI namespace into resources that lack one
-    namespace = ctx.obj["project"]
+    # Inject CLI project into resources that lack one
+    project = ctx.obj["project"]
     for res in resources:
         meta = res.setdefault("metadata", {})
         if "project" not in meta:
-            meta["project"] = namespace
+            meta["project"] = project
 
     headers = require_auth(ctx)
     results: list[dict[str, Any]] = []
@@ -618,7 +618,7 @@ def get(ctx: click.Context, kind: str, name: str) -> None:
     validate_name(name)
     server = ctx.obj["server"]
 
-    namespace = ctx.obj["project"]
+    project = ctx.obj["project"]
     plural = KIND_TO_PLURAL[kind]
 
     url = f"{server}/api/v1/{plural}/{name}"
@@ -626,7 +626,7 @@ def get(ctx: click.Context, kind: str, name: str) -> None:
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-            response = client.get(url, headers=headers, params={"project": namespace})
+            response = client.get(url, headers=headers, params={"project": project})
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
 
@@ -645,7 +645,7 @@ def get(ctx: click.Context, kind: str, name: str) -> None:
     header.add_column("Value")
     header.add_row("Kind", kind)
     header.add_row("Name", meta.get("name", name))
-    header.add_row("Project", meta.get("project", namespace))
+    header.add_row("Project", meta.get("project", project))
     header.add_row("Version", str(data.get("version", "—")))
     item_labels = meta.get("labels", {})
     if item_labels:
@@ -695,10 +695,10 @@ def list_resources_cmd(ctx: click.Context, kind: str, labels: tuple[str, ...], l
     """
     server = ctx.obj["server"]
 
-    namespace = ctx.obj["project"]
+    project = ctx.obj["project"]
     plural = KIND_TO_PLURAL[kind]
 
-    params: dict[str, Any] = {"project": namespace, "limit": limit}
+    params: dict[str, Any] = {"project": project, "limit": limit}
     if labels:
         for item in labels:
             if "=" not in item:
@@ -737,7 +737,7 @@ def list_resources_cmd(ctx: click.Context, kind: str, labels: tuple[str, ...], l
 
     items = extract_items(data)
     if not items:
-        msg = f"No {kind} resources found in project '{escape(namespace)}'"
+        msg = f"No {kind} resources found in project '{escape(project)}'"
         if labels:
             msg += f" with labels: {', '.join(escape(lbl) for lbl in labels)}"
         out.print(f"[dim]{msg}.[/]")
@@ -791,11 +791,11 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool) -> None:
     validate_name(name)
     server = ctx.obj["server"]
 
-    namespace = ctx.obj["project"]
+    project = ctx.obj["project"]
     plural = KIND_TO_PLURAL[kind]
 
     if not confirm_destructive(
-        ctx, f"Delete {kind}/{name} in project '{namespace}' on {server}?", yes=yes
+        ctx, f"Delete {kind}/{name} in project '{project}' on {server}?", yes=yes
     ):
         return
 
@@ -804,7 +804,7 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool) -> None:
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-            response = client.delete(url, headers=headers, params={"project": namespace})
+            response = client.delete(url, headers=headers, params={"project": project})
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
 
@@ -812,10 +812,10 @@ def delete(ctx: click.Context, kind: str, name: str, yes: bool) -> None:
         handle_http_error(response)
 
     if ctx.obj["json"]:
-        print_json({"deleted": f"{kind}/{name}", "project": namespace, "status": "deleted"})
+        print_json({"deleted": f"{kind}/{name}", "project": project, "status": "deleted"})
         return
 
-    out.print(f"[green]✓[/] Deleted [bold]{kind}/{name}[/] from project '{escape(namespace)}'")
+    out.print(f"[green]✓[/] Deleted [bold]{kind}/{name}[/] from project '{escape(project)}'")
 
 
 @cli.command(
@@ -874,7 +874,7 @@ def kickoff(
 
     server = ctx.obj["server"]
 
-    namespace = ctx.obj["project"]
+    project = ctx.obj["project"]
     prog = ctx.find_root().info_name or "blackbeard"
 
     warn_unused_interval(ctx, watch, interval, f"{prog} kickoff {crew_name}")
@@ -890,7 +890,7 @@ def kickoff(
                     url,
                     json=body,
                     headers=headers,
-                    params={"project": namespace},
+                    params={"project": project},
                 )
         except httpx.RequestError as exc:
             handle_request_error(server, exc)
@@ -911,7 +911,7 @@ def kickoff(
         out.print(
             Panel.fit(
                 f"[bold]Crew:[/] {crew_name}\n"
-                f"[bold]Project:[/] {namespace}\n"
+                f"[bold]Project:[/] {project}\n"
                 f"[bold]Execution ID:[/] {execution_id}\n"
                 f"[bold]Status:[/] {status_val}",
                 title="[green]Execution Submitted[/]",
@@ -1010,7 +1010,7 @@ def train(
     parsed_inputs = parse_key_value_inputs(inputs)
 
     server = ctx.obj["server"]
-    namespace = ctx.obj["project"]
+    project = ctx.obj["project"]
     prog = ctx.find_root().info_name or "blackbeard"
 
     warn_unused_interval(ctx, watch, interval, f"{prog} train {crew_name}")
@@ -1026,7 +1026,7 @@ def train(
                     url,
                     json=body,
                     headers=headers,
-                    params={"project": namespace},
+                    params={"project": project},
                 )
         except httpx.RequestError as exc:
             handle_request_error(server, exc)
@@ -1047,7 +1047,7 @@ def train(
         out.print(
             Panel.fit(
                 f"[bold]Crew:[/] {crew_name}\n"
-                f"[bold]Project:[/] {namespace}\n"
+                f"[bold]Project:[/] {project}\n"
                 f"[bold]Mode:[/] train\n"
                 f"[bold]Iterations:[/] {iterations}\n"
                 f"[bold]Filename:[/] {filename}\n"
@@ -1131,7 +1131,7 @@ def test_crew_cmd(
     parsed_inputs = parse_key_value_inputs(inputs)
 
     server = ctx.obj["server"]
-    namespace = ctx.obj["project"]
+    project = ctx.obj["project"]
     prog = ctx.find_root().info_name or "blackbeard"
 
     warn_unused_interval(ctx, watch, interval, f"{prog} test-crew {crew_name}")
@@ -1147,7 +1147,7 @@ def test_crew_cmd(
                     url,
                     json=body,
                     headers=headers,
-                    params={"project": namespace},
+                    params={"project": project},
                 )
         except httpx.RequestError as exc:
             handle_request_error(server, exc)
@@ -1168,7 +1168,7 @@ def test_crew_cmd(
         out.print(
             Panel.fit(
                 f"[bold]Crew:[/] {crew_name}\n"
-                f"[bold]Project:[/] {namespace}\n"
+                f"[bold]Project:[/] {project}\n"
                 f"[bold]Mode:[/] test\n"
                 f"[bold]Iterations:[/] {iterations}\n"
                 f"[bold]Execution ID:[/] {execution_id}\n"
@@ -1409,7 +1409,7 @@ def pull(ctx: click.Context, source: str, yes: bool) -> None:
         return
 
     headers = require_auth(ctx)
-    namespace = ctx.obj["project"]
+    project = ctx.obj["project"]
 
     try:
         with httpx.Client(timeout=max(ctx.obj["timeout"], 60.0)) as client:
@@ -1417,7 +1417,7 @@ def pull(ctx: click.Context, source: str, yes: bool) -> None:
                 f"{server}/api/v1/marketplace/import",
                 json={"url": source},
                 headers=headers,
-                params={"project": namespace},
+                params={"project": project},
             )
     except httpx.RequestError as exc:
         handle_request_error(server, exc)

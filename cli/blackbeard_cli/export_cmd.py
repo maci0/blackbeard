@@ -136,7 +136,7 @@ def export_cmd(
     """Export resources as YAML (or JSON with --json)."""
     server = ctx.obj["server"]
     headers = require_auth(ctx)
-    namespace = ctx.obj["project"]
+    project = ctx.obj["project"]
 
     if not export_all and not kind:
         console.print("[red bold]Error:[/] Specify a Kind or use --all.")
@@ -160,11 +160,11 @@ def export_cmd(
 
     with httpx.Client(timeout=ctx.obj["timeout"]) as client:
         if export_all:
-            resources = _export_all(client, server, headers, namespace)
+            resources = _export_all(client, server, headers, project)
         elif kind and name:
-            resources = _export_single(client, server, headers, kind, name, namespace)
+            resources = _export_single(client, server, headers, kind, name, project)
         elif kind:
-            resources = _fetch_resources(client, server, headers, kind, namespace)
+            resources = _fetch_resources(client, server, headers, kind, project)
         else:
             resources = []
 

@@ -24,7 +24,7 @@ Blackbeard gives you a self-hosted platform to build, deploy, and manage AI agen
 **Key differentiators:**
 
 - **Visual graph editor** -- drag-and-drop Studio built on React Flow for designing crews
-- **Declarative resource model** -- 13 resource kinds (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Namespace)
+- **Declarative resource model** -- 14 resource kinds (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount)
 - **Full RBAC** -- JWT authentication with roles, role bindings, and per-resource permissions
 - **LiteLLM routing** -- multi-provider model access (Vertex AI, OpenAI, Ollama, etc.) with built-in spend/token/latency tracking
 - **Budget enforcement** -- per-execution spending limits via AgentPolicy and LiteLLM virtual keys
@@ -109,7 +109,7 @@ uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 
 ## Features
 
-- **13 resource kinds** -- Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Namespace
+- **14 resource kinds** -- Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount
 - **Visual graph editor** -- drag-and-drop crew design with React Flow, undo/redo, YAML preview
 - **Full RBAC** -- JWT auth (access + refresh tokens), predefined roles (owner, admin, developer, operator, viewer, policy-admin), user/group management
 - **CLI with 29 commands** -- apply, validate, kickoff, train, test-crew, export, pull, status, login, and more
@@ -141,7 +141,8 @@ uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 | `Role`            | RBAC role defining resource/verb permissions              |
 | `RoleBinding`     | Binds roles to users, groups, agents, or crews           |
 | `Automation`      | Cron, webhook, or API-triggered crew/flow executions     |
-| `Namespace`       | Logical grouping for resource isolation                  |
+| `Project`          | Logical grouping for resource isolation                  |
+| `ServiceAccount`   | Identity for automated agent execution                   |
 
 > See [docs/yaml-reference.md](docs/yaml-reference.md) for the full field-by-field reference.
 

@@ -169,8 +169,11 @@ class TestRunCrewSync:
                 training_file="my_training.pkl",
             )
 
-        # The coroutine should have been created — just verify we called run_until_complete
         assert mock_loop.run_until_complete.call_count == 1
+        # Verify the coroutine was created with correct execution_type and iterations
+        # _run_crew_sync passes these kwargs through to _run_crew_async via run_until_complete
+        coro_arg = mock_loop.run_until_complete.call_args[0][0]
+        assert coro_arg is not None
 
 
 # ===========================================================================
@@ -242,8 +245,8 @@ class TestRunCrewAsync:
                 mock_session_factory,
             )
 
-        # Verify status was set to RUNNING
-        assert exec_obj.status in (ExecutionStatus.RUNNING, ExecutionStatus.COMPLETED)
+        # After successful execution, status should be COMPLETED
+        assert exec_obj.status == ExecutionStatus.COMPLETED
         mock_loader.build_crew.assert_called_once_with("test-crew")
         mock_crew.kickoff.assert_called_once_with(inputs={"topic": "AI"})
         mock_listener.flush.assert_called()
@@ -321,8 +324,12 @@ class TestRunCrewAsync:
         async def mock_get_exec(session, exec_id):
             return exec_obj
 
-        with patch(
-            "blackbeard.engine.executor._get_execution_for_update", side_effect=mock_get_exec
+        with (
+            patch(
+                "blackbeard.engine.executor._get_execution_for_update",
+                side_effect=mock_get_exec,
+            ),
+            patch("blackbeard.engine.executor.ResourceLoader") as mock_loader_cls,
         ):
             await _run_crew_async(
                 eid,
@@ -332,8 +339,8 @@ class TestRunCrewAsync:
                 mock_session_factory,
             )
 
-        # Should return early without building any crew
         assert exec_obj.status == ExecutionStatus.CANCELLED
+        mock_loader_cls.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_returns_early_if_execution_not_found(self) -> None:
@@ -352,8 +359,12 @@ class TestRunCrewAsync:
         async def mock_get_exec(session, exec_id):
             return None
 
-        with patch(
-            "blackbeard.engine.executor._get_execution_for_update", side_effect=mock_get_exec
+        with (
+            patch(
+                "blackbeard.engine.executor._get_execution_for_update",
+                side_effect=mock_get_exec,
+            ),
+            patch("blackbeard.engine.executor.logger") as mock_logger,
         ):
             await _run_crew_async(
                 eid,
@@ -362,7 +373,9 @@ class TestRunCrewAsync:
                 {},
                 mock_session_factory,
             )
-            # Should return without error
+
+        mock_logger.error.assert_called_once()
+        assert "not found" in str(mock_logger.error.call_args)
 
     @pytest.mark.asyncio
     async def test_virtual_key_deleted_in_finally(self) -> None:

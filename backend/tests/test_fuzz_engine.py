@@ -162,19 +162,17 @@ def test_scheduler_init():
 # ---------------------------------------------------------------------------
 
 
-def test_litellm_model_sync_functions_exist():
-    """Verify model sync module exports are callable."""
-    from blackbeard.litellm.model_sync import (
-        add_model,
-        delete_model,
-        sync_all,
-        update_model,
-    )
+def test_litellm_build_params_with_api_key():
+    """_build_litellm_params propagates api_key_env into result."""
+    from blackbeard.litellm.model_sync import _build_litellm_params
 
-    assert callable(add_model)
-    assert callable(update_model)
-    assert callable(delete_model)
-    assert callable(sync_all)
+    result = _build_litellm_params({
+        "provider": "anthropic",
+        "model": "claude-3-opus",
+        "api_key_env": "ANTHROPIC_API_KEY",
+    })
+    assert result["model"] == "anthropic/claude-3-opus"
+    assert result["api_key"] == "os.environ/ANTHROPIC_API_KEY"
 
 
 def test_litellm_build_params():
@@ -183,7 +181,8 @@ def test_litellm_build_params():
 
     result = _build_litellm_params({"provider": "ollama", "model": "llama3"})
     assert isinstance(result, dict)
-    assert "model_name" in result or "litellm_params" in result or len(result) >= 0
+    assert "model" in result
+    assert result["model"] == "ollama/llama3"
 
 
 # ---------------------------------------------------------------------------

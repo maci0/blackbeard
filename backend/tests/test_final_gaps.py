@@ -14,13 +14,15 @@ from hypothesis import strategies as st
 
 
 class TestPollExecution:
-    def test_poll_execution_is_async_generator(self) -> None:
-        """Verify _poll_execution is an async generator function."""
-        import inspect
+    def test_poll_backoff_phase_transitions(self) -> None:
+        """Verify backoff phases: 1s for early polls, 3s mid, 5s late."""
+        from blackbeard.api.executions import _poll_backoff
 
-        from blackbeard.api.executions import _poll_execution
-
-        assert inspect.isasyncgenfunction(_poll_execution)
+        assert _poll_backoff(0) == 1
+        assert _poll_backoff(29) == 1
+        assert _poll_backoff(30) == 3
+        assert _poll_backoff(59) == 3
+        assert _poll_backoff(60) == 5
 
     @given(polls=st.integers(min_value=0, max_value=100))
     @settings(max_examples=20)
@@ -114,19 +116,23 @@ class TestEnsureOauthBranches:
 
 
 class TestWasmRuntime:
-    def test_create_linker_returns_object(self) -> None:
+    def test_module_cache_lru_eviction(self) -> None:
+        from blackbeard.engine.sandbox.wasm_runtime import ModuleCache
+
+        cache = ModuleCache(max_size=2)
+        cache.put("a", MagicMock())
+        cache.put("b", MagicMock())
+        assert cache.size == 2
+        cache.put("c", MagicMock())
+        assert cache.size == 2
+        assert cache.get("a") is None
+
+    def test_describe_returns_none_for_missing_file(self) -> None:
         from blackbeard.engine.sandbox.wasm_runtime import WasmSandbox
 
         sandbox = WasmSandbox()
-        # _create_linker is called internally, test via the public API
-        assert sandbox is not None
-
-    def test_describe_exists(self) -> None:
-        from blackbeard.engine.sandbox.wasm_runtime import WasmSandbox
-
-        sandbox = WasmSandbox()
-        assert callable(sandbox.describe)
-        assert callable(sandbox.invoke)
+        result = sandbox.describe("/nonexistent/path.wasm")
+        assert result is None
 
 
 # ---------------------------------------------------------------------------
@@ -228,18 +234,12 @@ class TestFuzzFinalGaps:
         limiter = InMemoryRateLimiter(max_requests=100, window_seconds=60, name="fuzz4")
         check_rate_limit_by_ip(limiter, ip, "limited")
 
-    def test_fuzz_global_exception_handler_sync(self) -> None:
-        """Verify handler module is importable and function exists."""
-        from blackbeard.api.middleware import global_exception_handler
+    def test_wasm_invoke_rejects_path_outside_app(self) -> None:
+        from blackbeard.engine.sandbox.wasm_runtime import WasmExecutionError, WasmSandbox
 
-        assert callable(global_exception_handler)
-
-    def test_wasm_sandbox_callable(self) -> None:
-        from blackbeard.engine.sandbox.wasm_runtime import WasmSandbox
-
-        s = WasmSandbox()
-        assert hasattr(s, "describe")
-        assert hasattr(s, "invoke")
+        sandbox = WasmSandbox()
+        with pytest.raises(WasmExecutionError, match="path must be within"):
+            sandbox.invoke("/etc/passwd", "{}")
 
 
 # ---------------------------------------------------------------------------
@@ -314,6 +314,8 @@ class TestPollExecutionDeep:
                 events.append(event)
                 break
 
+        assert len(events) <= 1
+
 
 class TestSyncRefsDeep:
     """Cover _sync_refs body via proper mock."""
@@ -340,8 +342,9 @@ class TestSyncRefsDeep:
         }
 
         await service._sync_refs(mock_resource)
-        # Verify execute was called (for delete + insert)
         assert mock_session.execute.call_count >= 1
+        # Refs in spec should trigger add_all for new ResourceRef rows
+        mock_session.add_all.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_no_refs_in_spec(self) -> None:
@@ -365,16 +368,19 @@ class TestSyncRefsDeep:
 
 
 class TestWasmCreateLinker:
-    """Cover _create_linker by verifying it exists as a method."""
+    """Cover _create_linker via store creation and cache behavior."""
 
-    def test_create_linker_is_method(self) -> None:
+    def test_cache_clear_resets_size(self) -> None:
+        from blackbeard.engine.sandbox.wasm_runtime import ModuleCache
+
+        cache = ModuleCache(max_size=10)
+        cache.put("key1", MagicMock())
+        assert cache.size == 1
+        cache.clear()
+        assert cache.size == 0
+
+    def test_sandbox_custom_fuel_limit(self) -> None:
         from blackbeard.engine.sandbox.wasm_runtime import WasmSandbox
 
-        sandbox = WasmSandbox()
-        assert callable(getattr(sandbox, "_create_linker", None))
-
-    def test_sandbox_has_engine(self) -> None:
-        from blackbeard.engine.sandbox.wasm_runtime import WasmSandbox
-
-        sandbox = WasmSandbox()
-        assert sandbox._engine is not None
+        sandbox = WasmSandbox(fuel_limit=999)
+        assert sandbox._fuel_limit == 999

@@ -286,7 +286,7 @@ async def generate_resources(
     model_name = await _resolve_model_name(llm_connection_name, project, session)
 
     logger.info(
-        "Copilot generating resources: model=%s prompt_len=%d",
+        "Assistant generating resources: model=%s prompt_len=%d",
         model_name,
         len(prompt),
         extra={
@@ -319,7 +319,7 @@ async def generate_resources(
     except httpx.TransportError as e:
         latency_ms = int((time.monotonic() - t0) * 1000)
         logger.warning(
-            "Copilot LiteLLM unreachable: model=%s %s: %s (%.0fms)",
+            "Assistant LiteLLM unreachable: model=%s %s: %s (%.0fms)",
             model_name,
             type(e).__name__,
             e,
@@ -341,7 +341,7 @@ async def generate_resources(
     if resp.status_code != 200:
         error_body = resp.text[:500] if resp.text else ""
         logger.warning(
-            "Copilot LiteLLM error: model=%s status=%d latency_ms=%d body=%s",
+            "Assistant LiteLLM error: model=%s status=%d latency_ms=%d body=%s",
             model_name,
             resp.status_code,
             latency_ms,
@@ -361,7 +361,7 @@ async def generate_resources(
         data = resp.json()
     except ValueError:
         logger.error(
-            "Copilot: unparseable LiteLLM response: model=%s status=%d content_type=%s",
+            "Assistant: unparseable LiteLLM response: model=%s status=%d content_type=%s",
             model_name,
             resp.status_code,
             resp.headers.get("content-type", "unknown"),
@@ -392,7 +392,7 @@ async def generate_resources(
     total_tokens = usage.get("total_tokens", 0) if isinstance(usage, dict) else 0
 
     logger.info(
-        "Copilot LLM response: model=%s tokens=%d latency_ms=%d content_len=%d",
+        "Assistant LLM response: model=%s tokens=%d latency_ms=%d content_len=%d",
         model_name,
         total_tokens,
         latency_ms,
@@ -426,7 +426,7 @@ async def generate_resources(
     explanation = f"Generated {', '.join(parts)} from your prompt."
 
     logger.info(
-        "Copilot generated %d resources: %s",
+        "Assistant generated %d resources: %s",
         len(validated),
         ", ".join(f"{k}={v}" for k, v in kind_counts.items()),
         extra={

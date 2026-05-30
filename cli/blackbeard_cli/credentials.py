@@ -50,6 +50,7 @@ def load_credentials() -> StoredCredentials | None:
             expires_at=float(data["expires_at"]),
         )
     except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        logger.debug("Credentials file corrupt or incompatible — ignoring", exc_info=True)
         return None
 
 
@@ -96,6 +97,7 @@ def _refresh_token(server: str, refresh_token: str, timeout: float) -> StoredCre
                 json={"refresh_token": refresh_token},
             )
         if resp.status_code != 200:
+            logger.debug("Token refresh returned HTTP %d", resp.status_code)
             return None
         data = resp.json()
         return StoredCredentials(
@@ -106,6 +108,7 @@ def _refresh_token(server: str, refresh_token: str, timeout: float) -> StoredCre
             expires_at=time.time() + ACCESS_TOKEN_LIFETIME_S,
         )
     except (httpx.RequestError, KeyError, TypeError):
+        logger.debug("Token refresh failed", exc_info=True)
         return None
 
 

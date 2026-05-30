@@ -559,7 +559,7 @@ ROLE_SCHEMA: dict[str, Any] = {
                         "items": {"type": "string", "maxLength": 255},
                         "maxItems": 100,
                     },
-                    "namespaces": {
+                    "projects": {
                         "type": "array",
                         "items": {"type": "string", "maxLength": 255},
                         "maxItems": 50,

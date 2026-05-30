@@ -88,7 +88,7 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Resource versioning**: `resource_versions` table stores spec/labels snapshots on every create/update. Endpoints: `GET /{kind}/{name}/versions` (list), `GET /{kind}/{name}/versions/{version}` (detail), `POST /{kind}/{name}/rollback` (restore from snapshot).
 
-**Namespace-level guardrails**: Namespace resources support `spec.guardrails` array. At execution time, project guardrails are prepended to task-level guardrails.
+**Project-level guardrails**: Project resources support `spec.guardrails` array. At execution time, project guardrails are prepended to task-level guardrails.
 
 **OpenTelemetry**: Optional trace export via `OTEL_ENDPOINT` env var. When unset, tracing is disabled with no overhead.
 
