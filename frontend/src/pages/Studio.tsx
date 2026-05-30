@@ -22,6 +22,7 @@ import type { CrewSettings } from '@/stores/studioStore'
 import { CursorOverlay } from '@/components/studio/CursorOverlay'
 import { YamlEditor } from '@/components/studio/YamlEditor'
 import { autoLayout } from '@/components/studio/autoLayout'
+import { CanvasBreadcrumb } from '@/components/studio/CanvasBreadcrumb'
 import type { Node, Edge } from '@xyflow/react'
 import type { Resource } from '@/lib/types'
 
@@ -921,6 +922,8 @@ function StudioInner() {
         onClearExecResults={clearExecResults}
         onCrewSettingsClick={() => setCrewSettingsOpen(true)}
       />
+
+      <CanvasBreadcrumb />
 
       <div
         className="relative flex flex-1 overflow-hidden"

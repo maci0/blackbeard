@@ -29,6 +29,12 @@ export interface CrewSettings {
   onErrorAction: string
 }
 
+interface NavStackEntry {
+  nodes: Node[]
+  edges: Edge[]
+  crewName: string
+}
+
 interface StudioState {
   nodes: Node[]
   edges: Edge[]
@@ -40,6 +46,7 @@ interface StudioState {
   canUndo: boolean
   canRedo: boolean
   crewSettings: CrewSettings
+  navStack: NavStackEntry[]
 
   onNodesChange: (changes: NodeChange[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
@@ -55,6 +62,8 @@ interface StudioState {
   markClean: () => void
   undo: () => void
   redo: () => void
+  pushNav: (crewName: string, nodes: Node[], edges: Edge[]) => void
+  popNav: () => NavStackEntry | null
 }
 
 export const useStudioStore = create<StudioState>()(
@@ -91,6 +100,7 @@ export const useStudioStore = create<StudioState>()(
         canUndo: false,
         canRedo: false,
         crewSettings: { onErrorCrew: '', onErrorAction: '' },
+        navStack: [],
 
         onNodesChange: (changes) => {
           const hasStructuralChange = changes.some(
@@ -159,6 +169,45 @@ export const useStudioStore = create<StudioState>()(
         setEdges: (edges) => set({ edges }),
         setCrewSettings: (settings) => set({ crewSettings: settings, dirty: true }),
         markClean: () => set({ dirty: false }),
+
+        pushNav: (crewName, nodes, edges) => {
+          const state = get()
+          set({
+            navStack: [
+              ...state.navStack,
+              { nodes: state.nodes, edges: state.edges, crewName: state.crewName },
+            ],
+            nodes,
+            edges,
+            crewName,
+            selectedNodeId: null,
+            dirty: false,
+            history: [],
+            historyIndex: -1,
+            canUndo: false,
+            canRedo: false,
+          })
+        },
+
+        popNav: () => {
+          const state = get()
+          if (state.navStack.length === 0) return null
+          const stack = [...state.navStack]
+          const entry = stack.pop()!
+          set({
+            navStack: stack,
+            nodes: entry.nodes,
+            edges: entry.edges,
+            crewName: entry.crewName,
+            selectedNodeId: null,
+            dirty: false,
+            history: [],
+            historyIndex: -1,
+            canUndo: false,
+            canRedo: false,
+          })
+          return entry
+        },
 
         undo: () => {
           const state = get()
