@@ -94,7 +94,7 @@ resources table
 
 ### Execution Engine
 
-The execution engine takes a crew name, resolves all referenced resources, builds CrewAI objects, and runs the crew in a background thread.
+The execution engine takes a crew name, resolves all referenced resources, builds CrewAI objects, and runs the crew either as a Temporal workflow (when configured) or in a background thread via ThreadPoolExecutor.
 
 ```
 Execution Flow
@@ -265,6 +265,7 @@ A gRPC server (`blackbeard/grpc/server.py`) starts alongside FastAPI during the 
 /credentials          → Credentials Manager (centralized secret management)
 /guardrails/playground → Guardrail Playground (test guardrails with sample input)
 /executions/compare   → Execution Comparison (side-by-side metrics diff, ?a=&b= params)
+/observability        → Observability dashboard (traces, metrics, system health)
 ```
 
 **Command palette:** Press `Cmd+K` (macOS) or `Ctrl+K` (Windows/Linux) to open the command palette for quick navigation to any page, resource, or action.
@@ -320,7 +321,7 @@ No backend deps: no FastAPI, SQLAlchemy, or CrewAI
 blackbeard_cli/
 ├── __main__.py        # Entry point: core commands (apply, validate, get,
 │                      #   list, delete, kickoff, train, test-crew, status,
-│                      #   pull, health)
+│                      #   pull, health, shell)
 ├── auth_cmds.py       # login, logout, whoami, register
 ├── exec.py            # executions (list), events, cancel
 ├── export_cmd.py      # export (YAML dump of all resources)
@@ -592,7 +593,7 @@ The CLI (`cli/` directory) is a standalone Python package named `blackbeard-cli`
 
 | Module | Commands |
 |--------|----------|
-| `__main__.py` | apply, validate, get, list, delete, kickoff, train, test-crew, status, pull, health |
+| `__main__.py` | apply, validate, get, list, delete, kickoff, train, test-crew, status, pull, health, shell |
 | `auth_cmds.py` | login, logout, whoami, register |
 | `exec.py` | executions (list), events, cancel |
 | `export_cmd.py` | export (YAML dump) |
@@ -624,6 +625,7 @@ A Helm chart is available at `deploy/helm/blackbeard/` for Kubernetes deployment
 - LiteLLM proxy deployment
 - API and UI deployments
 - Ingress, Secrets, ConfigMaps
+- HPA (Horizontal Pod Autoscaler) for API and UI deployments
 
 Install with:
 
@@ -644,6 +646,64 @@ The backend supports exporting traces to an OpenTelemetry collector. Set the `OT
 ### Structured Logging
 
 All backend log entries are structured with `extra` dicts containing event names and contextual fields (execution IDs, crew names, error types). This makes logs machine-parseable for aggregation in tools like Loki, Elasticsearch, or CloudWatch.
+
+### Monitoring Stack
+
+The `deploy/monitoring/` directory contains Prometheus scrape configurations, Grafana dashboard definitions (JSON), and alerting rules. The monitoring stack scrapes metrics from the API server and LiteLLM proxy.
+
+---
+
+## Plugin System
+
+The plugin SDK (`backend/blackbeard/plugins/`) provides 4 extension points for customizing the platform:
+
+| Plugin Type | Base Class | Purpose |
+|-------------|-----------|---------|
+| `tool` | `ToolPlugin` | Custom tool implementations that agents can invoke |
+| `guardrail` | `GuardrailPlugin` | Custom validation logic applied to task outputs |
+| `auth_provider` | `AuthProviderPlugin` | External authentication provider integration (LDAP, SAML, etc.) |
+| `execution_hook` | `ExecutionHookPlugin` | Pre/post execution callbacks for logging, metrics, or side effects |
+
+Plugins are discovered via Python entry points (`blackbeard.plugins` group) or registered programmatically through the plugin API. Each plugin type defines a base class with abstract methods that implementations must provide.
+
+---
+
+## Git-Backed Resource Store
+
+The git store (`backend/blackbeard/git_store/`) maintains a local git repository that records every resource mutation as a commit. This provides a complete, diffable history separate from the database-level version snapshots.
+
+**Endpoints:**
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /{kind}/{name}/git/log` | Commit log for a resource |
+| `GET /{kind}/{name}/git/diff` | Diff between versions |
+| `GET /{kind}/{name}/git/blame` | Line-by-line attribution |
+| `GET /{kind}/{name}/git/show?ref=<sha>` | Show a specific commit |
+
+Each resource is stored as a YAML file in the git repository, organized by kind and name. Commits include the authenticated user as the author.
+
+---
+
+## Temporal Workflow Engine
+
+The Temporal integration (`backend/blackbeard/temporal/`) provides an alternative execution backend using [Temporal](https://temporal.io/) for durable workflow orchestration.
+
+**Configuration:** Set `TEMPORAL_ADDRESS` (e.g., `localhost:7233`) to enable Temporal. When not set, the system uses `ThreadPoolExecutor` (the default).
+
+**How it works:**
+
+1. When a crew kickoff is requested, the execution engine checks whether Temporal is configured
+2. If Temporal is available, the execution is submitted as a Temporal workflow
+3. The workflow runs crew setup, budget enforcement, and CrewAI execution as Temporal activities
+4. Results, token usage, and errors are recorded the same way as ThreadPoolExecutor executions
+
+**Advantages over ThreadPoolExecutor:**
+
+- Executions survive API server restarts
+- Automatic retry with configurable policies
+- Temporal UI provides workflow visibility and debugging
+- Workflow history is retained independently of the Blackbeard database
 
 ---
 

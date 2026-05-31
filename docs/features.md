@@ -305,3 +305,192 @@ curl -H "X-API-Key: $KEY" \
 # CLI equivalent
 uv run blackbeard export --all > backup.yaml
 ```
+
+---
+
+## Plugin SDK
+
+Extend Blackbeard with custom functionality through 4 plugin extension types:
+
+| Extension Type | Purpose |
+|----------------|---------|
+| `tool` | Custom tool implementations for agents |
+| `guardrail` | Custom validation logic for task outputs |
+| `auth_provider` | External authentication provider integration |
+| `execution_hook` | Pre/post execution callbacks for logging, metrics, or side effects |
+
+Plugins are registered via Python entry points or the plugin API. Each plugin type has a base class to implement:
+
+```python
+from blackbeard.plugins import ToolPlugin
+
+class MyCustomTool(ToolPlugin):
+    name = "my-tool"
+    description = "Does something useful"
+
+    def run(self, input_data: str) -> str:
+        return f"Processed: {input_data}"
+```
+
+---
+
+## Interactive TUI Shell
+
+The CLI includes an interactive REPL for exploratory resource management. Launch it with:
+
+```bash
+uv run blackbeard shell
+```
+
+The shell supports tab completion, command history, and inline help. All standard CLI commands are available without the `blackbeard` prefix:
+
+```
+blackbeard> list Agent
+blackbeard> get Crew research-crew
+blackbeard> kickoff research-crew --input topic="AI"
+blackbeard> status <execution-id>
+```
+
+---
+
+## Temporal Workflow Integration
+
+Blackbeard supports [Temporal](https://temporal.io/) as an optional durable workflow engine. When configured, crew executions run as Temporal workflows instead of ThreadPoolExecutor threads, providing automatic retries, visibility, and crash recovery.
+
+### Configuration
+
+Set the `TEMPORAL_ADDRESS` environment variable to enable Temporal:
+
+```bash
+TEMPORAL_ADDRESS=localhost:7233
+```
+
+When `TEMPORAL_ADDRESS` is not set, Blackbeard falls back to ThreadPoolExecutor (the default behavior). No code changes are needed to switch between the two.
+
+### What changes with Temporal
+
+- Executions survive API server restarts
+- Automatic retry on transient failures
+- Temporal UI provides execution visibility and debugging
+- Workflow history is retained for auditing
+
+---
+
+## Git-Backed Resource Versioning
+
+Every resource mutation (create, update, delete) is auto-committed to a local git repository maintained by the API server. This gives you a complete history of every change to every resource.
+
+### API Endpoints
+
+```bash
+# View commit log for a resource
+curl -H "X-API-Key: $KEY" \
+  http://localhost:8000/api/v1/agents/researcher/git/log
+
+# Show diff between versions
+curl -H "X-API-Key: $KEY" \
+  http://localhost:8000/api/v1/agents/researcher/git/diff
+
+# Blame (who changed what)
+curl -H "X-API-Key: $KEY" \
+  http://localhost:8000/api/v1/agents/researcher/git/blame
+
+# Show a specific commit
+curl -H "X-API-Key: $KEY" \
+  "http://localhost:8000/api/v1/agents/researcher/git/show?ref=abc1234"
+```
+
+This is separate from the database-level resource versioning (snapshot/rollback). The git store provides full commit history with diffs and blame, while database versioning provides fast snapshot/rollback.
+
+---
+
+## Observability Dashboard
+
+The `/observability` page provides a unified view of system health, traces, and metrics. It integrates with OpenTelemetry (traces), Prometheus (metrics), and Grafana (dashboards).
+
+Navigate to **Observability** in the sidebar to view:
+
+- Active and recent traces
+- Execution latency and throughput metrics
+- System health indicators (API, database, LiteLLM, Valkey)
+- Error rates and budget consumption
+
+### Monitoring Stack
+
+The `deploy/monitoring/` directory includes Prometheus scrape configs, Grafana dashboard JSON, and alerting rules for production deployments.
+
+---
+
+## Nested Project Hierarchy
+
+Projects support parent-child relationships for organizing resources into a hierarchy. Child projects can inherit policies from their parent, reducing duplication.
+
+### Configuration
+
+```yaml
+apiVersion: blackbeard/v1
+kind: Project
+metadata:
+  name: ml-team-prod
+spec:
+  description: "ML team production workloads"
+  parent: "ref:projects/ml-team"
+  inherit_policies: true
+```
+
+When `inherit_policies` is `true`, the child project inherits `default_agent_policy`, `guardrails`, and `resource_quota` from its parent. Child-level settings override parent settings where both are defined.
+
+---
+
+## Tool Versioning
+
+Tools support semantic versioning and deprecation to manage lifecycle transitions.
+
+```yaml
+apiVersion: blackbeard/v1
+kind: Tool
+metadata:
+  name: web-search
+spec:
+  type: python
+  class_path: crewai_tools.SerperDevTool
+  tool_version: "2.1.0"
+  deprecated: false
+```
+
+When a tool is marked `deprecated: true`, the UI shows a warning badge and the optional `deprecated_message` field is displayed to guide users toward the replacement.
+
+---
+
+## Composite Guardrail Chains
+
+Combine multiple guardrails into a single chain using AND/OR logic:
+
+```yaml
+apiVersion: blackbeard/v1
+kind: Guardrail
+metadata:
+  name: safety-chain
+spec:
+  type: composite
+  operator: AND
+  guardrails:
+    - "ref:guardrails/no-pii"
+    - "ref:guardrails/no-profanity"
+    - "ref:guardrails/format-check"
+  on_fail: reject
+```
+
+With `operator: AND`, all guardrails must pass. With `operator: OR`, at least one must pass. Composite guardrails can reference any other guardrail type (function, llm, schema, pii, hallucination).
+
+---
+
+## Canvas Export
+
+The Studio toolbar includes export options for sharing or archiving crew designs:
+
+- **PNG** -- raster image of the current canvas
+- **SVG** -- vector image, suitable for documentation or printing
+- **JSON** -- full canvas state (nodes, edges, positions) for re-importing
+
+Use the **Export** dropdown in the Studio toolbar to select the format.

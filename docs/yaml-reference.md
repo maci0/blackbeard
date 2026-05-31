@@ -171,6 +171,9 @@ spec:
   planning: false                          # Enable pre-execution planning step
   planning_llm: "ref:llm-connections/vertex-claude-sonnet"  # LLM used for planning
   default_agent_policy: "ref:agent-policies/standard"  # Policy applied to all agents
+  guardrails:                              # Guardrails applied to all tasks in this crew
+    - "ref:guardrails/no-pii"
+    - "ref:guardrails/format-check"
   inputs:                                  # Declare runtime inputs accepted by this crew
     - name: topic
       description: "The topic to research"
@@ -197,8 +200,9 @@ spec:
 | `planning` | boolean | — | Pre-execution planning step (stored but not yet passed to CrewAI at runtime) |
 | `planning_llm` | string | — | LLM used during planning (stored but not yet passed to CrewAI at runtime) |
 | `tool_loading` | `jit`\|`eager`\|`hybrid` | — | Tool loading strategy (default `hybrid`) |
-| `default_agent_policy` | string | — | Default `AgentPolicy` ref for all agents |
-| `inputs` | object[] | — | Runtime input declarations |
+| `default_agent_policy` | string | -- | Default `AgentPolicy` ref for all agents |
+| `guardrails` | string[] | -- | `ref:` guardrail resources applied to all tasks in the crew (prepended to task-level guardrails) |
+| `inputs` | object[] | -- | Runtime input declarations |
 | `inputs[].name` | string | ✅ | Input variable name |
 | `inputs[].description` | string | — | Description shown in UI |
 | `inputs[].required` | boolean | — | Whether input is mandatory (default `true`) |
@@ -271,6 +275,11 @@ spec:
   description: "Search the web for current information"
   sandbox: none                            # Sandbox tier: none, wasm, docker, podman, gvisor, microvm
 
+  # --- Versioning (optional) ---
+  tool_version: "2.1.0"                   # Semantic version string
+  deprecated: false                        # Mark tool as deprecated (default: false)
+  deprecated_message: "Use web-search-v3 instead"  # Shown in UI when deprecated
+
   # --- For type: wasm ---
   # type: wasm
   # wasm_module: "tools/my_tool.wasm"     # Path to compiled WASM module
@@ -306,7 +315,10 @@ spec:
 | `args` | string[] | — | Arguments for the MCP server command (`mcp-stdio`) |
 | `url` | string | — | URL of the MCP HTTP server (required for `mcp-http`) |
 | `env` | object | — | Environment variables for the MCP server process (`mcp-stdio`) |
-| `config` | object | — | Constructor kwargs passed to the tool |
+| `config` | object | -- | Constructor kwargs passed to the tool |
+| `tool_version` | string | -- | Semantic version string (e.g., `"1.0.0"`, `"2.1.0"`) |
+| `deprecated` | boolean | -- | Mark this tool as deprecated (default `false`); UI shows a warning badge |
+| `deprecated_message` | string | -- | Message displayed to users when the tool is deprecated (e.g., migration instructions) |
 
 > **Note:** The `env` capability passes a fixed set of safe environment variables (`LANG`, `LC_ALL`, `TZ`, `TERM`). Granular per-variable access is not supported.
 
@@ -460,7 +472,7 @@ metadata:
   project: default
 spec:
   # --- Required ---
-  type: function                           # "function", "llm", "schema", or "pii"
+  type: function                           # "function", "llm", "schema", "pii", "hallucination", or "composite"
 
   # --- Optional ---
   description: "Reject outputs containing personally identifiable information"
@@ -488,20 +500,37 @@ spec:
   #       type: number
   #       minimum: 0
   #       maximum: 1
+
+  # For type: hallucination
+  # type: hallucination
+  # llm: "ref:llm-connections/vertex-claude-sonnet"  # LLM used for fact-checking
+  # context_sources:                        # Reference material for fact verification
+  #   - "ref:knowledge-sources/product-docs"
+
+  # For type: composite
+  # type: composite
+  # operator: AND                           # "AND" (all must pass) or "OR" (at least one must pass)
+  # guardrails:                             # List of guardrail refs to combine
+  #   - "ref:guardrails/no-pii"
+  #   - "ref:guardrails/no-profanity"
+  #   - "ref:guardrails/format-check"
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | `function`\|`llm`\|`schema`\|`pii` | ✅ | Guardrail implementation strategy |
-| `description` | string | — | Human-readable description of what is being checked |
-| `on_fail` | `reject`\|`warn`\|`log` | — | Action on validation failure (default `reject`) |
-| `function_path` | string | — | Dotted path to Python callable `(output: str) -> bool` (required for `function`) |
-| `llm_prompt` | string | — | Prompt template with `{output}` placeholder (required for `llm`) |
-| `llm` | string | — | LLMConnection ref used for the LLM judge |
-| `json_schema` | object | — | JSON Schema to validate output against (required for `schema`) |
-| `pii_preset` | `hipaa`\|`gdpr`\|`pci-dss`\|`ccpa`\|`custom` | — | Predefined PII entity set (default `custom`; for `pii` type) |
-| `pii_entities` | string[] | — | Explicit PII entity types to detect (max 30; for `pii` type) |
-| `pii_action` | `redact`\|`reject`\|`warn` | — | Action when PII is detected (default `redact`; for `pii` type) |
+| `type` | `function`\|`llm`\|`schema`\|`pii`\|`hallucination`\|`composite` | yes | Guardrail implementation strategy |
+| `description` | string | -- | Human-readable description of what is being checked |
+| `on_fail` | `reject`\|`warn`\|`log` | -- | Action on validation failure (default `reject`) |
+| `function_path` | string | -- | Dotted path to Python callable `(output: str) -> bool` (required for `function`) |
+| `llm_prompt` | string | -- | Prompt template with `{output}` placeholder (required for `llm`) |
+| `llm` | string | -- | LLMConnection ref used for the LLM judge (used by `llm` and `hallucination` types) |
+| `json_schema` | object | -- | JSON Schema to validate output against (required for `schema`) |
+| `context_sources` | string[] | -- | `ref:` KnowledgeSource resources used as reference material for hallucination detection (for `hallucination` type) |
+| `operator` | `AND`\|`OR` | -- | Combination logic for composite guardrails (required for `composite`) |
+| `guardrails` | string[] | -- | `ref:` guardrail resources to combine (required for `composite`) |
+| `pii_preset` | `hipaa`\|`gdpr`\|`pci-dss`\|`ccpa`\|`custom` | -- | Predefined PII entity set (default `custom`; for `pii` type) |
+| `pii_entities` | string[] | -- | Explicit PII entity types to detect (max 30; for `pii` type) |
+| `pii_action` | `redact`\|`reject`\|`warn` | -- | Action when PII is detected (default `redact`; for `pii` type) |
 
 ---
 
@@ -720,6 +749,8 @@ spec:
   description: "Production workloads"
   labels:
     env: production
+  parent: "ref:projects/engineering"
+  inherit_policies: true
   default_agent_policy: "ref:agent-policies/strict"
   resource_quota:
     max_resources: 500
@@ -728,12 +759,16 @@ spec:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `description` | string | — | Human-readable description (max 5000 chars) |
-| `labels` | object | — | Arbitrary key-value labels for filtering (max 50) |
-| `default_agent_policy` | string | — | Default AgentPolicy ref applied to all agents in this project |
-| `resource_quota.max_resources` | integer (1–10000) | — | Maximum resources allowed in this project |
-| `resource_quota.max_executions_per_hour` | integer (1–1000) | — | Maximum executions per hour |
-| `guardrails` | string[] | — | `ref:` guardrail resources prepended to all task guardrails in this project (max 20) |
+| `description` | string | -- | Human-readable description (max 5000 chars) |
+| `labels` | object | -- | Arbitrary key-value labels for filtering (max 50) |
+| `parent` | string | -- | `ref:` to a parent Project for nested hierarchy |
+| `inherit_policies` | boolean | -- | Inherit `default_agent_policy`, `guardrails`, and `resource_quota` from the parent project (default `false`) |
+| `default_agent_policy` | string | -- | Default AgentPolicy ref applied to all agents in this project |
+| `resource_quota.max_resources` | integer (1--10000) | -- | Maximum resources allowed in this project |
+| `resource_quota.max_executions_per_hour` | integer (1--1000) | -- | Maximum executions per hour |
+| `guardrails` | string[] | -- | `ref:` guardrail resources prepended to all task guardrails in this project (max 20) |
+
+> **Nested projects:** When `inherit_policies` is `true`, the child project inherits settings from the parent. Child-level settings override parent settings where both are defined.
 
 ---
 

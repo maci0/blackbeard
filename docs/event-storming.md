@@ -89,6 +89,8 @@ Domain events, commands, aggregates, read models, and policies for the Blackbear
 - `ResourceRefResolved(ref_string, target_kind, target_name)`
 - `ResourceRefBroken(ref_string, reason)`
 - `BulkImportCompleted(created, updated, failed)`
+- `ResourceGitCommitted(kind, name, commit_sha)`
+- `ResourceGitDeleted(kind, name, commit_sha)`
 
 ### Aggregates
 - **Resource** (kind, name, project, spec, version, labels)
@@ -372,3 +374,26 @@ User clicks "Run Crew"
   -> WebhookDelivered event (for each registered webhook)
   -> AuditLogCreated event
 ```
+
+---
+
+## 12. Plugin System
+
+### Commands
+- `LoadPlugins(directory)`
+- `ReloadPlugin(name)`
+- `RegisterPlugin(meta, handler)`
+
+### Domain Events
+- `PluginDiscovered(name, type, version)`
+- `PluginRegistered(name, type)`
+- `PluginLoadFailed(path, error)`
+- `PluginReloaded(name)`
+
+### Aggregates
+- **PluginRegistry** (plugins by type and name)
+
+### Policies
+- Directory-based auto-discovery at startup
+- Graceful failure isolation (one bad plugin cannot break startup)
+- Thread-safe registry with lock-always pattern

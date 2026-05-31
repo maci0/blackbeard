@@ -386,3 +386,83 @@ Every journey below is a sequence a real user would follow to accomplish a goal.
 7. Press Cmd+. to go to Settings
 
 **Success criteria:** All documented shortcuts work.
+
+---
+
+## CUJ-23: Observability Dashboard
+
+**Actor:** Admin or developer user  
+**Goal:** Monitor platform health, spend, and execution metrics at a glance  
+
+1. Navigate to `/observability`
+2. View budget utilization cards (current spend, remaining budget, spend rate)
+3. View execution metrics (total runs, success rate, average duration, active count)
+4. View token usage breakdown by crew
+5. View policy and safety stats (permission denials, guardrail triggers, budget exceeded events)
+6. Click a stat card to navigate to the related detail page (e.g., click spend to go to executions, click guardrail triggers to go to guardrails)
+
+**Success criteria:** Dashboard renders all metric groups, cards link to correct detail pages.
+
+---
+
+## CUJ-24: Plugin Management
+
+**Actor:** Admin user  
+**Goal:** Install, reload, and use plugins that extend tools or guardrails  
+
+1. Browse installed plugins via `GET /api/v1/plugins`
+2. Place a plugin file (Python module) in the `plugins/` directory
+3. Restart the server, or call `POST /api/v1/plugins/{name}/reload` to hot-reload
+4. Verify the plugin appears in the listing with correct type and version
+5. Create or update a crew that references the custom tool or guardrail provided by the plugin
+6. Run the crew and confirm the plugin's tool or guardrail executes
+
+**Success criteria:** Plugin discovered, registered, and functional in crew execution.
+
+---
+
+## CUJ-25: Git Version Control
+
+**Actor:** Developer or admin user  
+**Goal:** Track resource changes through git-backed version control  
+
+1. Create or update a resource (triggers a git commit on the backing repo)
+2. View git log at `GET /api/v1/git/log` to see commit history
+3. View diff between two commits to inspect what changed
+4. View blame for a specific resource file to see who changed each line
+5. View resource content at a specific commit to inspect historical state
+6. Add a remote via `POST /api/v1/git/remotes` and push to sync with an external repository
+
+**Success criteria:** Resource mutations produce git commits, history is browsable, push to remote works.
+
+---
+
+## CUJ-26: Interactive TUI Shell
+
+**Actor:** Developer or operator user  
+**Goal:** Manage resources and run crews from an interactive terminal session  
+
+1. Run `blackbeard shell` to enter the TUI
+2. Use tab completion for commands and resource names
+3. Run `ls Agent` to list all agents
+4. Run `get Agent researcher` to view an agent's details
+5. Run `run research-crew` to kick off a crew execution
+6. Run `watch <execution-id>` to stream execution events in real time
+7. Run `use production` to switch the active project context
+
+**Success criteria:** Shell launches, completions work, CRUD and execution commands operate correctly.
+
+---
+
+## CUJ-27: Temporal Workflow Execution
+
+**Actor:** Admin or operator user  
+**Goal:** Run crew executions as durable Temporal workflows with automatic retry  
+
+1. Set the `TEMPORAL_HOST` environment variable to point at a Temporal cluster
+2. Start the Temporal services via `docker-compose.temporal.yaml`
+3. Kick off a crew execution through the API or UI
+4. Open the Temporal UI at `:8233` and verify the workflow appears
+5. Simulate a failure mid-execution and confirm Temporal retries the workflow according to its retry policy
+
+**Success criteria:** Execution runs as a Temporal workflow, visible in Temporal UI, retries on failure.

@@ -353,15 +353,38 @@ Groups can be used as subjects in RoleBindings for team-level RBAC.
 
 ---
 
+## Alternative: Interactive Shell
+
+Instead of running individual CLI commands, you can launch the interactive TUI shell for a REPL-based workflow:
+
+```bash
+cd cli
+uv run blackbeard shell
+```
+
+The shell provides tab completion, command history, and inline help. All standard commands work without the `blackbeard` prefix:
+
+```
+blackbeard> list Agent
+blackbeard> get Crew research-crew
+blackbeard> kickoff research-crew --input topic="AI agents"
+blackbeard> status <execution-id>
+```
+
+This is useful for exploratory work and rapid iteration.
+
+---
+
 ## Next Steps
 
 - **Add tools to agents** -- see `examples/research-crew/tools/` for examples of builtin and Python tools
 - **Set up agent policies** -- create `AgentPolicy` resources to enforce spending budgets, tool allowlists, and delegation rules
-- **Add guardrails** -- attach `Guardrail` resources to tasks for output validation (function, LLM, or schema-based)
+- **Add guardrails** -- attach `Guardrail` resources to tasks for output validation (function, LLM, schema, or composite chains)
 - **Configure RBAC** -- create users, groups, roles, and role bindings for team access control
 - **Use different LLM providers** -- create `LLMConnection` resources pointing to OpenAI, Anthropic, or Vertex AI
 - **Build flows** -- create `Flow` resources to chain multiple crews into multi-step pipelines
 - **Set up webhooks** -- register webhook URLs at `POST /api/v1/webhooks` for execution event delivery
+- **Write a plugin** -- extend the platform with custom tools, guardrails, auth providers, or execution hooks via the Plugin SDK (see [features.md](features.md#plugin-sdk))
 - **Install the Python SDK** -- see [sdks/python/README.md](../sdks/python/README.md) for programmatic access
 - **Read the YAML reference** -- see [docs/yaml-reference.md](yaml-reference.md) for every field on every resource kind
 - **Explore the API** -- open http://localhost:8000/docs for interactive Swagger documentation (debug mode)
