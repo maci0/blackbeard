@@ -117,12 +117,10 @@ class TestRunCrewSync:
 
         with (
             patch("blackbeard.engine.executor.asyncio.new_event_loop", return_value=mock_loop),
-            patch("blackbeard.engine.executor.asyncio.set_event_loop") as mock_set,
             patch("blackbeard.engine.executor._thread_session_factory", return_value=mock_factory),
         ):
             _run_crew_sync(eid, snapshot, "test-crew", {"topic": "AI"})
 
-        mock_set.assert_called_once_with(mock_loop)
         mock_loop.run_until_complete.assert_called_once()
         mock_loop.close.assert_called_once()
 
@@ -138,7 +136,6 @@ class TestRunCrewSync:
 
         with (
             patch("blackbeard.engine.executor.asyncio.new_event_loop", return_value=mock_loop),
-            patch("blackbeard.engine.executor.asyncio.set_event_loop"),
             patch("blackbeard.engine.executor._thread_session_factory", return_value=mock_factory),
             pytest.raises(RuntimeError, match="crew exploded"),
         ):
@@ -156,7 +153,6 @@ class TestRunCrewSync:
 
         with (
             patch("blackbeard.engine.executor.asyncio.new_event_loop", return_value=mock_loop),
-            patch("blackbeard.engine.executor.asyncio.set_event_loop"),
             patch("blackbeard.engine.executor._thread_session_factory", return_value=mock_factory),
         ):
             _run_crew_sync(
