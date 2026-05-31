@@ -1,21 +1,21 @@
 import { test, expect } from '@playwright/test'
 import { loginAndNavigate } from './helpers'
 
-test.describe('Copilot', () => {
+test.describe('Assistant', () => {
   test.beforeEach(async ({ page }) => {
     await loginAndNavigate(page, '/studio')
   })
 
-  test('copilot button visible in studio', async ({ page }) => {
+  test('assistant button visible in studio', async ({ page }) => {
     const main = page.locator('main')
-    // The studio page should have a copilot/sparkles button
-    const sparklesBtn = main.getByRole('button', { name: /copilot|sparkles|generate/i })
+    // The studio page should have a assistant/sparkles button
+    const sparklesBtn = main.getByRole('button', { name: /assistant|sparkles|generate/i })
     await expect(sparklesBtn).toBeVisible()
   })
 
-  test('clicking copilot opens dialog with textarea', async ({ page }) => {
+  test('clicking assistant opens dialog with textarea', async ({ page }) => {
     const main = page.locator('main')
-    const sparklesBtn = main.getByRole('button', { name: /copilot|sparkles|generate/i })
+    const sparklesBtn = main.getByRole('button', { name: /assistant|sparkles|generate/i })
     await sparklesBtn.click()
 
     // Dialog should open with a textarea for prompt
@@ -26,9 +26,9 @@ test.describe('Copilot', () => {
     ).toBeVisible()
   })
 
-  test('copilot dialog has textarea and generate button', async ({ page }) => {
+  test('assistant dialog has textarea and generate button', async ({ page }) => {
     const main = page.locator('main')
-    const sparklesBtn = main.getByRole('button', { name: /copilot|sparkles|generate/i })
+    const sparklesBtn = main.getByRole('button', { name: /assistant|sparkles|generate/i })
     await sparklesBtn.click()
 
     const dialog = page.getByRole('dialog')

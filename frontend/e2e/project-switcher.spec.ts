@@ -1,22 +1,22 @@
 import { test, expect } from '@playwright/test'
 import { loginAndNavigate } from './helpers'
 
-test.describe('Namespace Switcher', () => {
+test.describe('Project Switcher', () => {
   test.beforeEach(async ({ page }) => {
     await loginAndNavigate(page, '/dashboard')
   })
 
-  test('namespace switcher in sidebar shows default', async ({ page }) => {
-    // Namespace switcher is in the sidebar, keep page scope intentionally
+  test('project switcher in sidebar shows default', async ({ page }) => {
+    // Project switcher is in the sidebar, keep page scope intentionally
     await expect(
       page.getByRole('button', { name: /default/i }).or(
-        page.getByText(/namespace.*default/i),
+        page.getByText(/project.*default/i),
       ),
     ).toBeVisible()
   })
 
-  test('click opens dropdown with namespace list', async ({ page }) => {
-    const switcher = page.getByRole('button', { name: /namespace/i }).or(
+  test('click opens dropdown with project list', async ({ page }) => {
+    const switcher = page.getByRole('button', { name: /project/i }).or(
       page.getByRole('button', { name: /default/i }),
     )
     await switcher.click()
@@ -24,27 +24,27 @@ test.describe('Namespace Switcher', () => {
     await expect(
       page.getByRole('listbox').or(
         page.getByRole('menu'),
-      ).or(page.locator('[data-testid="namespace-dropdown"]')),
+      ).or(page.locator('[data-testid="project-dropdown"]')),
     ).toBeVisible()
 
     await expect(page.getByText('default')).toBeVisible()
   })
 
-  test('create namespace button present', async ({ page }) => {
-    const switcher = page.getByRole('button', { name: /namespace/i }).or(
+  test('create project button present', async ({ page }) => {
+    const switcher = page.getByRole('button', { name: /project/i }).or(
       page.getByRole('button', { name: /default/i }),
     )
     await switcher.click()
 
     await expect(
-      page.getByRole('button', { name: /create namespace/i }).or(
-        page.getByRole('button', { name: /new namespace/i }),
+      page.getByRole('button', { name: /create project/i }).or(
+        page.getByRole('button', { name: /new project/i }),
       ),
     ).toBeVisible()
   })
 
-  test('selecting namespace updates display', async ({ page }) => {
-    const switcher = page.getByRole('button', { name: /namespace/i }).or(
+  test('selecting project updates display', async ({ page }) => {
+    const switcher = page.getByRole('button', { name: /project/i }).or(
       page.getByRole('button', { name: /default/i }),
     )
 

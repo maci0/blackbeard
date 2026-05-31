@@ -38,6 +38,7 @@ import {
   KeyRound,
   Library,
   FlaskConical,
+  UserCog,
 } from 'lucide-react'
 import { useDarkMode, useHealthCheck } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
@@ -94,6 +95,8 @@ const navSections: Array<{ key: string; label: string; items: NavItem[] }> = [
       { to: '/audit-logs', label: 'Audit Logs', icon: ScrollText },
       { to: '/webhooks', label: 'Webhooks', icon: Webhook },
       { to: '/credentials', label: 'Credentials', icon: KeyRound },
+      { to: '/projects', label: 'Projects', icon: FolderOpen },
+      { to: '/service-accounts', label: 'Service Accounts', icon: UserCog },
     ],
   },
   {
