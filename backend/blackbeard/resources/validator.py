@@ -13,6 +13,8 @@ import time
 from typing import Any
 from urllib.parse import urlparse
 
+import os
+
 import jsonschema
 
 from blackbeard.resources.exceptions import ValidationError
@@ -249,21 +251,22 @@ def check_url_ssrf(url: str) -> str | None:
     return errors[0].message if errors else None
 
 
+_ALLOW_INTERNAL_URLS = os.environ.get("ALLOW_INTERNAL_URLS", "").lower() in ("1", "true", "yes")
+
+
 def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError]) -> None:
-    """Validate a URL against SSRF — reusable across kinds.
+    """Validate a URL against SSRF, reusable across kinds.
 
     Performs two layers of validation:
     1. Hostname-based checks (blocklists, IP format checks)
-    2. DNS resolution check — resolves the hostname and verifies all resolved
+    2. DNS resolution check, resolves the hostname and verifies all resolved
        IPs are routable. This prevents DNS rebinding attacks where a public
        domain resolves to an internal IP (e.g., 169.254.169.254).
 
-    NOTE: DNS resolution uses socket.getaddrinfo which is a blocking call.
-    A 2-second timeout is applied to prevent slow/hanging DNS lookups from
-    blocking the async event loop. This is acceptable because validation
-    runs infrequently (resource create/update) and the timeout caps worst-case
-    latency.
+    Set ALLOW_INTERNAL_URLS=true to skip SSRF checks (local dev with Ollama, etc.).
     """
+    if _ALLOW_INTERNAL_URLS:
+        return
     try:
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):

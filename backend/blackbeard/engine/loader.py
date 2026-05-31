@@ -175,13 +175,11 @@ class ResourceLoader:
             raise LoaderError(f"Expected LLMConnection, got {resource.kind.value}")
 
         spec = resource.spec
-        model = spec.get("model", "")
+        # LiteLLM registers the model under the resource name, not the provider model string.
+        model = resource.name
         params = spec.get("parameters", {})
         vertex = spec.get("vertex", {})
 
-        # All LLM traffic routes through the LiteLLM proxy.
-        # Use the per-execution virtual key when available, falling back
-        # to the global master key.
         effective_key = self._api_key or settings.litellm_master_key.get_secret_value()
         llm_kwargs: dict[str, Any] = {
             "model": model,

@@ -719,7 +719,6 @@ def _run_crew_sync(
         },
     )
     loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
     thread_session = _thread_session_factory()
     try:
         loop.run_until_complete(
@@ -973,27 +972,31 @@ async def _run_crew_async(
                 crew_spec = crew_snap.get("spec", {})
                 hooks = crew_spec.get("hooks", {})
 
-                if execution_type == ExecutionType.TRAIN:
-                    crew.train(
-                        n_iterations=n_iterations,
-                        inputs=inputs,
-                        filename=training_file,
-                    )
-                    result = None
-                elif execution_type == ExecutionType.TEST:
-                    eval_llm = _resolve_eval_llm(loader, resource_snapshot, crew_name)
-                    crew.test(
-                        n_iterations=n_iterations,
-                        eval_llm=eval_llm,
-                        inputs=inputs,
-                    )
-                    result = None
-                else:
-                    if hooks.get("before_kickoff"):
-                        call_hook(loader, hooks["before_kickoff"], inputs, "before_kickoff")
-                    result = crew.kickoff(inputs=inputs)
-                    if hooks.get("after_kickoff"):
-                        call_hook(loader, hooks["after_kickoff"], result, "after_kickoff")
+                def _run_crew_sync() -> Any:
+                    if execution_type == ExecutionType.TRAIN:
+                        crew.train(
+                            n_iterations=n_iterations,
+                            inputs=inputs,
+                            filename=training_file,
+                        )
+                        return None
+                    elif execution_type == ExecutionType.TEST:
+                        eval_llm = _resolve_eval_llm(loader, resource_snapshot, crew_name)
+                        crew.test(
+                            n_iterations=n_iterations,
+                            eval_llm=eval_llm,
+                            inputs=inputs,
+                        )
+                        return None
+                    else:
+                        if hooks.get("before_kickoff"):
+                            call_hook(loader, hooks["before_kickoff"], inputs, "before_kickoff")
+                        r = crew.kickoff(inputs=inputs)
+                        if hooks.get("after_kickoff"):
+                            call_hook(loader, hooks["after_kickoff"], r, "after_kickoff")
+                        return r
+
+                result = await asyncio.to_thread(_run_crew_sync)
             listener.flush()
 
             execution = await _get_execution_for_update(session, execution_id)

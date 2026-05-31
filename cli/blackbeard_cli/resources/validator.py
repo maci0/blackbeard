@@ -5,6 +5,7 @@ from __future__ import annotations
 import concurrent.futures
 import ipaddress
 import logging
+import os
 import re
 import socket
 import threading
@@ -247,20 +248,16 @@ def _is_path_traversal(path: str) -> bool:
     return not _SAFE_PATH_PATTERN.match(path)
 
 
+_ALLOW_INTERNAL_URLS = os.environ.get("ALLOW_INTERNAL_URLS", "").lower() in ("1", "true", "yes")
+
+
 def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError]) -> None:
-    """Validate a URL against SSRF — reusable across kinds.
+    """Validate a URL against SSRF, reusable across kinds.
 
-    Performs two layers of validation:
-    1. Hostname-based checks (blocklists, IP format checks)
-    2. DNS resolution check — resolves the hostname and verifies all resolved
-       IPs are routable. This prevents DNS rebinding attacks where a public
-       domain resolves to an internal IP (e.g., 169.254.169.254).
-
-    NOTE: DNS resolution uses socket.getaddrinfo which is a blocking call.
-    A 5-second timeout is applied to prevent slow/hanging DNS lookups from
-    blocking the CLI. This is acceptable because validation runs
-    infrequently and the timeout caps worst-case latency.
+    Set ALLOW_INTERNAL_URLS=true to skip SSRF checks (local dev with Ollama, etc.).
     """
+    if _ALLOW_INTERNAL_URLS:
+        return
     try:
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):

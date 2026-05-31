@@ -179,11 +179,12 @@ async def oidc_callback(
         await log_audit(
             session,
             action="user_registered",
-            actor_type="oidc",
+            actor_type="system",
             actor_id=str(user.id),
             actor_email=user.email,
             resource_type="User",
             resource_id=str(user.id),
+            detail={"method": "oidc"},
             ip_address=ip,
         )
     await log_audit(

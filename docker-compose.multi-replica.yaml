@@ -1,0 +1,65 @@
+# Multi-replica deployment with nginx load balancer.
+# Tests Valkey pub/sub fan-out for collaboration across API replicas.
+#
+# Usage:
+#   podman-compose -f docker-compose.yaml -f docker-compose.multi-replica.yaml up -d
+#
+# This override:
+#   - Removes the port mapping from the api service (nginx handles it)
+#   - Adds a second API replica (api-2)
+#   - Adds an nginx load balancer on port 8000
+#   - UI proxies to the load balancer instead of a single API instance
+
+services:
+  api:
+    ports: []
+
+  api-2:
+    build:
+      context: ./backend
+      dockerfile: ../deploy/docker/Dockerfile.api
+    env_file: .env
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://blackbeard:${POSTGRES_PASSWORD:-blackbeard}@postgres:5432/blackbeard"
+      VALKEY_URL: "redis://:${VALKEY_PASSWORD:-blackbeard-valkey}@valkey:6379/0"
+      LITELLM_URL: "http://litellm:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+  api-lb:
+    image: nginx:1.29-alpine
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./deploy/nginx-lb.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - api-2
+    security_opt:
+      - no-new-privileges
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+
+  ui:
+    environment:
+      API_UPSTREAM: "api-lb:8000"
