@@ -189,36 +189,45 @@ if TEMPORAL_AVAILABLE:
 _worker_task: asyncio.Task[None] | None = None
 _worker_stop_event: asyncio.Event | None = None
 _temporal_client: Any = None
+_temporal_client_lock = asyncio.Lock()
 
 
 async def _get_temporal_client() -> Any:
-    """Return a cached Temporal client, creating one on first call."""
+    """Return a cached Temporal client, creating one on first call.
+
+    Uses double-checked locking to avoid creating duplicate connections
+    when multiple coroutines call concurrently.
+    """
     global _temporal_client
     if _temporal_client is not None:
         return _temporal_client
 
-    if not TEMPORAL_AVAILABLE:
-        raise RuntimeError("temporalio is not installed")
+    async with _temporal_client_lock:
+        if _temporal_client is not None:
+            return _temporal_client
 
-    host = settings.temporal_host
-    if not host:
-        raise RuntimeError("TEMPORAL_HOST is not configured")
+        if not TEMPORAL_AVAILABLE:
+            raise RuntimeError("temporalio is not installed")
 
-    _temporal_client = await Client.connect(
-        host,
-        namespace=settings.temporal_namespace,
-    )
-    logger.info(
-        "Temporal client connected: host=%s namespace=%s",
-        host,
-        settings.temporal_namespace,
-        extra={
-            "event": "temporal_client_connected",
-            "host": host,
-            "namespace": settings.temporal_namespace,
-        },
-    )
-    return _temporal_client
+        host = settings.temporal_host
+        if not host:
+            raise RuntimeError("TEMPORAL_HOST is not configured")
+
+        _temporal_client = await Client.connect(
+            host,
+            namespace=settings.temporal_namespace,
+        )
+        logger.info(
+            "Temporal client connected: host=%s namespace=%s",
+            host,
+            settings.temporal_namespace,
+            extra={
+                "event": "temporal_client_connected",
+                "host": host,
+                "namespace": settings.temporal_namespace,
+            },
+        )
+        return _temporal_client
 
 
 async def start_temporal_worker() -> None:

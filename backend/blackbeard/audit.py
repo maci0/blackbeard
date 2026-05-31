@@ -46,6 +46,7 @@ async def log_audit(
     is responsible for committing the transaction so audit writes are
     atomic with the action they record.
     """
+    anon_ip = anonymize_ip(ip_address) if ip_address else None
     entry = AuditLog(
         action=action,
         actor_type=actor_type,
@@ -55,7 +56,7 @@ async def log_audit(
         resource_id=resource_id,
         detail=detail,
         request_id=request_id or request_id_var.get("-"),
-        ip_address=ip_address,
+        ip_address=anon_ip,
     )
     session.add(entry)
 

@@ -57,6 +57,30 @@ def _fire_and_forget(coro: Any) -> None:
     task.add_done_callback(_discard_and_log)
 
 
+async def drain_background_tasks(timeout: float = 5.0) -> None:
+    """Wait for in-flight background tasks (git commits, LiteLLM sync, etc.).
+
+    Called during shutdown to avoid losing fire-and-forget mutations.
+    """
+    tasks = list(_background_tasks)
+    if not tasks:
+        return
+    _done, pending = await asyncio.wait(tasks, timeout=timeout)
+    for task in pending:
+        task.cancel()
+    if pending:
+        logger.warning(
+            "Cancelled %d background tasks that did not finish within %.1fs",
+            len(pending),
+            timeout,
+            extra={
+                "event": "background_tasks_cancelled_on_shutdown",
+                "cancelled_count": len(pending),
+                "timeout": timeout,
+            },
+        )
+
+
 _LLM_KIND = "LLMConnection"
 _AUTHZ_CACHE_KINDS = frozenset({ResourceKind.ROLE.value, ResourceKind.ROLE_BINDING.value})
 
@@ -433,7 +457,7 @@ async def create_resource(
         data.spec,
         project=data.metadata.project,
         labels=dict(data.metadata.labels),
-        author=user.email if user else "system",
+        author=str(user.id) if user else "system",
     )
     return ResourceResponse.from_db(resource)
 
@@ -574,7 +598,7 @@ async def update_resource(
         resource.spec,
         project=resource.project,
         labels=dict(resource.labels or {}),
-        author=user.email if user else "system",
+        author=str(user.id) if user else "system",
     )
     return ResourceResponse.from_db(resource)
 
@@ -638,7 +662,7 @@ async def delete_resource(
             kind,
             name,
             project=project,
-            author=user.email if user else "system",
+            author=str(user.id) if user else "system",
         )
 
 
@@ -845,6 +869,6 @@ async def rollback_resource(
         resource.spec,
         project=resource.project,
         labels=dict(resource.labels or {}),
-        author=user.email if user else "system",
+        author=str(user.id) if user else "system",
     )
     return ResourceResponse.from_db(resource)

@@ -402,6 +402,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                     exc_info=True,
                     extra={"event": "temporal_worker_stop_failed"},
                 )
+        from blackbeard.api.resources import drain_background_tasks
+
+        await drain_background_tasks()
         shutdown_executor()
         logger.info("Executor shut down", extra={"event": "executor_shutdown"})
         shutdown_webhook_executor()

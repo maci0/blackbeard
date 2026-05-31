@@ -270,9 +270,10 @@ class TestPII:
 
         reset_engines()
         analyzer = _get_analyzer()
+        before_count = len(analyzer.registry.recognizers)
         config = {"model": "test-model", "proxy_url": "http://localhost:4000"}
         _add_llm_recognizer(analyzer, config)
-        # Verify recognizer was added (no exception)
+        assert len(analyzer.registry.recognizers) == before_count + 1
         reset_engines()
 
     def test_redact_value_string_short(self) -> None:
@@ -683,7 +684,7 @@ class TestResourceValidator:
 
 
 class TestResourceService:
-    def test_get_by_identity_is_method(self) -> None:
+    def test_get_by_identity_is_async_method(self) -> None:
         import inspect
 
         from blackbeard.resources.service import ResourceService
@@ -691,8 +692,11 @@ class TestResourceService:
         method = getattr(ResourceService, "_get_by_identity", None)
         assert method is not None, "_get_by_identity not found on ResourceService"
         assert inspect.iscoroutinefunction(method), "_get_by_identity should be async"
+        sig = inspect.signature(method)
+        assert "kind" in sig.parameters
+        assert "name" in sig.parameters
 
-    def test_update_existing_is_method(self) -> None:
+    def test_update_existing_is_async_method(self) -> None:
         import inspect
 
         from blackbeard.resources.service import ResourceService
@@ -700,6 +704,8 @@ class TestResourceService:
         method = getattr(ResourceService, "_update_existing", None)
         assert method is not None, "_update_existing not found on ResourceService"
         assert inspect.iscoroutinefunction(method), "_update_existing should be async"
+        sig = inspect.signature(method)
+        assert "resource" in sig.parameters
 
 
 # ---------------------------------------------------------------------------
@@ -893,37 +899,38 @@ class TestDatabaseInstrumentation:
         return eng
 
     def test_before_cursor_execute_sets_time(self) -> None:
-        """_before_cursor_execute stores query_start_time on connection info."""
+        """_before_cursor_execute stores query_start_time, _after pops it."""
         from sqlalchemy import text
 
         eng = self._make_engine("timing-test")
         with eng.connect() as conn:
             conn.execute(text("SELECT 1"))
+            assert "query_start_time" not in conn.info, (
+                "after_cursor_execute should have popped query_start_time"
+            )
 
-    def test_after_cursor_execute_logs_slow_query(self) -> None:
-        """_after_cursor_execute logs when elapsed time exceeds threshold."""
-        from sqlalchemy import text
-
-        eng = self._make_engine("slow-test")
-        # Normal fast query should complete without error
-        with eng.connect() as conn:
-            conn.execute(text("SELECT 1"))
-
-    def test_on_checkout_exists(self) -> None:
-        """checkout listener fires when a connection is checked out."""
+    def test_on_checkout_sets_time(self) -> None:
+        """checkout listener stores _bb_checkout_time on the connection record."""
         from sqlalchemy import text
 
         eng = self._make_engine("checkout-test")
         with eng.connect() as conn:
             conn.execute(text("SELECT 1"))
+            raw = conn.connection.dbapi_connection
+            assert raw is not None, "dbapi_connection should exist during active checkout"
 
-    def test_on_checkin_exists(self) -> None:
-        """checkin listener fires when a connection is returned."""
+    def test_on_checkin_clears_time(self) -> None:
+        """checkin listener fires when a connection is returned to the pool."""
         from sqlalchemy import text
 
         eng = self._make_engine("checkin-test")
         with eng.connect() as conn:
             conn.execute(text("SELECT 1"))
+        # After exiting the context, checkin should have fired without error.
+        # Verify the engine pool is healthy by checking out again.
+        with eng.connect() as conn:
+            result = conn.execute(text("SELECT 1"))
+            assert result.scalar() == 1
 
 
 # ---------------------------------------------------------------------------
@@ -1097,10 +1104,10 @@ class TestA2A:
 
 
 class TestAuditAPI:
-    def test_list_audit_logs_exists(self) -> None:
+    def test_list_audit_logs_is_async_endpoint(self) -> None:
         from blackbeard.api.audit import list_audit_logs
 
-        assert callable(list_audit_logs)
+        assert asyncio.iscoroutinefunction(list_audit_logs)
 
 
 # ---------------------------------------------------------------------------
@@ -1237,16 +1244,15 @@ class TestChatAPI:
         assert "temperature" not in payload
         assert "max_tokens" not in payload
 
-    def test_event_generator_exists(self) -> None:
-        """_event_generator is defined inside chat_stream endpoint."""
+    def test_chat_stream_is_async_endpoint(self) -> None:
         from blackbeard.api.chat import chat_stream
 
-        assert callable(chat_stream)
+        assert asyncio.iscoroutinefunction(chat_stream)
 
-    def test_list_available_models_exists(self) -> None:
+    def test_list_available_models_is_async_endpoint(self) -> None:
         from blackbeard.api.chat import list_available_models
 
-        assert callable(list_available_models)
+        assert asyncio.iscoroutinefunction(list_available_models)
 
 
 # ---------------------------------------------------------------------------
@@ -1279,21 +1285,19 @@ class TestCollaborationAPI:
     async def test_init_valkey_backend(self) -> None:
         from blackbeard.api.collaboration import _init_valkey_backend
 
-        # Returns None when redis is unavailable (test env has no Valkey)
         result = await _init_valkey_backend()
         assert result is None
 
     def test_get_valkey_backend(self) -> None:
         from blackbeard.api.collaboration import _get_valkey_backend
 
-        # Returns None before init
         result = _get_valkey_backend()
         assert result is None
 
-    def test_collaborate_exists(self) -> None:
+    def test_collaborate_is_async_endpoint(self) -> None:
         from blackbeard.api.collaboration import collaborate
 
-        assert callable(collaborate)
+        assert asyncio.iscoroutinefunction(collaborate)
 
 
 # ---------------------------------------------------------------------------
@@ -1302,10 +1306,10 @@ class TestCollaborationAPI:
 
 
 class TestMarketplaceAPI:
-    def test_import_from_url_exists(self) -> None:
+    def test_import_from_url_is_async_endpoint(self) -> None:
         from blackbeard.api.marketplace import import_from_url
 
-        assert callable(import_from_url)
+        assert asyncio.iscoroutinefunction(import_from_url)
 
 
 # ---------------------------------------------------------------------------
@@ -1495,20 +1499,20 @@ class TestToolsLibrary:
 
 
 class TestAgencyImportAPI:
-    def test_fetch_github_file_exists(self) -> None:
+    def test_fetch_github_file_is_async(self) -> None:
         from blackbeard.api.agency_import import _fetch_github_file
 
-        assert callable(_fetch_github_file)
+        assert asyncio.iscoroutinefunction(_fetch_github_file)
 
-    def test_list_division_files_exists(self) -> None:
+    def test_list_division_files_is_async(self) -> None:
         from blackbeard.api.agency_import import _list_division_files
 
-        assert callable(_list_division_files)
+        assert asyncio.iscoroutinefunction(_list_division_files)
 
-    def test_import_agency_agents_exists(self) -> None:
+    def test_import_agency_agents_is_async_endpoint(self) -> None:
         from blackbeard.api.agency_import import import_agency_agents
 
-        assert callable(import_agency_agents)
+        assert asyncio.iscoroutinefunction(import_agency_agents)
 
 
 # ---------------------------------------------------------------------------
@@ -1562,25 +1566,20 @@ class TestMiddleware:
         result = _check_rate_limit(request, "req-123", "10.0.0.1")
         assert result is None
 
-    def test_api_key_middleware_exists(self) -> None:
+    def test_api_key_middleware_is_async(self) -> None:
         from blackbeard.api.middleware import api_key_middleware
 
-        assert callable(api_key_middleware)
+        assert asyncio.iscoroutinefunction(api_key_middleware)
 
-    def test_log_request_exists(self) -> None:
-        from blackbeard.api.middleware import _log_request
-
-        assert callable(_log_request)
-
-    def test_security_headers_middleware_exists(self) -> None:
+    def test_security_headers_middleware_is_async(self) -> None:
         from blackbeard.api.middleware import security_headers_middleware
 
-        assert callable(security_headers_middleware)
+        assert asyncio.iscoroutinefunction(security_headers_middleware)
 
-    def test_body_size_limiter_exists(self) -> None:
+    def test_body_size_limiter_is_async(self) -> None:
         from blackbeard.api.middleware import body_size_limiter
 
-        assert callable(body_size_limiter)
+        assert asyncio.iscoroutinefunction(body_size_limiter)
 
     @pytest.mark.asyncio
     async def test_validation_exception_handler(self) -> None:
@@ -1667,10 +1666,10 @@ class TestLiteLLMModelSync:
 
 
 class TestEngineAssistant:
-    def test_resolve_model_name_exists(self) -> None:
+    def test_resolve_model_name_is_async(self) -> None:
         from blackbeard.engine.assistant import _resolve_model_name
 
-        assert callable(_resolve_model_name)
+        assert asyncio.iscoroutinefunction(_resolve_model_name)
 
     @pytest.mark.asyncio
     async def test_resolve_model_name_not_found(self) -> None:
@@ -1796,25 +1795,38 @@ class TestEngineAgencyImport:
 
 
 class TestExecutor:
-    def test_on_thread_error_cancelled(self) -> None:
-        """_on_thread_error handles cancelled futures gracefully."""
-        fut = MagicMock(spec=asyncio.Future)
-        fut.cancelled.return_value = True
-        fut.exception.return_value = None
-        assert fut.cancelled() is True
-        assert fut.exception() is None
-
-    def test_collect_exists(self) -> None:
-        """_collect is defined in _snapshot_crew_resources."""
+    def test_snapshot_crew_resources_filters_reachable(self) -> None:
+        """_snapshot_crew_resources returns specs only for resources reachable from the crew."""
         from blackbeard.engine.executor import _snapshot_crew_resources
 
-        assert callable(_snapshot_crew_resources)
+        crew = MagicMock()
+        crew.kind.value = "Crew"
+        crew.name = "my-crew"
+        crew.spec = {"agents": ["ref:agents/a1"], "tasks": ["ref:tasks/t1"]}
 
-    def test_delete_one_exists(self) -> None:
-        """_delete_one is defined in cleanup_orphaned_keys."""
+        agent = MagicMock()
+        agent.kind.value = "Agent"
+        agent.name = "a1"
+        agent.spec = {"role": "r", "goal": "g", "backstory": "b"}
+
+        orphan = MagicMock()
+        orphan.kind.value = "Agent"
+        orphan.name = "orphan"
+        orphan.spec = {"role": "x"}
+
+        resources = {
+            "Crew/my-crew": crew,
+            "Agent/a1": agent,
+            "Agent/orphan": orphan,
+        }
+        result = _snapshot_crew_resources(resources, "my-crew")
+        assert "Agent/a1" in result
+        assert "Agent/orphan" not in result
+
+    def test_cleanup_orphaned_keys_is_async(self) -> None:
         from blackbeard.engine.executor import cleanup_orphaned_keys
 
-        assert callable(cleanup_orphaned_keys)
+        assert asyncio.iscoroutinefunction(cleanup_orphaned_keys)
 
 
 # ---------------------------------------------------------------------------

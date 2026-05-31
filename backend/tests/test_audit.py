@@ -55,7 +55,7 @@ async def test_audit_log_creation(db_session: AsyncSession):
     assert saved.resource_id == "test-123"
     assert saved.detail == {"key": "value"}
     assert saved.request_id == "req-abc"
-    assert saved.ip_address == "10.0.0.1"
+    assert saved.ip_address == "10.0.0.x"
     assert saved.timestamp is not None
     assert saved.timestamp.year >= 2024
 

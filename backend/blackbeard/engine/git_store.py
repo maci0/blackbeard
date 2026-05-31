@@ -165,7 +165,7 @@ def commit_resource(
             _run_git(repo, [
                 "commit",
                 "-m", msg,
-                "--author", f"{safe_author} <{safe_author}@blackbeard>",
+                "--author", f"{safe_author} <noreply@blackbeard>",
             ])
             commit_hash = _run_git(repo, ["rev-parse", "HEAD"])
             sha = commit_hash.stdout.strip()
@@ -217,7 +217,7 @@ def delete_resource(
             _run_git(repo, [
                 "commit",
                 "-m", msg,
-                "--author", f"{safe_author} <{safe_author}@blackbeard>",
+                "--author", f"{safe_author} <noreply@blackbeard>",
             ])
             commit_hash = _run_git(repo, ["rev-parse", "HEAD"])
             sha = commit_hash.stdout.strip()
@@ -273,7 +273,7 @@ def get_log(
             entries.append({
                 "commit": parts[0],
                 "author": parts[1],
-                "email": parts[2],
+                "email": "noreply@blackbeard",
                 "timestamp": parts[3],
                 "message": parts[4],
             })
