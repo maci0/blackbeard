@@ -74,6 +74,7 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
 
         self._api_key = api_key
         self._token = token
+        self._timeout = timeout
         headers: dict[str, str] = {}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -101,7 +102,7 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
             resp = self._http.request(method, url, **kwargs)
         except httpx.TimeoutException as exc:
             raise BlackbeardApiError(
-                0, f"Request timed out: {method} {url}: {exc}"
+                0, f"{method} {url}: request timed out after {self._timeout}s"
             ) from exc
         except httpx.TransportError as exc:
             msg = str(exc) or "Network request failed"

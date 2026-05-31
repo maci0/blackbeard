@@ -76,25 +76,29 @@ class ImportResponse(BaseModel):
     error_details: list[str] = Field(default_factory=list)
 
 
+_YAML_SUFFIXES = frozenset({".yaml", ".yml"})
+
+
 def _find_yaml_files(directory: Path) -> list[Path]:
     """Recursively find YAML files in a directory, respecting safety limits.
 
     Skips symlinks to prevent symlink-based directory traversal attacks
     where a malicious repo could link to files outside the clone directory.
-    Uses targeted globs instead of walking all files to avoid scanning
-    non-YAML content in large repositories.
     """
     resolved_root = directory.resolve()
     files: list[Path] = []
-    for pattern in ("**/*.yaml", "**/*.yml"):
-        for f in directory.glob(pattern):
-            if f.is_symlink():
-                continue
-            if not f.resolve().is_relative_to(resolved_root):
-                continue
-            files.append(f)
+    for f in directory.rglob("*"):
+        if f.suffix not in _YAML_SUFFIXES:
+            continue
+        if f.is_symlink():
+            continue
+        if not f.resolve().is_relative_to(resolved_root):
+            continue
+        files.append(f)
+        if len(files) >= _MAX_YAML_FILES:
+            break
     files.sort()
-    return files[:_MAX_YAML_FILES]
+    return files
 
 
 _MAX_DOCS_PER_FILE = 100

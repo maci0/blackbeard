@@ -77,7 +77,10 @@ def _poll_backoff(polls: int) -> int:
 
 
 def _serialize_event(ev: ExecutionEvent) -> dict[str, object]:
-    data: dict[str, object] = redact_sensitive_values(dict(ev.data)) if ev.data else {}
+    if not ev.data:
+        return {"sequence": ev.sequence, "timestamp": ev.timestamp.isoformat()}
+    redacted = redact_sensitive_values(ev.data)
+    data: dict[str, object] = redacted if redacted is not ev.data else dict(redacted)
     data["sequence"] = ev.sequence
     data["timestamp"] = ev.timestamp.isoformat()
     return data

@@ -67,14 +67,14 @@ _SENSITIVE_QS_PARAMS = SENSITIVE_KEYS | frozenset(
         "connectionstring",
     }
 )
+_SENSITIVE_QS_RE = re.compile("|".join(re.escape(p) for p in _SENSITIVE_QS_PARAMS))
 
 
 def _redact_query_string(query: str) -> str:
     """Redact sensitive query-parameter values before logging."""
     if not query:
         return query
-    query_lower = query.lower()
-    if not any(p in query_lower for p in _SENSITIVE_QS_PARAMS):
+    if not _SENSITIVE_QS_RE.search(query.lower()):
         return query
     pairs = parse_qsl(query, keep_blank_values=True)
     if not pairs:

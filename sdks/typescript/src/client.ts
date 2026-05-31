@@ -38,10 +38,10 @@ export const KIND_PLURALS: Record<string, string> = {
 const _PLURAL_SET: ReadonlySet<string> = new Set(Object.values(KIND_PLURALS));
 
 export class BlackbeardClient {
-  private baseUrl: string;
+  private readonly baseUrl: string;
   private apiKey?: string;
   private token?: string;
-  private timeout: number;
+  private readonly timeout: number;
 
   constructor(config: BlackbeardConfig = {}) {
     const env =

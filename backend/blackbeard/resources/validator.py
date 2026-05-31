@@ -143,6 +143,7 @@ _BLOCKED_ENV_EXACT = frozenset(
         "MASTER_KEY",
     }
 )
+_BLOCKED_ENV_PREFIX_FIRST_CHARS = frozenset(p[0] for p in _BLOCKED_ENV_PREFIXES)
 
 _INTERNAL_HOSTNAMES = frozenset(
     {
@@ -226,8 +227,14 @@ _SAFE_PATH_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/ -]*$")
 
 def is_blocked_env_name(name: str) -> bool:
     """Check if an environment variable name is on the blocklist."""
+    if not name:
+        return False
     upper = name.upper()
-    return upper.startswith(_BLOCKED_ENV_PREFIXES) or upper in _BLOCKED_ENV_EXACT
+    if upper in _BLOCKED_ENV_EXACT:
+        return True
+    if upper[0] not in _BLOCKED_ENV_PREFIX_FIRST_CHARS:
+        return False
+    return upper.startswith(_BLOCKED_ENV_PREFIXES)
 
 
 def _is_path_traversal(path: str) -> bool:
@@ -435,7 +442,7 @@ ALLOWED_TOOL_MODULE_PREFIXES = (
     "langchain.tools.",
 )
 
-BLOCKED_TOOL_SUBMODULES = (
+BLOCKED_TOOL_SUBMODULES = frozenset({
     "langchain_community.tools.shell",
     "langchain_community.tools.python",
     "langchain_community.tools.file_management",
@@ -447,7 +454,8 @@ BLOCKED_TOOL_SUBMODULES = (
     "langchain.tools.shell_tool",
     "crewai_tools.code_interpreter_tool",
     "crewai_tools.code_docs_search_tool",
-)
+})
+_BLOCKED_TOOL_SUBMODULE_PREFIXES = tuple(b + "." for b in BLOCKED_TOOL_SUBMODULES)
 
 
 def check_tool_class_path(class_path: str) -> str | None:
@@ -463,12 +471,13 @@ def check_tool_class_path(class_path: str) -> str | None:
         )
     if "." in class_path:
         module_path = class_path.rsplit(".", 1)[0]
-        for blocked in BLOCKED_TOOL_SUBMODULES:
-            if module_path == blocked or module_path.startswith(blocked + "."):
-                return (
-                    f"class_path '{class_path}' references a blocked module "
-                    f"that can execute arbitrary code."
-                )
+        if module_path in BLOCKED_TOOL_SUBMODULES or module_path.startswith(
+            _BLOCKED_TOOL_SUBMODULE_PREFIXES
+        ):
+            return (
+                f"class_path '{class_path}' references a blocked module "
+                f"that can execute arbitrary code."
+            )
     return None
 
 
