@@ -86,7 +86,7 @@ class SearchToolsTool(_DiscoveryBaseTool):
                 return "No tools found matching your query."
 
             return json.dumps(matches, indent=2)
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "search_tools failed for query=%s project=%s",
                 query[:200],
@@ -97,7 +97,7 @@ class SearchToolsTool(_DiscoveryBaseTool):
                     "project": self.project,
                 },
             )
-            return "Error searching tools. Check server logs for details."
+            return f"Error searching tools ({type(exc).__name__}). Check server logs for details."
 
 
 class GetToolTool(_DiscoveryBaseTool):
@@ -151,7 +151,7 @@ class GetToolTool(_DiscoveryBaseTool):
             }
 
             return json.dumps(result, indent=2)
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "get_tool failed for tool=%s project=%s",
                 tool_name,
@@ -162,4 +162,4 @@ class GetToolTool(_DiscoveryBaseTool):
                     "project": self.project,
                 },
             )
-            return "Error fetching tool. Check server logs for details."
+            return f"Error fetching tool ({type(exc).__name__}). Check server logs for details."

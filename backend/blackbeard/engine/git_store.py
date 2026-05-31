@@ -11,6 +11,7 @@ during app startup.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import re
@@ -185,10 +186,8 @@ def commit_resource(
             )
             return sha
         except Exception:
-            try:
+            with contextlib.suppress(Exception):
                 _run_git(repo, ["reset", "HEAD", "--", rel_path], check=False)
-            except Exception:
-                pass
             logger.warning(
                 "Git commit failed for %s/%s in project '%s'",
                 kind,
@@ -241,10 +240,8 @@ def delete_resource(
             )
             return sha
         except Exception:
-            try:
+            with contextlib.suppress(Exception):
                 _run_git(repo, ["checkout", "HEAD", "--", rel_path], check=False)
-            except Exception:
-                pass
             logger.warning(
                 "Git delete failed for %s/%s in project '%s'",
                 kind,

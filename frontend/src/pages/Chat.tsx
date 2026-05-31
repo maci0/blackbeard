@@ -298,7 +298,10 @@ export default function Chat() {
       })
 
       if (!resp.ok || !resp.body) {
-        const text = await resp.text().catch(() => 'Unknown error')
+        const text = await resp.text().catch((err) => {
+          console.warn('[chat] failed to read error response body:', err)
+          return `HTTP ${resp.status}`
+        })
         throw new Error(text)
       }
 

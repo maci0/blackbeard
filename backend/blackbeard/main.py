@@ -309,7 +309,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
         init_git_store(settings.git_resource_dir)
     except Exception:
-        logger.debug("Git resource store not available", exc_info=True)
+        logger.warning(
+            "Git resource store init failed — resource git history will be unavailable",
+            exc_info=True,
+            extra={"event": "git_store_init_failed"},
+        )
 
     # Discover and load plugins
     try:
