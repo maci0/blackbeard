@@ -106,7 +106,7 @@ def _refresh_token(server: str, refresh_token: str, timeout: float) -> StoredCre
             email="",
             expires_at=time.time() + ACCESS_TOKEN_LIFETIME_S,
         )
-    except (httpx.RequestError, KeyError, TypeError):
+    except (httpx.RequestError, KeyError, TypeError, ValueError):
         logger.debug("Token refresh failed", exc_info=True)
         return None
 

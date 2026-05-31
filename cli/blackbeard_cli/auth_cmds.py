@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from urllib.parse import urlparse
 
 import click
 import httpx
@@ -27,6 +28,19 @@ from blackbeard_cli.helpers import (
     require_auth,
 )
 
+_LOCALHOST_HOSTS = frozenset({"localhost", "127.0.0.1", "[::1]"})
+
+
+def _warn_insecure_http(server: str) -> None:
+    """Warn when sending credentials over unencrypted HTTP to a non-localhost host."""
+    parsed = urlparse(server)
+    if parsed.scheme == "http" and parsed.hostname not in _LOCALHOST_HOSTS:
+        console.print(
+            f"[yellow]Warning:[/] Sending credentials over unencrypted HTTP"
+            f" to [bold]{escape(parsed.hostname or server)}[/].\n"
+            f"  [dim]Use HTTPS in production to protect passwords and tokens.[/]"
+        )
+
 
 @click.command(
     cls=HelpCommand,
@@ -34,7 +48,8 @@ from blackbeard_cli.helpers import (
 Examples:
   blackbeard login
   blackbeard login -e user@example.com
-  blackbeard -s http://prod:8000 login
+  blackbeard -s https://prod:8000 login
+  blackbeard login --json
 """,
 )
 @click.option(
@@ -57,6 +72,7 @@ Examples:
 def login(ctx: click.Context, email: str, password: str) -> None:
     """Log in and store credentials locally."""
     server = ctx.obj["server"]
+    _warn_insecure_http(server)
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
@@ -173,6 +189,7 @@ def whoami(ctx: click.Context) -> None:
 Examples:
   blackbeard register
   blackbeard register -e user@example.com --display-name "Jane Doe"
+  blackbeard register --json
 """,
 )
 @click.option(
@@ -208,6 +225,7 @@ def register(
 ) -> None:
     """Register a new user account."""
     server = ctx.obj["server"]
+    _warn_insecure_http(server)
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:

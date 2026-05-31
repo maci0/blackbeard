@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from graphlib import TopologicalSorter
@@ -82,6 +83,13 @@ def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
         except yaml.YAMLError as exc:
             console.print(
                 f"[red bold]Error:[/] Invalid YAML in [bold]{escape(str(f))}[/]: {escape(str(exc))}"
+            )
+            raise SystemExit(2) from exc
+        except UnicodeDecodeError as exc:
+            console.print(
+                f"[red bold]Error:[/] Cannot read [bold]{escape(str(f))}[/]:"
+                f" {escape(str(exc))}\n"
+                f"  [dim]Hint: File is not valid UTF-8. Check the encoding.[/]"
             )
             raise SystemExit(2) from exc
     return resources
@@ -214,6 +222,12 @@ def cli(
     ctx.obj["api_key"] = api_key
     ctx.obj["project"] = project
     ctx.obj["timeout"] = float(timeout)
+
+    if api_key and not os.environ.get("BLACKBEARD_API_KEY"):
+        console.print(
+            "[yellow]Warning:[/] API key passed on command line is visible in process listings.\n"
+            "  [dim]Prefer BLACKBEARD_API_KEY env var for non-interactive use.[/]"
+        )
 
 
 cli.command_class = HelpCommand

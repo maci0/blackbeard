@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from blackbeard.models.user import User
 
-from blackbeard.logging_config import request_id_var
+from blackbeard.logging_config import anonymize_ip, request_id_var
 from blackbeard.models import AuditLog
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ async def log_audit(
             "actor_id": actor_id,
             "resource_type": resource_type,
             "resource_id": resource_id,
-            "ip_address": ip_address,
+            "client_ip": anonymize_ip(ip_address),
             "request_id": entry.request_id,
         },
     )

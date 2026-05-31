@@ -257,11 +257,11 @@ def _cmd_ls(state: ShellState, args: list[str]) -> None:
     for item in items:
         meta = item.get("metadata", {})
         labels = meta.get("labels", {})
-        label_str = ", ".join(f"{k}={v}" for k, v in labels.items()) if labels else ""
+        label_str = ", ".join(f"{k}={v}" for k, v in labels.items()) if labels else "—"
         table.add_row(
-            meta.get("name", "?"),
-            meta.get("project", "?"),
-            str(item.get("version", "")),
+            meta.get("name", "—"),
+            meta.get("project", "—"),
+            str(item.get("version", "—")),
             label_str,
         )
 
@@ -503,21 +503,21 @@ def _cmd_executions(state: ShellState, args: list[str]) -> None:
     table.add_column("Cost", justify="right")
 
     for ex in items:
-        ex_id = str(ex.get("id", "?"))
-        status_val = ex.get("status", "?")
+        ex_id = str(ex.get("id", "—"))
+        status_val = ex.get("status", "—")
         color = STATUS_COLORS.get(status_val, "dim")
         tokens = ex.get("total_tokens")
         cost = ex.get("cost_usd")
         try:
-            cost_str = f"${float(cost):.4f}" if cost else ""
+            cost_str = f"${float(cost):.4f}" if cost else "—"
         except (TypeError, ValueError):
-            cost_str = ""
+            cost_str = "—"
         table.add_row(
             ex_id,
-            escape(str(ex.get("crew_name", "?"))),
+            escape(str(ex.get("crew_name", "—"))),
             f"[{color}]{status_val}[/]",
             format_timestamp(ex.get("created_at")),
-            f"{tokens:,}" if tokens else "",
+            f"{tokens:,}" if tokens else "—",
             cost_str,
         )
 
@@ -578,7 +578,7 @@ def _render_execution(data: dict[str, Any], execution_id: str) -> None:
 
     table.add_row("Execution ID", str(data.get("id", execution_id)))
     table.add_row("Status", f"[{color} bold]{status_val}[/]")
-    table.add_row("Crew", str(data.get("crew_name", "")))
+    table.add_row("Crew", str(data.get("crew_name", "—")))
 
     tokens = data.get("total_tokens")
     if tokens:
@@ -647,13 +647,18 @@ def start_shell(
     """Start the interactive Blackbeard shell."""
     state = ShellState(server=server, project=project, api_key=api_key, timeout=timeout)
 
-    # Ensure history directory exists
+    # Ensure history directory exists with restricted permissions
     _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    os.chmod(_CONFIG_DIR, 0o700)
 
     session: PromptSession[str] = PromptSession(
         history=FileHistory(str(_HISTORY_FILE)),
         completer=ShellCompleter(state),
     )
+
+    # Restrict history file after FileHistory creates it
+    if _HISTORY_FILE.exists():
+        os.chmod(_HISTORY_FILE, 0o600)
 
     out.print(
         Panel.fit(

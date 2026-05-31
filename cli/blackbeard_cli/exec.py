@@ -262,9 +262,13 @@ def events(
 
                 has_more = data.get("has_more", False)
                 if not has_more:
-                    exec_resp = client.get(
-                        f"{server}/api/v1/executions/{execution_id}", headers=headers
-                    )
+                    try:
+                        exec_resp = client.get(
+                            f"{server}/api/v1/executions/{execution_id}", headers=headers
+                        )
+                    except httpx.RequestError:
+                        time.sleep(interval)
+                        continue
                     if exec_resp.status_code == 200:
                         terminal_status = exec_resp.json().get("status", "")
                         if terminal_status in TERMINAL_STATUSES:
