@@ -121,7 +121,7 @@ export function yamlToCanvas(
     return null
   }
 
-  if (!docs || docs.length === 0) return null
+  if (docs.length === 0) return null
 
   // Build a map of existing node positions by resource name for stable layout
   const positionMap = new Map<string, { x: number; y: number }>()

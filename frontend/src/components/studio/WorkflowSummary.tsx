@@ -48,7 +48,7 @@ export function WorkflowSummary({ nodes, executionStatus }: WorkflowSummaryProps
       const t = node.type ?? 'unknown'
       typeCounts[t] = (typeCounts[t] ?? 0) + 1
 
-      const execStatus = node.data?.['_execStatus'] as string | undefined
+      const execStatus = node.data['_execStatus'] as string | undefined
       if (execStatus) {
         hasExecData = true
         if (execStatus in statusCounts) {

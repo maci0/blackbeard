@@ -12,7 +12,8 @@ import { useDocumentTitle } from '@/hooks'
 export default function ServiceAccounts() {
   useDocumentTitle('Service Accounts')
 
-  const resources = useResourceStore((s) => s.resources['service-accounts']) ?? []
+  const rawResources = useResourceStore((s) => s.resources['service-accounts'])
+  const resources = useMemo(() => rawResources ?? [], [rawResources])
   const loading = useResourceStore((s) => s.loadingKinds['service-accounts'] ?? false)
   const fetchResources = useResourceStore((s) => s.fetchResources)
 
@@ -85,7 +86,7 @@ export default function ServiceAccounts() {
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">v{sa.version}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
-                        <SmartTime date={sa.updated_at ?? sa.created_at ?? ''} />
+                        <SmartTime date={sa.updated_at} />
                       </td>
                     </tr>
                   ))}

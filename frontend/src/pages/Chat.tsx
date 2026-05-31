@@ -306,7 +306,7 @@ export default function Chat() {
       const decoder = new TextDecoder()
       let buffer = ''
 
-      while (true) {
+      for (;;) {
         const { done, value } = await reader.read()
         if (done) break
         buffer += decoder.decode(value, { stream: true })
@@ -379,7 +379,7 @@ export default function Chat() {
               )
             }
           } catch (parseErr) {
-            console.debug('[chat] unparseable SSE chunk:', dataStr?.slice(0, 200), parseErr)
+            console.debug('[chat] unparseable SSE chunk:', dataStr.slice(0, 200), parseErr)
             continue
           }
         }

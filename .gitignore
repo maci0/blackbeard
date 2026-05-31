@@ -52,3 +52,5 @@ credentials.json
 .sisyphus/
 .playwright-mcp/
 test-*.png
+*.png
+!frontend/public/*.png

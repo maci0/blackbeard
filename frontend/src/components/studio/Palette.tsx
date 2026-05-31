@@ -237,8 +237,11 @@ function PaletteCard({ item }: { item: PaletteItem }) {
 }
 
 function CrewComponentCard({ crew }: { crew: Resource }) {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- spec fields are runtime-typed
   const agentCount = ((crew.spec.agents as unknown[]) ?? []).length
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- spec fields are runtime-typed
   const taskCount = ((crew.spec.tasks as unknown[]) ?? []).length
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- spec fields are runtime-typed
   const inputs = (crew.spec.inputs as Array<{ name: string }>) ?? []
 
   function onDragStart(event: DragEvent<HTMLDivElement>) {
@@ -247,6 +250,7 @@ function CrewComponentCard({ crew }: { crew: Resource }) {
       'application/crewdata',
       JSON.stringify({
         crew_name: crew.metadata.name,
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime data
         description: (crew.spec.description as string) ?? '',
         agent_count: agentCount,
         task_count: taskCount,

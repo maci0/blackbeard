@@ -173,7 +173,7 @@ export function CommandPalette({
     const items: CommandItem[] = []
     for (const [kindPlural, list] of Object.entries(resources)) {
       const kind = PLURAL_TO_KIND[kindPlural]
-      if (!kind || !list) continue
+      if (!kind) continue
       for (const r of list) {
         items.push({
           id: `resource-${kindPlural}-${r.metadata.name}`,

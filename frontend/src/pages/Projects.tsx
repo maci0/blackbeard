@@ -142,6 +142,7 @@ export default function Projects() {
                 </thead>
                 <tbody className="divide-y">
                   {filtered.map((project) => {
+                    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- spec field may be absent
                     const guardrails = (project.spec.guardrails as string[]) ?? []
                     const quota = project.spec.resource_quota as
                       | { max_resources?: number; max_executions_per_hour?: number }
@@ -181,7 +182,7 @@ export default function Projects() {
                               : 'unlimited'}
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">
-                          <SmartTime date={project.updated_at ?? project.created_at ?? ''} />
+                          <SmartTime date={project.updated_at} />
                         </td>
                         <td className="px-4 py-3 text-right">
                           {project.metadata.name !== 'default' && (

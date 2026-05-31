@@ -552,7 +552,7 @@ export default function ResourceDetail() {
     setSaving(true)
     try {
       const parsed = parseYaml(yamlContent)
-      const spec = (parsed['spec'] as Record<string, unknown>) ?? {}
+      const spec = parsed['spec'] as Record<string, unknown>
       const meta = parsed['metadata'] as
         | { name?: string; project?: string; labels?: Record<string, string> }
         | undefined
@@ -893,7 +893,7 @@ export default function ResourceDetail() {
             </span>
             <p className="mt-0.5 text-foreground">{formatDate(resource.updated_at)}</p>
           </div>
-          {Object.keys(resource.metadata.labels ?? {}).length > 0 ? (
+          {Object.keys(resource.metadata.labels).length > 0 ? (
             <>
               <div className="hidden h-8 w-px bg-border sm:block" />
               <div>
@@ -901,7 +901,7 @@ export default function ResourceDetail() {
                   Labels
                 </span>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                  {Object.entries(resource.metadata.labels ?? {}).map(([k, v]) => (
+                  {Object.entries(resource.metadata.labels).map(([k, v]) => (
                     <span
                       key={k}
                       className="inline-flex items-center rounded bg-secondary px-1.5 py-0.5 font-mono text-xs text-secondary-foreground"

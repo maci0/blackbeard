@@ -214,7 +214,6 @@ function StudioInner() {
 
   const lastCursorBroadcast = useRef(0)
   const throttledBroadcastCursor = useMemo(() => {
-    if (!broadcastCursor) return undefined
     const CURSOR_THROTTLE_MS = 33 // ~30fps
     return (e: React.MouseEvent) => {
       const now = performance.now()
@@ -673,23 +672,27 @@ function StudioInner() {
     [setNodes],
   )
 
+  const pollCancelledRef = useRef(false)
+
   useEffect(() => {
     if (!executionId) return
 
-    let cancelled = false
+    pollCancelledRef.current = false
     let timer: ReturnType<typeof setTimeout> | null = null
 
     async function poll() {
-      if (cancelled) return
+      if (pollCancelledRef.current) return
       try {
         const exec = await api.get<Execution>(`/api/v1/executions/${executionId}`)
-        if (cancelled) return
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mutated by cleanup after await
+        if (pollCancelledRef.current) return
         if (TERMINAL_STATUSES.has(exec.status) && exec.tasks && exec.tasks.length > 0) {
           applyExecResults(exec.tasks, exec.status)
           return
         }
       } catch (err) {
-        if (cancelled) return
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mutated by cleanup after await
+        if (pollCancelledRef.current) return
         console.error('[studio] Execution poll failed:', err)
       }
       timer = setTimeout(() => void poll(), 3000)
@@ -698,7 +701,7 @@ function StudioInner() {
     timer = setTimeout(() => void poll(), 2000)
 
     return () => {
-      cancelled = true
+      pollCancelledRef.current = true
       if (timer) clearTimeout(timer)
     }
   }, [executionId, applyExecResults])

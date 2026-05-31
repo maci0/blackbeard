@@ -1233,7 +1233,9 @@ function CrewComponentForm({
       </FieldGroup>
       <FieldGroup label="Info">
         <div className="flex gap-2 text-[10px] text-muted-foreground">
+          {/* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime node data */}
           <span>{(data['agent_count'] as number) ?? 0} agents</span>
+          {/* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime node data */}
           <span>{(data['task_count'] as number) ?? 0} tasks</span>
         </div>
         <p className="mt-1 text-[10px] text-muted-foreground">

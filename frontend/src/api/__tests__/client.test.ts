@@ -31,6 +31,7 @@ describe('ApiClient', () => {
     vi.restoreAllMocks()
     vi.stubGlobal('fetch', vi.fn())
     // crypto.randomUUID is needed by the client
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- randomUUID may be missing in test envs
     if (!globalThis.crypto?.randomUUID) {
       vi.stubGlobal('crypto', { randomUUID: () => '00000000-0000-0000-0000-000000000000' })
     }

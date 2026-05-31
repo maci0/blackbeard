@@ -598,10 +598,7 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
     return raw as SpendCall[]
   }, [data])
 
-  const totalCost = useMemo(
-    () => (calls ? calls.reduce((sum, c) => sum + (c.spend ?? 0), 0) : 0),
-    [calls],
-  )
+  const totalCost = useMemo(() => (calls ? calls.reduce((sum, c) => sum + c.spend, 0) : 0), [calls])
 
   if (!calls) {
     return (
@@ -651,12 +648,12 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
           <tbody>
             {calls.map((call, idx) => (
               <tr key={idx} className="border-b transition-colors last:border-0 hover:bg-muted/10">
-                <td className="px-4 py-2 font-mono text-xs">{call.model ?? 'unknown'}</td>
+                <td className="px-4 py-2 font-mono text-xs">{call.model}</td>
                 <td className="px-4 py-2 text-right tabular-nums">
-                  {(call.prompt_tokens ?? 0).toLocaleString()}
+                  {call.prompt_tokens.toLocaleString()}
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">
-                  {(call.completion_tokens ?? 0).toLocaleString()}
+                  {call.completion_tokens.toLocaleString()}
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">{formatCost(call.spend)}</td>
                 <td className="px-4 py-2 text-right text-xs tabular-nums">
@@ -665,8 +662,8 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
                     const end = call.endTime
                     if (start && end) {
                       const ms = new Date(end).getTime() - new Date(start).getTime()
-                      if (ms > 0 && (call.completion_tokens ?? 0) > 0) {
-                        return `${((call.completion_tokens ?? 0) / (ms / 1000)).toFixed(1)}`
+                      if (ms > 0 && call.completion_tokens > 0) {
+                        return `${(call.completion_tokens / (ms / 1000)).toFixed(1)}`
                       }
                     }
                     return '—'
@@ -1106,7 +1103,7 @@ export default function ExecutionDetail() {
           <div>
             <div className="mb-1.5 flex flex-wrap items-center gap-3">
               <StatusBadge status={execution.status} live />
-              {execution.execution_type && execution.execution_type !== 'kickoff' && (
+              {execution.execution_type !== 'kickoff' && (
                 <span
                   className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${
                     execution.execution_type === 'train'

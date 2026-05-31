@@ -65,6 +65,7 @@ export function resourceToYaml(resource: Resource): string {
     `  name: ${resource.metadata.name}`,
     `  project: ${resource.metadata.project || 'default'}`,
   ]
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- labels may be absent in runtime data
   const labels = resource.metadata.labels ?? {}
   if (Object.keys(labels).length > 0) {
     lines.push('  labels:')

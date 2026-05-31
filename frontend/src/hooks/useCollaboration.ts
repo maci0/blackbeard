@@ -65,6 +65,8 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
   const colorIndexRef = useRef(0)
   /** Current reconnect delay for exponential backoff. */
   const reconnectDelayRef = useRef(RECONNECT_DELAY_MS)
+  /** Stable ref to the latest handleIncoming so the effect doesn't re-run. */
+  const handleIncomingRef = useRef<(msg: CollabMessage) => void>(() => {})
 
   useEffect(() => {
     if (!enabled || !crewName) {
@@ -116,7 +118,7 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
       ws.onmessage = (event: MessageEvent) => {
         try {
           const msg = JSON.parse(event.data as string) as CollabMessage
-          handleIncoming(msg)
+          handleIncomingRef.current(msg)
         } catch (err) {
           console.warn('[collab] malformed WebSocket message:', err)
         }
@@ -240,11 +242,11 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
 
       case 'participant_joined':
       case 'room_state':
-        setParticipants((msg.data['count'] as number) ?? 1)
+        setParticipants(msg.data['count'] as number)
         break
 
       case 'participant_left': {
-        setParticipants((msg.data['count'] as number) ?? 1)
+        setParticipants(msg.data['count'] as number)
         // Clean up cursor for the departing user if their userId is provided
         const leftUserId = msg.data['userId'] as string | undefined
         if (leftUserId) {
@@ -258,6 +260,7 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
       }
     }
   }
+  handleIncomingRef.current = handleIncoming
 
   /**
    * Throttled cursor broadcast. Call on every mousemove; only sends at
