@@ -12,7 +12,9 @@ Provide a browser-based drag-and-drop canvas where users compose agents, tasks, 
 
 **Partial:** Training tab -- Run/Train/Test modes available in RunDialog; dedicated training panel with feedback workflow (section 7.1) deferred.
 
-**Deferred to post-MVP:** Export ZIP/PNG/SVG/React (YAML export only implemented), drag reparenting.
+**Implemented (post-MVP):** Canvas export PNG/SVG via html-to-image in the Export dropdown.
+
+**Deferred to post-MVP:** Export ZIP/React, drag reparenting.
 
 ---
 

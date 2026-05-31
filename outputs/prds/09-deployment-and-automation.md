@@ -10,7 +10,9 @@ Manage the full lifecycle of deployed crews and flows: build, deploy, version, r
 
 **Implemented (post-MVP):** A2A Protocol — `GET /.well-known/agent-card.json` auto-generates agent cards from Crew resources with `spec.a2a.enabled: true`. Cards include skills (from task refs), auth schemes, capabilities. Cached 60s. Public endpoint. Resource version snapshots — `resource_versions` table stores spec/labels snapshot on every create/update. List versions (`GET /{kind}/{name}/versions`), view snapshot (`GET /{kind}/{name}/versions/{version}`), rollback (`POST /{kind}/{name}/rollback`). Admin credentials file — `seed.sh` saves admin credentials to `.admin-credentials` (mode 600).
 
-**Deferred to post-MVP:** Deployment lifecycle (build/deploy/version), blue-green/canary deployments, replica scaling.
+**Implemented (post-MVP):** HPA autoscaling template added to the Helm chart. Multi-replica docker-compose config with nginx load balancer.
+
+**Deferred to post-MVP:** Deployment lifecycle (build/deploy/version), blue-green/canary deployments.
 
 **Implemented (beyond initial MVP):**
 - Automation UI: Full Automations page (`/automations`) with create, edit, delete, and trigger functionality.

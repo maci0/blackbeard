@@ -12,7 +12,9 @@ Provide a guided first-run experience that helps new users understand Blackbeard
 - Global keyboard shortcuts: `Cmd+Shift+S` (save), `Cmd+Shift+E` (executions), `Cmd+Shift+N` (new resource), `Cmd+.` (settings), `?` (shortcuts dialog). Keyboard shortcuts dialog accessible from the Help menu or by pressing `?`.
 - Loading skeletons: Dashboard, Chat, and KnowledgeSources pages display pulse-animated placeholder shapes while data loads, replacing blank/flashing states.
 
-**Deferred to post-MVP:** Guided tour (step-by-step tooltip walkthrough of Studio UI elements), progressive disclosure (contextual tooltips on first interaction), help sidebar with "Restart tour" and documentation links, interactive tutorial, "What's new" dialog.
+**Implemented (post-MVP):** Guided tour with spotlight overlay (`GuidedTour` component), step-by-step tooltip walkthrough of Studio UI elements. Help menu with "Restart tour" option and documentation links.
+
+**Deferred to post-MVP:** Progressive disclosure (contextual tooltips on first interaction), interactive tutorial, "What's new" dialog.
 
 ---
 

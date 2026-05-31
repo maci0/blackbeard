@@ -14,9 +14,9 @@ Define the canonical data model for every first-class resource in Blackbeard. Al
 
 **Implementation note — LiteLLM dynamic sync:** LLMConnection CRUD operations now push configuration changes to the LiteLLM Proxy API in real time. Creating, updating, or deleting an LLMConnection resource triggers a corresponding model add/update/delete call to the co-deployed LiteLLM Proxy, keeping routing config in sync without requiring a proxy restart.
 
-**Implemented (post-MVP):** ServiceAccount as a standalone resource kind with CRUD at `/api/v1/service-accounts`. Schema: description, project, permissions. Referenced by Agent `spec.serviceAccount` (defaults to `sa-<agent-name>`) for principal chain tracking. Project (formerly Namespace) as a resource kind at `/api/v1/projects` with description, labels, resource quotas, and project-level guardrails.
+**Implemented (post-MVP):** ServiceAccount as a standalone resource kind with CRUD at `/api/v1/service-accounts`. Schema: description, project, permissions. Referenced by Agent `spec.serviceAccount` (defaults to `sa-<agent-name>`) for principal chain tracking. Project (formerly Namespace) as a resource kind at `/api/v1/projects` with description, labels, resource quotas, and project-level guardrails. Nested project hierarchy with `parent` ref and `inherit_policies` on the Project schema, enabling hierarchical trees (e.g., `org/team/project`) with policy inheritance.
 
-**Deferred to post-MVP:** Nested project hierarchy (hierarchical tree with inheritance — e.g., `org/team/project`), EnvironmentVariable, SSOConfig, APIKey.
+**Deferred to post-MVP:** EnvironmentVariable, SSOConfig, APIKey.
 
 #### Nested Projects (Post-MVP)
 

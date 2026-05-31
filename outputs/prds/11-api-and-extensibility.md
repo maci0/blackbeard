@@ -8,7 +8,9 @@ Define the public API surface, webhook streaming protocol, plugin SDK, and exten
 
 **Implemented:** REST CRUD for all 12 resource kinds (including Automation), execution lifecycle endpoints (kickoff, train, test, flow run, status, cancel, stream, events), auth endpoints (register, login, refresh, whoami), health check endpoints, audit log API, marketplace import, webhook configuration (register/deliver with HMAC signing), HITL respond endpoint (`POST /executions/{id}/respond`), automation trigger endpoints (cron, webhook, API), gRPC API on :50051 with auth interceptor (ListResources, GetResource, CreateResource, DeleteResource, Kickoff, GetExecution, StreamEvents, Health). OpenAPI schema at `/api/v1/docs`. SDKs: Python (`sdks/python/`) + TypeScript (`sdks/typescript/`). React component export via `@blackbeard/react` SDK (`sdks/react/`). CLI: standalone package, 25+ commands.
 
-**Deferred to post-MVP:** Plugin SDK, AsyncAPI spec for webhook events (no `/api/v1/asyncapi.json` endpoint exists).
+**Implemented (post-MVP):** AsyncAPI spec endpoint at `GET /api/v1/asyncapi.json` (public, AsyncAPI 3.0 format) documenting webhook event schemas.
+
+**Deferred to post-MVP:** Plugin SDK.
 
 **Implemented (post-MVP):** Credentials API (`POST/GET/DELETE /api/v1/credentials`) for centralized secret management. Resource version endpoints (`GET /{kind}/{name}/versions`, `GET /{kind}/{name}/versions/{version}`, `POST /{kind}/{name}/rollback`). A2A discovery endpoint (`GET /.well-known/agent-card.json`).
 

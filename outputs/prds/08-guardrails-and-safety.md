@@ -23,7 +23,7 @@ Provide configurable safety mechanisms that validate, filter, and redact agent o
 - **Custom**: user selects individual entities from a 13-entity master list
 Selecting a preset auto-populates the entity list. Custom entity additions are merged on top. Toggling individual entities switches preset to "custom". Studio PIINode displays preset badge + action badge + entity tags. `resolve_pii_entities()` in `pii.py` handles resolution at runtime.
 
-**Deferred to post-MVP:** Hallucination detection, crew-level guardrails, composite guardrail chains.
+**Implemented (post-MVP):** Hallucination detection guardrail type with `factual_consistency`, `source_grounding`, and `self_contradiction` checks. Crew-level guardrails via `spec.guardrails` array on Crew resources, evaluated at crew execution time. Composite guardrail chains with AND/OR operators and short-circuit evaluation.
 
 ---
 

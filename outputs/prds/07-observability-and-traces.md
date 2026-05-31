@@ -22,7 +22,9 @@ Provide comprehensive visibility into every crew, flow, and agent execution thro
 
 **Planned (post-MVP concepts):** Latency heatmap (visual grid showing model response latency by time-of-day and model). Token sparklines (inline mini-charts on dashboard cards showing token usage trends over the last 24h).
 
-**Deferred to post-MVP:** Custom trace backend integration, advanced dashboards (policy denials, sandbox usage, budget utilization charts).
+**Implemented (post-MVP):** Advanced observability dashboard page (`/observability`) with budget utilization, token usage, and policy charts.
+
+**Deferred to post-MVP:** Custom trace backend integration.
 
 ### What LiteLLM provides (LLM-level)
 

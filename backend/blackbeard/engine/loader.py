@@ -354,6 +354,19 @@ class ResourceLoader:
             )
             return None
 
+        if spec.get("deprecated"):
+            msg = spec.get("deprecated_message", "")
+            logger.warning(
+                "Tool '%s' is deprecated%s",
+                resource.name,
+                f": {msg}" if msg else "",
+                extra={
+                    "event": "tool_deprecated",
+                    "tool_name": resource.name,
+                    "deprecated_message": msg,
+                },
+            )
+
         config = spec.get("config", {})
         _validate_tool_config(config, resource.name)
         try:
@@ -670,6 +683,103 @@ class ResourceLoader:
 
         return prompt
 
+    def _build_composite_guardrail(
+        self,
+        gspec: dict[str, Any],
+        guardrail_name: str,
+    ) -> Any:
+        """Build a composite guardrail that combines multiple child guardrails.
+
+        For "and" operator: all child guardrails must pass. With short_circuit
+        enabled (default), evaluation stops on first failure.
+        For "or" operator: at least one child guardrail must pass. With
+        short_circuit enabled, evaluation stops on first success.
+
+        Child guardrails that resolve to strings (LLM prompts) are joined into
+        a combined prompt. Child guardrails that resolve to callables are
+        wrapped in a function that applies the operator logic.
+        """
+        operator = gspec.get("operator", "and")
+        child_refs = gspec.get("guardrails", [])
+        short_circuit = gspec.get("short_circuit", True)
+
+        if len(child_refs) < 2:
+            logger.warning(
+                "Composite guardrail '%s' needs at least 2 child guardrails, got %d",
+                guardrail_name,
+                len(child_refs),
+                extra={
+                    "event": "composite_guardrail_insufficient_children",
+                    "guardrail_name": guardrail_name,
+                    "child_count": len(child_refs),
+                },
+            )
+            return None
+
+        children = self._build_guardrails(child_refs)
+        if not children:
+            logger.warning(
+                "Composite guardrail '%s': no child guardrails resolved successfully",
+                guardrail_name,
+                extra={
+                    "event": "composite_guardrail_no_children",
+                    "guardrail_name": guardrail_name,
+                },
+            )
+            return None
+
+        # If all children are strings (LLM prompts), combine into a single prompt
+        if all(isinstance(c, str) for c in children):
+            if operator == "and":
+                header = (
+                    f"[Composite guardrail '{guardrail_name}': ALL of the "
+                    f"following checks must pass]\n\n"
+                )
+                return header + "\n\n".join(
+                    f"Check {i + 1}: {c}" for i, c in enumerate(children)
+                )
+            else:
+                header = (
+                    f"[Composite guardrail '{guardrail_name}': ANY ONE of the "
+                    f"following checks must pass]\n\n"
+                )
+                return header + "\n\n".join(
+                    f"Check {i + 1}: {c}" for i, c in enumerate(children)
+                )
+
+        # Mixed or all-callable children: wrap in a function
+        def _composite_guardrail(output: str) -> str:
+            errors: list[str] = []
+            for child in children:
+                if isinstance(child, str):
+                    # String guardrails cannot be evaluated as functions,
+                    # skip them in callable mode (they are advisory)
+                    continue
+                try:
+                    child(output)
+                    if operator == "or" and short_circuit:
+                        return output
+                except (ValueError, Exception) as exc:
+                    if operator == "and" and short_circuit:
+                        raise
+                    errors.append(str(exc))
+
+            if operator == "and" and errors:
+                raise ValueError(
+                    f"Composite guardrail '{guardrail_name}' failed: "
+                    + "; ".join(errors)
+                )
+            if operator == "or" and errors and len(errors) >= len(
+                [c for c in children if not isinstance(c, str)]
+            ):
+                raise ValueError(
+                    f"Composite guardrail '{guardrail_name}': all checks failed: "
+                    + "; ".join(errors)
+                )
+            return output
+
+        return _composite_guardrail
+
     def _get_project_guardrails(self, project: str) -> list[str]:
         """Return guardrail refs from the project resource, if any."""
         ns_resource = self._resources.get(f"Project/{project}")
@@ -705,6 +815,10 @@ class ResourceLoader:
                     elif gspec.get("type") == "hallucination":
                         prompt = self._build_hallucination_guardrail(gspec, resource.name)
                         result.append(prompt)
+                    elif gspec.get("type") == "composite":
+                        composite = self._build_composite_guardrail(gspec, resource.name)
+                        if composite is not None:
+                            result.append(composite)
                 except LoaderError:
                     logger.warning(
                         "Failed to resolve guardrail ref: %s",

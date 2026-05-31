@@ -233,6 +233,13 @@ TOOL_SCHEMA = {
         },
         "class_path": {"type": "string", "pattern": "^[a-zA-Z_][a-zA-Z0-9_.]*$", "maxLength": 500},
         "description": {"type": "string", "maxLength": 5000},
+        "tool_version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+([\\-+][a-zA-Z0-9.]+)?$",
+            "maxLength": 20,
+        },
+        "deprecated": {"type": "boolean", "default": False},
+        "deprecated_message": {"type": "string", "maxLength": 500},
         "wasm_module": {
             "type": "string",
             "pattern": "^(?![/\\\\])(?!.*\\.\\.).*\\.wasm$",
@@ -406,7 +413,13 @@ GUARDRAIL_SCHEMA = {
     "type": "object",
     "required": ["type"],
     "properties": {
-        "type": {"type": "string", "enum": ["function", "llm", "schema", "pii", "hallucination"]},
+        "type": {
+            "type": "string",
+            "enum": [
+                "function", "llm", "schema", "pii",
+                "hallucination", "composite",
+            ],
+        },
         "description": {"type": "string", "maxLength": 5000},
         "function_path": {
             "type": "string",
@@ -442,6 +455,17 @@ GUARDRAIL_SCHEMA = {
             "maximum": 1,
             "default": 0.7,
         },
+        "operator": {
+            "type": "string",
+            "enum": ["and", "or"],
+        },
+        "guardrails": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 500},
+            "minItems": 2,
+            "maxItems": 10,
+        },
+        "short_circuit": {"type": "boolean", "default": True},
     },
     "additionalProperties": False,
 }
@@ -664,6 +688,8 @@ PROJECT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "description": {"type": "string", "maxLength": 5000},
+        "parent": {"type": "string", "maxLength": 500},
+        "inherit_policies": {"type": "boolean", "default": True},
         "labels": {
             "type": "object",
             "additionalProperties": {"type": "string", "maxLength": 255},
