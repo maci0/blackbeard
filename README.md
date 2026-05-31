@@ -66,7 +66,7 @@ cd cli && uv sync
 uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 ```
 
-> See [docs/quickstart.md](docs/quickstart.md) for a full walkthrough.
+> See [docs/quickstart.md](docs/quickstart.md) for a full walkthrough, [docs/studio-guide.md](docs/studio-guide.md) for the visual editor, and [docs/features.md](docs/features.md) for all platform features.
 
 ## Architecture
 
@@ -120,9 +120,15 @@ uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 - **Marketplace** -- import crews from git repositories (`blackbeard pull`)
 - **Train/test** -- CrewAI native training and testing via CLI or API
 - **Policy enforcement** -- tool allowlists/denylists, delegation control, sandbox tier requirements
-- **Guardrails** -- function-based or LLM-judge output validation on tasks
+- **Guardrails** -- function-based or LLM-judge output validation on tasks, with PII compliance presets (HIPAA, GDPR, PCI-DSS, CCPA)
 - **Knowledge sources** -- RAG-accessible content (text, PDF, CSV, JSON) attached to agents
+- **A2A protocol** -- agent-to-agent discovery via `/.well-known/agent-card.json`
+- **Resource versioning** -- snapshot on every mutation, list versions, rollback to any point
+- **Agency Agents import** -- one-click import of 200+ agent personas from the Agency Agents library
+- **Tools Library** -- bundled catalog of tools ready to install
+- **Credentials manager** -- centralized secret storage for API keys and tokens
 - **Helm chart** -- Kubernetes deployment via `deploy/helm/blackbeard/`
+- **gRPC API** -- full resource CRUD and execution management on port 50051
 - **SDKs** -- Python, TypeScript, and React client libraries in `sdks/`
 
 ## Resource Kinds
