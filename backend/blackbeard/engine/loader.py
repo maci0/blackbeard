@@ -141,6 +141,7 @@ class ResourceLoader:
         self._tools_loaded = 0
         self._tools_skipped = 0
         self._discovery_tools_cache: dict[str, list[Any]] = {}
+        self._crew_guardrail_refs: list[str] = []
 
     def _resolve_ref(self, ref_str: str) -> Resource:
         """Resolve a ref string to a Resource object."""
@@ -614,6 +615,61 @@ class ResourceLoader:
 
         return _schema_guardrail
 
+    @staticmethod
+    def _build_hallucination_guardrail(
+        gspec: dict[str, Any],
+        guardrail_name: str,
+    ) -> str:
+        """Build an LLM prompt guardrail for hallucination detection.
+
+        Translates the hallucination config into a prompt string that
+        CrewAI will evaluate as an LLM guardrail.
+        """
+        check_type = gspec.get("hallucination_check", "factual_consistency")
+        threshold = gspec.get("hallucination_threshold", 0.7)
+        llm_ref = gspec.get("llm")
+
+        prompts = {
+            "factual_consistency": (
+                "Verify the output contains only factual claims that are "
+                "directly supported by the input context. Flag any claims "
+                "that are fabricated or cannot be traced back to provided data."
+            ),
+            "source_grounding": (
+                "Check that every assertion in the output is grounded in "
+                "the source material. Reject outputs that introduce information "
+                "not present in the original sources."
+            ),
+            "self_contradiction": (
+                "Analyze the output for internal contradictions. Identify "
+                "any statements that conflict with each other within the "
+                "same response."
+            ),
+        }
+
+        base_prompt = prompts.get(check_type, prompts["factual_consistency"])
+        prompt = (
+            f"[Hallucination guardrail: {guardrail_name}] "
+            f"{base_prompt} "
+            f"Confidence threshold: {threshold}. "
+            f"Return PASS if the output meets the threshold, FAIL otherwise."
+        )
+
+        if llm_ref:
+            logger.info(
+                "Hallucination guardrail '%s' specifies llm=%s (advisory, "
+                "CrewAI uses the task agent's LLM for guardrail evaluation)",
+                guardrail_name,
+                llm_ref,
+                extra={
+                    "event": "hallucination_guardrail_llm_advisory",
+                    "guardrail_name": guardrail_name,
+                    "llm_ref": llm_ref,
+                },
+            )
+
+        return prompt
+
     def _get_project_guardrails(self, project: str) -> list[str]:
         """Return guardrail refs from the project resource, if any."""
         ns_resource = self._resources.get(f"Project/{project}")
@@ -646,6 +702,9 @@ class ResourceLoader:
                             gspec["json_schema"], resource.name
                         )
                         result.append(guardrail_fn)
+                    elif gspec.get("type") == "hallucination":
+                        prompt = self._build_hallucination_guardrail(gspec, resource.name)
+                        result.append(prompt)
                 except LoaderError:
                     logger.warning(
                         "Failed to resolve guardrail ref: %s",
@@ -704,6 +763,8 @@ class ResourceLoader:
             task_kwargs["output_json"] = spec["output_json"]
 
         guardrail_refs = list(spec.get("guardrails", []))
+        if self._crew_guardrail_refs:
+            guardrail_refs = list(self._crew_guardrail_refs) + guardrail_refs
         ns_guardrails = self._get_project_guardrails(resource.project)
         if ns_guardrails:
             guardrail_refs = ns_guardrails + guardrail_refs
@@ -864,8 +925,14 @@ class ResourceLoader:
                         agent, agent_resource, tool_loading, resource.project
                     )
 
+        # Set crew-level guardrails so build_task() can prepend them
+        self._crew_guardrail_refs = list(spec.get("guardrails", []))
+
         task_refs = spec.get("tasks", [])
         tasks = [self.build_task(ref) for ref in task_refs]
+
+        # Clear crew guardrails after tasks are built
+        self._crew_guardrail_refs = []
 
         process_str = spec.get("process", "sequential")
         process = _PROCESS_MAP.get(process_str, Process.sequential)

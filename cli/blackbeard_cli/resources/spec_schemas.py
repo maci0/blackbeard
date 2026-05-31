@@ -215,6 +215,11 @@ CREW_SCHEMA = {
             },
             "additionalProperties": False,
         },
+        "guardrails": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 500},
+            "maxItems": 10,
+        },
     },
     "additionalProperties": False,
 }
@@ -402,7 +407,7 @@ GUARDRAIL_SCHEMA = {
     "type": "object",
     "required": ["type"],
     "properties": {
-        "type": {"type": "string", "enum": ["function", "llm", "schema", "pii"]},
+        "type": {"type": "string", "enum": ["function", "llm", "schema", "pii", "hallucination"]},
         "description": {"type": "string", "maxLength": 5000},
         "function_path": {
             "type": "string",
@@ -427,6 +432,16 @@ GUARDRAIL_SCHEMA = {
             "type": "string",
             "enum": ["redact", "reject", "warn"],
             "default": "redact",
+        },
+        "hallucination_check": {
+            "type": "string",
+            "enum": ["factual_consistency", "source_grounding", "self_contradiction"],
+        },
+        "hallucination_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.7,
         },
     },
     "additionalProperties": False,

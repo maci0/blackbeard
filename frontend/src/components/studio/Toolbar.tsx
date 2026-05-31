@@ -17,7 +17,10 @@ import {
   ClipboardCopy,
   XCircle,
   Settings,
+  Image,
+  FileType,
 } from 'lucide-react'
+import { toPng, toSvg } from 'html-to-image'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { NAME_PATTERN } from '@/lib/kinds'
 import { toResourceName } from '@/lib/utils'
@@ -125,6 +128,56 @@ export function Toolbar({
       toasts.error('Failed to copy to clipboard')
     }
   }, [getExportData, toasts])
+
+  const getReactFlowElement = useCallback((): HTMLElement | null => {
+    return document.querySelector<HTMLElement>('.react-flow')
+  }, [])
+
+  const downloadBlob = useCallback((dataUrl: string, filename: string) => {
+    const a = document.createElement('a')
+    a.href = dataUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }, [])
+
+  const handleExportPNG = useCallback(async () => {
+    const el = getReactFlowElement()
+    if (!el) {
+      toasts.error('Canvas element not found')
+      return
+    }
+    try {
+      const dataUrl = await toPng(el, {
+        backgroundColor: '#ffffff',
+        pixelRatio: 2,
+      })
+      downloadBlob(dataUrl, `${toResourceName(crewName) || 'crew'}.png`)
+      toasts.success('Exported as PNG')
+    } catch (err) {
+      console.error('[studio] PNG export failed:', err)
+      toasts.error('PNG export failed')
+    }
+  }, [crewName, getReactFlowElement, downloadBlob, toasts])
+
+  const handleExportSVG = useCallback(async () => {
+    const el = getReactFlowElement()
+    if (!el) {
+      toasts.error('Canvas element not found')
+      return
+    }
+    try {
+      const dataUrl = await toSvg(el, {
+        backgroundColor: '#ffffff',
+      })
+      downloadBlob(dataUrl, `${toResourceName(crewName) || 'crew'}.svg`)
+      toasts.success('Exported as SVG')
+    } catch (err) {
+      console.error('[studio] SVG export failed:', err)
+      toasts.error('SVG export failed')
+    }
+  }, [crewName, getReactFlowElement, downloadBlob, toasts])
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-card px-2 sm:gap-3 sm:px-4">
@@ -372,6 +425,21 @@ export function Toolbar({
               >
                 <ClipboardCopy className="h-3.5 w-3.5 text-muted-foreground" />
                 Copy as JSON
+              </DropdownMenu.Item>
+              <DropdownMenu.Separator className="mx-2 my-1 h-px bg-border" />
+              <DropdownMenu.Item
+                onSelect={() => void handleExportPNG()}
+                className="mx-1 flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus:bg-muted focus:outline-none"
+              >
+                <Image className="h-3.5 w-3.5 text-muted-foreground" />
+                Export PNG
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                onSelect={() => void handleExportSVG()}
+                className="mx-1 flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus:bg-muted focus:outline-none"
+              >
+                <FileType className="h-3.5 w-3.5 text-muted-foreground" />
+                Export SVG
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>

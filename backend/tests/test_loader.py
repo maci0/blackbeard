@@ -32,7 +32,7 @@ def test_build_llm_vertex_ai(mock_llm_cls):
 
     mock_llm_cls.assert_called_once()
     _, kwargs = mock_llm_cls.call_args
-    assert kwargs["model"] == "claude-sonnet-4-6"
+    assert kwargs["model"] == "my-llm"
 
 
 @patch("blackbeard.engine.loader.LLM")
@@ -47,7 +47,7 @@ def test_build_llm_openai(mock_llm_cls):
     loader.build_llm("ref:llm-connections/gpt4")
 
     _, kwargs = mock_llm_cls.call_args
-    assert kwargs["model"] == "gpt-4o"
+    assert kwargs["model"] == "gpt4"
 
 
 @patch("blackbeard.engine.loader.LLM")

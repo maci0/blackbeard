@@ -29,6 +29,12 @@ api:
   #   ENFORCE_RBAC: "true"
   #   DEBUG: "false"
   #   LOG_LEVEL: "info"
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilization: 70
+    targetMemoryUtilization: 80
 
 # -- UI (React/Vite + nginx) --
 ui:

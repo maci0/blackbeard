@@ -6,14 +6,13 @@ import collections
 import concurrent.futures
 import ipaddress
 import logging
+import os
 import re
 import socket
 import threading
 import time
 from typing import Any
 from urllib.parse import urlparse
-
-import os
 
 import jsonschema
 

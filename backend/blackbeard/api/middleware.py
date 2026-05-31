@@ -33,7 +33,12 @@ from blackbeard.rate_limiter import is_rate_limited_with_count, record_auth_fail
 
 logger = logging.getLogger(__name__)
 
-_HEALTH_PATHS = {"/api/v1/health", "/api/v1/health/ready", "/.well-known/agent-card.json"}
+_HEALTH_PATHS = {
+    "/api/v1/health",
+    "/api/v1/health/ready",
+    "/.well-known/agent-card.json",
+    "/api/v1/asyncapi.json",
+}
 _DOCS_PATHS = {"/docs", "/openapi.json", "/redoc"}
 _AUTH_PATHS = {"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh"}
 _OIDC_PATHS = {"/api/v1/auth/oidc/login", "/api/v1/auth/oidc/callback", "/api/v1/config/public"}
