@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-import os
 import textwrap
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from blackbeard.plugins import PluginMeta, PluginRegistry, PluginType
 from blackbeard.plugins.base import (
-    AuthPlugin,
     ExecutionHookPlugin,
     GuardrailPlugin,
     ToolPlugin,
 )
 from blackbeard.plugins.loader import load_plugin_module, load_plugins
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
@@ -55,9 +55,7 @@ class TestPluginMeta:
         assert meta.plugin_type is PluginType.TOOL
 
     def test_frozen(self):
-        meta = PluginMeta(
-            name="x", version="0.1", description="", plugin_type=PluginType.TOOL
-        )
+        meta = PluginMeta(name="x", version="0.1", description="", plugin_type=PluginType.TOOL)
         with pytest.raises(AttributeError):
             meta.name = "y"  # type: ignore[misc]
 
@@ -259,9 +257,7 @@ class TestPluginLoader:
 
     def test_skip_invalid_descriptor(self, tmp_path: Path):
         # Missing required keys
-        (tmp_path / "broken.py").write_text(
-            'blackbeard_plugin = {"name": "broken"}\n'
-        )
+        (tmp_path / "broken.py").write_text('blackbeard_plugin = {"name": "broken"}\n')
 
         reg = PluginRegistry()
         loaded = load_plugins(str(tmp_path), target_registry=reg)

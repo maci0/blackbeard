@@ -108,6 +108,13 @@ python_version = "3.13"
 strict = true
 plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
 
+[[tool.mypy.overrides]]
+module = "blackbeard.engine.temporal"
+# temporalio is an optional dependency; conditional imports produce
+# unresolvable type-ignore noise depending on install state.
+warn_unused_ignores = false
+disallow_untyped_decorators = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

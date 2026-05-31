@@ -15,7 +15,9 @@ The Execution Engine is the runtime that loads YAML resource definitions, resolv
 - Cost alert thresholds on AgentPolicy (`warn_at_usd`, `warn_at_tokens`) -- triggers `cost_alert` event when spend crosses warning thresholds during execution, before hard budget limit.
 - Run history tab on Crew ResourceDetail -- shows past executions for a specific crew with status, duration, cost, and re-run button.
 
-**Deferred to post-MVP:** Temporal workflow backend, dynamic task creation in hierarchical mode, warm container/VM pools.
+**Implemented (post-MVP):** Temporal workflow engine as an optional backend when `TEMPORAL_HOST` is set. Includes `CrewExecutionWorkflow` and `run_crew` activity, configurable timeouts and retry policy, graceful fallback to ThreadPoolExecutor when Temporal is unavailable, and `docker-compose.temporal.yaml` overlay for local deployment.
+
+**Deferred to post-MVP:** Dynamic task creation in hierarchical mode, warm container/VM pools.
 
 ## 2. Architecture
 

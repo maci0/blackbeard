@@ -5,6 +5,22 @@ All notable changes to Blackbeard are documented here. Grouped by release, newes
 ## Unreleased
 
 ### Features
+- **Plugin SDK** with 4 extension types: tool, guardrail, auth_provider, execution_hook
+- **Interactive TUI shell** (`blackbeard shell`) for exploratory REPL-based resource management
+- **Temporal workflow engine** integration for durable execution (optional, falls back to ThreadPoolExecutor)
+- **Git-backed resource versioning** with auto-commit on every mutation, log/diff/blame/show API
+- **Observability dashboard** page at `/observability` with traces, metrics, and system health
+- **Nested project hierarchy** with parent refs and `inherit_policies` for cascading policy inheritance
+- **Tool versioning** with `tool_version` semver field and `deprecated`/`deprecated_message` support
+- **Composite guardrail chains** with AND/OR operators for combining multiple guardrails
+- **Hallucination detection** guardrail type for factual accuracy validation
+- **Crew-level guardrails** applied to all tasks in a crew
+- **Canvas PNG/SVG export** from the Studio visual editor
+- **AsyncAPI 3.0 spec** served at `/api/v1/asyncapi.json`
+- **HPA autoscaling** in Helm chart for Kubernetes deployments
+- **Multi-replica Docker Compose** with nginx load balancer
+- **Monitoring stack** with Prometheus, Grafana dashboards, and alerting rules
+- **`ALLOW_INTERNAL_URLS`** env var for local dev marketplace imports
 - **22 Critical User Journeys** documented with 230 Playwright E2E test specs
 - **Event storming** map covering 11 bounded contexts
 - **Studio guide** and **features reference** documentation

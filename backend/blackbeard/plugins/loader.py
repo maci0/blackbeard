@@ -124,7 +124,7 @@ def load_plugin_module(
         logger.debug(
             "Module %s has no blackbeard_plugin dict, skipping",
             stem,
-            extra={"event": "plugin_no_descriptor", "module": stem},
+            extra={"event": "plugin_no_descriptor", "plugin_module": stem},
         )
         # Clean up from sys.modules since it's not a plugin
         sys.modules.pop(module_name, None)
@@ -136,7 +136,7 @@ def load_plugin_module(
             "Invalid plugin descriptor in %s: %s",
             stem,
             error,
-            extra={"event": "plugin_invalid_descriptor", "module": stem, "error": error},
+            extra={"event": "plugin_invalid_descriptor", "plugin_module": stem, "error": error},
         )
         sys.modules.pop(module_name, None)
         return None
@@ -153,7 +153,7 @@ def load_plugin_module(
             stem,
             extra={
                 "event": "plugin_instantiation_failed",
-                "module": stem,
+                "plugin_module": stem,
                 "handler_class": handler_cls.__name__,
             },
         )

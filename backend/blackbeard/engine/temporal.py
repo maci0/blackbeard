@@ -32,6 +32,8 @@ logger = logging.getLogger(__name__)
 # Conditional imports: graceful degradation when temporalio is not installed
 # ---------------------------------------------------------------------------
 
+TEMPORAL_AVAILABLE: bool
+
 try:
     from temporalio import activity, workflow
     from temporalio.client import Client
@@ -62,18 +64,37 @@ class CrewExecutionInput:
 
 
 # ---------------------------------------------------------------------------
-# Temporal activity: runs the actual crew (reuses existing _run_crew_async)
+# Temporal activity and workflow definitions
+#
+# These are only defined when temporalio is installed.  The conditional
+# block uses runtime decorators from the SDK.  We store references in
+# module-level variables so the worker and submission code can use them
+# without caring about the conditional import.
 # ---------------------------------------------------------------------------
 
-if TEMPORAL_AVAILABLE:
+# Activity function reference (set inside the TEMPORAL_AVAILABLE block)
+_run_crew_activity: Any = None
+
+# Workflow class reference (set inside the TEMPORAL_AVAILABLE block)
+_CrewExecutionWorkflow: Any = None
+
+
+def _register_temporal_definitions() -> None:
+    """Register Temporal workflow and activity definitions.
+
+    Called once at import time when temporalio is available.
+    Defined as a function so decorators are applied inside a controlled
+    scope rather than at module top level.
+    """
+    global _run_crew_activity, _CrewExecutionWorkflow
 
     @activity.defn(name="run_crew")
-    async def run_crew_activity(payload: CrewExecutionInput) -> dict[str, Any]:
+    async def _activity_impl(payload: CrewExecutionInput) -> dict[str, Any]:
         """Temporal activity that runs a crew execution.
 
-        This reuses the existing ``_run_crew_async`` logic from the executor
-        module, running inside a Temporal activity context instead of a raw
-        thread.
+        Reuses the existing ``_run_crew_async`` logic from the executor
+        module, running inside a Temporal activity context instead of a
+        raw thread.
         """
         from uuid import UUID as _UUID
 
@@ -82,7 +103,6 @@ if TEMPORAL_AVAILABLE:
         execution_id = _UUID(payload.execution_id)
         execution_type = _ExecType(payload.execution_type)
 
-        # Import executor internals for DB session and crew execution
         from blackbeard.engine.executor import (
             _run_crew_async,
             _thread_session_factory,
@@ -110,12 +130,8 @@ if TEMPORAL_AVAILABLE:
 
         return {"execution_id": payload.execution_id, "status": "completed"}
 
-    # -----------------------------------------------------------------------
-    # Temporal workflow: orchestrates the activity with retry/timeout policies
-    # -----------------------------------------------------------------------
-
     @workflow.defn(name="CrewExecution")
-    class CrewExecutionWorkflow:
+    class _WorkflowImpl:
         """Temporal workflow for crew execution.
 
         Dispatches the crew run as a single activity with configurable
@@ -133,8 +149,8 @@ if TEMPORAL_AVAILABLE:
 
             timeout_s = settings.temporal_workflow_timeout_s
 
-            result = await workflow.execute_activity(
-                run_crew_activity,
+            result: dict[str, Any] = await workflow.execute_activity(
+                _run_crew_activity,
                 payload,
                 start_to_close_timeout=timedelta(seconds=timeout_s),
                 retry_policy=RetryPolicy(
@@ -158,17 +174,12 @@ if TEMPORAL_AVAILABLE:
             )
             return result
 
-else:
-    # Stubs so type checkers and imports do not break when temporalio is
-    # missing.  These should never be called at runtime when Temporal is
-    # not available.
+    _run_crew_activity = _activity_impl
+    _CrewExecutionWorkflow = _WorkflowImpl
 
-    async def run_crew_activity(payload: CrewExecutionInput) -> dict[str, Any]:  # type: ignore[misc]
-        raise RuntimeError("temporalio is not installed")
 
-    class CrewExecutionWorkflow:  # type: ignore[no-redef]
-        async def run(self, payload: CrewExecutionInput) -> dict[str, Any]:
-            raise RuntimeError("temporalio is not installed")
+if TEMPORAL_AVAILABLE:
+    _register_temporal_definitions()
 
 
 # ---------------------------------------------------------------------------
@@ -177,10 +188,10 @@ else:
 
 _worker_task: asyncio.Task[None] | None = None
 _worker_stop_event: asyncio.Event | None = None
-_temporal_client: Client | None = None  # type: ignore[type-arg]
+_temporal_client: Any = None
 
 
-async def _get_temporal_client() -> Client:  # type: ignore[type-arg]
+async def _get_temporal_client() -> Any:
     """Return a cached Temporal client, creating one on first call."""
     global _temporal_client
     if _temporal_client is not None:
@@ -241,8 +252,8 @@ async def start_temporal_worker() -> None:
         worker = Worker(
             client,
             task_queue=settings.temporal_task_queue,
-            workflows=[CrewExecutionWorkflow],
-            activities=[run_crew_activity],
+            workflows=[_CrewExecutionWorkflow],
+            activities=[_run_crew_activity],
         )
         logger.info(
             "Temporal worker started: task_queue=%s",
@@ -307,8 +318,8 @@ async def submit_temporal_execution(
 ) -> str:
     """Submit a crew execution as a Temporal workflow.
 
-    Returns the Temporal workflow ID (which is the execution UUID as a
-    string, making it easy to correlate).
+    Returns the Temporal workflow ID (which includes the execution UUID,
+    making it easy to correlate).
 
     Raises RuntimeError if Temporal is not available or not configured.
     """
@@ -331,7 +342,7 @@ async def submit_temporal_execution(
     timeout_s = settings.temporal_workflow_timeout_s
 
     handle = await client.start_workflow(
-        CrewExecutionWorkflow.run,
+        _CrewExecutionWorkflow.run,
         payload,
         id=workflow_id,
         task_queue=settings.temporal_task_queue,
@@ -353,4 +364,4 @@ async def submit_temporal_execution(
         },
     )
 
-    return handle.id
+    return str(handle.id)

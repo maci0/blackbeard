@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Blackbeard
 
-Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount) with a visual graph editor, async execution engine, RBAC, and LiteLLM proxy for model routing (with built-in spend/token/latency tracking).
+Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount) with a visual graph editor (26 frontend pages), async execution engine (ThreadPoolExecutor or optional Temporal workflows), RBAC, LiteLLM proxy for model routing (with built-in spend/token/latency tracking), plugin SDK (4 extension types: tool, guardrail, auth_provider, execution_hook), and git-backed resource version control (auto-commit on mutation, log/diff/blame/show API).
 
 ## Commands
 
@@ -39,6 +39,7 @@ uv sync                          # install deps (click, httpx, rich, pyyaml, jso
 uv run blackbeard --help         # all commands
 uv run blackbeard validate -f ../examples/research-crew/  # offline validation
 uv run blackbeard login          # store JWT credentials
+uv run blackbeard shell          # interactive TUI REPL
 uv run ruff check blackbeard_cli/  # lint
 ```
 
@@ -56,7 +57,7 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Resource system**: All entities (Agent, Task, Crew, etc.) are stored as generic `Resource` rows with a JSONB `spec` column, validated against per-kind JSON schemas (`resources/spec_schemas.py`). Resources reference each other with strings like `ref:agents/researcher`, tracked in a `ResourceRef` table. `kinds.py` is the single source of truth for the kind registry and URL plural mapping.
 
-**Execution flow**: `POST /api/v1/crews/{crew_name}/kickoff` (also `/train`, `/test`, `/flows/{name}/run`) → creates `Execution` record with `initiated_by` (user) + `principal_chain` (User → Crew → Agent/ServiceAccount) → submits to `ThreadPoolExecutor` → background thread derives budget limits from AgentPolicy → creates per-execution LiteLLM virtual key with budget caps → builds CrewAI objects via `ResourceLoader` (resolves refs, builds LLM/Agent/Task/Crew with virtual key) → calls `crew.kickoff(inputs=...)` (or `.train()`/`.test()`, or sequential flow step execution) → stores result + token usage → deletes virtual key → delivers webhook events. Each crew run gets its own thread with an isolated asyncio event loop.
+**Execution flow**: `POST /api/v1/crews/{crew_name}/kickoff` (also `/train`, `/test`, `/flows/{name}/run`) → creates `Execution` record with `initiated_by` (user) + `principal_chain` (User → Crew → Agent/ServiceAccount) → submits to Temporal workflow (if configured) or `ThreadPoolExecutor` → background thread/workflow derives budget limits from AgentPolicy → creates per-execution LiteLLM virtual key with budget caps → builds CrewAI objects via `ResourceLoader` (resolves refs, builds LLM/Agent/Task/Crew with virtual key) → calls `crew.kickoff(inputs=...)` (or `.train()`/`.test()`, or sequential flow step execution) → stores result + token usage → deletes virtual key → delivers webhook events. Each crew run gets its own thread with an isolated asyncio event loop (ThreadPoolExecutor path) or a Temporal activity (Temporal path).
 
 **Budget enforcement**: AgentPolicy `max_usd`/`max_tokens` → LiteLLM virtual key with budget limits → LiteLLM Proxy enforces at call time. Key created inside the background thread before crew.kickoff(), deleted after (success or failure). Most restrictive policy across all agents wins.
 
@@ -66,7 +67,7 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Middleware stack** (outermost → innermost): CORS (`CORSMiddleware` via `add_middleware`) → security headers → API key auth (hmac.compare_digest or JWT Bearer) + request ID → body size limiter (10MB). The three `app.middleware("http")` middlewares are registered LIFO in `main.py`. Auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), health checks, and automation webhook paths (`/automations/{name}/webhook`) are public (no auth required — automation webhooks use their own HMAC validation inside the route handler).
 
-**CLI** (`cli/` — separate package `blackbeard-cli`): Standalone package with no server deps (click, httpx, rich, pyyaml, jsonschema only). 29 commands (including 4 groups with subcommands) across 6 modules. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
+**CLI** (`cli/` -- separate package `blackbeard-cli`): Standalone package with no server deps (click, httpx, rich, pyyaml, jsonschema only). 29 commands (including 4 groups with subcommands) across 6 modules. Includes `blackbeard shell` for an interactive TUI REPL. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
 
 **Dynamic LiteLLM sync**: When `LLMConnection` resources are created/updated/deleted, the API pushes changes to LiteLLM via `POST /model/new`, `/model/update`, and `/model/delete` — no container restart needed.
 
@@ -88,6 +89,12 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Resource versioning**: `resource_versions` table stores spec/labels snapshots on every create/update. Endpoints: `GET /{kind}/{name}/versions` (list), `GET /{kind}/{name}/versions/{version}` (detail), `POST /{kind}/{name}/rollback` (restore from snapshot).
 
+**Git-backed resource store**: Every resource mutation (create/update/delete) triggers an auto-commit to a local git repository. Provides `GET /{kind}/{name}/git/log`, `GET /{kind}/{name}/git/diff`, `GET /{kind}/{name}/git/blame`, and `GET /{kind}/{name}/git/show` endpoints for version control operations on resources.
+
+**Plugin SDK**: Extension system with 4 plugin types: `tool` (custom tool implementations), `guardrail` (custom validation logic), `auth_provider` (external auth integration), and `execution_hook` (pre/post execution callbacks). Plugins are registered via entry points or the plugin API.
+
+**Temporal workflow engine**: Optional durable workflow execution via Temporal. When `TEMPORAL_ADDRESS` is configured, crew executions run as Temporal workflows instead of ThreadPoolExecutor threads. Falls back to ThreadPoolExecutor when Temporal is not available. Configuration in `backend/blackbeard/temporal/`.
+
 **Project-level guardrails**: Project resources support `spec.guardrails` array. At execution time, project guardrails are prepended to task-level guardrails.
 
 **OpenTelemetry**: Optional trace export via `OTEL_ENDPOINT` env var. When unset, tracing is disabled with no overhead.
@@ -96,7 +103,7 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 ### Frontend (React + React Flow)
 
-**Studio**: Visual graph editor (`@xyflow/react`) where users drag Agent/Task/Tool/FlowStep/Condition/Router/Parallel/IF-ELSE/Switch/Merge/Filter/Gate nodes and sticky notes (4 colors) onto a canvas, configure them via PropertyPanel, save as resources, and run/train/test crews. `studioStore` (Zustand) manages canvas state with undo/redo (30-snapshot history). Crew group nodes wrap agents+tasks in a visual bounding box. ELK.js auto-layout arranges nodes left-to-right. Bidirectional YAML editor syncs with canvas. Per-node testing ("Test Agent"/"Test Task" in PropertyPanel). Expression editor with syntax validation and variable autocomplete for Condition/Router nodes. Execution data overlay (green/red borders, output preview). Gantt timeline and grouped/collapsible execution logs. Crew Settings dialog (error workflow). Canvas JSON export (Export + Copy as JSON).
+**Studio**: Visual graph editor (`@xyflow/react`) where users drag Agent/Task/Tool/FlowStep/Condition/Router/Parallel/IF-ELSE/Switch/Merge/Filter/Gate nodes and sticky notes (4 colors) onto a canvas, configure them via PropertyPanel, save as resources, and run/train/test crews. `studioStore` (Zustand) manages canvas state with undo/redo (30-snapshot history). Crew group nodes wrap agents+tasks in a visual bounding box. ELK.js auto-layout arranges nodes left-to-right. Bidirectional YAML editor syncs with canvas. Per-node testing ("Test Agent"/"Test Task" in PropertyPanel). Expression editor with syntax validation and variable autocomplete for Condition/Router nodes. Execution data overlay (green/red borders, output preview). Gantt timeline and grouped/collapsible execution logs. Crew Settings dialog (error workflow). Canvas export (PNG, SVG, JSON).
 
 **Resource CRUD**: `resourceStore` handles all resource kinds through the generic `/api/v1/{kind_plural}` endpoints. Updates use optimistic locking via `version` field.
 
@@ -126,6 +133,8 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Execution Comparison**: `/executions/compare?a=&b=` for side-by-side metrics diff of two executions.
 
+**Observability**: `/observability` page with traces, metrics, and system health overview. Integrates with OpenTelemetry, Prometheus, and Grafana.
+
 **Streaming chat**: `POST /api/v1/chat/stream` provides real SSE streaming. Chat page renders tokens as they arrive with a stop button for in-flight cancellation.
 
 **Presence indicators**: `PresenceAvatars` component shows colored avatar circles on ResourceDetail and Studio pages for users viewing the same resource.
@@ -152,7 +161,11 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 DB schema is managed in `backend/entrypoint.sh`: first creates PostgreSQL enum types and runs `Base.metadata.create_all()` (for initial table creation), then runs `alembic upgrade head` if configured. `create_all` only creates new tables — it cannot alter existing ones — so Alembic handles schema evolution. If `alembic.ini` or `alembic/versions` doesn't exist, migrations are skipped.
 
-**Helm chart**: `deploy/helm/blackbeard/` — full Kubernetes deployment. PG StatefulSet, Valkey, LiteLLM, API, UI, Ingress, Secrets. Install: `helm install blackbeard deploy/helm/blackbeard/ --set auth.apiKey=... --set auth.jwtSecret=...`
+**Helm chart**: `deploy/helm/blackbeard/` -- full Kubernetes deployment. PG StatefulSet, Valkey, LiteLLM, API, UI, Ingress, Secrets, HPA autoscaling. Install: `helm install blackbeard deploy/helm/blackbeard/ --set auth.apiKey=... --set auth.jwtSecret=...`
+
+**Multi-replica compose**: Docker Compose supports multi-replica API deployment with an nginx load balancer for horizontal scaling.
+
+**Monitoring stack**: Prometheus, Grafana dashboards, and alerting rules in `deploy/monitoring/`. Scrapes API and LiteLLM metrics.
 
 **SDKs**: Python (`sdks/python/`), TypeScript (`sdks/typescript/`), and React (`sdks/react/`) — thin wrappers over httpx/fetch. Cover auth, resources, executions, train/test/flow. React SDK provides `BlackbeardProvider`, `CrewViewer`, `CrewRunner`, and `ExecutionStatus` components.
 

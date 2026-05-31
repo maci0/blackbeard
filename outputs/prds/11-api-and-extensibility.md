@@ -10,7 +10,7 @@ Define the public API surface, webhook streaming protocol, plugin SDK, and exten
 
 **Implemented (post-MVP):** AsyncAPI spec endpoint at `GET /api/v1/asyncapi.json` (public, AsyncAPI 3.0 format) documenting webhook event schemas.
 
-**Deferred to post-MVP:** Plugin SDK.
+**Implemented (post-MVP):** Plugin SDK with plugin registry supporting 4 plugin types (tool, guardrail, auth_provider, execution_hook), directory-based auto-discovery, `GET /api/v1/plugins` listing endpoint, and abstract base classes for each plugin type.
 
 **Implemented (post-MVP):** Credentials API (`POST/GET/DELETE /api/v1/credentials`) for centralized secret management. Resource version endpoints (`GET /{kind}/{name}/versions`, `GET /{kind}/{name}/versions/{version}`, `POST /{kind}/{name}/rollback`). A2A discovery endpoint (`GET /.well-known/agent-card.json`).
 
@@ -637,8 +637,8 @@ for await (const event of execution.stream()) {
 9. React component export via `@blackbeard/react` SDK produces a working embeddable widget.
 10. Python and TypeScript SDKs can create resources, kick off crews, and stream results.
 
-### Post-MVP
-8. Plugin SDK allows registering a custom tool, LLM provider, and sandbox provider.
+### Implemented (post-MVP)
+8. Plugin SDK allows registering custom plugins (tool, guardrail, auth_provider, execution_hook) via directory-based auto-discovery and abstract base classes.
 
 ## Error Code Taxonomy
 

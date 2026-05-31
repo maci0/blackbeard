@@ -23,13 +23,16 @@ Blackbeard gives you a self-hosted platform to build, deploy, and manage AI agen
 
 **Key differentiators:**
 
-- **Visual graph editor** -- drag-and-drop Studio built on React Flow for designing crews
+- **Visual graph editor** -- drag-and-drop Studio built on React Flow for designing crews, with PNG/SVG canvas export
 - **Declarative resource model** -- 14 resource kinds (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount)
 - **Full RBAC** -- JWT authentication with roles, role bindings, and per-resource permissions
 - **LiteLLM routing** -- multi-provider model access (Vertex AI, OpenAI, Ollama, etc.) with built-in spend/token/latency tracking
 - **Budget enforcement** -- per-execution spending limits via AgentPolicy and LiteLLM virtual keys
 - **Multi-tier sandbox isolation** -- run untrusted tool code in WASM, Docker/Podman, gVisor, or Firecracker MicroVM sandboxes
-- **CLI parity** -- everything you can do in the UI, you can do from the command line
+- **Plugin SDK** -- extend the platform with custom tools, guardrails, auth providers, and execution hooks
+- **Git-backed versioning** -- auto-commit on every resource mutation, with log/diff/blame/show API
+- **Temporal integration** -- optional Temporal workflow engine for durable execution (falls back to ThreadPoolExecutor)
+- **CLI parity** -- everything you can do in the UI, you can do from the command line, including an interactive TUI shell
 
 ## Quick Start
 
@@ -99,35 +102,44 @@ uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
                                     └──────────────┘
 ```
 
-**Backend (FastAPI):** All resources are stored as generic rows with a JSONB `spec` column, validated against per-kind JSON schemas. Crew executions run in background threads via `ThreadPoolExecutor`, each with an isolated asyncio event loop. Auth supports both API key (`X-API-Key`) and JWT Bearer tokens.
+**Backend (FastAPI):** All resources are stored as generic rows with a JSONB `spec` column, validated against per-kind JSON schemas. Crew executions run via Temporal workflows when configured, or in background threads via `ThreadPoolExecutor` (each with an isolated asyncio event loop). A git-backed store auto-commits on every resource mutation, providing log/diff/blame/show endpoints. The plugin SDK supports 4 extension types: tool, guardrail, auth_provider, and execution_hook. Auth supports both API key (`X-API-Key`) and JWT Bearer tokens.
 
-**Frontend (React + React Flow):** The Studio visual editor lets you drag Agent, Task, and Tool nodes onto a canvas, configure them via a property panel, save as resources, and kick off executions. State is managed with Zustand (undo/redo with 30-snapshot history).
+**Frontend (React + React Flow):** 26 pages including the Studio visual editor, Observability dashboard, and all resource management views. The Studio lets you drag Agent, Task, and Tool nodes onto a canvas, configure them via a property panel, save as resources, kick off executions, and export the canvas as PNG or SVG. State is managed with Zustand (undo/redo with 30-snapshot history).
 
-**CLI:** Standalone Python package (`blackbeard-cli`) with no server dependencies. Validates YAML offline, applies resources in dependency order, and manages executions, users, roles, and exports.
+**CLI:** Standalone Python package (`blackbeard-cli`) with 29 commands and no server dependencies. Validates YAML offline, applies resources in dependency order, and manages executions, users, roles, and exports. The `blackbeard shell` command launches an interactive TUI REPL for exploratory use.
 
 > See [docs/architecture.md](docs/architecture.md) for a detailed breakdown.
 
 ## Features
 
 - **14 resource kinds** -- Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount
-- **Visual graph editor** -- drag-and-drop crew design with React Flow, undo/redo, YAML preview
+- **Visual graph editor** -- drag-and-drop crew design with React Flow, undo/redo, YAML preview, PNG/SVG canvas export
 - **Full RBAC** -- JWT auth (access + refresh tokens), predefined roles (owner, admin, developer, operator, viewer, policy-admin), user/group management
-- **CLI with 29 commands** -- apply, validate, kickoff, train, test-crew, export, pull, status, login, and more
+- **CLI with 29 commands** -- apply, validate, kickoff, train, test-crew, export, pull, status, shell, login, and more
+- **Interactive TUI shell** -- `blackbeard shell` launches a REPL for exploratory resource management
 - **Budget enforcement** -- per-execution spending caps via AgentPolicy `max_usd`/`max_tokens` and LiteLLM virtual keys
 - **Multi-provider LLM routing** -- Vertex AI, OpenAI, Anthropic, Ollama, and any LiteLLM-supported provider
 - **Execution streaming** -- SSE and WebSocket streams with event replay for real-time execution monitoring
-- **Tool ecosystem** -- Python tools, builtin CrewAI tools, sandboxed tools (WASM/Docker/gVisor/MicroVM), MCP servers (stdio + HTTP)
+- **Tool ecosystem** -- Python tools, builtin CrewAI tools, sandboxed tools (WASM/Docker/gVisor/MicroVM), MCP servers (stdio + HTTP), with tool versioning and deprecation support
+- **Plugin SDK** -- 4 extension types (tool, guardrail, auth_provider, execution_hook) for extending the platform
+- **Git-backed versioning** -- auto-commit on every resource mutation, with log/diff/blame/show API endpoints
+- **Temporal integration** -- optional Temporal workflow engine for durable execution (falls back to ThreadPoolExecutor when not configured)
 - **Marketplace** -- import crews from git repositories (`blackbeard pull`)
 - **Train/test** -- CrewAI native training and testing via CLI or API
 - **Policy enforcement** -- tool allowlists/denylists, delegation control, sandbox tier requirements
-- **Guardrails** -- function-based or LLM-judge output validation on tasks, with PII compliance presets (HIPAA, GDPR, PCI-DSS, CCPA)
+- **Guardrails** -- function-based, LLM-judge, hallucination detection, and composite guardrail chains (AND/OR), with PII compliance presets (HIPAA, GDPR, PCI-DSS, CCPA)
 - **Knowledge sources** -- RAG-accessible content (text, PDF, CSV, JSON) attached to agents
 - **A2A protocol** -- agent-to-agent discovery via `/.well-known/agent-card.json`
 - **Resource versioning** -- snapshot on every mutation, list versions, rollback to any point
+- **Nested projects** -- hierarchical project structure with parent refs and inherited policies
+- **Observability dashboard** -- `/observability` page with traces, metrics, and system health
+- **AsyncAPI spec** -- machine-readable event schema at `/api/v1/asyncapi.json`
 - **Agency Agents import** -- one-click import of 200+ agent personas from the Agency Agents library
 - **Tools Library** -- bundled catalog of tools ready to install
 - **Credentials manager** -- centralized secret storage for API keys and tokens
-- **Helm chart** -- Kubernetes deployment via `deploy/helm/blackbeard/`
+- **Helm chart** -- Kubernetes deployment via `deploy/helm/blackbeard/`, with HPA autoscaling
+- **Multi-replica compose** -- nginx load balancer for horizontal scaling in Docker Compose
+- **Monitoring stack** -- Prometheus, Grafana, and alerting rules
 - **gRPC API** -- full resource CRUD and execution management on port 50051
 - **SDKs** -- Python, TypeScript, and React client libraries in `sdks/`
 
@@ -181,6 +193,9 @@ uv run blackbeard status <execution-id> --watch             # watch execution pr
 uv run blackbeard cancel <execution-id>                     # cancel a running execution
 uv run blackbeard executions                                # list all executions
 
+# Interactive shell
+uv run blackbeard shell                                     # launch TUI REPL
+
 # Marketplace
 uv run blackbeard pull https://github.com/org/crew-repo.git # import from git
 
@@ -227,6 +242,9 @@ uv run ruff check blackbeard_cli/          # lint
 | LLM Gateway  | LiteLLM Proxy                                |
 | WASM Runtime | wasmtime-py                                   |
 | Orchestration| CrewAI                                        |
+| Workflows    | Temporal (optional, falls back to ThreadPoolExecutor) |
+| Version Control | Git-backed resource store                  |
+| Monitoring   | Prometheus, Grafana                           |
 
 ### Project Structure
 
@@ -237,16 +255,19 @@ blackbeard/
 │   │   ├── api/               # REST endpoints
 │   │   ├── auth/              # JWT auth, RBAC
 │   │   ├── engine/            # Execution engine + sandbox runtimes
+│   │   ├── git_store/         # Git-backed resource version control
 │   │   ├── litellm/           # LiteLLM config + key management
 │   │   ├── models/            # SQLAlchemy + Pydantic models
-│   │   └── resources/         # Resource CRUD + validation
+│   │   ├── plugins/           # Plugin SDK (tool, guardrail, auth, hooks)
+│   │   ├── resources/         # Resource CRUD + validation
+│   │   └── temporal/          # Temporal workflow integration
 │   └── tests/
 ├── cli/                       # Standalone CLI package (blackbeard-cli)
 │   └── blackbeard_cli/
-├── frontend/                  # React + TypeScript SPA
+├── frontend/                  # React + TypeScript SPA (26 pages)
 │   └── src/
 │       ├── components/studio/ # Visual editor (React Flow)
-│       ├── pages/             # Studio, Resources, Executions, Models, etc.
+│       ├── pages/             # Studio, Resources, Executions, Observability, etc.
 │       └── stores/            # Zustand state management
 ├── sdks/                      # Client libraries
 │   ├── python/                # Python SDK
@@ -255,8 +276,9 @@ blackbeard/
 ├── examples/                  # Example YAML crews
 ├── deploy/
 │   ├── docker/                # Dockerfiles
-│   ├── helm/blackbeard/       # Helm chart for Kubernetes
+│   ├── helm/blackbeard/       # Helm chart for Kubernetes (with HPA)
 │   ├── litellm/               # LiteLLM proxy config
+│   ├── monitoring/            # Prometheus, Grafana, alert rules
 │   └── seed.sh                # Database seeding script
 ├── docs/                      # Documentation
 ├── docker-compose.yaml
@@ -294,6 +316,7 @@ Key variables (see [.env.example](.env.example) for the full list):
 | `LITELLM_MASTER_KEY`           | LiteLLM proxy master key                         | `sk-litellm-master-key`    |
 | `GOOGLE_APPLICATION_CREDENTIALS`| Path to GCP service account key (for Vertex AI)  | Empty placeholder          |
 | `DEBUG`                         | Enable debug mode (Swagger UI, relaxed auth)     | `false`                    |
+| `ALLOW_INTERNAL_URLS`           | Allow marketplace imports from internal URLs     | `false`                    |
 
 ## API
 

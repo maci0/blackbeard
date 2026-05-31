@@ -10,7 +10,9 @@ Ensure every operation available in the Blackbeard UI can also be performed via 
 
 **Implemented:** ✅ Fully implemented as a standalone package (`cli/`) with 28 commands (including 4 groups with subcommands) spanning all three phases. All CLI commands listed in this PRD are shipped and functional. CLI modules: `cli/blackbeard_cli/__main__.py`, `cli/blackbeard_cli/auth_cmds.py`, `cli/blackbeard_cli/credentials.py`, `cli/blackbeard_cli/users.py`, `cli/blackbeard_cli/rbac.py`, `cli/blackbeard_cli/exec.py`, `cli/blackbeard_cli/export_cmd.py`, `cli/blackbeard_cli/helpers.py`. Commands include: `apply`, `validate`, `get`, `list`, `delete`, `kickoff`, `train`, `test-crew`, `status`, `pull`, `cancel`, `executions`, `events --follow`, `export`, `login`/`logout`/`whoami`/`register`, `user list/invite`, `group list/create/delete/add-member/remove-member/members`, `role list/describe`, `rolebinding list/create`, `apikey generate/rotate/show`, `health`. JWT credential storage in `~/.config/blackbeard/` with auto-refresh. Both Rich (human) and JSON (machine) output modes.
 
-**Deferred to post-MVP:** Interactive TUI mode, `blackbeard shell` (REPL), plugin system for custom commands, `blackbeard tool compile`, `blackbeard repo publish/install`, `blackbeard deploy/rollback`.
+**Implemented (post-MVP):** Interactive TUI shell via `blackbeard shell` command using prompt_toolkit, with context-aware autocomplete, persistent history, rich output, and built-in commands (help, use, ls, get, cat, run, watch, status, executions, health).
+
+**Deferred to post-MVP:** Plugin system for custom commands, `blackbeard tool compile`, `blackbeard repo publish/install`, `blackbeard deploy/rollback`.
 
 ---
 
