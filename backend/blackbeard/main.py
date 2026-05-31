@@ -30,6 +30,7 @@ from blackbeard.api.chat import router as chat_router
 from blackbeard.api.collaboration import router as collaboration_router
 from blackbeard.api.credentials import router as credentials_router
 from blackbeard.api.executions import router as executions_router
+from blackbeard.api.git import router as git_router
 from blackbeard.api.health import router as health_router
 from blackbeard.api.health import shutdown_health_clients
 from blackbeard.api.marketplace import router as marketplace_router
@@ -289,6 +290,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             extra={"event": "grpc_server_start_failed"},
         )
 
+    try:
+        from blackbeard.engine.git_store import init_git_store
+        init_git_store()
+    except Exception:
+        logger.debug("Git resource store not available", exc_info=True)
+
     startup_ms = round((time.monotonic() - t0_startup) * 1000, 1)
     logger.info(
         "Blackbeard %s ready to accept traffic (%.0fms, %d stale executions recovered)",
@@ -441,6 +448,7 @@ app.include_router(a2a_router)
 app.include_router(asyncapi_router)
 app.include_router(agency_import_router, prefix="/api/v1")
 app.include_router(tools_library_router, prefix="/api/v1")
+app.include_router(git_router, prefix="/api/v1")
 
 if settings.oidc_issuer:
     from blackbeard.api.oidc import router as oidc_router

@@ -61,17 +61,42 @@ _LLM_KIND = "LLMConnection"
 _AUTHZ_CACHE_KINDS = frozenset({ResourceKind.ROLE.value, ResourceKind.ROLE_BINDING.value})
 
 
+def _git_commit_resource(
+    kind: str,
+    name: str,
+    project: str,
+    spec: dict[str, Any] | None,
+    labels: dict[str, str] | None,
+    author: str,
+) -> None:
+    """Commit resource change to git store (best-effort, non-blocking)."""
+    try:
+        from blackbeard.engine.git_store import commit_resource
+        from blackbeard.engine.git_store import delete_resource as git_delete
+
+        if spec is not None:
+            commit_resource(kind, name, project, spec, labels, action="update", author=author)
+        else:
+            git_delete(kind, name, project, author=author)
+    except Exception:
+        logger.debug("Git commit skipped (store may not be initialized)", exc_info=True)
+
+
 def _post_mutation_hooks(
     request: Request,
     kind: str,
     name: str,
     spec: dict[str, Any] | None = None,
+    project: str = "default",
+    labels: dict[str, str] | None = None,
+    author: str = "system",
 ) -> None:
-    """Fire scheduler/LiteLLM/RBAC side-effects after a resource mutation."""
+    """Fire scheduler/LiteLLM/RBAC/git side-effects after a resource mutation."""
     _fire_and_forget(_maybe_reload_scheduler(request, kind))
     _fire_and_forget(_sync_llm_to_litellm(kind, name, spec))
     if kind in _AUTHZ_CACHE_KINDS:
         _clear_authz_cache()
+    _git_commit_resource(kind, name, project, spec, labels, author)
 
 
 async def _sync_llm_to_litellm(kind: str, name: str, spec: dict[str, Any] | None) -> None:
@@ -393,7 +418,11 @@ async def create_resource(
         response.headers["Location"] = f"/api/v1/{kind_plural}/{data.metadata.name}?project={ns}"
     else:
         response.status_code = 200
-    _post_mutation_hooks(request, url_kind, data.metadata.name, data.spec)
+    _post_mutation_hooks(
+        request, url_kind, data.metadata.name, data.spec,
+        project=data.metadata.project, labels=dict(data.metadata.labels),
+        author=user.email if user and hasattr(user, "email") else "system",
+    )
     return ResourceResponse.from_db(resource)
 
 
@@ -526,7 +555,11 @@ async def update_resource(
             status_code=422,
             detail=[e.to_dict() for e in exc.errors],
         ) from exc
-    _post_mutation_hooks(request, kind, name, resource.spec)
+    _post_mutation_hooks(
+        request, kind, name, resource.spec,
+        project=resource.project, labels=dict(resource.labels or {}),
+        author=user.email if user and hasattr(user, "email") else "system",
+    )
     return ResourceResponse.from_db(resource)
 
 
@@ -584,7 +617,11 @@ async def delete_resource(
             },
         )
     else:
-        _post_mutation_hooks(request, kind, name)
+        _post_mutation_hooks(
+            request, kind, name,
+            project=project,
+            author=user.email if user and hasattr(user, "email") else "system",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -783,5 +820,9 @@ async def rollback_resource(
     await _save_version_snapshot(session, resource, user)
     await session.commit()
 
-    _post_mutation_hooks(request, kind, name, resource.spec)
+    _post_mutation_hooks(
+        request, kind, name, resource.spec,
+        project=resource.project, labels=dict(resource.labels or {}),
+        author=user.email if hasattr(user, "email") else "system",
+    )
     return ResourceResponse.from_db(resource)
