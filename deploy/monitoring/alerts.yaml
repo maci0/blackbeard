@@ -1,0 +1,94 @@
+groups:
+  - name: blackbeard
+    rules:
+      # API health
+      - alert: APIDown
+        expr: up{job="blackbeard-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Blackbeard API is down"
+          description: "API has been unreachable for more than 1 minute."
+
+      - alert: APIHighLatency
+        expr: http_request_duration_seconds{job="blackbeard-api", quantile="0.95"} > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 latency above 2s"
+          description: "95th percentile request latency has been above 2 seconds for 5 minutes."
+
+      - alert: APIHighErrorRate
+        expr: rate(http_requests_total{job="blackbeard-api", status=~"5.."}[5m]) / rate(http_requests_total{job="blackbeard-api"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API error rate above 5%"
+          description: "More than 5% of requests are returning 5xx errors."
+
+      # LiteLLM
+      - alert: LiteLLMDown
+        expr: up{job="litellm"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LiteLLM proxy is down"
+          description: "LiteLLM has been unreachable for more than 1 minute. No LLM calls can be made."
+
+      - alert: LiteLLMHighSpend
+        expr: litellm_spend_total > 100
+        labels:
+          severity: warning
+        annotations:
+          summary: "LiteLLM total spend above $100"
+          description: "Total LLM spend has exceeded $100. Review budget policies."
+
+      # Database
+      - alert: PostgresDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "Database has been unreachable for more than 1 minute."
+
+      - alert: PostgresHighConnections
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connection count above 80"
+          description: "High number of database connections. Consider adding connection pooling."
+
+      - alert: PostgresDiskUsage
+        expr: pg_database_size_bytes{datname="blackbeard"} > 5e9
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database size above 5GB"
+          description: "Blackbeard database is growing large. Consider archiving old executions."
+
+      # Valkey
+      - alert: ValkeyDown
+        expr: up{job="valkey"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Valkey is down"
+          description: "Valkey is unreachable. Live collaboration and multi-replica broadcasting will not work."
+
+      - alert: ValkeyHighMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Valkey memory usage above 90%"
+          description: "Valkey is running low on memory."

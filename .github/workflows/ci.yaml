@@ -8,7 +8,7 @@ on:
 
 env:
   PYTHON_VERSION: "3.13"
-  UV_VERSION: "0.11.14"
+  UV_VERSION: "0.11.15"
   BUN_VERSION: "1.2.17"
 
 permissions:
@@ -162,6 +162,9 @@ jobs:
       - name: Type check
         run: bunx tsc --noEmit
 
+      - name: Test
+        run: bun run test
+
   sdk-react:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -190,6 +193,9 @@ jobs:
 
       - name: Type check
         run: bunx tsc --noEmit
+
+      - name: Test
+        run: bun run test
 
   helm-lint:
     runs-on: ubuntu-latest

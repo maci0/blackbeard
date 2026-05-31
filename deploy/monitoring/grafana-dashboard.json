@@ -1,0 +1,204 @@
+{
+  "dashboard": {
+    "title": "Blackbeard Overview",
+    "uid": "blackbeard-overview",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": { "from": "now-1h", "to": "now" },
+    "panels": [
+      {
+        "title": "API Health",
+        "type": "stat",
+        "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+        "targets": [
+          {
+            "expr": "up{job=\"blackbeard-api\"}",
+            "legendFormat": "API"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              { "type": "value", "options": { "1": { "text": "UP", "color": "green" }, "0": { "text": "DOWN", "color": "red" } } }
+            ]
+          }
+        }
+      },
+      {
+        "title": "LiteLLM Health",
+        "type": "stat",
+        "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+        "targets": [
+          {
+            "expr": "up{job=\"litellm\"}",
+            "legendFormat": "LiteLLM"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              { "type": "value", "options": { "1": { "text": "UP", "color": "green" }, "0": { "text": "DOWN", "color": "red" } } }
+            ]
+          }
+        }
+      },
+      {
+        "title": "PostgreSQL Health",
+        "type": "stat",
+        "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+        "targets": [
+          {
+            "expr": "up{job=\"postgres\"}",
+            "legendFormat": "PostgreSQL"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              { "type": "value", "options": { "1": { "text": "UP", "color": "green" }, "0": { "text": "DOWN", "color": "red" } } }
+            ]
+          }
+        }
+      },
+      {
+        "title": "Valkey Health",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+        "targets": [
+          {
+            "expr": "up{job=\"valkey\"}",
+            "legendFormat": "Valkey"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              { "type": "value", "options": { "1": { "text": "UP", "color": "green" }, "0": { "text": "DOWN", "color": "red" } } }
+            ]
+          }
+        }
+      },
+      {
+        "title": "API Request Rate",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"blackbeard-api\"}[5m])",
+            "legendFormat": "{{ method }} {{ status }}"
+          }
+        ]
+      },
+      {
+        "title": "API Latency (p50, p95, p99)",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"blackbeard-api\"}[5m]))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"blackbeard-api\"}[5m]))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job=\"blackbeard-api\"}[5m]))",
+            "legendFormat": "p99"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "s" }
+        }
+      },
+      {
+        "title": "LLM Spend (cumulative)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 12, "w": 8, "h": 6 },
+        "targets": [
+          {
+            "expr": "litellm_spend_total",
+            "legendFormat": "Total spend"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "currencyUSD" }
+        }
+      },
+      {
+        "title": "LLM Token Usage",
+        "type": "timeseries",
+        "gridPos": { "x": 8, "y": 12, "w": 8, "h": 6 },
+        "targets": [
+          {
+            "expr": "rate(litellm_tokens_total{type=\"prompt\"}[5m])",
+            "legendFormat": "Prompt tokens/s"
+          },
+          {
+            "expr": "rate(litellm_tokens_total{type=\"completion\"}[5m])",
+            "legendFormat": "Completion tokens/s"
+          }
+        ]
+      },
+      {
+        "title": "Active Executions",
+        "type": "stat",
+        "gridPos": { "x": 16, "y": 12, "w": 8, "h": 6 },
+        "targets": [
+          {
+            "expr": "blackbeard_active_executions",
+            "legendFormat": "Running"
+          }
+        ]
+      },
+      {
+        "title": "Database Connections",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 18, "w": 12, "h": 6 },
+        "targets": [
+          {
+            "expr": "pg_stat_activity_count{datname=\"blackbeard\"}",
+            "legendFormat": "Active connections"
+          }
+        ]
+      },
+      {
+        "title": "Database Size",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 18, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "pg_database_size_bytes{datname=\"blackbeard\"}",
+            "legendFormat": "Size"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "bytes" }
+        }
+      },
+      {
+        "title": "Valkey Memory",
+        "type": "gauge",
+        "gridPos": { "x": 18, "y": 18, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes / redis_memory_max_bytes * 100",
+            "legendFormat": "Memory %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 70, "color": "yellow" },
+                { "value": 90, "color": "red" }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}
