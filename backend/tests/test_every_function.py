@@ -772,7 +772,7 @@ class TestResourceSchemas:
 
         spec = {"trigger": {"webhook_secret": "real-secret", "type": "webhook"}}
         result = redact_automation_spec("Automation", spec)
-        assert result["trigger"]["webhook_secret"] == "**REDACTED**"
+        assert result["trigger"]["webhook_secret"] == "[REDACTED]"
 
     def test_redact_automation_spec_no_secret(self) -> None:
         from blackbeard.models.resource_schemas import redact_automation_spec
@@ -1529,7 +1529,7 @@ class TestWebhooksAPI:
     def test_validate_event_strings_empty_event(self) -> None:
         from blackbeard.api.webhooks import WebhookCreateRequest
 
-        with pytest.raises(ValidationError, match="1-100 characters"):
+        with pytest.raises(ValidationError, match="1-100 non-whitespace characters"):
             WebhookCreateRequest(
                 url="https://example.com/webhook",
                 events=[""],
@@ -1538,7 +1538,7 @@ class TestWebhooksAPI:
     def test_validate_event_strings_too_long(self) -> None:
         from blackbeard.api.webhooks import WebhookCreateRequest
 
-        with pytest.raises(ValidationError, match="1-100 characters"):
+        with pytest.raises(ValidationError, match="1-100 non-whitespace characters"):
             WebhookCreateRequest(
                 url="https://example.com/webhook",
                 events=["x" * 101],

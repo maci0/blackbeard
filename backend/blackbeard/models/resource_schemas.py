@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 from blackbeard.kinds import ALL_KINDS, API_VERSION, NAME_PATTERN
 
-_REDACTED_SECRET = "**REDACTED**"  # nosec B105 -- redaction-placeholder
+_REDACTED_SECRET = "[REDACTED]"  # nosec B105 -- redaction-placeholder
 
 
 def redact_automation_spec(kind_value: str, spec: dict[str, Any]) -> dict[str, Any]:
@@ -26,6 +26,7 @@ def redact_automation_spec(kind_value: str, spec: dict[str, Any]) -> dict[str, A
     spec = dict(spec)
     spec["trigger"] = {**trigger, "webhook_secret": _REDACTED_SECRET}
     return spec
+
 
 __all__ = [
     "ResourceCreate",

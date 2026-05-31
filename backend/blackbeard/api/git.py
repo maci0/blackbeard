@@ -83,7 +83,7 @@ async def git_log(
     name: str | None = Query(default=None, pattern=_NAME_PATTERN, max_length=255),
     project: str = Query(default="default", pattern=_NAME_PATTERN, max_length=100),
     limit: int = Query(default=50, ge=1, le=500),
-    _user: User = Depends(require_permission("list", "Agent", require_identity=True)),
+    _user: User = Depends(require_permission("list", "Resource", require_identity=True)),
 ) -> GitLogResponse:
     """Get git commit history for a resource or the entire repo."""
     entries = await asyncio.to_thread(get_log, kind=kind, name=name, project=project, limit=limit)
@@ -100,7 +100,7 @@ async def git_diff(
     kind: str | None = Query(default=None, pattern=_NAME_PATTERN, max_length=100),
     name: str | None = Query(default=None, pattern=_NAME_PATTERN, max_length=255),
     project: str = Query(default="default", pattern=_NAME_PATTERN, max_length=100),
-    _user: User = Depends(require_permission("list", "Agent", require_identity=True)),
+    _user: User = Depends(require_permission("list", "Resource", require_identity=True)),
 ) -> GitDiffResponse:
     """Get diff between two commits."""
     try:
@@ -117,7 +117,7 @@ async def git_blame(
     kind: str = Path(..., pattern=_NAME_PATTERN, max_length=100),
     name: str = Path(..., pattern=_NAME_PATTERN, max_length=255),
     project: str = Query(default="default", pattern=_NAME_PATTERN, max_length=100),
-    _user: User = Depends(require_permission("get", "Agent", require_identity=True)),
+    _user: User = Depends(require_permission("get", "Resource", require_identity=True)),
 ) -> GitBlameResponse:
     """Get git blame for a resource file."""
     blame_text = await asyncio.to_thread(get_blame, kind=kind, name=name, project=project)
@@ -134,7 +134,7 @@ async def git_show(
     kind: str = Path(..., pattern=_NAME_PATTERN, max_length=100),
     name: str = Path(..., pattern=_NAME_PATTERN, max_length=255),
     project: str = Query(default="default", pattern=_NAME_PATTERN, max_length=100),
-    _user: User = Depends(require_permission("get", "Agent", require_identity=True)),
+    _user: User = Depends(require_permission("get", "Resource", require_identity=True)),
 ) -> GitShowResponse:
     """Get resource content at a specific commit."""
     try:
@@ -154,7 +154,7 @@ async def git_show(
 @router.post("/remote", response_model=GitSyncResponse)
 async def add_git_remote(
     body: GitRemoteRequest,
-    _user: User = Depends(require_permission("create", "Agent", require_identity=True)),
+    _user: User = Depends(require_permission("create", "Resource", require_identity=True)),
 ) -> GitSyncResponse:
     """Add a git remote to the resource repository."""
     try:
@@ -169,7 +169,7 @@ async def add_git_remote(
 @router.post("/push", response_model=GitSyncResponse)
 async def git_push(
     body: GitSyncRequest,
-    _user: User = Depends(require_permission("create", "Agent", require_identity=True)),
+    _user: User = Depends(require_permission("create", "Resource", require_identity=True)),
 ) -> GitSyncResponse:
     """Push resource commits to a remote."""
     try:
@@ -184,7 +184,7 @@ async def git_push(
 @router.post("/pull", response_model=GitSyncResponse)
 async def git_pull(
     body: GitSyncRequest,
-    _user: User = Depends(require_permission("create", "Agent", require_identity=True)),
+    _user: User = Depends(require_permission("create", "Resource", require_identity=True)),
 ) -> GitSyncResponse:
     """Pull resource changes from a remote."""
     try:

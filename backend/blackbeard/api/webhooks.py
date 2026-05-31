@@ -52,10 +52,13 @@ class WebhookCreateRequest(BaseModel):
     @field_validator("events")
     @classmethod
     def _validate_event_strings(cls, v: list[str]) -> list[str]:
+        cleaned = []
         for event in v:
+            event = event.strip()
             if not event or len(event) > 100:
-                raise ValueError("Each event type must be 1-100 characters")
-        return v
+                raise ValueError("Each event type must be 1-100 non-whitespace characters")
+            cleaned.append(event)
+        return cleaned
 
     secret: str | None = Field(
         default=None,

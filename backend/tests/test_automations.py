@@ -61,7 +61,7 @@ async def test_create_automation_webhook(client):
     assert r.status_code == 201
     data = r.json()
     assert data["spec"]["trigger"]["type"] == "webhook"
-    assert data["spec"]["trigger"]["webhook_secret"] == "**REDACTED**"
+    assert data["spec"]["trigger"]["webhook_secret"] == "[REDACTED]"
 
 
 async def test_create_automation_api(client):

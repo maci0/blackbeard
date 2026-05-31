@@ -179,7 +179,7 @@ def commit_resource(
                     "event": "git_commit",
                     "action": action,
                     "kind": kind,
-                    "name": name,
+                    "resource_name": name,
                     "commit": sha,
                 },
             )
@@ -190,7 +190,7 @@ def commit_resource(
                 kind,
                 name,
                 exc_info=True,
-                extra={"event": "git_commit_failed", "kind": kind, "name": name},
+                extra={"event": "git_commit_failed", "kind": kind, "resource_name": name},
             )
             return None
 
@@ -226,7 +226,7 @@ def delete_resource(
                 kind,
                 name,
                 sha[:8],
-                extra={"event": "git_delete", "kind": kind, "name": name, "commit": sha},
+                extra={"event": "git_delete", "kind": kind, "resource_name": name, "commit": sha},
             )
             return sha
         except Exception:
@@ -235,7 +235,7 @@ def delete_resource(
                 kind,
                 name,
                 exc_info=True,
-                extra={"event": "git_delete_failed", "kind": kind, "name": name},
+                extra={"event": "git_delete_failed", "kind": kind, "resource_name": name},
             )
             return None
 
@@ -264,7 +264,7 @@ def get_log(
             "git log failed (rc=%d): %s",
             result.returncode,
             result.stderr.strip()[:200],
-            extra={"event": "git_log_failed", "kind": kind, "name": name},
+            extra={"event": "git_log_failed", "kind": kind, "resource_name": name},
         )
     entries = []
     for line in result.stdout.strip().splitlines():
@@ -330,7 +330,7 @@ def get_blame(
             name,
             result.returncode,
             result.stderr.strip()[:200],
-            extra={"event": "git_blame_failed", "kind": kind, "name": name},
+            extra={"event": "git_blame_failed", "kind": kind, "resource_name": name},
         )
     return result.stdout
 
@@ -350,7 +350,12 @@ def get_show(commit: str, kind: str, name: str, project: str = "default") -> str
             commit,
             result.returncode,
             result.stderr.strip()[:200],
-            extra={"event": "git_show_failed", "kind": kind, "name": name, "commit": commit},
+            extra={
+                "event": "git_show_failed",
+                "kind": kind,
+                "resource_name": name,
+                "commit": commit,
+            },
         )
     return result.stdout
 

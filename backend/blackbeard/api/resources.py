@@ -84,7 +84,7 @@ def _git_commit_resource_sync(
             kind,
             name,
             exc_info=True,
-            extra={"event": "git_commit_sync_failed", "kind": kind, "name": name},
+            extra={"event": "git_commit_sync_failed", "kind": kind, "resource_name": name},
         )
 
 
@@ -167,7 +167,7 @@ class _VersionDetailResponse(BaseModel):
     changed_by: str | None
     created_at: datetime
     spec: dict[str, Any]
-    labels: dict[str, Any] | None
+    labels: dict[str, str] | None
 
 
 class _RollbackRequest(BaseModel):

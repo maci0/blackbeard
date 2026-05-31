@@ -378,9 +378,11 @@ async def refresh(
     responses={401: {"description": "Missing or invalid Bearer token"}},
 )
 async def me(
+    response: Response,
     user: User = Depends(require_user),
 ) -> UserResponse:
     """Get the currently authenticated user's profile."""
+    response.headers["Cache-Control"] = "no-store"
     return user_response(user)
 
 
