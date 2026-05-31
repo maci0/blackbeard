@@ -137,6 +137,7 @@ function NavSection({
           type="button"
           onClick={onToggle}
           aria-expanded={!sectionCollapsed}
+          aria-controls={`nav-section-${section.key}`}
           className="flex w-full items-center gap-1 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors hover:text-muted-foreground"
         >
           <ChevronDown
@@ -149,6 +150,7 @@ function NavSection({
         </button>
       )}
       <div
+        id={`nav-section-${section.key}`}
         className={cn(
           'grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none',
           sidebarCollapsed || !sectionCollapsed ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
@@ -289,6 +291,7 @@ function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
         title={collapsed ? `Project: ${current}` : undefined}
         aria-label={`Current project: ${current}`}
         aria-expanded={open}
+        aria-haspopup="listbox"
         className={`flex w-full items-center gap-2 rounded-md border bg-muted/30 px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           collapsed ? 'md:justify-center md:px-2' : ''
         }`}
@@ -307,16 +310,22 @@ function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
               Project
             </p>
           </div>
-          <div className="max-h-48 overflow-y-auto">
+          <div className="max-h-48 overflow-y-auto" role="listbox" aria-label="Available projects">
             {loading ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
+              <div className="flex items-center justify-center py-4" role="status">
+                <Loader2
+                  className="h-4 w-4 animate-spin text-muted-foreground motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+                <span className="sr-only">Loading projects</span>
               </div>
             ) : (
               projects.map((ns) => (
                 <button
                   key={ns}
                   type="button"
+                  role="option"
+                  aria-selected={ns === current}
                   onClick={() => {
                     setCurrent(ns)
                     setOpen(false)
@@ -326,7 +335,7 @@ function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
                   }`}
                 >
                   <span className="flex-1 truncate">{ns}</span>
-                  {ns === current && <Check className="h-3 w-3 shrink-0" />}
+                  {ns === current && <Check className="h-3 w-3 shrink-0" aria-hidden="true" />}
                 </button>
               ))
             )}
@@ -755,6 +764,7 @@ export default function Layout() {
                     : 'No unread notifications'
                 }
                 aria-expanded={notifOpen}
+                aria-haspopup="true"
                 title="Notifications"
                 className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >

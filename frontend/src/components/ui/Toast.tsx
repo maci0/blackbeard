@@ -79,7 +79,6 @@ export function ToastContainer() {
     <div
       role="region"
       aria-label="Notifications"
-      aria-live="polite"
       className="pointer-events-none fixed bottom-4 left-4 right-4 z-[100] flex flex-col-reverse items-end gap-2 sm:left-auto"
     >
       {toasts.map((toast) => (

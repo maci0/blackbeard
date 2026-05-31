@@ -296,8 +296,12 @@ function CrewComponentCard({ crew }: { crew: Resource }) {
         <span className="truncate text-[9px] font-bold text-white">{crew.metadata.name}</span>
       </div>
       <div className="flex items-center gap-1 px-1.5 py-1">
-        <span className="text-[8px] text-muted-foreground">{agentCount}A</span>
-        <span className="text-[8px] text-muted-foreground">{taskCount}T</span>
+        <span className="text-[10px] text-muted-foreground" aria-label={`${agentCount} agents`}>
+          {agentCount}A
+        </span>
+        <span className="text-[10px] text-muted-foreground" aria-label={`${taskCount} tasks`}>
+          {taskCount}T
+        </span>
       </div>
     </div>
   )
@@ -350,8 +354,11 @@ export default function Palette() {
         {/* My Components section */}
         {filteredCrews.length > 0 && (
           <>
-            <div className="mt-1 border-t pt-2">
-              <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            <div className="mt-1 border-t pt-2" role="group" aria-label="My Crews">
+              <p
+                className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70"
+                aria-hidden="true"
+              >
                 My Crews
               </p>
             </div>
