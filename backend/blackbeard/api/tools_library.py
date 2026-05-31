@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.audit import audit_from_request, log_audit
-from blackbeard.auth.dependencies import require_permission
+from blackbeard.auth import require_permission
 from blackbeard.kinds import API_VERSION
 from blackbeard.models import User, get_session
 from blackbeard.models.resource_schemas import ResourceCreate, ResourceMetadata
@@ -94,7 +94,7 @@ class InstallResponse(BaseModel):
     responses={401: {"description": "Authentication required"}},
 )
 async def list_library_tools(
-    category: str | None = Query(default=None, description="Filter by category"),
+    category: str | None = Query(default=None, max_length=100, description="Filter by category"),
     search: str | None = Query(default=None, max_length=100, description="Search by name or tag"),
     _current_user: User | None = Depends(require_permission("list", "Tool")),
 ) -> LibraryListResponse:

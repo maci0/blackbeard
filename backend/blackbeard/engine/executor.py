@@ -176,9 +176,9 @@ def get_pool_status() -> dict[str, object]:
 
 
 def _get_bg_engine() -> AsyncEngine:
-    """Return the shared background engine, creating it on first use (thread-safe).
+    """Return the shared background engine, creating it and the session factory on first use.
 
-    Uses lock-always pattern (safe under both GIL and free-threaded Python).
+    Thread-safe via lock-always pattern (safe under both GIL and free-threaded builds).
     """
     with _bg_engine_lock:
         global _bg_engine, _bg_session_factory

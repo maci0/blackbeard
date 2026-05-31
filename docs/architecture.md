@@ -670,7 +670,7 @@ Plugins are discovered via Python entry points (`blackbeard.plugins` group) or r
 
 ## Git-Backed Resource Store
 
-The git store (`backend/blackbeard/git_store/`) maintains a local git repository that records every resource mutation as a commit. This provides a complete, diffable history separate from the database-level version snapshots.
+The git store (`backend/blackbeard/engine/git_store.py`) maintains a local git repository that records every resource mutation as a commit. This provides a complete, diffable history separate from the database-level version snapshots.
 
 **Endpoints:**
 

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.api import RETRY_HEADERS_30
-from blackbeard.auth.dependencies import get_current_user
+from blackbeard.auth import get_current_user
 from blackbeard.engine.assistant import (
     AssistantError,
     NoLLMConnectionError,

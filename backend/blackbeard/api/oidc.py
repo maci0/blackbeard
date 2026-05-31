@@ -22,8 +22,7 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
 from blackbeard.audit import get_client_ip, log_audit
-from blackbeard.auth.jwt import create_access_token, create_refresh_token
-from blackbeard.auth.passwords import hash_password
+from blackbeard.auth import create_access_token, create_refresh_token, hash_password
 from blackbeard.config import settings
 from blackbeard.logging_config import anonymize_ip, request_id_var
 from blackbeard.models import User, get_session

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.api import MUTATION_RATE_MSG as _MUTATION_RATE_MSG
 from blackbeard.audit import audit_from_request, log_audit
-from blackbeard.auth.dependencies import require_permission
+from blackbeard.auth import require_permission
 from blackbeard.models import User, get_session
 from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
 

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel
 
-from blackbeard.auth.dependencies import require_permission
+from blackbeard.auth import require_permission
 from blackbeard.models import User
 from blackbeard.plugins import PluginType, registry
 from blackbeard.plugins.loader import reload_plugin
@@ -48,7 +48,7 @@ class PluginReloadResponse(BaseModel):
     summary="List registered plugins",
 )
 async def list_plugins(
-    plugin_type: str | None = None,
+    plugin_type: str | None = Query(default=None, max_length=50),
     _user: User | None = Depends(require_permission("list", "Plugin")),
 ) -> PluginListResponse:
     """List all registered plugins, optionally filtered by type."""
@@ -83,7 +83,7 @@ async def list_plugins(
     summary="Reload a plugin",
 )
 async def reload_plugin_endpoint(
-    name: str,
+    name: str = Path(..., min_length=1, max_length=255, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._\-]*$"),
     _user: User | None = Depends(require_permission("update", "Plugin")),
 ) -> PluginReloadResponse:
     """Reload a specific plugin by name.

@@ -7,7 +7,7 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 
-from blackbeard.auth.dependencies import require_permission
+from blackbeard.auth import require_permission
 from blackbeard.engine.git_store import (
     add_remote,
     get_blame,
@@ -73,11 +73,15 @@ class GitSyncResponse(BaseModel):
     message: str
 
 
+_NAME_PATTERN = r"^[a-zA-Z0-9][a-zA-Z0-9._\-]*$"
+_COMMIT_REF_PATTERN = r"^[a-zA-Z0-9_./^~\-]+$"
+
+
 @router.get("/log", response_model=GitLogResponse)
 async def git_log(
-    kind: str | None = Query(default=None),
-    name: str | None = Query(default=None),
-    project: str = Query(default="default"),
+    kind: str | None = Query(default=None, pattern=_NAME_PATTERN, max_length=100),
+    name: str | None = Query(default=None, pattern=_NAME_PATTERN, max_length=255),
+    project: str = Query(default="default", pattern=_NAME_PATTERN, max_length=100),
     limit: int = Query(default=50, ge=1, le=500),
     _user: User = Depends(require_permission("list", "Agent", require_identity=True)),
 ) -> GitLogResponse:
@@ -91,11 +95,11 @@ async def git_log(
 
 @router.get("/diff", response_model=GitDiffResponse)
 async def git_diff(
-    commit_a: str = Query(default="HEAD~1"),
-    commit_b: str = Query(default="HEAD"),
-    kind: str | None = Query(default=None),
-    name: str | None = Query(default=None),
-    project: str = Query(default="default"),
+    commit_a: str = Query(default="HEAD~1", pattern=_COMMIT_REF_PATTERN, max_length=255),
+    commit_b: str = Query(default="HEAD", pattern=_COMMIT_REF_PATTERN, max_length=255),
+    kind: str | None = Query(default=None, pattern=_NAME_PATTERN, max_length=100),
+    name: str | None = Query(default=None, pattern=_NAME_PATTERN, max_length=255),
+    project: str = Query(default="default", pattern=_NAME_PATTERN, max_length=100),
     _user: User = Depends(require_permission("list", "Agent", require_identity=True)),
 ) -> GitDiffResponse:
     """Get diff between two commits."""
@@ -106,9 +110,6 @@ async def git_diff(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return GitDiffResponse(diff=diff_text, commit_a=commit_a, commit_b=commit_b)
-
-
-_NAME_PATTERN = r"^[a-zA-Z0-9][a-zA-Z0-9._\-]*$"
 
 
 @router.get("/blame/{kind}/{name}", response_model=GitBlameResponse)
@@ -129,7 +130,7 @@ async def git_blame(
 
 @router.get("/show/{commit}/{kind}/{name}", response_model=GitShowResponse)
 async def git_show(
-    commit: str = Path(..., pattern=r"^[a-zA-Z0-9_./^~\-]+$", max_length=255),
+    commit: str = Path(..., pattern=_COMMIT_REF_PATTERN, max_length=255),
     kind: str = Path(..., pattern=_NAME_PATTERN, max_length=100),
     name: str = Path(..., pattern=_NAME_PATTERN, max_length=255),
     project: str = Query(default="default", pattern=_NAME_PATTERN, max_length=100),

@@ -27,7 +27,7 @@ from sse_starlette.sse import EventSourceResponse
 from blackbeard import sse as sse_state
 from blackbeard.api import RETRY_HEADERS_30
 from blackbeard.audit import audit_from_request, log_audit
-from blackbeard.auth.dependencies import require_permission
+from blackbeard.auth import require_permission
 from blackbeard.config import settings
 from blackbeard.engine import ExecutionError, ExecutionNotFoundError
 from blackbeard.engine import executor as _executor_mod
@@ -70,7 +70,7 @@ _PHASE2_THRESHOLD = 30
 
 
 def _poll_backoff(polls: int) -> int:
-    """Return sleep seconds for progressive backoff: 1s → 2s."""
+    """Return sleep seconds for progressive backoff: 1s for first 30 polls, then 2s."""
     if polls < _PHASE2_THRESHOLD:
         return 1
     return 2
@@ -92,6 +92,15 @@ class _StreamEvent:
         self.kind = kind
         self.data = data
         self.event_type = event_type
+
+    @property
+    def event_name(self) -> str:
+        """Resolve the outgoing event name for SSE/WS dispatch."""
+        if self.kind == "event":
+            return self.event_type
+        if self.kind in ("error", "timeout"):
+            return "error"
+        return self.kind
 
 
 _HEARTBEAT_EVENTS: dict[ExecutionStatus, _StreamEvent] = {
@@ -848,12 +857,7 @@ async def stream_execution(
                 return
             try:
                 async for item in _poll_execution(execution_id):
-                    if item.kind == "event":
-                        yield {"event": item.event_type, "data": json.dumps(item.data)}
-                    elif item.kind in ("error", "timeout"):
-                        yield {"event": "error", "data": json.dumps(item.data)}
-                    else:
-                        yield {"event": item.kind, "data": json.dumps(item.data)}
+                    yield {"event": item.event_name, "data": json.dumps(item.data)}
             except asyncio.CancelledError:
                 logger.info(
                     "SSE stream client disconnected: execution_id=%s",
@@ -900,7 +904,7 @@ async def ws_execution(
     cannot set custom headers, so credentials must be passed via query
     string.
     """
-    from blackbeard.auth.dependencies import validate_ws_auth
+    from blackbeard.auth import validate_ws_auth
     from blackbeard.rate_limiter import is_rate_limited, record_auth_failure
 
     client_ip = websocket.client.host if websocket.client else "unknown"
@@ -937,12 +941,7 @@ async def ws_execution(
 
     try:
         async for item in _poll_execution(execution_id):
-            if item.kind == "event":
-                await websocket.send_json({"event": item.event_type, "data": item.data})
-            elif item.kind in ("error", "timeout"):
-                await websocket.send_json({"event": "error", "data": item.data})
-            else:
-                await websocket.send_json({"event": item.kind, "data": item.data})
+            await websocket.send_json({"event": item.event_name, "data": item.data})
     except WebSocketDisconnect:
         logger.debug(
             "WS client disconnected: execution_id=%s",

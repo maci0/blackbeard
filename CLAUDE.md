@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Blackbeard
 
-Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount) with a visual graph editor (26 frontend pages), async execution engine (ThreadPoolExecutor or optional Temporal workflows), RBAC, LiteLLM proxy for model routing (with built-in spend/token/latency tracking), plugin SDK (4 extension types: tool, guardrail, auth_provider, execution_hook), and git-backed resource version control (auto-commit on mutation, log/diff/blame/show API).
+Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount) with a visual graph editor (27 frontend pages), async execution engine (ThreadPoolExecutor or optional Temporal workflows), RBAC, LiteLLM proxy for model routing (with built-in spend/token/latency tracking), plugin SDK (4 extension types: tool, guardrail, auth_provider, execution_hook), and git-backed resource version control (auto-commit on mutation, log/diff/blame/show API).
 
 ## Commands
 
@@ -67,7 +67,7 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Middleware stack** (outermost → innermost): CORS (`CORSMiddleware` via `add_middleware`) → security headers → API key auth (hmac.compare_digest or JWT Bearer) + request ID → body size limiter (10MB). The three `app.middleware("http")` middlewares are registered LIFO in `main.py`. Auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), health checks, and automation webhook paths (`/automations/{name}/webhook`) are public (no auth required — automation webhooks use their own HMAC validation inside the route handler).
 
-**CLI** (`cli/` -- separate package `blackbeard-cli`): Standalone package with no server deps (click, httpx, rich, pyyaml, jsonschema only). 29 commands (including 4 groups with subcommands) across 6 modules. Includes `blackbeard shell` for an interactive TUI REPL. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
+**CLI** (`cli/` -- separate package `blackbeard-cli`): Standalone package with no server deps (click, httpx, rich, pyyaml, jsonschema only). 30 commands (including 4 groups with subcommands) across 6 modules. Includes `blackbeard shell` for an interactive TUI REPL. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
 
 **Dynamic LiteLLM sync**: When `LLMConnection` resources are created/updated/deleted, the API pushes changes to LiteLLM via `POST /model/new`, `/model/update`, and `/model/delete` — no container restart needed.
 
@@ -169,7 +169,7 @@ DB schema is managed in `backend/entrypoint.sh`: first creates PostgreSQL enum t
 
 **SDKs**: Python (`sdks/python/`), TypeScript (`sdks/typescript/`), and React (`sdks/react/`) — thin wrappers over httpx/fetch. Cover auth, resources, executions, train/test/flow. React SDK provides `BlackbeardProvider`, `CrewViewer`, `CrewRunner`, and `ExecutionStatus` components.
 
-**CI**: GitHub Actions — 9 jobs: backend (ruff check + ruff format + mypy + pytest + pip-audit + bandit security scan) → CLI (lint + validate) → Python SDK (pytest) → TypeScript SDK (tsc) → React SDK (tsc) → Helm lint → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (docker-api after backend, docker-ui after frontend, cached). Includes Hypothesis property-based testing (backend) and fast-check fuzzing (frontend) for schema validation edge cases.
+**CI**: GitHub Actions — 10 jobs: backend (ruff check + ruff format + mypy + pytest + pip-audit + bandit security scan) → CLI (lint + validate) → Python SDK (pytest) → TypeScript SDK (tsc) → React SDK (tsc) → Helm lint → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (docker-api after backend, docker-ui after frontend, cached) → ci-gate (all-green check). Includes Hypothesis property-based testing (backend) and fast-check fuzzing (frontend) for schema validation edge cases.
 
 **Webhooks**: Register webhook URLs via `POST /api/v1/webhooks`. Execution events delivered with HMAC-SHA256 signature. Fire-and-forget delivery.
 

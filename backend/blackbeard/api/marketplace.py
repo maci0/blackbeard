@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from blackbeard.audit import audit_from_request, log_audit
-from blackbeard.auth.dependencies import require_permission
+from blackbeard.auth import require_permission
 from blackbeard.models.resource_schemas import ResourceCreate
 from blackbeard.rate_limiter import check_rate_limit, marketplace_limiter
 from blackbeard.resources import (

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from blackbeard.api import smart_total
-from blackbeard.auth.dependencies import require_permission
+from blackbeard.auth import require_permission
 from blackbeard.models import AuditLog, User, get_session
 from blackbeard.models.execution_schemas import redact_sensitive_values
 

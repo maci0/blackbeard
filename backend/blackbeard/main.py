@@ -200,7 +200,11 @@ def _validate_startup_config() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    """Application lifespan: config validation, scheduler, LiteLLM sync, gRPC, cleanup."""
+    """Application lifespan.
+
+    Startup: config validation, plugins, scheduler, LiteLLM sync,
+    git store, gRPC server, Temporal worker. Shutdown: reverse order.
+    """
     t0_startup = time.monotonic()
     _validate_startup_config()
     pool = cast("Any", engine.pool)

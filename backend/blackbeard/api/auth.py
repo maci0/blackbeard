@@ -18,9 +18,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from blackbeard.audit import get_client_ip, log_audit
-from blackbeard.auth.dependencies import bearer_401, require_jwt_user, require_user
-from blackbeard.auth.jwt import create_access_token, create_refresh_token, decode_token
-from blackbeard.auth.passwords import hash_password, verify_password
+from blackbeard.auth import (
+    bearer_401,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    require_jwt_user,
+    require_user,
+    verify_password,
+)
 from blackbeard.logging_config import anonymize_ip
 from blackbeard.models import User, get_session
 from blackbeard.models.user_schemas import UserResponse, user_response

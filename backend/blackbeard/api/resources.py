@@ -18,8 +18,8 @@ from sqlalchemy.orm import load_only
 
 from blackbeard.api import MUTATION_RATE_MSG as _MUTATION_RATE_MSG
 from blackbeard.audit import audit_from_request, log_audit
+from blackbeard.auth import check_resource_permission, require_permission
 from blackbeard.auth.authorizer import clear_cache as _clear_authz_cache
-from blackbeard.auth.dependencies import check_resource_permission, require_permission
 from blackbeard.kinds import API_VERSION, NAME_PATTERN, PLURAL_TO_KIND, ResourceKind
 from blackbeard.litellm import model_sync
 from blackbeard.logging_config import log_task_exception
@@ -433,7 +433,7 @@ async def create_resource(
         data.spec,
         project=data.metadata.project,
         labels=dict(data.metadata.labels),
-        author=user.email if user and hasattr(user, "email") else "system",
+        author=user.email if user else "system",
     )
     return ResourceResponse.from_db(resource)
 
@@ -574,7 +574,7 @@ async def update_resource(
         resource.spec,
         project=resource.project,
         labels=dict(resource.labels or {}),
-        author=user.email if user and hasattr(user, "email") else "system",
+        author=user.email if user else "system",
     )
     return ResourceResponse.from_db(resource)
 
@@ -638,7 +638,7 @@ async def delete_resource(
             kind,
             name,
             project=project,
-            author=user.email if user and hasattr(user, "email") else "system",
+            author=user.email if user else "system",
         )
 
 
@@ -845,6 +845,6 @@ async def rollback_resource(
         resource.spec,
         project=resource.project,
         labels=dict(resource.labels or {}),
-        author=user.email if user and hasattr(user, "email") else "system",
+        author=user.email if user else "system",
     )
     return ResourceResponse.from_db(resource)

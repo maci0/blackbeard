@@ -17,7 +17,7 @@ from sqlalchemy.orm import defer
 from blackbeard.api import MUTATION_RATE_MSG as _MUTATION_RATE_MSG
 from blackbeard.api import smart_total
 from blackbeard.audit import audit_from_request, log_audit
-from blackbeard.auth.dependencies import require_permission
+from blackbeard.auth import require_permission
 from blackbeard.config import settings
 from blackbeard.engine.execution_listener import invalidate_webhook_cache
 from blackbeard.logging_config import safe_log_url

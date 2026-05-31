@@ -20,7 +20,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 from blackbeard.api import RETRY_HEADERS_30
-from blackbeard.auth.dependencies import get_current_user
+from blackbeard.auth import get_current_user
 from blackbeard.config import settings
 from blackbeard.http_client import get_litellm_client
 from blackbeard.logging_config import request_id_var, scrub_pii

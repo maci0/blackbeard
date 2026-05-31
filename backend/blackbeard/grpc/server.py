@@ -112,7 +112,7 @@ class AuthInterceptor(grpc.aio.ServerInterceptor):
 
         api_key = metadata.get("x-api-key", "")
         if api_key:
-            from blackbeard.auth.api_key import get_api_key
+            from blackbeard.auth import get_api_key
 
             if hmac.compare_digest(api_key.encode(), get_api_key().encode()):
                 return await continuation(handler_call_details)
@@ -133,7 +133,7 @@ class AuthInterceptor(grpc.aio.ServerInterceptor):
             token = auth[7:]
             import jwt as pyjwt
 
-            from blackbeard.auth.jwt import decode_access_token
+            from blackbeard.auth import decode_access_token
 
             try:
                 payload = decode_access_token(token)

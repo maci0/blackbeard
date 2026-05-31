@@ -104,9 +104,9 @@ uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 
 **Backend (FastAPI):** All resources are stored as generic rows with a JSONB `spec` column, validated against per-kind JSON schemas. Crew executions run via Temporal workflows when configured, or in background threads via `ThreadPoolExecutor` (each with an isolated asyncio event loop). A git-backed store auto-commits on every resource mutation, providing log/diff/blame/show endpoints. The plugin SDK supports 4 extension types: tool, guardrail, auth_provider, and execution_hook. Auth supports both API key (`X-API-Key`) and JWT Bearer tokens.
 
-**Frontend (React + React Flow):** 26 pages including the Studio visual editor, Observability dashboard, and all resource management views. The Studio lets you drag Agent, Task, and Tool nodes onto a canvas, configure them via a property panel, save as resources, kick off executions, and export the canvas as PNG or SVG. State is managed with Zustand (undo/redo with 30-snapshot history).
+**Frontend (React + React Flow):** 27 pages including the Studio visual editor, Observability dashboard, and all resource management views. The Studio lets you drag Agent, Task, and Tool nodes onto a canvas, configure them via a property panel, save as resources, kick off executions, and export the canvas as PNG or SVG. State is managed with Zustand (undo/redo with 30-snapshot history).
 
-**CLI:** Standalone Python package (`blackbeard-cli`) with 29 commands and no server dependencies. Validates YAML offline, applies resources in dependency order, and manages executions, users, roles, and exports. The `blackbeard shell` command launches an interactive TUI REPL for exploratory use.
+**CLI:** Standalone Python package (`blackbeard-cli`) with 30 commands and no server dependencies. Validates YAML offline, applies resources in dependency order, and manages executions, users, roles, and exports. The `blackbeard shell` command launches an interactive TUI REPL for exploratory use.
 
 > See [docs/architecture.md](docs/architecture.md) for a detailed breakdown.
 
@@ -115,7 +115,7 @@ uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 - **14 resource kinds** -- Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount
 - **Visual graph editor** -- drag-and-drop crew design with React Flow, undo/redo, YAML preview, PNG/SVG canvas export
 - **Full RBAC** -- JWT auth (access + refresh tokens), predefined roles (owner, admin, developer, operator, viewer, policy-admin), user/group management
-- **CLI with 29 commands** -- apply, validate, kickoff, train, test-crew, export, pull, status, shell, login, and more
+- **CLI with 30 commands** -- apply, validate, kickoff, train, test-crew, export, pull, status, shell, login, and more
 - **Interactive TUI shell** -- `blackbeard shell` launches a REPL for exploratory resource management
 - **Budget enforcement** -- per-execution spending caps via AgentPolicy `max_usd`/`max_tokens` and LiteLLM virtual keys
 - **Multi-provider LLM routing** -- Vertex AI, OpenAI, Anthropic, Ollama, and any LiteLLM-supported provider
@@ -255,7 +255,7 @@ blackbeard/
 │   │   ├── api/               # REST endpoints
 │   │   ├── auth/              # JWT auth, RBAC
 │   │   ├── engine/            # Execution engine + sandbox runtimes
-│   │   ├── git_store/         # Git-backed resource version control
+│   │   ├── engine/git_store.py # Git-backed resource version control
 │   │   ├── litellm/           # LiteLLM config + key management
 │   │   ├── models/            # SQLAlchemy + Pydantic models
 │   │   ├── plugins/           # Plugin SDK (tool, guardrail, auth, hooks)
@@ -264,7 +264,7 @@ blackbeard/
 │   └── tests/
 ├── cli/                       # Standalone CLI package (blackbeard-cli)
 │   └── blackbeard_cli/
-├── frontend/                  # React + TypeScript SPA (26 pages)
+├── frontend/                  # React + TypeScript SPA (27 pages)
 │   └── src/
 │       ├── components/studio/ # Visual editor (React Flow)
 │       ├── pages/             # Studio, Resources, Executions, Observability, etc.

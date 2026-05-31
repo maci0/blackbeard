@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from blackbeard.auth.dependencies import validate_ws_auth
+from blackbeard.auth import validate_ws_auth
 from blackbeard.config import settings
 from blackbeard.kinds import NAME_PATTERN
 from blackbeard.logging_config import anonymize_ip, log_task_exception, request_id_var
