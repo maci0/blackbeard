@@ -118,7 +118,7 @@ export default function WelcomeDialog({ open, onStartTour, onSkip }: WelcomeDial
               <button
                 autoFocus
                 onClick={handleStartTour}
-                className="flex-1 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="btn-press flex-1 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Take the Tour →
               </button>

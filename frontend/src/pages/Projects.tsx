@@ -1,13 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import {
-  FolderOpen,
-  Plus,
-  Trash2,
-  RefreshCw,
-  Search,
-  X,
-  Shield,
-} from 'lucide-react'
+import { FolderOpen, Plus, Trash2, RefreshCw, Search, X, Shield } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { api } from '@/api/client'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -294,7 +286,10 @@ function CreateProjectDialog({
             <X className="h-4 w-4" />
           </button>
           {error && (
-            <div role="alert" className="mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div
+              role="alert"
+              className="mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
               {error}
             </div>
           )}
@@ -330,7 +325,10 @@ function CreateProjectDialog({
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <Dialog.Close asChild>
-                <button type="button" className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-muted">
+                <button
+                  type="button"
+                  className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-muted"
+                >
                   Cancel
                 </button>
               </Dialog.Close>

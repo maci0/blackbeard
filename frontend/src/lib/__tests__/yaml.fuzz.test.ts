@@ -150,14 +150,10 @@ describe('fuzz: serializeValue', () => {
 
   it('never crashes on recursive structures', () => {
     fc.assert(
-      fc.property(
-        jsonValue,
-        fc.integer({ min: 0, max: 5 }),
-        (value, indent) => {
-          const result = serializeValue(value, indent)
-          expect(typeof result).toBe('string')
-        },
-      ),
+      fc.property(jsonValue, fc.integer({ min: 0, max: 5 }), (value, indent) => {
+        const result = serializeValue(value, indent)
+        expect(typeof result).toBe('string')
+      }),
       { numRuns: NUM_RUNS },
     )
   })
@@ -165,9 +161,9 @@ describe('fuzz: serializeValue', () => {
   it('serializes multiline strings with block scalar indicator', () => {
     fc.assert(
       fc.property(
-        fc.string({ minLength: 1, maxLength: 30 }).chain((a) =>
-          fc.string({ minLength: 1, maxLength: 30 }).map((b) => `${a}\n${b}`),
-        ),
+        fc
+          .string({ minLength: 1, maxLength: 30 })
+          .chain((a) => fc.string({ minLength: 1, maxLength: 30 }).map((b) => `${a}\n${b}`)),
         (multiline) => {
           const result = serializeValue(multiline, 0)
           expect(result).toContain('|')

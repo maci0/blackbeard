@@ -71,7 +71,7 @@ describe('fuzz: resourceStore', () => {
               spec: {},
             }
             expect(() => {
-              const plural = KIND_TO_PLURAL[unknownKind as keyof typeof KIND_TO_PLURAL]
+              const plural = KIND_TO_PLURAL[unknownKind]
               if (!plural) throw new Error(`Unknown kind: ${unknownKind}`)
             }).toThrow()
           },
@@ -120,7 +120,7 @@ describe('fuzz: resourceStore', () => {
           (resources, idx) => {
             const safeIdx = idx % resources.length
             const target = resources[safeIdx]!
-            const kindPlural = KIND_TO_PLURAL[target.kind as keyof typeof KIND_TO_PLURAL]!
+            const kindPlural = KIND_TO_PLURAL[target.kind]!
 
             useResourceStore.setState({ resources: { [kindPlural]: [...resources] } })
 

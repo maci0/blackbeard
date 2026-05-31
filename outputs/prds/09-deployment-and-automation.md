@@ -238,9 +238,9 @@ triggers:
 | **HubSpot** | CRM record created/updated |
 | **Salesforce** | Object trigger via Salesforce Flows |
 
-## 6. Agent-to-Agent (A2A) Protocol *(Deferred to post-MVP)*
+## 6. Agent-to-Agent (A2A) Protocol *(Implemented)*
 
-> **Status:** No `.well-known/agent-card.json` or A2A endpoints exist in the current implementation. The full A2A protocol described below is deferred to post-MVP.
+> **Status:** `GET /.well-known/agent-card.json` auto-generates agent cards from Crew resources with `spec.a2a.enabled: true`. Cards include skills (from task refs), auth schemes, capabilities. Cached 60s. Public endpoint (no auth).
 
 Deployed automations can expose A2A endpoints for inter-agent communication:
 
@@ -266,9 +266,9 @@ External A2A callers authenticate using one of:
 
 The principal chain for an A2A-initiated execution: `External ServiceAccount/User → Automation → Crew → Agent`. RBAC and AgentPolicy enforcement apply identically to human-initiated executions.
 
-## 7. Versioning & Rollback *(Deferred to post-MVP)*
+## 7. Versioning & Rollback *(Implemented)*
 
-> **Status:** No versioning system exists in the current implementation. The full versioning and rollback workflow described below is deferred to post-MVP.
+> **Status:** `resource_versions` table stores spec/labels snapshots on every create/update. `GET /{kind}/{name}/versions` lists versions, `GET /{kind}/{name}/versions/{version}` shows snapshot, `POST /{kind}/{name}/rollback` restores from snapshot. Frontend shows version history tab on ResourceDetail pages.
 
 - Every deployment creates a new **version** with a sequential number.
 - Versions are immutable snapshots of the resource graph + dependencies.

@@ -191,7 +191,10 @@ export function AssistantDialog({ open, onOpenChange, onApply }: AssistantDialog
           {/* Footer */}
           <div className="flex items-center justify-end gap-3 border-t px-6 py-4">
             <Dialog.Close asChild>
-              <button type="button" className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <button
+                type="button"
+                className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 Cancel
               </button>
             </Dialog.Close>

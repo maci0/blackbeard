@@ -532,7 +532,7 @@ function AddModelDialog({
                 type="submit"
                 disabled={submitting}
                 aria-busy={submitting}
-                className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-press flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting && <Spinner size="sm" className="text-current" />}
                 Add Connection
@@ -726,7 +726,7 @@ export default function Models() {
                     setSubmitError(null)
                     setAddOpen(true)
                   }}
-                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="btn-press inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Plus className="h-4 w-4" />
                   Add Connection
@@ -861,7 +861,7 @@ export default function Models() {
                                 return (
                                   <tr
                                     key={resource.id}
-                                    className="group transition-colors duration-150 hover:bg-muted/50"
+                                    className="group transition-colors duration-150 hover:bg-accent/50"
                                   >
                                     <td className="px-4 py-3 font-medium">
                                       <Link

@@ -79,15 +79,11 @@ export default function ServiceAccounts() {
                           {sa.metadata.name}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {sa.metadata.project}
-                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{sa.metadata.project}</td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {(sa.spec.description as string) || '-'}
                       </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">
-                        v{sa.version}
-                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">v{sa.version}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
                         <SmartTime date={sa.updated_at ?? sa.created_at ?? ''} />
                       </td>
