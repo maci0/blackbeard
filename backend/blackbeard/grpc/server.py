@@ -185,7 +185,7 @@ def _resource_to_proto(resource: Any) -> blackbeard_pb2.Resource:
         api_version=API_VERSION,
         kind=resource.kind.value if hasattr(resource.kind, "value") else str(resource.kind),
         name=resource.name or "",
-        namespace=resource.project or "default",
+        project=resource.project or "default",
         spec_json=json.dumps(resource.spec) if resource.spec else "{}",
         version=resource.version or 1,
         created_at=resource.created_at.isoformat() if resource.created_at else "",
@@ -198,7 +198,7 @@ def _execution_to_proto(execution: Any) -> blackbeard_pb2.Execution:
     return blackbeard_pb2.Execution(
         id=str(execution.id) if execution.id else "",
         crew_name=execution.crew_name or "",
-        namespace=execution.crew_project or "default",
+        project=execution.crew_project or "default",
         status=execution.status.value
         if hasattr(execution.status, "value")
         else str(execution.status),
@@ -250,7 +250,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
     ) -> blackbeard_pb2.ListResourcesResponse:
         """List resources by kind."""
         kind = _resolve_kind(request.kind)
-        project = request.namespace or None
+        project = request.project or None
         limit = request.limit or 100
         offset = request.offset or 0
 
@@ -275,7 +275,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
     ) -> blackbeard_pb2.Resource:
         """Get a single resource."""
         kind = _resolve_kind(request.kind)
-        project = request.namespace or "default"
+        project = request.project or "default"
 
         async with async_session() as session:
             service = ResourceService(session)
@@ -295,7 +295,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
         """Create a resource."""
         await _enforce_rbac_guard(context)
         kind = _resolve_kind(request.kind)
-        project = request.namespace or "default"
+        project = request.project or "default"
 
         try:
             spec = json.loads(request.spec_json) if request.spec_json else {}
@@ -336,7 +336,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
         """Delete a resource."""
         await _enforce_rbac_guard(context)
         kind = _resolve_kind(request.kind)
-        project = request.namespace or "default"
+        project = request.project or "default"
 
         async with async_session() as session:
             service = ResourceService(session)
@@ -358,7 +358,7 @@ class BlackbeardServicer(blackbeard_pb2_grpc.BlackbeardServiceServicer):
         from blackbeard.engine import ExecutionError, ExecutionNotFoundError
         from blackbeard.engine import executor as _executor_mod
 
-        project = request.namespace or "default"
+        project = request.project or "default"
         try:
             inputs = json.loads(request.inputs_json) if request.inputs_json else {}
         except json.JSONDecodeError:

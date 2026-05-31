@@ -34,7 +34,7 @@ def test_resource_to_proto():
     proto = _resource_to_proto(resource)
     assert proto.kind == "Agent"
     assert proto.name == "test-agent"
-    assert proto.namespace == "default"
+    assert proto.project == "default"
     assert json.loads(proto.spec_json)["role"] == "tester"
     assert proto.version == 1
 
@@ -100,7 +100,7 @@ async def test_grpc_list_resources(servicer, db_session):
 
     request = blackbeard_pb2.ListResourcesRequest(
         kind="Agent",
-        namespace="default",
+        project="default",
         limit=10,
         offset=0,
     )
@@ -140,7 +140,7 @@ async def test_grpc_get_resource(servicer, db_session):
     request = blackbeard_pb2.GetResourceRequest(
         kind="Task",
         name="grpc-task",
-        namespace="default",
+        project="default",
     )
     context = MagicMock()
 
@@ -161,7 +161,7 @@ async def test_grpc_get_resource_not_found(servicer, db_session):
     request = blackbeard_pb2.GetResourceRequest(
         kind="Agent",
         name="nonexistent",
-        namespace="default",
+        project="default",
     )
     context = AsyncMock()
 
@@ -197,7 +197,7 @@ async def test_grpc_delete_resource(servicer, db_session):
     request = blackbeard_pb2.DeleteResourceRequest(
         kind="Guardrail",
         name="grpc-guard",
-        namespace="default",
+        project="default",
     )
     context = MagicMock()
 
@@ -217,7 +217,7 @@ async def test_grpc_delete_resource_not_found(servicer, db_session):
     request = blackbeard_pb2.DeleteResourceRequest(
         kind="Agent",
         name="no-such-agent",
-        namespace="default",
+        project="default",
     )
     context = MagicMock()
 
@@ -239,7 +239,7 @@ async def test_grpc_create_resource(servicer, db_session):
         api_version="blackbeard/v1",
         kind="Agent",
         name="grpc-new-agent",
-        namespace="default",
+        project="default",
         spec_json=json.dumps(spec),
     )
     context = MagicMock()

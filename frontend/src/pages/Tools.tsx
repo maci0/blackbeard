@@ -257,6 +257,12 @@ export default function Tools() {
                   Refresh
                 </button>
                 <Link
+                  to="/tools/library"
+                  className="btn-press inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Browse Library
+                </Link>
+                <Link
                   to="/studio"
                   className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >

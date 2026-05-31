@@ -36,6 +36,8 @@ import {
   AlertTriangle,
   Keyboard,
   KeyRound,
+  Library,
+  FlaskConical,
 } from 'lucide-react'
 import { useDarkMode, useHealthCheck } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
@@ -69,6 +71,7 @@ const navSections: Array<{ key: string; label: string; items: NavItem[] }> = [
       { to: '/resources', label: 'Resources', icon: Database },
       { to: '/models', label: 'Models', icon: Cpu },
       { to: '/tools', label: 'Tools', icon: Wrench },
+      { to: '/tools/library', label: 'Tool Library', icon: Library },
       { to: '/knowledge', label: 'Knowledge', icon: BookOpen },
     ],
   },
@@ -79,6 +82,7 @@ const navSections: Array<{ key: string; label: string; items: NavItem[] }> = [
       { to: '/executions', label: 'Executions', icon: Play },
       { to: '/chat', label: 'Chat', icon: MessageSquare },
       { to: '/automations', label: 'Automations', icon: Timer },
+      { to: '/guardrails/playground', label: 'Guardrails', icon: FlaskConical },
     ],
   },
   {
