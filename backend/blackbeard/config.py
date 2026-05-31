@@ -86,6 +86,8 @@ class Settings(BaseSettings):
     db_pool_max_overflow: int = Field(default=20, ge=0)
     db_pool_timeout: int = Field(default=30, ge=1)
     db_pool_recycle: int = Field(default=3600, ge=60)
+    db_slow_query_threshold_s: float = Field(default=1.0, ge=0.01)
+    db_long_checkout_threshold_s: float = Field(default=5.0, ge=0.1)
 
     max_concurrent_executions: int = Field(default=4, ge=1)
     max_concurrent_sse: int = Field(default=20, ge=1)

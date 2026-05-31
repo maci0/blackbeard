@@ -112,6 +112,7 @@ def load_plugin_module(
         sys.modules[module_name] = module
         spec.loader.exec_module(module)
     except Exception:
+        sys.modules.pop(module_name, None)
         logger.exception(
             "Failed to import plugin module: %s",
             file_path,

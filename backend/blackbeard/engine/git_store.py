@@ -185,12 +185,23 @@ def commit_resource(
             )
             return sha
         except Exception:
+            try:
+                _run_git(repo, ["reset", "HEAD", "--", rel_path], check=False)
+            except Exception:
+                pass
             logger.warning(
-                "Git commit failed for %s/%s",
+                "Git commit failed for %s/%s in project '%s'",
                 kind,
                 name,
+                project,
                 exc_info=True,
-                extra={"event": "git_commit_failed", "kind": kind, "resource_name": name},
+                extra={
+                    "event": "git_commit_failed",
+                    "kind": kind,
+                    "resource_name": name,
+                    "project": project,
+                    "action": action,
+                },
             )
             return None
 
@@ -230,12 +241,22 @@ def delete_resource(
             )
             return sha
         except Exception:
+            try:
+                _run_git(repo, ["checkout", "HEAD", "--", rel_path], check=False)
+            except Exception:
+                pass
             logger.warning(
-                "Git delete failed for %s/%s",
+                "Git delete failed for %s/%s in project '%s'",
                 kind,
                 name,
+                project,
                 exc_info=True,
-                extra={"event": "git_delete_failed", "kind": kind, "resource_name": name},
+                extra={
+                    "event": "git_delete_failed",
+                    "kind": kind,
+                    "resource_name": name,
+                    "project": project,
+                },
             )
             return None
 
@@ -392,7 +413,14 @@ def push(remote: str = "origin", branch: str = "main") -> bool:
             result.stderr.strip()[:300],
             extra={"event": "git_push_failed", "remote": remote, "branch": branch},
         )
-    return result.returncode == 0
+        return False
+    logger.info(
+        "Git push succeeded: %s/%s",
+        remote,
+        branch,
+        extra={"event": "git_push", "remote": remote, "branch": branch},
+    )
+    return True
 
 
 def pull(remote: str = "origin", branch: str = "main") -> bool:
@@ -410,4 +438,11 @@ def pull(remote: str = "origin", branch: str = "main") -> bool:
             result.stderr.strip()[:300],
             extra={"event": "git_pull_failed", "remote": remote, "branch": branch},
         )
-    return result.returncode == 0
+        return False
+    logger.info(
+        "Git pull succeeded: %s/%s",
+        remote,
+        branch,
+        extra={"event": "git_pull", "remote": remote, "branch": branch},
+    )
+    return True

@@ -103,7 +103,7 @@ export function usePresence(roomId: string | null): UsePresenceReturn {
       }
 
       ws.onerror = () => {
-        /* onclose fires after onerror */
+        console.warn('[presence] WebSocket error (onclose will follow)')
       }
     }
 

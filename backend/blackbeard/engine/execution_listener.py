@@ -152,7 +152,7 @@ def shutdown_webhook_executor() -> None:
     global _webhook_executor
     with _webhook_executor_lock:
         if _webhook_executor is not None:
-            _webhook_executor.shutdown(wait=False)
+            _webhook_executor.shutdown(wait=True, cancel_futures=True)
             _webhook_executor = None
 
 

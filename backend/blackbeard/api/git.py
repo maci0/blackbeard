@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
@@ -18,6 +19,8 @@ from blackbeard.engine.git_store import (
     push,
 )
 from blackbeard.models import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/git", tags=["git"])
 
@@ -177,7 +180,31 @@ async def git_push(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not ok:
+        logger.warning(
+            "Git push failed via API: remote=%s branch=%s user=%s",
+            body.remote,
+            body.branch,
+            _user.id,
+            extra={
+                "event": "git_push_api_failed",
+                "remote": body.remote,
+                "branch": body.branch,
+                "user_id": str(_user.id),
+            },
+        )
         raise HTTPException(status_code=500, detail="Push failed. Check remote configuration.")
+    logger.info(
+        "Git push via API: remote=%s branch=%s user=%s",
+        body.remote,
+        body.branch,
+        _user.id,
+        extra={
+            "event": "git_push_api",
+            "remote": body.remote,
+            "branch": body.branch,
+            "user_id": str(_user.id),
+        },
+    )
     return GitSyncResponse(success=True, message=f"Pushed to {body.remote}/{body.branch}")
 
 
@@ -192,5 +219,29 @@ async def git_pull(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not ok:
+        logger.warning(
+            "Git pull failed via API: remote=%s branch=%s user=%s",
+            body.remote,
+            body.branch,
+            _user.id,
+            extra={
+                "event": "git_pull_api_failed",
+                "remote": body.remote,
+                "branch": body.branch,
+                "user_id": str(_user.id),
+            },
+        )
         raise HTTPException(status_code=500, detail="Pull failed. Check remote configuration.")
+    logger.info(
+        "Git pull via API: remote=%s branch=%s user=%s",
+        body.remote,
+        body.branch,
+        _user.id,
+        extra={
+            "event": "git_pull_api",
+            "remote": body.remote,
+            "branch": body.branch,
+            "user_id": str(_user.id),
+        },
+    )
     return GitSyncResponse(success=True, message=f"Pulled from {body.remote}/{body.branch}")

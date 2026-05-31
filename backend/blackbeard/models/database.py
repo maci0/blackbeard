@@ -18,8 +18,8 @@ from blackbeard.logging_config import request_id_var
 
 logger = logging.getLogger(__name__)
 
-_SLOW_QUERY_THRESHOLD_S = 1.0
-_LONG_CHECKOUT_THRESHOLD_S = 5.0
+_SLOW_QUERY_THRESHOLD_S = settings.db_slow_query_threshold_s
+_LONG_CHECKOUT_THRESHOLD_S = settings.db_long_checkout_threshold_s
 
 CONNECT_ARGS: dict[str, object] = {
     "server_settings": {
@@ -152,6 +152,7 @@ def instrument_engine(sync_engine: Any, *, label: str = "main") -> None:
                         "engine_label": label,
                         "held_s": round(held_s, 2),
                         "threshold_s": _LONG_CHECKOUT_THRESHOLD_S,
+                        "request_id": request_id_var.get("-"),
                     },
                 )
 

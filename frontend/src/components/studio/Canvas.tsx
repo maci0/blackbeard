@@ -246,8 +246,8 @@ function CanvasInner() {
       if (type === 'crewComponent' && crewDataStr) {
         try {
           nodeData = { ...nodeData, ...(JSON.parse(crewDataStr) as Record<string, unknown>) }
-        } catch {
-          /* ignore malformed crew data */
+        } catch (err) {
+          console.warn('[studio] malformed crew data on drop:', err)
         }
       }
 
