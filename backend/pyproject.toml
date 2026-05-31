@@ -56,6 +56,9 @@ dev = [
     "grpcio-tools>=1.70,<2",
     "bandit[toml]>=1.8,<2",
 ]
+temporal = [
+    "temporalio>=1.9,<2",
+]
 muninn = [
     "muninn-python>=0.1,<1",
 ]

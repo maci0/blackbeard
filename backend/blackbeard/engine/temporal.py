@@ -1,0 +1,356 @@
+"""Optional Temporal workflow engine for crew execution.
+
+When the ``temporalio`` package is installed and ``TEMPORAL_HOST`` is set,
+crew executions are dispatched as Temporal workflows instead of running in
+the local ThreadPoolExecutor.  When either condition is not met, this module
+degrades gracefully and all public functions become no-ops or raise clear
+errors.
+
+The module is safe to import regardless of whether ``temporalio`` is
+installed.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import logging
+from dataclasses import dataclass
+from datetime import timedelta
+from typing import TYPE_CHECKING, Any
+
+from blackbeard.config import settings
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from blackbeard.models import ExecutionType
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Conditional imports: graceful degradation when temporalio is not installed
+# ---------------------------------------------------------------------------
+
+try:
+    from temporalio import activity, workflow
+    from temporalio.client import Client
+    from temporalio.common import RetryPolicy
+    from temporalio.worker import Worker
+
+    TEMPORAL_AVAILABLE = True
+except ImportError:
+    TEMPORAL_AVAILABLE = False
+
+
+# ---------------------------------------------------------------------------
+# Workflow input dataclass (serializable, used by both workflow and activity)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class CrewExecutionInput:
+    """Serializable input for the crew execution workflow."""
+
+    execution_id: str
+    resource_snapshot: dict[str, dict[str, Any]]
+    crew_name: str
+    inputs: dict[str, Any]
+    execution_type: str  # ExecutionType.value
+    n_iterations: int = 1
+    training_file: str = "training_data.pkl"
+
+
+# ---------------------------------------------------------------------------
+# Temporal activity: runs the actual crew (reuses existing _run_crew_async)
+# ---------------------------------------------------------------------------
+
+if TEMPORAL_AVAILABLE:
+
+    @activity.defn(name="run_crew")
+    async def run_crew_activity(payload: CrewExecutionInput) -> dict[str, Any]:
+        """Temporal activity that runs a crew execution.
+
+        This reuses the existing ``_run_crew_async`` logic from the executor
+        module, running inside a Temporal activity context instead of a raw
+        thread.
+        """
+        from uuid import UUID as _UUID
+
+        from blackbeard.models import ExecutionType as _ExecType
+
+        execution_id = _UUID(payload.execution_id)
+        execution_type = _ExecType(payload.execution_type)
+
+        # Import executor internals for DB session and crew execution
+        from blackbeard.engine.executor import (
+            _run_crew_async,
+            _thread_session_factory,
+        )
+
+        thread_session = _thread_session_factory()
+
+        activity.logger.info(
+            "Running crew activity: execution_id=%s crew=%s type=%s",
+            payload.execution_id,
+            payload.crew_name,
+            payload.execution_type,
+        )
+
+        await _run_crew_async(
+            execution_id,
+            payload.resource_snapshot,
+            payload.crew_name,
+            payload.inputs,
+            thread_session,
+            execution_type=execution_type,
+            n_iterations=payload.n_iterations,
+            training_file=payload.training_file,
+        )
+
+        return {"execution_id": payload.execution_id, "status": "completed"}
+
+    # -----------------------------------------------------------------------
+    # Temporal workflow: orchestrates the activity with retry/timeout policies
+    # -----------------------------------------------------------------------
+
+    @workflow.defn(name="CrewExecution")
+    class CrewExecutionWorkflow:
+        """Temporal workflow for crew execution.
+
+        Dispatches the crew run as a single activity with configurable
+        timeouts and retry policies.  Temporal handles scheduling, retries,
+        and visibility out of the box.
+        """
+
+        @workflow.run
+        async def run(self, payload: CrewExecutionInput) -> dict[str, Any]:
+            workflow.logger.info(
+                "Starting crew execution workflow: execution_id=%s crew=%s",
+                payload.execution_id,
+                payload.crew_name,
+            )
+
+            timeout_s = settings.temporal_workflow_timeout_s
+
+            result = await workflow.execute_activity(
+                run_crew_activity,
+                payload,
+                start_to_close_timeout=timedelta(seconds=timeout_s),
+                retry_policy=RetryPolicy(
+                    initial_interval=timedelta(seconds=5),
+                    backoff_coefficient=2.0,
+                    maximum_interval=timedelta(minutes=5),
+                    maximum_attempts=3,
+                    non_retryable_error_types=[
+                        "ExecutionNotFoundError",
+                        "ExecutionError",
+                        "ValueError",
+                        "KeyError",
+                    ],
+                ),
+                heartbeat_timeout=timedelta(minutes=5),
+            )
+
+            workflow.logger.info(
+                "Crew execution workflow completed: execution_id=%s",
+                payload.execution_id,
+            )
+            return result
+
+else:
+    # Stubs so type checkers and imports do not break when temporalio is
+    # missing.  These should never be called at runtime when Temporal is
+    # not available.
+
+    async def run_crew_activity(payload: CrewExecutionInput) -> dict[str, Any]:  # type: ignore[misc]
+        raise RuntimeError("temporalio is not installed")
+
+    class CrewExecutionWorkflow:  # type: ignore[no-redef]
+        async def run(self, payload: CrewExecutionInput) -> dict[str, Any]:
+            raise RuntimeError("temporalio is not installed")
+
+
+# ---------------------------------------------------------------------------
+# Worker lifecycle: start / stop
+# ---------------------------------------------------------------------------
+
+_worker_task: asyncio.Task[None] | None = None
+_worker_stop_event: asyncio.Event | None = None
+_temporal_client: Client | None = None  # type: ignore[type-arg]
+
+
+async def _get_temporal_client() -> Client:  # type: ignore[type-arg]
+    """Return a cached Temporal client, creating one on first call."""
+    global _temporal_client
+    if _temporal_client is not None:
+        return _temporal_client
+
+    if not TEMPORAL_AVAILABLE:
+        raise RuntimeError("temporalio is not installed")
+
+    host = settings.temporal_host
+    if not host:
+        raise RuntimeError("TEMPORAL_HOST is not configured")
+
+    _temporal_client = await Client.connect(
+        host,
+        namespace=settings.temporal_namespace,
+    )
+    logger.info(
+        "Temporal client connected: host=%s namespace=%s",
+        host,
+        settings.temporal_namespace,
+        extra={
+            "event": "temporal_client_connected",
+            "host": host,
+            "namespace": settings.temporal_namespace,
+        },
+    )
+    return _temporal_client
+
+
+async def start_temporal_worker() -> None:
+    """Start the Temporal worker in a background task.
+
+    The worker polls the configured task queue for workflow and activity
+    tasks.  Call ``stop_temporal_worker()`` during shutdown.
+
+    Raises RuntimeError if temporalio is not installed or TEMPORAL_HOST
+    is not set.
+    """
+    global _worker_task, _worker_stop_event
+
+    if not TEMPORAL_AVAILABLE:
+        raise RuntimeError("temporalio is not installed")
+    if not settings.temporal_host:
+        raise RuntimeError("TEMPORAL_HOST is not configured")
+
+    if _worker_task is not None and not _worker_task.done():
+        logger.warning(
+            "Temporal worker already running, skipping duplicate start",
+            extra={"event": "temporal_worker_already_running"},
+        )
+        return
+
+    client = await _get_temporal_client()
+    _worker_stop_event = asyncio.Event()
+
+    async def _run_worker() -> None:
+        assert _worker_stop_event is not None
+        worker = Worker(
+            client,
+            task_queue=settings.temporal_task_queue,
+            workflows=[CrewExecutionWorkflow],
+            activities=[run_crew_activity],
+        )
+        logger.info(
+            "Temporal worker started: task_queue=%s",
+            settings.temporal_task_queue,
+            extra={
+                "event": "temporal_worker_started",
+                "task_queue": settings.temporal_task_queue,
+            },
+        )
+        async with worker:
+            await _worker_stop_event.wait()
+        logger.info(
+            "Temporal worker stopped",
+            extra={"event": "temporal_worker_stopped"},
+        )
+
+    _worker_task = asyncio.create_task(_run_worker())
+
+
+async def stop_temporal_worker() -> None:
+    """Signal the Temporal worker to stop and wait for it to drain."""
+    global _worker_task, _worker_stop_event, _temporal_client
+
+    if _worker_stop_event is not None:
+        _worker_stop_event.set()
+
+    if _worker_task is not None:
+        try:
+            await asyncio.wait_for(_worker_task, timeout=30)
+        except TimeoutError:
+            logger.warning(
+                "Temporal worker did not stop within 30s, cancelling",
+                extra={"event": "temporal_worker_stop_timeout"},
+            )
+            _worker_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await _worker_task
+        except asyncio.CancelledError:
+            pass
+        _worker_task = None
+    _worker_stop_event = None
+    _temporal_client = None
+    logger.info(
+        "Temporal worker shutdown complete",
+        extra={"event": "temporal_worker_shutdown_complete"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Execution submission: dispatch a crew run as a Temporal workflow
+# ---------------------------------------------------------------------------
+
+
+async def submit_temporal_execution(
+    execution_id: UUID,
+    resource_snapshot: dict[str, dict[str, Any]],
+    crew_name: str,
+    inputs: dict[str, Any],
+    execution_type: ExecutionType,
+    n_iterations: int = 1,
+    training_file: str = "training_data.pkl",
+) -> str:
+    """Submit a crew execution as a Temporal workflow.
+
+    Returns the Temporal workflow ID (which is the execution UUID as a
+    string, making it easy to correlate).
+
+    Raises RuntimeError if Temporal is not available or not configured.
+    """
+    if not TEMPORAL_AVAILABLE:
+        raise RuntimeError("temporalio is not installed")
+
+    client = await _get_temporal_client()
+
+    payload = CrewExecutionInput(
+        execution_id=str(execution_id),
+        resource_snapshot=resource_snapshot,
+        crew_name=crew_name,
+        inputs=inputs,
+        execution_type=execution_type.value,
+        n_iterations=n_iterations,
+        training_file=training_file,
+    )
+
+    workflow_id = f"crew-exec-{execution_id}"
+    timeout_s = settings.temporal_workflow_timeout_s
+
+    handle = await client.start_workflow(
+        CrewExecutionWorkflow.run,
+        payload,
+        id=workflow_id,
+        task_queue=settings.temporal_task_queue,
+        execution_timeout=timedelta(seconds=timeout_s),
+    )
+
+    logger.info(
+        "Temporal workflow started: workflow_id=%s execution_id=%s crew=%s",
+        handle.id,
+        execution_id,
+        crew_name,
+        extra={
+            "event": "temporal_workflow_started",
+            "workflow_id": handle.id,
+            "execution_id": str(execution_id),
+            "crew_name": crew_name,
+            "execution_type": execution_type.value,
+            "task_queue": settings.temporal_task_queue,
+        },
+    )
+
+    return handle.id

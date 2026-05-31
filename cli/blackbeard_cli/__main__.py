@@ -1471,6 +1471,21 @@ from blackbeard_cli.export_cmd import export_cmd  # noqa: E402
 from blackbeard_cli.rbac import role, rolebinding  # noqa: E402
 from blackbeard_cli.users import group, user  # noqa: E402
 
+
+@cli.command("shell")
+@click.pass_context
+def shell_cmd(ctx: click.Context) -> None:
+    """Start interactive shell."""
+    from blackbeard_cli.shell import start_shell
+
+    start_shell(
+        server=ctx.obj["server"],
+        api_key=ctx.obj.get("api_key"),
+        project=ctx.obj["project"],
+        timeout=ctx.obj["timeout"],
+    )
+
+
 cli.add_command(login)
 cli.add_command(logout)
 cli.add_command(whoami)

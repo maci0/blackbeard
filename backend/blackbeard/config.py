@@ -86,6 +86,12 @@ class Settings(BaseSettings):
     max_concurrent_executions: int = Field(default=4, ge=1)
     max_concurrent_sse: int = Field(default=20, ge=1)
 
+    # Temporal workflow engine (optional, replaces ThreadPoolExecutor when set)
+    temporal_host: str | None = None  # e.g. "localhost:7233"
+    temporal_namespace: str = "blackbeard"
+    temporal_task_queue: str = "crew-execution"
+    temporal_workflow_timeout_s: int = Field(default=3600, ge=60)
+
     auth_fail_window_seconds: int = Field(default=300, ge=1)
     auth_fail_max_per_ip: int = Field(default=20, ge=1)
     auth_fail_max_tracked_ips: int = Field(default=200, ge=1)

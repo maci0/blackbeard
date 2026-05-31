@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "click>=8.1,<9",
     "httpx>=0.28,<1",
+    "prompt-toolkit>=3.0,<4",
     "rich>=14.0,<15",
     "pyyaml>=6.0,<7",
     "jsonschema>=4.23,<5",
@@ -35,4 +36,5 @@ ignore = ["ANN401"]
 [tool.ruff.lint.per-file-ignores]
 "blackbeard_cli/exec.py" = ["PT"]
 "blackbeard_cli/resources/refs.py" = ["N806"]
+"blackbeard_cli/shell.py" = ["ANN401", "E402"]
 "tests/**" = ["ANN", "E402", "SIM300"]

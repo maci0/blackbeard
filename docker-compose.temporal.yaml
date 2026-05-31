@@ -1,0 +1,60 @@
+# Temporal workflow engine overlay for development.
+#
+# Usage:
+#   docker compose -f docker-compose.yaml -f docker-compose.temporal.yaml up
+#
+# This adds a Temporal server (with auto-setup) and the Temporal web UI,
+# and injects the TEMPORAL_HOST env var into the Blackbeard API service so
+# crew executions are dispatched as Temporal workflows instead of running
+# in the local ThreadPoolExecutor.
+
+services:
+
+  # Override the API service to point at the Temporal server
+  api:
+    environment:
+      TEMPORAL_HOST: temporal:7233
+      TEMPORAL_NAMESPACE: blackbeard
+      TEMPORAL_TASK_QUEUE: crew-execution
+    depends_on:
+      temporal:
+        condition: service_healthy
+
+  # Temporal server with auto-setup (creates namespace on first start)
+  temporal:
+    image: temporalio/auto-setup:latest
+    ports:
+      - "127.0.0.1:7233:7233"
+    environment:
+      DB: sqlite
+      TEMPORAL_BROADCAST_ADDRESS: 0.0.0.0
+      # Create the blackbeard namespace automatically
+      TEMPORAL_CLI_NAMESPACE: blackbeard
+    healthcheck:
+      test: ["CMD", "tctl", "--ns", "blackbeard", "namespace", "describe"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Temporal web UI for workflow visibility
+  temporal-ui:
+    image: temporalio/ui:latest
+    ports:
+      - "127.0.0.1:8233:8080"
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: "http://localhost:3000"
+    depends_on:
+      temporal:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

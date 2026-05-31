@@ -42,6 +42,7 @@ from blackbeard.api.middleware import (
     security_headers_middleware,
     validation_exception_handler,
 )
+from blackbeard.api.plugins import router as plugins_router
 from blackbeard.api.resources import router as resources_router
 from blackbeard.api.tools_library import router as tools_library_router
 from blackbeard.api.users import router as users_router
@@ -292,9 +293,65 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     try:
         from blackbeard.engine.git_store import init_git_store
+
         init_git_store()
     except Exception:
         logger.debug("Git resource store not available", exc_info=True)
+
+    # Discover and load plugins
+    try:
+        from blackbeard.plugins.loader import load_plugins as _load_plugins
+
+        loaded_plugins = _load_plugins()
+        if loaded_plugins:
+            logger.info(
+                "Loaded %d plugin(s): %s",
+                len(loaded_plugins),
+                ", ".join(p.name for p in loaded_plugins),
+                extra={
+                    "event": "plugins_loaded",
+                    "plugin_count": len(loaded_plugins),
+                    "plugin_names": [p.name for p in loaded_plugins],
+                },
+            )
+    except Exception:
+        logger.warning(
+            "Plugin loading failed, continuing without plugins",
+            exc_info=True,
+            extra={"event": "plugin_loading_failed"},
+        )
+
+    # Start Temporal worker if configured
+    temporal_running = False
+    if settings.temporal_host:
+        try:
+            from blackbeard.engine.temporal import TEMPORAL_AVAILABLE, start_temporal_worker
+
+            if TEMPORAL_AVAILABLE:
+                await start_temporal_worker()
+                temporal_running = True
+                logger.info(
+                    "Temporal worker started: host=%s queue=%s",
+                    settings.temporal_host,
+                    settings.temporal_task_queue,
+                    extra={
+                        "event": "temporal_worker_started",
+                        "host": settings.temporal_host,
+                        "task_queue": settings.temporal_task_queue,
+                    },
+                )
+            else:
+                logger.warning(
+                    "TEMPORAL_HOST is set but temporalio package is not installed, "
+                    "falling back to ThreadPoolExecutor",
+                    extra={"event": "temporal_package_missing"},
+                )
+        except Exception:
+            logger.warning(
+                "Temporal worker failed to start, falling back to ThreadPoolExecutor",
+                exc_info=True,
+                extra={"event": "temporal_worker_start_failed"},
+            )
 
     startup_ms = round((time.monotonic() - t0_startup) * 1000, 1)
     logger.info(
@@ -317,6 +374,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         if grpc_server is not None:
             await grpc_server.stop(grace=5)
             logger.info("gRPC server stopped", extra={"event": "grpc_server_stopped"})
+        if temporal_running:
+            try:
+                from blackbeard.engine.temporal import stop_temporal_worker
+
+                await stop_temporal_worker()
+                logger.info(
+                    "Temporal worker stopped",
+                    extra={"event": "temporal_worker_stopped"},
+                )
+            except Exception:
+                logger.warning(
+                    "Temporal worker stop failed",
+                    exc_info=True,
+                    extra={"event": "temporal_worker_stop_failed"},
+                )
         shutdown_executor()
         logger.info("Executor shut down", extra={"event": "executor_shutdown"})
         shutdown_webhook_executor()
@@ -411,6 +483,10 @@ app = FastAPI(
             "name": "tools-library",
             "description": "Browse and install curated tools from the built-in library",
         },
+        {
+            "name": "plugins",
+            "description": "Plugin SDK: list and reload extension plugins",
+        },
     ],
 )
 
@@ -449,6 +525,7 @@ app.include_router(asyncapi_router)
 app.include_router(agency_import_router, prefix="/api/v1")
 app.include_router(tools_library_router, prefix="/api/v1")
 app.include_router(git_router, prefix="/api/v1")
+app.include_router(plugins_router, prefix="/api/v1")
 
 if settings.oidc_issuer:
     from blackbeard.api.oidc import router as oidc_router

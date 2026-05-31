@@ -61,6 +61,19 @@ from blackbeard.models.database import CONNECT_ARGS, instrument_engine
 from blackbeard.models.execution_schemas import redact_sensitive_values
 from blackbeard.resources import parse_ref
 
+# Temporal integration: available only when temporalio is installed
+try:
+    from blackbeard.engine.temporal import (
+        TEMPORAL_AVAILABLE,
+        submit_temporal_execution,
+    )
+except ImportError:
+    TEMPORAL_AVAILABLE = False
+
+    async def submit_temporal_execution(*args: Any, **kwargs: Any) -> str:  # type: ignore[misc]
+        raise RuntimeError("temporalio is not installed")
+
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from uuid import UUID
@@ -442,54 +455,95 @@ async def _submit_execution(
     resource_snapshot = _snapshot_crew_resources(resources, crew_name, target_kind=target_kind)
 
     execution_id = execution.id
-    loop = asyncio.get_running_loop()
-    future = loop.run_in_executor(
-        _get_executor(),
-        _run_crew_sync,
-        execution_id,
-        resource_snapshot,
-        crew_name,
-        inputs,
-        execution_type,
-        n_iterations or 1,
-        training_file or "training_data.pkl",
-    )
 
-    def _on_thread_error(fut: asyncio.Future[None]) -> None:
-        if fut.cancelled():
-            return
+    if settings.temporal_host and TEMPORAL_AVAILABLE:
+        # Dispatch via Temporal workflow engine
         try:
-            exc = fut.exception()
-        except Exception:
-            logger.warning(
-                "Could not retrieve exception from execution %s thread future",
+            workflow_id = await submit_temporal_execution(
                 execution_id,
+                resource_snapshot,
+                crew_name,
+                inputs,
+                execution_type,
+                n_iterations or 1,
+                training_file or "training_data.pkl",
+            )
+            logger.info(
+                "Execution %s dispatched to Temporal: workflow_id=%s",
+                execution_id,
+                workflow_id,
+                extra={
+                    "event": "execution_dispatched_temporal",
+                    "execution_id": str(execution_id),
+                    "workflow_id": workflow_id,
+                    "crew_name": crew_name,
+                },
+            )
+        except Exception as temporal_exc:
+            logger.error(
+                "Failed to dispatch execution %s to Temporal: %s",
+                execution_id,
+                temporal_exc,
                 exc_info=True,
                 extra={
-                    "event": "execution_future_exception_retrieval_failed",
-                    "execution_id": str(execution_id),
-                },
-            )
-            return
-        if exc is not None:
-            logger.error(
-                "Execution %s thread failed: %s",
-                execution_id,
-                exc,
-                exc_info=exc,
-                extra={
-                    "event": "execution_thread_failed",
+                    "event": "temporal_dispatch_failed",
                     "execution_id": str(execution_id),
                     "crew_name": crew_name,
-                    "error_type": type(exc).__name__,
-                    "error_message": str(exc)[:500],
+                    "error_type": type(temporal_exc).__name__,
                 },
             )
-            error_msg = _sanitize_error(str(exc))
-            task = loop.create_task(_mark_failed_async(execution_id, error_msg))
-            task.add_done_callback(log_task_exception)
+            error_msg = _sanitize_error(str(temporal_exc))
+            await _mark_failed_async(execution_id, error_msg)
+    else:
+        # Local ThreadPoolExecutor path (default)
+        loop = asyncio.get_running_loop()
+        future = loop.run_in_executor(
+            _get_executor(),
+            _run_crew_sync,
+            execution_id,
+            resource_snapshot,
+            crew_name,
+            inputs,
+            execution_type,
+            n_iterations or 1,
+            training_file or "training_data.pkl",
+        )
 
-    future.add_done_callback(_on_thread_error)
+        def _on_thread_error(fut: asyncio.Future[None]) -> None:
+            if fut.cancelled():
+                return
+            try:
+                exc = fut.exception()
+            except Exception:
+                logger.warning(
+                    "Could not retrieve exception from execution %s thread future",
+                    execution_id,
+                    exc_info=True,
+                    extra={
+                        "event": "execution_future_exception_retrieval_failed",
+                        "execution_id": str(execution_id),
+                    },
+                )
+                return
+            if exc is not None:
+                logger.error(
+                    "Execution %s thread failed: %s",
+                    execution_id,
+                    exc,
+                    exc_info=exc,
+                    extra={
+                        "event": "execution_thread_failed",
+                        "execution_id": str(execution_id),
+                        "crew_name": crew_name,
+                        "error_type": type(exc).__name__,
+                        "error_message": str(exc)[:500],
+                    },
+                )
+                error_msg = _sanitize_error(str(exc))
+                task = loop.create_task(_mark_failed_async(execution_id, error_msg))
+                task.add_done_callback(log_task_exception)
+
+        future.add_done_callback(_on_thread_error)
 
     loaded = await get_execution(session, execution_id)
     if loaded is None:
