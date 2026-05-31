@@ -112,9 +112,10 @@ def test_fuzz_masked_value_never_reveals_original(value):
     from blackbeard.api.credentials import _MASKED_VALUE
 
     assert isinstance(_MASKED_VALUE, str)
-    # For any non-trivial value, the mask must differ
-    if len(value) > 0 and value != _MASKED_VALUE:
-        assert value != _MASKED_VALUE
+    assert len(_MASKED_VALUE) > 0, "Mask must be non-empty"
+    # Mask must be a fixed, short placeholder — not derived from input
+    assert len(_MASKED_VALUE) <= 10, "Mask should be a short placeholder"
+    assert _MASKED_VALUE == "****", "Mask must be the expected fixed value"
 
 
 # ---------------------------------------------------------------------------
@@ -169,8 +170,11 @@ def test_fuzz_resolve_dotted(path, context):
     """resolve_dotted never crashes on arbitrary paths and contexts."""
     from blackbeard.engine.flow_runner import resolve_dotted
 
-    # Should not raise any exception
-    resolve_dotted(path, context)
+    result = resolve_dotted(path, context)
+    # If the path has a key that exists at the top level, result should be the value
+    parts = path.split(".")
+    if len(parts) == 1 and path in context:
+        assert result == context[path]
 
 
 @given(
@@ -189,6 +193,9 @@ def test_fuzz_resolve_dotted_depth_limit(parts):
     context = {}
     result = resolve_dotted(path, context)
     if len(parts) > _MAX_RESOLVE_DEPTH:
+        assert result is None
+    else:
+        # Empty context means no key can be found — must also be None
         assert result is None
 
 

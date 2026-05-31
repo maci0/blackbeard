@@ -754,7 +754,6 @@ async def rollback_resource(
     except ResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    # Find the target version snapshot
     result = await session.execute(
         select(ResourceVersion).where(
             ResourceVersion.resource_id == resource.id,

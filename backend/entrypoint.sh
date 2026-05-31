@@ -53,8 +53,15 @@ reload_flag=""
 if [ "${DEBUG:-false}" = "true" ] && [ "${WEB_CONCURRENCY:-1}" = "1" ]; then
   reload_flag="--reload"
 fi
+if [ -n "${LOG_LEVEL:-}" ]; then
+  uvi_log_level="${LOG_LEVEL}"
+elif [ "${DEBUG:-false}" = "true" ]; then
+  uvi_log_level="debug"
+else
+  uvi_log_level="info"
+fi
 exec uvicorn blackbeard.main:app --host "${HOST:-0.0.0.0}" --port "${PORT:-8000}" \
   --proxy-headers --forwarded-allow-ips="${FORWARDED_ALLOW_IPS:-127.0.0.1}" \
-  --log-level "${LOG_LEVEL:-info}" \
+  --log-level "$uvi_log_level" \
   --workers "$(printf '%d' "${WEB_CONCURRENCY:-1}" 2>/dev/null || echo 1)" \
   ${reload_flag:+"$reload_flag"}

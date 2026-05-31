@@ -2,6 +2,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { formatDate, getDuration, formatCost, statusLabel } from '../formatters'
 
 describe('formatDate', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('returns dash for null input', () => {
     expect(formatDate(null)).toBe('—')
   })

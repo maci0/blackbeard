@@ -8,7 +8,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from blackbeard_sdk import BlackbeardClient
+from blackbeard_sdk import BlackbeardApiError, BlackbeardClient
 from blackbeard_sdk.resources import KIND_TO_PLURAL, _kind_plural
 
 from .conftest import MockTransport, _mock_response
@@ -146,7 +146,7 @@ class TestResources:
         assert req.url.path == "/api/v1/agents"
 
     def test_create_without_kind_raises(self, client: BlackbeardClient) -> None:
-        with pytest.raises(ValueError, match="must contain a 'kind' key"):
+        with pytest.raises(BlackbeardApiError, match="must contain a 'kind' key"):
             client.create({"metadata": {"name": "foo"}})
 
     def test_update_resource(
@@ -208,7 +208,7 @@ class TestResources:
         assert "project=default" in str(req.url)
 
     def test_unknown_kind_raises(self, client: BlackbeardClient) -> None:
-        with pytest.raises(ValueError, match="Unknown resource kind"):
+        with pytest.raises(BlackbeardApiError, match="Unknown resource kind"):
             client.list("FakeKind")
 
 
@@ -310,7 +310,7 @@ class TestExecutions:
             with patch(
                 "blackbeard_sdk.executions.time.monotonic", side_effect=[0, 0, 999]
             ):
-                with pytest.raises(TimeoutError, match="did not complete"):
+                with pytest.raises(BlackbeardApiError, match="did not complete"):
                     client.wait("e1", timeout=1)
 
     def test_get_execution_spend(
@@ -434,5 +434,5 @@ class TestKindPlural:
         assert _kind_plural("llm-connections") == "llm-connections"
 
     def test_unknown_raises(self) -> None:
-        with pytest.raises(ValueError, match="Unknown resource kind"):
+        with pytest.raises(BlackbeardApiError, match="Unknown resource kind"):
             _kind_plural("Nonexistent")

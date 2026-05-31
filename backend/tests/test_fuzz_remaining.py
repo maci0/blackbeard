@@ -1274,18 +1274,16 @@ class TestPollBackoff:
     @given(polls=st.integers(min_value=0, max_value=10_000))
     @settings(max_examples=50)
     def test_fuzz_poll_backoff_range(self, polls: int) -> None:
-        """_poll_backoff must return 1, 3, or 5."""
+        """_poll_backoff must return 1 or 2."""
         from blackbeard.api.executions import _poll_backoff
 
         result = _poll_backoff(polls)
-        assert result in (1, 3, 5)
+        assert result in (1, 2)
 
         if polls < 30:
             assert result == 1
-        elif polls < 60:
-            assert result == 3
         else:
-            assert result == 5
+            assert result == 2
 
 
 # ===================================================================

@@ -112,7 +112,7 @@ function ThinkingBlock({ text }: { text: string }) {
       open={open}
       onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
     >
-      <summary className="cursor-pointer select-none px-3 py-1.5 text-xs font-medium text-violet-600 dark:text-violet-400">
+      <summary className="cursor-pointer select-none rounded px-3 py-1.5 text-xs font-medium text-violet-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-violet-400">
         {open ? 'Hide' : 'Show'} thinking ({text.length} chars)
       </summary>
       <div className="max-h-48 overflow-y-auto whitespace-pre-wrap border-t border-violet-200 px-3 py-2 font-mono text-xs text-muted-foreground dark:border-violet-800">

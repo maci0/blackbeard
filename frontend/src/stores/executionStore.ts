@@ -99,7 +99,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
 
   pollExecution: async (id: string) => {
     try {
-      const execution = await api.get<Execution>(`/api/v1/executions/${id}`)
+      const execution = await api.get<Execution>(`/api/v1/executions/${id}`, { skipCache: true })
       set((state) => {
         const prev = state.currentExecution
         if (
@@ -134,6 +134,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     try {
       const result = await api.get<{ items: Execution[]; total: number }>(
         executionsPath(crewName, pagination),
+        { skipCache: true },
       )
       set((state) => {
         const prev = state.executions
@@ -167,12 +168,11 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       const lastSeq = state.events.at(-1)?.sequence ?? -1
       const unique = newEvents.filter((e) => e.sequence > lastSeq)
       if (unique.length === 0) return state
-      const total = state.events.length + unique.length
-      if (total <= MAX_EVENTS) {
-        return { events: state.events.concat(unique) }
+      const combined = state.events.concat(unique)
+      if (combined.length <= MAX_EVENTS) {
+        return { events: combined }
       }
-      const drop = total - MAX_EVENTS
-      return { events: state.events.slice(drop).concat(unique) }
+      return { events: combined.slice(-MAX_EVENTS) }
     })
   },
 
@@ -186,6 +186,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     try {
       const result = await api.get<{ events: ExecutionEvent[]; next_sequence: number }>(
         `/api/v1/executions/${id}/events?after=${lastSeq}&limit=${EVENTS_FETCH_LIMIT}`,
+        { skipCache: true },
       )
       get().addEvents(result.events)
     } catch (err) {
@@ -195,7 +196,9 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
 
   fetchSpend: async (id: string) => {
     try {
-      const result = await api.get<Record<string, unknown>>(`/api/v1/executions/${id}/spend`)
+      const result = await api.get<Record<string, unknown>>(`/api/v1/executions/${id}/spend`, {
+        skipCache: true,
+      })
       set({ spendData: result })
     } catch (err) {
       console.warn('[poll] spend fetch failed:', getErrorMessage(err, 'unknown error'))

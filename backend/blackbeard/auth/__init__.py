@@ -10,6 +10,7 @@ from blackbeard.auth.dependencies import (
     get_current_user,
     require_permission,
     require_user,
+    validate_ws_auth,
 )
 from blackbeard.auth.jwt import (
     create_access_token,
@@ -33,5 +34,6 @@ __all__ = [
     "require_permission",
     "require_user",
     "set_api_key",
+    "validate_ws_auth",
     "verify_password",
 ]

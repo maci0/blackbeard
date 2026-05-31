@@ -29,10 +29,8 @@ from blackbeard.kinds import SAFE_FILENAME as _SAFE_FILENAME
 from blackbeard.kinds import ResourceKind
 from blackbeard.litellm import apply_model_params, apply_vertex_params
 from blackbeard.resources import (
-    ALLOWED_CALLABLE_MODULE_PREFIXES,
-    ALLOWED_TOOL_MODULE_PREFIXES,
-    BLOCKED_CALLABLE_MODULES,
-    BLOCKED_TOOL_SUBMODULES,
+    check_callable_path,
+    check_tool_class_path,
     check_url_ssrf,
     is_blocked_env_name,
     parse_ref,
@@ -306,24 +304,15 @@ class ResourceLoader:
             class_path = spec.get("class_path")
             if not class_path:
                 raise LoaderError(f"Tool '{resource.name}' has type=python but no class_path")
-            if not class_path.startswith(ALLOWED_TOOL_MODULE_PREFIXES):
-                raise LoaderError(
-                    f"Tool '{resource.name}': class_path '{class_path}' is not in the "
-                    f"allowed module list. Permitted prefixes: "
-                    f"{', '.join(ALLOWED_TOOL_MODULE_PREFIXES)}"
-                )
+            path_error = check_tool_class_path(class_path)
+            if path_error:
+                raise LoaderError(f"Tool '{resource.name}': {path_error}")
             module_path, class_name = class_path.rsplit(".", 1)
             if class_name.startswith("_"):
                 raise LoaderError(
                     f"Tool '{resource.name}': class_path '{class_path}' references a "
                     f"private/dunder attribute"
                 )
-            for blocked in BLOCKED_TOOL_SUBMODULES:
-                if module_path == blocked or module_path.startswith(blocked + "."):
-                    raise LoaderError(
-                        f"Tool '{resource.name}': class_path '{class_path}' references a "
-                        f"blocked module that can execute arbitrary code"
-                    )
             try:
                 module = importlib.import_module(module_path)
                 tool_cls = getattr(module, class_name)
@@ -575,16 +564,9 @@ class ResourceLoader:
                 extra={"event": "callable_import_invalid_path", "dotted_path": dotted_path},
             )
             return None
-        top_module = dotted_path.split(".")[0]
-        if top_module in BLOCKED_CALLABLE_MODULES:
-            msg = f"Blocked import from dangerous module: {dotted_path}"
-            logger.warning(
-                msg,
-                extra={"event": "callable_import_blocked", "dotted_path": dotted_path},
-            )
-            raise LoaderError(msg)
-        if not dotted_path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
-            msg = f"Blocked import from unapproved module: {dotted_path}"
+        path_error = check_callable_path(dotted_path)
+        if path_error:
+            msg = f"Blocked import: {dotted_path} — {path_error}"
             logger.warning(
                 msg,
                 extra={"event": "callable_import_blocked", "dotted_path": dotted_path},
@@ -872,9 +854,10 @@ class ResourceLoader:
         tool_loading = spec.get("tool_loading", "hybrid")
 
         agent_refs = spec.get("agents", [])
-        agents = [self.build_agent(ref) for ref in agent_refs]
-
-        for ref_str, agent in zip(agent_refs, agents, strict=True):
+        agents: list[Agent] = []
+        for ref_str in agent_refs:
+            agent = self.build_agent(ref_str)
+            agents.append(agent)
             ref = parse_ref(ref_str)
             if ref:
                 agent_resource = self._resources.get(f"{ref.kind.value}/{ref.name}")

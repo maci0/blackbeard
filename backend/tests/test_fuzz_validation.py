@@ -330,6 +330,8 @@ def test_deeply_nested_spec_does_not_crash():
     for kind in _ALL_KINDS:
         errors, _refs = validate_resource(kind, spec)
         assert isinstance(errors, list)
+        # A 100-level deep nested dict is not valid for any kind's schema
+        assert len(errors) > 0, f"Deeply nested spec should fail validation for {kind}"
 
 
 # ---------------------------------------------------------------------------

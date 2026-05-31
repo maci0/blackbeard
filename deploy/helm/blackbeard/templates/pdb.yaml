@@ -12,3 +12,18 @@ spec:
     matchLabels:
       {{- include "blackbeard.selectorLabels" (dict "context" . "component" "api") | nindent 6 }}
 {{- end }}
+---
+{{- if and .Values.litellm.enabled (gt (int .Values.litellm.replicas) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "blackbeard.fullname" . }}-litellm
+  labels:
+    {{- include "blackbeard.labels" . | nindent 4 }}
+    {{- include "blackbeard.selectorLabels" (dict "context" . "component" "litellm") | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "blackbeard.selectorLabels" (dict "context" . "component" "litellm") | nindent 6 }}
+{{- end }}

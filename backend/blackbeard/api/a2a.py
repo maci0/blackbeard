@@ -104,7 +104,10 @@ async def agent_card(
         return JSONResponse(content=entry[1], headers=_CACHE_HEADERS)
 
     async with _cache_lock:
-        # Re-check under lock — another coroutine may have refreshed
+        # Re-check under lock — another coroutine may have refreshed.
+        # Re-read monotonic clock: the original `now` is from before we
+        # awaited the lock, so it could be stale enough to miss a fresh entry.
+        now = time.monotonic()
         entry = _cache_entry
         if entry is not None and (now - entry[0]) < _CACHE_TTL_S:
             return JSONResponse(content=entry[1], headers=_CACHE_HEADERS)
@@ -117,20 +120,20 @@ async def agent_card(
             select(Resource)
             .where(Resource.kind == ResourceKind.CREW)
             .options(load_only(Resource.name, Resource.spec, Resource.version))
+            .order_by(Resource.name)
+            .limit(500)
         )
         crews = result.scalars().all()
 
-        # Filter to crews with a2a.enabled = true
         a2a_crews = [
             c for c in crews if isinstance(c.spec.get("a2a"), dict) and c.spec["a2a"].get("enabled")
         ]
 
         if not a2a_crews:
             payload: dict[str, Any] = {"agents": []}
-            _cache_entry = (now, payload)
+            _cache_entry = (time.monotonic(), payload)
             return JSONResponse(content=payload, headers=_CACHE_HEADERS)
 
-        # Collect all task ref names we need to resolve
         all_task_names: set[str] = set()
         for crew in a2a_crews:
             for ref in crew.spec.get("tasks", []):
@@ -138,7 +141,6 @@ async def agent_card(
                 if name is not None:
                     all_task_names.add(name)
 
-        # Batch-fetch all referenced Task resources
         task_map: dict[str, dict[str, Any]] = {}
         if all_task_names:
             task_result = await session.execute(
@@ -148,11 +150,11 @@ async def agent_card(
                     Resource.name.in_(all_task_names),
                 )
                 .options(load_only(Resource.name, Resource.spec))
+                .limit(1000)
             )
             for task in task_result.scalars().all():
                 task_map[task.name] = task.spec
 
-        # Build agent cards
         agents: list[dict[str, Any]] = []
         for crew in a2a_crews:
             a2a_spec: dict[str, Any] = crew.spec["a2a"]
@@ -188,7 +190,7 @@ async def agent_card(
             agents.append(card)
 
         payload = {"agents": agents}
-        _cache_entry = (now, payload)
+        _cache_entry = (time.monotonic(), payload)
 
     logger.info(
         "A2A agent card generated: %d agents",

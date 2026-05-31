@@ -12,10 +12,7 @@ import math
 import operator
 from typing import Any
 
-from blackbeard.resources import (
-    ALLOWED_CALLABLE_MODULE_PREFIXES,
-    BLOCKED_CALLABLE_MODULES,
-)
+from blackbeard.resources import check_callable_path
 
 __all__ = [
     "call_hook",
@@ -95,26 +92,12 @@ def _validate_callable_path(
 
     Returns an error string if blocked, or ``None`` if the path is allowed.
     """
-    module_path = fn_path.rsplit(":", 1)[0]
-    top_module = module_path.split(".")[0]
-    if top_module in BLOCKED_CALLABLE_MODULES:
+    error = check_callable_path(fn_path)
+    if error:
         logger.warning(
-            "Flow step '%s' blocked: module '%s' is not allowed",
+            "Flow step '%s' blocked: %s",
             step_name,
-            top_module,
-            extra={
-                "event": "flow_step_blocked",
-                "flow_name": flow_name,
-                "step_name": step_name,
-                "blocked_module": top_module,
-            },
-        )
-        return "error: blocked module"
-    if not fn_path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
-        logger.warning(
-            "Flow step '%s' blocked: function_path '%s' not in allowlist",
-            step_name,
-            fn_path,
+            error,
             extra={
                 "event": "flow_step_blocked",
                 "flow_name": flow_name,
@@ -122,7 +105,7 @@ def _validate_callable_path(
                 "function_path": fn_path,
             },
         )
-        return "error: function not in allowlist"
+        return f"error: {error}"
     return None
 
 

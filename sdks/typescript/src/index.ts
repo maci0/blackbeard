@@ -1,6 +1,7 @@
 export { BlackbeardClient, KIND_PLURALS } from "./client.js";
 export { BlackbeardApiError, TERMINAL_STATUSES } from "./types.js";
 export type {
+  AuditLogEntry,
   BlackbeardConfig,
   Resource,
   ResourceMetadata,
@@ -16,4 +17,7 @@ export type {
   ReadinessResponse,
   HITLResponseResult,
   SpendRecord,
+  VersionSummary,
+  VersionListResponse,
+  VersionDetail,
 } from "./types.js";

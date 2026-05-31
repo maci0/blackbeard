@@ -195,5 +195,40 @@ export class BlackbeardApiError extends Error {
   }
 }
 
+/** A single entry from the audit log. */
+export interface AuditLogEntry {
+  id: string
+  timestamp: string
+  actor_type: string
+  actor_id: string
+  action: string
+  resource_type: string | null
+  resource_id: string | null
+  detail: Record<string, unknown> | null
+  request_id: string | null
+}
+
+/** Summary of a resource version returned from the versions list endpoint. */
+export interface VersionSummary {
+  version: number
+  changed_by: string | null
+  created_at: string
+  changed_keys: string[]
+}
+
+/** Response shape from GET /{kind}/{name}/versions. */
+export interface VersionListResponse {
+  versions: VersionSummary[]
+}
+
+/** Full snapshot of a resource at a specific version. */
+export interface VersionDetail {
+  version: number
+  changed_by: string | null
+  created_at: string
+  spec: Record<string, unknown>
+  labels: Record<string, string> | null
+}
+
 /** Statuses after which an execution will not change. */
 export const TERMINAL_STATUSES: ReadonlySet<string> = new Set(['completed', 'failed', 'cancelled'])

@@ -313,12 +313,12 @@ Examples:
   blackbeard group delete 1 --json
 """,
 )
-@click.argument("group_id")
+@click.argument("group_id", metavar="ID")
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @json_opt
 @click.pass_context
 def group_delete(ctx: click.Context, group_id: str, yes: bool) -> None:
-    """Delete a group by ID."""
+    """Delete a group by its numeric ID (shown in 'group list')."""
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 

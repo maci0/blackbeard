@@ -269,7 +269,7 @@ spec:
   # --- For type: python ---
   class_path: crewai_tools.SerperDevTool  # Dotted import path to a BaseTool subclass
   description: "Search the web for current information"
-  sandbox: none                            # Sandbox level: "none" or "wasm" (default: "none")
+  sandbox: none                            # Sandbox tier: none, wasm, docker, podman, gvisor, microvm
 
   # --- For type: wasm ---
   # type: wasm
@@ -299,7 +299,7 @@ spec:
 | `type` | `python`\|`wasm`\|`builtin`\|`mcp-stdio`\|`mcp-http` | ✅ | Tool implementation type |
 | `class_path` | string | — | Dotted path to Python `BaseTool` subclass (required for `python`; tool name for `builtin`) |
 | `description` | string | — | Human-readable description of what the tool does |
-| `sandbox` | `none`\|`wasm` | — | Sandbox enforcement level (default `none`) |
+| `sandbox` | `none`\|`wasm`\|`docker`\|`podman`\|`gvisor`\|`microvm` | — | Sandbox tier (default `none`); higher tiers = stronger isolation |
 | `wasm_module` | string | — | Path to `.wasm` module file (required for `wasm`) |
 | `capabilities` | string[] | — | WASI capability grants for WASM tools (e.g. `http_fetch`, `env`) |
 | `command` | string | — | Command to launch the MCP server (required for `mcp-stdio`) |
@@ -499,6 +499,9 @@ spec:
 | `llm_prompt` | string | — | Prompt template with `{output}` placeholder (required for `llm`) |
 | `llm` | string | — | LLMConnection ref used for the LLM judge |
 | `json_schema` | object | — | JSON Schema to validate output against (required for `schema`) |
+| `pii_preset` | `hipaa`\|`gdpr`\|`pci-dss`\|`ccpa`\|`custom` | — | Predefined PII entity set (default `custom`; for `pii` type) |
+| `pii_entities` | string[] | — | Explicit PII entity types to detect (max 30; for `pii` type) |
+| `pii_action` | `redact`\|`reject`\|`warn` | — | Action when PII is detected (default `redact`; for `pii` type) |
 
 ---
 
@@ -730,3 +733,29 @@ spec:
 | `default_agent_policy` | string | — | Default AgentPolicy ref applied to all agents in this project |
 | `resource_quota.max_resources` | integer (1–10000) | — | Maximum resources allowed in this project |
 | `resource_quota.max_executions_per_hour` | integer (1–1000) | — | Maximum executions per hour |
+| `guardrails` | string[] | — | `ref:` guardrail resources prepended to all task guardrails in this project (max 20) |
+
+---
+
+## ServiceAccount
+
+A ServiceAccount provides an identity for automated agent execution. Agents default to a service account named `sa-<agent-name>`.
+
+```yaml
+apiVersion: blackbeard/v1
+kind: ServiceAccount
+metadata:
+  name: sa-researcher
+  project: default
+spec:
+  description: "Service account for the researcher agent"
+  permissions:
+    - "read:knowledge-sources"
+    - "invoke:tools"
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string | — | Human-readable description (max 5000 chars) |
+| `project` | string | — | Project scope (max 255 chars) |
+| `permissions` | string[] | — | Permission strings for this service account (max 50) |

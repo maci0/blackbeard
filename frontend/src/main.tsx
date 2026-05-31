@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { api } from './api/client'
-import '@xyflow/react/dist/style.css'
 import './index.css'
 
 // Set API key from build-time env var (for Vite dev server).
@@ -14,11 +13,22 @@ if (import.meta.env.VITE_API_KEY) {
 }
 
 window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
-  console.error(
-    '[Unhandled Rejection]',
-    event.reason instanceof Error ? event.reason.message : 'promise rejected',
-  )
+  if (event.reason instanceof Error) {
+    console.error(
+      `[Unhandled Rejection] ${event.reason.name}: ${event.reason.message}`,
+      event.reason,
+    )
+  } else {
+    console.error('[Unhandled Rejection]', event.reason)
+  }
   event.preventDefault()
+})
+
+window.addEventListener('error', (event: ErrorEvent) => {
+  console.error(
+    `[Uncaught Error] ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`,
+    event.error,
+  )
 })
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

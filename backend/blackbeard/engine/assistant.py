@@ -16,13 +16,15 @@ import yaml
 
 from blackbeard.config import settings
 from blackbeard.http_client import get_litellm_client
-from blackbeard.kinds import API_VERSION, ResourceKind
+from blackbeard.kinds import API_VERSION, NAME_PATTERN, ResourceKind
 from blackbeard.logging_config import request_id_var
 from blackbeard.resources import validate_resource
 
 logger = logging.getLogger(__name__)
 
 _yaml_loader: Any = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+_NAME_VALIDATE_RE = re.compile(NAME_PATTERN)
 
 SYSTEM_PROMPT = f"""\
 You are Blackbeard Assistant. Generate CrewAI agent/task/crew definitions as YAML.
@@ -100,7 +102,6 @@ def _get_assistant_client() -> httpx.AsyncClient:
 def _strip_markdown_fences(text: str) -> str:
     """Remove markdown code fences if the LLM wrapped its output in them."""
     stripped = text.strip()
-    # Match ```yaml ... ``` or ``` ... ```
     match = re.match(r"^```(?:ya?ml)?\s*\n(.*?)```\s*$", stripped, re.DOTALL)
     if match:
         return match.group(1).strip()
@@ -243,10 +244,10 @@ def _validate_and_filter(docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if "name" not in doc["metadata"]:
             # Generate a name from role (Agent) or description (Task) or kind
             if kind == "Agent" and spec.get("role"):
-                name = re.sub(r"[^a-z0-9]+", "-", spec["role"].lower()).strip("-")
+                name = _SLUG_RE.sub("-", spec["role"].lower()).strip("-")
             elif kind == "Task" and spec.get("description"):
                 words = spec["description"].lower().split()[:3]
-                name = re.sub(r"[^a-z0-9]+", "-", "-".join(words)).strip("-")
+                name = _SLUG_RE.sub("-", "-".join(words)).strip("-")
             else:
                 name = kind.lower()
             doc["metadata"]["name"] = name
@@ -255,7 +256,7 @@ def _validate_and_filter(docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         # name pattern.  An LLM could produce names with illegal chars
         # or empty strings after sanitization.
         final_name = doc["metadata"].get("name", "")
-        if not final_name or not re.match(r"^[a-z0-9][a-z0-9\-]*$", final_name):
+        if not final_name or not _NAME_VALIDATE_RE.match(final_name):
             doc["metadata"]["name"] = f"{kind.lower()}-{len(validated)}"
 
         # Truncate overly long names (max 255 chars per NAME_PATTERN usage)
@@ -378,7 +379,6 @@ async def generate_resources(
         )
         raise AssistantError("Model proxy returned an unparseable response.") from None
 
-    # Extract content from the chat completion response
     choices = data.get("choices") or []
     choice = choices[0] if isinstance(choices, list) and choices else {}
     message = choice.get("message", {}) if isinstance(choice, dict) else {}
@@ -408,7 +408,6 @@ async def generate_resources(
         },
     )
 
-    # Parse and validate the YAML response
     docs = _parse_yaml_response(raw_content)
     validated = _validate_and_filter(docs)
 
@@ -418,7 +417,6 @@ async def generate_resources(
             "Try rephrasing your prompt with more specific requirements."
         )
 
-    # Build explanation
     kinds_generated = [d.get("kind", "Unknown") for d in validated]
     kind_counts: dict[str, int] = {}
     for k in kinds_generated:

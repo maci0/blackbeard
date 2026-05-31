@@ -446,30 +446,35 @@ BLOCKED_TOOL_SUBMODULES = (
 )
 
 
+def check_tool_class_path(class_path: str) -> str | None:
+    """Return an error message if *class_path* is blocked, else ``None``.
+
+    Checks both the module prefix allowlist and the blocked-submodule denylist.
+    Used at validation time (resource creation) and at runtime (loader).
+    """
+    if not class_path.startswith(ALLOWED_TOOL_MODULE_PREFIXES):
+        return (
+            f"class_path '{class_path}' is not in the allowed module list. "
+            f"Permitted prefixes: {', '.join(ALLOWED_TOOL_MODULE_PREFIXES)}"
+        )
+    if "." in class_path:
+        module_path = class_path.rsplit(".", 1)[0]
+        for blocked in BLOCKED_TOOL_SUBMODULES:
+            if module_path == blocked or module_path.startswith(blocked + "."):
+                return (
+                    f"class_path '{class_path}' references a blocked module "
+                    f"that can execute arbitrary code."
+                )
+    return None
+
+
 def _validate_tool_extra(spec: dict[str, Any], errors: list[ValidationError]) -> None:
     """Block SSRF in tool URL, env var exfiltration, shell injection, and dangerous imports."""
     class_path = spec.get("class_path")
     if class_path and isinstance(class_path, str) and spec.get("type", "python") == "python":
-        if not class_path.startswith(ALLOWED_TOOL_MODULE_PREFIXES):
-            errors.append(
-                ValidationError(
-                    "spec.class_path",
-                    f"class_path '{class_path}' is not in the allowed module list. "
-                    f"Permitted prefixes: {', '.join(ALLOWED_TOOL_MODULE_PREFIXES)}",
-                )
-            )
-        elif "." in class_path:
-            module_path = class_path.rsplit(".", 1)[0]
-            for blocked in BLOCKED_TOOL_SUBMODULES:
-                if module_path == blocked or module_path.startswith(blocked + "."):
-                    errors.append(
-                        ValidationError(
-                            "spec.class_path",
-                            f"class_path '{class_path}' references a blocked module "
-                            f"that can execute arbitrary code.",
-                        )
-                    )
-                    break
+        error = check_tool_class_path(class_path)
+        if error:
+            errors.append(ValidationError("spec.class_path", error))
 
     url = spec.get("url")
     if url and isinstance(url, str):
@@ -583,6 +588,24 @@ BLOCKED_CALLABLE_MODULES = frozenset(
 )
 
 
+def check_callable_path(path: str) -> str | None:
+    """Return an error message if callable *path* is blocked, else ``None``.
+
+    Handles both dotted paths (``module.func``) and colon notation
+    (``module.path:func``).  Used at validation time and at runtime
+    (loader, flow runner).
+    """
+    top_module = path.split(".")[0].split(":")[0]
+    if top_module in BLOCKED_CALLABLE_MODULES:
+        return f"references a blocked module '{top_module}'"
+    if not path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
+        return (
+            f"not in the allowed module list. "
+            f"Permitted prefixes: {', '.join(ALLOWED_CALLABLE_MODULE_PREFIXES)}"
+        )
+    return None
+
+
 def _validate_function_path(
     spec: dict[str, Any], field_name: str, errors: list[ValidationError]
 ) -> None:
@@ -590,22 +613,10 @@ def _validate_function_path(
     func_path = spec.get("function_path")
     if not func_path or not isinstance(func_path, str):
         return
-    top_module = func_path.split(".")[0].split(":")[0]
-    if top_module in BLOCKED_CALLABLE_MODULES:
+    error = check_callable_path(func_path)
+    if error:
         errors.append(
-            ValidationError(
-                field_name,
-                f"Function path '{func_path}' references a blocked module '{top_module}'.",
-            )
-        )
-        return
-    if not func_path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
-        errors.append(
-            ValidationError(
-                field_name,
-                f"Function path '{func_path}' is not in the allowed module list. "
-                f"Permitted prefixes: {', '.join(ALLOWED_CALLABLE_MODULE_PREFIXES)}",
-            )
+            ValidationError(field_name, f"Function path '{func_path}' {error}")
         )
 
 

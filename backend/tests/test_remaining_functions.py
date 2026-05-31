@@ -1566,7 +1566,7 @@ class TestValidateWsAuth:
         from blackbeard.api.collaboration import validate_ws_auth
 
         with patch(
-            "blackbeard.api.collaboration.decode_access_token",
+            "blackbeard.auth.dependencies.decode_access_token",
             return_value={"sub": "user-1", "type": "access"},
         ):
             assert validate_ws_auth("valid-jwt-token", "") is True
@@ -1578,11 +1578,11 @@ class TestValidateWsAuth:
 
         with (
             patch(
-                "blackbeard.api.collaboration.decode_access_token",
+                "blackbeard.auth.dependencies.decode_access_token",
                 side_effect=pyjwt.ExpiredSignatureError("expired"),
             ),
             patch(
-                "blackbeard.api.collaboration.get_api_key",
+                "blackbeard.auth.dependencies.get_api_key",
                 return_value="system-key",
             ),
         ):
@@ -1595,7 +1595,7 @@ class TestValidateWsAuth:
         from blackbeard.api.collaboration import validate_ws_auth
 
         with patch(
-            "blackbeard.api.collaboration.get_api_key",
+            "blackbeard.auth.dependencies.get_api_key",
             return_value="correct-api-key",
         ):
             assert validate_ws_auth("", "correct-api-key") is True
@@ -1604,7 +1604,7 @@ class TestValidateWsAuth:
         from blackbeard.api.collaboration import validate_ws_auth
 
         with patch(
-            "blackbeard.api.collaboration.get_api_key",
+            "blackbeard.auth.dependencies.get_api_key",
             return_value="correct-api-key",
         ):
             assert validate_ws_auth("", "wrong-key") is False
@@ -1613,7 +1613,7 @@ class TestValidateWsAuth:
         from blackbeard.api.collaboration import validate_ws_auth
 
         with patch(
-            "blackbeard.api.collaboration.get_api_key",
+            "blackbeard.auth.dependencies.get_api_key",
             return_value="system-key",
         ):
             assert validate_ws_auth("", "") is False
@@ -1625,11 +1625,11 @@ class TestValidateWsAuth:
 
         with (
             patch(
-                "blackbeard.api.collaboration.decode_access_token",
+                "blackbeard.auth.dependencies.decode_access_token",
                 side_effect=pyjwt.InvalidTokenError("bad token"),
             ),
             patch(
-                "blackbeard.api.collaboration.get_api_key",
+                "blackbeard.auth.dependencies.get_api_key",
                 return_value="valid-system-key",
             ),
         ):

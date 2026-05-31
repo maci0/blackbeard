@@ -144,11 +144,46 @@ export interface SpendRecord {
   [key: string]: unknown;
 }
 
+/** A single entry from the audit log. */
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  actor_type: string;
+  actor_id: string;
+  action: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  detail: Record<string, unknown> | null;
+  request_id: string | null;
+}
+
 export const TERMINAL_STATUSES: ReadonlySet<string> = new Set([
   "completed",
   "failed",
   "cancelled",
 ]);
+
+/** Summary of a resource version returned from the versions list endpoint. */
+export interface VersionSummary {
+  version: number;
+  changed_by: string | null;
+  created_at: string;
+  changed_keys: string[];
+}
+
+/** Response shape from GET /{kind}/{name}/versions. */
+export interface VersionListResponse {
+  versions: VersionSummary[];
+}
+
+/** Full snapshot of a resource at a specific version. */
+export interface VersionDetail {
+  version: number;
+  changed_by: string | null;
+  created_at: string;
+  spec: Record<string, unknown>;
+  labels: Record<string, string> | null;
+}
 
 /** Error thrown when the API returns a non-OK response or a network failure occurs. */
 export class BlackbeardApiError extends Error {

@@ -6,6 +6,7 @@ import json
 import re
 import time
 from graphlib import TopologicalSorter
+from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 from typing import Any, cast
@@ -46,6 +47,11 @@ from blackbeard_cli.resources import (
     validate_resource,
 )
 
+try:
+    _cli_version = pkg_version("blackbeard-cli")
+except PackageNotFoundError:
+    _cli_version = "0.1.0-dev"
+
 
 def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
     """Load all YAML resource files from a file or directory."""
@@ -84,7 +90,13 @@ def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
 def validate_resources(
     resources: list[dict[str, Any]],
 ) -> tuple[list[tuple[dict[str, Any], list[ValidationError]]], list[list[str]]]:
-    """Validate resources and check for cycles and duplicates."""
+    """Validate resources and check for cycles and duplicates.
+
+    Returns:
+        A tuple of (per_resource_errors, cycles) where per_resource_errors is
+        a list of (resource_dict, validation_errors) pairs, and cycles is a list
+        of dependency cycles (each cycle is a list of resource keys).
+    """
     per_errors = []
     seen: dict[str, int] = {}
     for idx, res in enumerate(resources):
@@ -146,7 +158,7 @@ Common workflows:
   blackbeard delete Agent my-agent            # remove a resource
 """,
 )
-@click.version_option(version=pkg_version("blackbeard-cli"))
+@click.version_option(version=_cli_version)
 @click.option(
     "--server",
     "-s",
@@ -428,13 +440,13 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
         raise SystemExit(1)
 
     if dry_run:
-        ns = ctx.obj["project"]
+        project = ctx.obj["project"]
         if ctx.obj["json"]:
             print_json(
                 {
                     "dry_run": True,
                     "server": server,
-                    "project": ns,
+                    "project": project,
                     "resources": [
                         {"kind": r.get("kind"), "name": r.get("metadata", {}).get("name")}
                         for r in resources
@@ -445,7 +457,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
             out.print(
                 Panel(
                     f"[cyan]Dry run — no changes applied[/]\n"
-                    f"[dim]Server: {server}  Project: {ns}[/]",
+                    f"[dim]Server: {server}  Project: {project}[/]",
                     border_style="cyan",
                 )
             )
@@ -458,7 +470,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
     if not yes and not ctx.obj["json"]:
         console.print(
             f"\n[bold]{len(resources)}[/] resource(s) will be applied to"
-            f" [bold]{server}[/] (project: [bold]{ctx.obj['project']}[/])."
+            f" [bold]{escape(server)}[/] (project: [bold]{escape(ctx.obj['project'])}[/])."
         )
         if not click.confirm("Proceed?", default=True):
             console.print("[yellow]Aborted.[/]")
@@ -556,8 +568,21 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
 
     interrupted = len(results) < len(resources)
 
+    succeeded = sum(1 for r in results if r["status"] in ("created", "updated"))
+    failed = sum(1 for r in results if r["status"] == "error")
+    skipped = len(resources) - len(results)
+
     if ctx.obj["json"]:
-        print_json({"results": results, "total": len(resources), "interrupted": interrupted})
+        print_json(
+            {
+                "results": results,
+                "total": len(resources),
+                "succeeded": succeeded,
+                "failed": failed,
+                "skipped": skipped,
+                "interrupted": interrupted,
+            }
+        )
     else:
         table = Table(title="Apply Results")
         table.add_column("Status", width=3)
@@ -579,9 +604,6 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
 
         out.print(table)
 
-        succeeded = sum(1 for r in results if r["status"] in ("created", "updated"))
-        failed = sum(1 for r in results if r["status"] == "error")
-        skipped = len(resources) - len(results)
         summary = (
             f"\n[bold]{len(resources)}[/] resources:"
             f" [green]{succeeded} succeeded[/],"
@@ -910,10 +932,10 @@ def kickoff(
     if not is_json:
         out.print(
             Panel.fit(
-                f"[bold]Crew:[/] {crew_name}\n"
-                f"[bold]Project:[/] {project}\n"
-                f"[bold]Execution ID:[/] {execution_id}\n"
-                f"[bold]Status:[/] {status_val}",
+                f"[bold]Crew:[/] {escape(crew_name)}\n"
+                f"[bold]Project:[/] {escape(project)}\n"
+                f"[bold]Execution ID:[/] {escape(execution_id)}\n"
+                f"[bold]Status:[/] {escape(status_val)}",
                 title="[green]Execution Submitted[/]",
                 border_style="green",
             )
@@ -927,7 +949,7 @@ def kickoff(
             interval=interval,
         )
     else:
-        console.print(f"\nTrack with: [bold]{prog} status {execution_id} -w[/]")
+        console.print(f"\nTrack with: [bold]{prog} status {escape(execution_id)} -w[/]")
 
 
 def _validate_pkl_filename(_ctx: click.Context, _param: click.Parameter, value: str) -> str:
@@ -1046,13 +1068,13 @@ def train(
     if not is_json:
         out.print(
             Panel.fit(
-                f"[bold]Crew:[/] {crew_name}\n"
-                f"[bold]Project:[/] {project}\n"
+                f"[bold]Crew:[/] {escape(crew_name)}\n"
+                f"[bold]Project:[/] {escape(project)}\n"
                 f"[bold]Mode:[/] train\n"
                 f"[bold]Iterations:[/] {iterations}\n"
-                f"[bold]Filename:[/] {filename}\n"
-                f"[bold]Execution ID:[/] {execution_id}\n"
-                f"[bold]Status:[/] {status_val}",
+                f"[bold]Filename:[/] {escape(filename)}\n"
+                f"[bold]Execution ID:[/] {escape(execution_id)}\n"
+                f"[bold]Status:[/] {escape(status_val)}",
                 title="[green]Training Submitted[/]",
                 border_style="green",
             )
@@ -1066,7 +1088,7 @@ def train(
             interval=interval,
         )
     else:
-        console.print(f"\nTrack with: [bold]{prog} status {execution_id} -w[/]")
+        console.print(f"\nTrack with: [bold]{prog} status {escape(execution_id)} -w[/]")
 
 
 @cli.command(
@@ -1167,12 +1189,12 @@ def test_crew_cmd(
     if not is_json:
         out.print(
             Panel.fit(
-                f"[bold]Crew:[/] {crew_name}\n"
-                f"[bold]Project:[/] {project}\n"
+                f"[bold]Crew:[/] {escape(crew_name)}\n"
+                f"[bold]Project:[/] {escape(project)}\n"
                 f"[bold]Mode:[/] test\n"
                 f"[bold]Iterations:[/] {iterations}\n"
-                f"[bold]Execution ID:[/] {execution_id}\n"
-                f"[bold]Status:[/] {status_val}",
+                f"[bold]Execution ID:[/] {escape(execution_id)}\n"
+                f"[bold]Status:[/] {escape(status_val)}",
                 title="[green]Test Submitted[/]",
                 border_style="green",
             )
@@ -1186,7 +1208,7 @@ def test_crew_cmd(
             interval=interval,
         )
     else:
-        console.print(f"\nTrack with: [bold]{prog} status {execution_id} -w[/]")
+        console.print(f"\nTrack with: [bold]{prog} status {escape(execution_id)} -w[/]")
 
 
 @cli.command(
@@ -1199,7 +1221,7 @@ Examples:
   blackbeard status abc-123 --json --wait  # one JSON object per poll (JSONL)
 """
 )
-@click.argument("execution_id")
+@click.argument("execution_id", metavar="UUID")
 @click.option(
     "--wait",
     "--watch",
@@ -1223,7 +1245,7 @@ Examples:
 def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) -> None:
     """Show execution status and details.
 
-    EXECUTION_ID is the UUID returned by the kickoff command.
+    UUID is the execution ID returned by the kickoff command.
     """
     server = ctx.obj["server"]
 
@@ -1342,13 +1364,14 @@ def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) ->
             render(data)
             current = data.get("status", "")
             if current and current not in TERMINAL_STATUSES:
-                console.print(f"\n[dim]Still running. Watch: {prog} status {execution_id} -w[/]")
+                eid = escape(execution_id)
+                console.print(f"\n[dim]Still running. Watch: {prog} status {eid} -w[/]")
             elif current in ("failed", "cancelled"):
                 raise SystemExit(1)
             return
 
         console.print(
-            f"[dim]Watching execution {execution_id}"
+            f"[dim]Watching execution {escape(execution_id)}"
             f" (Ctrl-C to stop, polling every {interval}s)...[/]\n"
         )
         current_status = ""
@@ -1400,12 +1423,7 @@ def pull(ctx: click.Context, source: str, yes: bool) -> None:
     """
     server = ctx.obj["server"]
 
-    if (
-        not yes
-        and not ctx.obj["json"]
-        and not click.confirm(f"Import resources from '{source}' into {server}?", default=True)
-    ):
-        console.print("[yellow]Aborted.[/]")
+    if not confirm_destructive(ctx, f"Import resources from '{source}' into {server}?", yes=yes):
         return
 
     headers = require_auth(ctx)
@@ -1438,7 +1456,7 @@ def pull(ctx: click.Context, source: str, yes: bool) -> None:
     if imported:
         out.print(f"[green]Imported {imported} resource(s)[/]")
         for r in resources:
-            out.print(f"  [green]✓[/] {r}")
+            out.print(f"  [green]✓[/] {escape(str(r))}")
     if errors:
         out.print(f"[red]{errors} error(s)[/]")
     if not imported and not errors:

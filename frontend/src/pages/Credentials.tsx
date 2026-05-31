@@ -427,7 +427,7 @@ export default function Credentials() {
                 onClick={() => void fetchCredentials()}
                 disabled={loading}
                 aria-label="Refresh credentials"
-                className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RefreshCw
                   className={cn('h-4 w-4', loading && 'animate-spin motion-reduce:animate-none')}

@@ -235,6 +235,7 @@ export function Toolbar({
       <div className="flex items-center gap-2">
         {/* Undo / Redo */}
         <button
+          type="button"
           onClick={undo}
           disabled={!canUndo}
           className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
@@ -244,6 +245,7 @@ export function Toolbar({
           <Undo2 className="h-3.5 w-3.5" />
         </button>
         <button
+          type="button"
           onClick={redo}
           disabled={!canRedo}
           className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
@@ -254,6 +256,7 @@ export function Toolbar({
         </button>
 
         <button
+          type="button"
           data-tour="save-button"
           onClick={onSave}
           disabled={status === 'saving' || status === 'loading'}
@@ -276,6 +279,7 @@ export function Toolbar({
         </button>
 
         <button
+          type="button"
           data-tour="run-button"
           onClick={onRunClick}
           disabled={status === 'running' || status === 'saving' || status === 'loading'}
@@ -301,6 +305,7 @@ export function Toolbar({
 
         {hasExecResults && onClearExecResults && (
           <button
+            type="button"
             onClick={onClearExecResults}
             aria-label="Clear execution results from canvas"
             title="Clear results"
@@ -313,6 +318,7 @@ export function Toolbar({
 
         {/* Crew settings */}
         <button
+          type="button"
           onClick={onCrewSettingsClick}
           aria-label="Crew settings"
           title="Crew Settings"
@@ -323,6 +329,7 @@ export function Toolbar({
 
         {/* AI Assistant */}
         <button
+          type="button"
           onClick={onAssistantClick}
           disabled={status === 'saving' || status === 'loading'}
           aria-label="AI Assistant — generate crew from prompt"
@@ -372,6 +379,7 @@ export function Toolbar({
 
         {/* YAML editor toggle */}
         <button
+          type="button"
           onClick={onYamlToggle}
           aria-label={yamlOpen ? 'Close YAML editor' : 'Open YAML editor'}
           aria-pressed={yamlOpen}
@@ -385,6 +393,7 @@ export function Toolbar({
 
         {/* Auto layout */}
         <button
+          type="button"
           onClick={onAutoLayout}
           disabled={layouting}
           aria-label="Auto-arrange nodes"
@@ -402,6 +411,7 @@ export function Toolbar({
         {onCollabToggle && (
           <div className="flex items-center gap-1.5">
             <button
+              type="button"
               onClick={onCollabToggle}
               aria-label={
                 collabEnabled ? 'Disable live collaboration' : 'Enable live collaboration'
@@ -438,6 +448,7 @@ export function Toolbar({
 
         {/* Keyboard shortcuts */}
         <button
+          type="button"
           onClick={() => setShortcutsOpen(true)}
           aria-label="Keyboard shortcuts"
           title={`Keyboard shortcuts (${modKey}+/)`}

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useStudioStore } from '@/stores/studioStore'
@@ -324,7 +325,8 @@ function StudioInner() {
     try {
       const result = await api.get<{ items: Resource[]; total: number }>('/api/v1/crews')
       setCrews(result.items.map((c) => c.metadata.name))
-    } catch {
+    } catch (err) {
+      console.error('[studio] Failed to fetch crews:', err)
       setCrews([])
       setCrewsFetchError(true)
     } finally {
@@ -395,7 +397,8 @@ function StudioInner() {
           allNodes = [groupNode, ...parented]
           setNodes(allNodes)
           setEdges(laid.edges)
-        } catch {
+        } catch (err) {
+          console.warn('[studio] Auto-layout failed, using fallback positioning:', err)
           const groupNode = buildCrewGroupNode(crew.metadata.name, childNodes)
           const parented = childNodes.map((n) => ({
             ...n,
@@ -685,8 +688,9 @@ function StudioInner() {
           applyExecResults(exec.tasks, exec.status)
           return
         }
-      } catch {
+      } catch (err) {
         if (cancelled) return
+        console.error('[studio] Execution poll failed:', err)
       }
       timer = setTimeout(() => void poll(), 3000)
     }

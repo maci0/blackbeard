@@ -7,14 +7,16 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import require_permission
 from blackbeard.kinds import API_VERSION
 from blackbeard.models import User, get_session
 from blackbeard.models.resource_schemas import ResourceCreate, ResourceMetadata
+from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
 from blackbeard.resources import ResourceService
 
 logger = logging.getLogger(__name__)
@@ -32,8 +34,24 @@ def _load_catalog() -> list[dict[str, Any]]:
     if not _CATALOG_PATH.exists():
         logger.warning("Tools library catalog not found: %s", _CATALOG_PATH)
         return []
-    with open(_CATALOG_PATH) as f:
-        _catalog = yaml.safe_load(f) or []
+    try:
+        with open(_CATALOG_PATH, encoding="utf-8") as f:
+            raw = yaml.safe_load(f)
+        if not isinstance(raw, list):
+            logger.error(
+                "Tools library catalog root must be a list, got %s: %s",
+                type(raw).__name__,
+                _CATALOG_PATH,
+                extra={"event": "tools_library_invalid_type", "root_type": type(raw).__name__},
+            )
+            return []
+        _catalog = raw
+    except yaml.YAMLError:
+        logger.exception("Tools library catalog has invalid YAML: %s", _CATALOG_PATH)
+        return []
+    except OSError:
+        logger.exception("Failed to read tools library catalog: %s", _CATALOG_PATH)
+        return []
     logger.info(
         "Tools library loaded: %d entries",
         len(_catalog),
@@ -70,29 +88,32 @@ class InstallResponse(BaseModel):
     errors: list[str]
 
 
-@router.get("", response_model=LibraryListResponse)
+@router.get(
+    "",
+    response_model=LibraryListResponse,
+    responses={401: {"description": "Authentication required"}},
+)
 async def list_library_tools(
     category: str | None = Query(default=None, description="Filter by category"),
     search: str | None = Query(default=None, max_length=100, description="Search by name or tag"),
-    _current_user: User | None = Depends(
-        require_permission("list", "Tool")
-    ),
+    _current_user: User | None = Depends(require_permission("list", "Tool")),
 ) -> LibraryListResponse:
     """Browse the curated tools library."""
     catalog = _load_catalog()
 
     tools = []
     categories_set: set[str] = set()
+    q = search.lower() if search else ""
     for entry in catalog:
         categories_set.add(entry.get("category", "other"))
         if category and entry.get("category") != category:
             continue
-        if search:
-            q = search.lower()
+        if q:
+            slug_match = q in entry.get("slug", "").lower()
             name_match = q in entry.get("name", "").lower()
             desc_match = q in entry.get("description", "").lower()
             tag_match = any(q in t.lower() for t in entry.get("tags", []))
-            if not (name_match or desc_match or tag_match):
+            if not (slug_match or name_match or desc_match or tag_match):
                 continue
         tools.append(
             LibraryTool(
@@ -115,17 +136,21 @@ async def list_library_tools(
     )
 
 
-@router.post("/install", response_model=InstallResponse)
+@router.post(
+    "/install",
+    response_model=InstallResponse,
+    responses={
+        401: {"description": "Authentication required"},
+        429: {"description": "Too many install requests"},
+    },
+)
 async def install_library_tools(
+    request: Request,
     body: InstallRequest,
     session: AsyncSession = Depends(get_session),
-    _current_user: User = Depends(
-        require_permission("create", "Tool", require_identity=True)
-    ),
+    _current_user: User = Depends(require_permission("create", "Tool", require_identity=True)),
 ) -> InstallResponse:
     """Install tools from the library as Blackbeard Tool resources."""
-    from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
-
     check_rate_limit(mutation_limiter, _current_user, "Too many install requests. Try again later.")
 
     catalog = _load_catalog()
@@ -174,18 +199,19 @@ async def install_library_tools(
             else:
                 errors.append(f"{slug}: {str(exc)[:100]}")
 
-    if installed > 0:
-        from blackbeard.audit import log_audit
-
-        await log_audit(
-            session=session,
-            action="import",
-            resource_type="Tool",
-            resource_id=f"library:{installed}",
-            actor_type="user",
-            actor_id=str(_current_user.id) if _current_user else None,
-            detail={"source": "library", "installed": installed, "skipped": skipped},
-        )
-        await session.commit()
+    await log_audit(
+        session=session,
+        action="import",
+        resource_type="Tool",
+        resource_id=f"library:{installed}",
+        detail={
+            "source": "library",
+            "installed": installed,
+            "skipped": skipped,
+            "errors": len(errors),
+        },
+        **audit_from_request(request, _current_user),
+    )
+    await session.commit()
 
     return InstallResponse(installed=installed, skipped=skipped, errors=errors)

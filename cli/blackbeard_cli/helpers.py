@@ -75,6 +75,16 @@ def extract_detail(response: httpx.Response) -> str:
             detail = body.get("detail", response.text)
             if isinstance(detail, str):
                 return detail
+            if isinstance(detail, list):
+                parts = []
+                for item in detail:
+                    if isinstance(item, dict):
+                        loc = ".".join(str(x) for x in item.get("loc", []))
+                        msg = item.get("msg", str(item))
+                        parts.append(f"{loc}: {msg}" if loc else msg)
+                    else:
+                        parts.append(str(item))
+                return "; ".join(parts) if parts else str(detail)
             return str(detail)
         return response.text
     except (ValueError, KeyError):
@@ -174,7 +184,8 @@ def validate_name(name: str) -> None:
         console.print(
             f"[red bold]Error:[/] Invalid resource name {escape(repr(name))}.\n"
             "  Names must start with a lowercase letter or digit and"
-            " contain only lowercase letters, digits, and hyphens."
+            " contain only lowercase letters, digits, and hyphens.\n"
+            "  [dim]Example: my-agent[/]"
         )
         raise SystemExit(2)
 

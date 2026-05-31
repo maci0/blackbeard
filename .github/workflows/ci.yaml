@@ -271,9 +271,19 @@ jobs:
           context: ./backend
           file: deploy/docker/Dockerfile.api
           push: false
+          load: true
           tags: blackbeard-api:${{ github.sha }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
+
+      - name: Scan API image for vulnerabilities
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          image-ref: blackbeard-api:${{ github.sha }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
 
   docker-ui:
     runs-on: ubuntu-latest
@@ -292,9 +302,19 @@ jobs:
           context: ./frontend
           file: deploy/docker/Dockerfile.ui
           push: false
+          load: true
           tags: blackbeard-ui:${{ github.sha }}
           cache-from: type=gha,scope=ui
           cache-to: type=gha,mode=max,scope=ui
+
+      - name: Scan UI image for vulnerabilities
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          image-ref: blackbeard-ui:${{ github.sha }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
 
   ci-gate:
     if: always()

@@ -15,7 +15,7 @@ from collections.abc import AsyncGenerator
 from typing import Any, Literal
 
 import httpx
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
@@ -381,7 +381,7 @@ async def chat_stream(
                         delta = choices[0].get("delta", {})
                         content = delta.get("content") or delta.get("reasoning_content") or ""
                         if content:
-                            yield f"data: {json.dumps({'content': content, 'done': False})}\n\n"
+                            yield f'data: {{"content":{json.dumps(content)},"done":false}}\n\n'
 
                     if chunk_data.get("usage"):
                         usage = chunk_data["usage"]
@@ -619,6 +619,9 @@ class ModelInfo(BaseModel):
     model_id: str | None = None
 
 
+_MODEL_LIST_RATE_MSG = "Too many model list requests. Try again later."
+
+
 @router.get(
     "/models/available",
     response_model=list[ModelInfo],
@@ -628,9 +631,12 @@ class ModelInfo(BaseModel):
     },
 )
 async def list_available_models(
+    response: Response,
     _user: User | None = Depends(get_current_user),
 ) -> list[ModelInfo]:
     """List all models configured in the LiteLLM proxy."""
+    check_rate_limit(chat_limiter, _user, _MODEL_LIST_RATE_MSG)
+    response.headers["Cache-Control"] = "no-store"
     try:
         client = _get_litellm_client()
         resp = await client.get(

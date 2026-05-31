@@ -203,19 +203,14 @@ class TestPollBackoff:
         assert _poll_backoff(15) == 1
         assert _poll_backoff(29) == 1
 
-    def test_phase2_returns_3(self) -> None:
+    def test_phase2_returns_2(self) -> None:
         from blackbeard.api.executions import _poll_backoff
 
-        assert _poll_backoff(30) == 3
-        assert _poll_backoff(45) == 3
-        assert _poll_backoff(59) == 3
-
-    def test_phase3_returns_5(self) -> None:
-        from blackbeard.api.executions import _poll_backoff
-
-        assert _poll_backoff(60) == 5
-        assert _poll_backoff(100) == 5
-        assert _poll_backoff(999) == 5
+        assert _poll_backoff(30) == 2
+        assert _poll_backoff(45) == 2
+        assert _poll_backoff(60) == 2
+        assert _poll_backoff(100) == 2
+        assert _poll_backoff(999) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -300,8 +295,8 @@ class TestLogWebhookFutureException:
         with patch("blackbeard.engine.execution_listener.logger") as mock_logger:
             _log_webhook_future_exception(future)
 
-        # Generic exception on .exception() is caught; debug logged
-        mock_logger.debug.assert_called()
+        # Generic exception on .exception() is caught; warning logged
+        mock_logger.warning.assert_called()
 
 
 # ---------------------------------------------------------------------------

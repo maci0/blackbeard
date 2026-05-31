@@ -22,12 +22,14 @@ describe('StatusBadge', () => {
       render(<StatusBadge status="completed" />)
       const badge = screen.getByText('Completed').closest('span')
       expect(badge).toHaveClass('bg-green-100', 'text-green-700')
+      expect(badge).not.toHaveClass('bg-red-100', 'bg-blue-100')
     })
 
     it('applies red classes for failed status', () => {
       render(<StatusBadge status="failed" />)
       const badge = screen.getByText('Failed').closest('span')
       expect(badge).toHaveClass('bg-red-100', 'text-red-700')
+      expect(badge).not.toHaveClass('bg-green-100', 'bg-blue-100')
     })
 
     it('applies blue classes for running status', () => {
@@ -76,11 +78,10 @@ describe('StatusBadge', () => {
       expect(screen.getByRole('status')).toBeInTheDocument()
     })
 
-    it('does not set role attribute when live prop is false', () => {
+    it('always sets role="status" regardless of live prop', () => {
       render(<StatusBadge status="running" />)
-      // The outer span should not have role="status"
       const badge = screen.getByText('Running').closest('span')
-      expect(badge).not.toHaveAttribute('role')
+      expect(badge).toHaveAttribute('role', 'status')
     })
   })
 })

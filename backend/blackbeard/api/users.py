@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from blackbeard.api import MUTATION_RATE_MSG as _MUTATION_RATE_MSG
-from blackbeard.api import smart_total as _smart_total
+from blackbeard.api import smart_total
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth.dependencies import require_permission
 from blackbeard.models import (
@@ -154,17 +154,19 @@ def _require_self_only(current_user: User, user_id: uuid.UUID, action: str) -> N
     responses={401: {"description": "Authentication required"}},
 )
 async def list_users(
+    response: Response,
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     _current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> UserListResponse:
     """List users with pagination (requires authentication)."""
+    response.headers["Cache-Control"] = "no-store"
     result = await session.execute(
         select(User).options(*_USER_SAFE_LOAD).order_by(User.created_at).limit(limit).offset(offset)
     )
     users = list(result.scalars().all())
-    total = await _smart_total(
+    total = await smart_total(
         session, users, limit, offset, select(func.count()).select_from(User)
     )
     return UserListResponse(
@@ -186,10 +188,12 @@ async def list_users(
 )
 async def get_user(
     user_id: uuid.UUID,
+    response: Response,
     _current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> UserResponse:
     """Get a user by ID."""
+    response.headers["Cache-Control"] = "no-store"
     result = await session.execute(select(User).where(User.id == user_id).options(*_USER_SAFE_LOAD))
     user = result.scalar_one_or_none()
     if user is None:
@@ -291,7 +295,9 @@ async def deactivate_user(
     )
     # Scrub user identity from execution records (principal_chain may reference user).
     await session.execute(
-        update(Execution).where(Execution.initiated_by == user.id).values(principal_chain=None)
+        update(Execution)
+        .where(Execution.initiated_by == user.id)
+        .values(initiated_by=None, principal_chain=None)
     )
     # Scrub user identity from resource version history (changed_by may store
     # user ID or legacy email).
@@ -325,15 +331,17 @@ async def deactivate_user(
     responses={401: {"description": "Authentication required"}},
 )
 async def list_groups(
+    response: Response,
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     _current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> GroupListResponse:
     """List groups with pagination."""
+    response.headers["Cache-Control"] = "no-store"
     result = await session.execute(select(Group).order_by(Group.name).limit(limit).offset(offset))
     groups = list(result.scalars().all())
-    total = await _smart_total(
+    total = await smart_total(
         session, groups, limit, offset, select(func.count()).select_from(Group)
     )
     return GroupListResponse(
@@ -412,10 +420,12 @@ async def create_group(
 )
 async def get_group(
     group_id: uuid.UUID,
+    response: Response,
     _current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> GroupResponse:
     """Get a group by ID."""
+    response.headers["Cache-Control"] = "no-store"
     group = await _require_group(session, group_id)
     return group_response(group)
 
@@ -536,12 +546,14 @@ async def delete_group(
 )
 async def list_group_members(
     group_id: uuid.UUID,
+    response: Response,
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, le=100_000, description="Results to skip"),
     _current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> GroupMemberListResponse:
     """List members of a group."""
+    response.headers["Cache-Control"] = "no-store"
     await _require_group(session, group_id)
 
     result = await session.execute(
@@ -554,7 +566,7 @@ async def list_group_members(
         .offset(offset)
     )
     users = list(result.scalars().all())
-    total = await _smart_total(
+    total = await smart_total(
         session,
         users,
         limit,

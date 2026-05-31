@@ -119,29 +119,35 @@ async def test_revoke_api_key_requires_jwt(client: AsyncClient):
 
 
 async def test_generated_api_key_is_stored_on_user(client: AsyncClient, db_session: AsyncSession):
-    """Generating an API key should persist it on the User record."""
+    """Generating an API key should persist its SHA-256 hash on the User record."""
+    import hashlib
+
     token = await _register_and_get_token(client)
     resp = await client.post("/api/v1/auth/api-key", headers=_bearer(token))
     assert resp.status_code == 200
     api_key = resp.json()["api_key"]
 
-    # Verify the key is persisted on the user row
-    result = await db_session.execute(select(User).where(User.api_key == api_key))
+    # Verify the hashed key is persisted on the user row
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    result = await db_session.execute(select(User).where(User.api_key == key_hash))
     user = result.scalar_one_or_none()
-    assert user is not None, "Generated API key should be stored on the user"
-    assert user.api_key == api_key
+    assert user is not None, "Generated API key hash should be stored on the user"
+    assert user.api_key == key_hash
 
 
 async def test_revoked_api_key_is_cleared_on_user(client: AsyncClient, db_session: AsyncSession):
     """Revoking an API key should clear it from the User record."""
+    import hashlib
+
     token = await _register_and_get_token(client)
 
     # Generate a key
     resp = await client.post("/api/v1/auth/api-key", headers=_bearer(token))
     api_key = resp.json()["api_key"]
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
 
     # Verify it's stored
-    result = await db_session.execute(select(User).where(User.api_key == api_key))
+    result = await db_session.execute(select(User).where(User.api_key == key_hash))
     stored_user = result.scalar_one_or_none()
     assert stored_user is not None and stored_user.email == _APIKEY_EMAIL
 
@@ -150,12 +156,14 @@ async def test_revoked_api_key_is_cleared_on_user(client: AsyncClient, db_sessio
     assert del_resp.status_code == 204
 
     # Verify the key is no longer stored
-    result2 = await db_session.execute(select(User).where(User.api_key == api_key))
+    result2 = await db_session.execute(select(User).where(User.api_key == key_hash))
     assert result2.scalar_one_or_none() is None, "Revoked key should be cleared from DB"
 
 
 async def test_rotated_key_invalidates_previous(client: AsyncClient, db_session: AsyncSession):
     """Rotating an API key should invalidate the previous key."""
+    import hashlib
+
     token = await _register_and_get_token(client)
 
     # Generate first key
@@ -167,13 +175,15 @@ async def test_rotated_key_invalidates_previous(client: AsyncClient, db_session:
     key2 = resp2.json()["api_key"]
 
     # Old key should no longer resolve to any user
-    result_old = await db_session.execute(select(User).where(User.api_key == key1))
+    hash1 = hashlib.sha256(key1.encode()).hexdigest()
+    result_old = await db_session.execute(select(User).where(User.api_key == hash1))
     assert result_old.scalar_one_or_none() is None, "Old key must not resolve after rotation"
 
     # New key should resolve
-    result_new = await db_session.execute(select(User).where(User.api_key == key2))
+    hash2 = hashlib.sha256(key2.encode()).hexdigest()
+    result_new = await db_session.execute(select(User).where(User.api_key == hash2))
     new_user = result_new.scalar_one_or_none()
-    assert new_user is not None and new_user.api_key == key2, "New key should resolve"
+    assert new_user is not None and new_user.api_key == hash2, "New key should resolve"
 
 
 # ---------------------------------------------------------------------------

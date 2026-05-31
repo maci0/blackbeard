@@ -395,6 +395,14 @@ app = FastAPI(
             "name": "a2a",
             "description": "Agent-to-Agent protocol (agent card discovery)",
         },
+        {
+            "name": "import",
+            "description": "Import agent personas from the Agency Agents library",
+        },
+        {
+            "name": "tools-library",
+            "description": "Browse and install curated tools from the built-in library",
+        },
     ],
 )
 
@@ -404,7 +412,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["Content-Type", "X-API-Key", "Authorization", "X-Request-Id"],
-    expose_headers=["X-Request-Id"],
+    expose_headers=["X-Request-Id", "Location", "Retry-After"],
 )
 
 # Middleware stack (LIFO): security_headers → api_key_middleware → body_size_limiter

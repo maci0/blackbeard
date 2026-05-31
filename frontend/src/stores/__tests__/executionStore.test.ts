@@ -206,7 +206,7 @@ describe('executionStore', () => {
 
       const stateAfter = useExecutionStore.getState()
       // API should still have been called even though state didn't change
-      expect(mockApi.get).toHaveBeenCalledWith('/api/v1/executions/exec-1')
+      expect(mockApi.get).toHaveBeenCalledWith('/api/v1/executions/exec-1', { skipCache: true })
       // State reference should be the same (no unnecessary re-render)
       expect(stateAfter.currentExecution).toBe(stateBefore.currentExecution)
       // Verify actual field values are preserved

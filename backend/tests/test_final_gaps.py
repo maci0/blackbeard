@@ -15,14 +15,14 @@ from hypothesis import strategies as st
 
 class TestPollExecution:
     def test_poll_backoff_phase_transitions(self) -> None:
-        """Verify backoff phases: 1s for early polls, 3s mid, 5s late."""
+        """Verify backoff phases: 1s for early polls, 2s after threshold."""
         from blackbeard.api.executions import _poll_backoff
 
         assert _poll_backoff(0) == 1
         assert _poll_backoff(29) == 1
-        assert _poll_backoff(30) == 3
-        assert _poll_backoff(59) == 3
-        assert _poll_backoff(60) == 5
+        assert _poll_backoff(30) == 2
+        assert _poll_backoff(59) == 2
+        assert _poll_backoff(60) == 2
 
     @given(polls=st.integers(min_value=0, max_value=100))
     @settings(max_examples=20)
@@ -30,7 +30,7 @@ class TestPollExecution:
         from blackbeard.api.executions import _poll_backoff
 
         result = _poll_backoff(polls)
-        assert result in (1, 3, 5)
+        assert result in (1, 2)
 
 
 # ---------------------------------------------------------------------------

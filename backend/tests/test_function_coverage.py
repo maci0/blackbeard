@@ -113,13 +113,11 @@ class TestRedactQueryString:
         # urlencode encodes brackets: [REDACTED] -> %5BREDACTED%5D
         assert "REDACTED" in result
 
-    def test_name_redacted_age_not(self):
+    def test_name_not_redacted(self):
         from blackbeard.api.middleware import _redact_query_string
 
         result = _redact_query_string("name=bob&age=30")
-        assert "bob" not in result
-        assert "REDACTED" in result
-        assert "age=30" in result
+        assert result == "name=bob&age=30"
 
     def test_multiple_sensitive_params(self):
         from blackbeard.api.middleware import _redact_query_string

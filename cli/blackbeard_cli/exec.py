@@ -37,13 +37,18 @@ Examples:
   blackbeard executions
   blackbeard executions --crew research-crew
   blackbeard executions --status running
-  blackbeard executions --project prod --status failed
-  blackbeard executions --type train
+  blackbeard -n prod executions --status failed
+  blackbeard executions --project staging --type train
   blackbeard executions --json
 """,
 )
 @click.option("--crew", "-c", default=None, metavar="NAME", help="Filter by crew name")
-@click.option("--project", default=None, metavar="NAME", help="Filter by project")
+@click.option(
+    "--project",
+    default=None,
+    metavar="NAME",
+    help="Filter by project (defaults to global -n/--project)",
+)
 @click.option(
     "--status",
     "status_filter",
@@ -83,11 +88,13 @@ def executions_list(
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
+    effective_project = project if project is not None else ctx.obj.get("project")
+
     params: dict[str, Any] = {"limit": limit}
     if crew:
         params["crew_name"] = crew
-    if project:
-        params["project"] = project
+    if effective_project:
+        params["project"] = effective_project
     if status_filter:
         params["status"] = status_filter
     if exec_type:
@@ -114,8 +121,8 @@ def executions_list(
         filters = []
         if crew:
             filters.append(f"crew={escape(crew)}")
-        if project:
-            filters.append(f"project={escape(project)}")
+        if effective_project:
+            filters.append(f"project={escape(effective_project)}")
         if status_filter:
             filters.append(f"status={escape(status_filter)}")
         if exec_type:
@@ -171,7 +178,7 @@ Examples:
   blackbeard events abc-123 --follow --json   # JSONL stream
 """,
 )
-@click.argument("execution_id")
+@click.argument("execution_id", metavar="UUID")
 @click.option("--follow", "-f", is_flag=True, default=False, help="Follow events in real-time")
 @click.option(
     "--interval",
@@ -192,7 +199,7 @@ def events(
 ) -> None:
     """Show execution events.
 
-    EXECUTION_ID is the UUID returned by the kickoff command.
+    UUID is the execution ID returned by the kickoff command.
     """
     server = ctx.obj["server"]
     headers = require_auth(ctx)
@@ -215,7 +222,7 @@ def events(
 
     if follow and not is_json:
         console.print(
-            f"[dim]Following events for {execution_id}"
+            f"[dim]Following events for {escape(execution_id)}"
             f" (Ctrl-C to stop, polling every {interval}s)...[/]\n"
         )
 
@@ -323,14 +330,14 @@ Examples:
   blackbeard cancel abc-123 --json
 """,
 )
-@click.argument("execution_id")
+@click.argument("execution_id", metavar="UUID")
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @json_opt
 @click.pass_context
 def cancel(ctx: click.Context, execution_id: str, yes: bool) -> None:
     """Cancel a running execution.
 
-    EXECUTION_ID is the UUID returned by the kickoff command.
+    UUID is the execution ID returned by the kickoff command.
     """
     server = ctx.obj["server"]
     headers = require_auth(ctx)

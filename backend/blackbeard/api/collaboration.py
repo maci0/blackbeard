@@ -4,21 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import collections
-import hmac
 import json
 import logging
 import re
 import time
+import uuid
 from typing import Any
 
-import jwt as pyjwt
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from blackbeard.auth.api_key import get_api_key
-from blackbeard.auth.jwt import decode_access_token
+from blackbeard.auth.dependencies import validate_ws_auth
 from blackbeard.config import settings
 from blackbeard.kinds import NAME_PATTERN
-from blackbeard.logging_config import anonymize_ip, log_task_exception
+from blackbeard.logging_config import anonymize_ip, log_task_exception, request_id_var
 from blackbeard.models.execution_schemas import exceeds_depth as _exceeds_depth
 from blackbeard.rate_limiter import record_auth_failure
 
@@ -71,9 +69,6 @@ _rooms: dict[str, set[WebSocket]] = {}
 _rooms_lock = asyncio.Lock()
 _MAX_ROOMS = 500  # prevent unbounded memory growth from room creation
 _MAX_CONNECTIONS_PER_ROOM = 50
-
-
-_log_collab_task_exception = log_task_exception
 
 
 class ValkeyCollabBackend:
@@ -130,7 +125,7 @@ class ValkeyCollabBackend:
                 return
 
             task = asyncio.create_task(self._listen(room), name=f"valkey-collab-{room}")
-            task.add_done_callback(_log_collab_task_exception)
+            task.add_done_callback(log_task_exception)
             self._subscriptions[room] = task
 
     async def unsubscribe(self, room: str) -> None:
@@ -341,29 +336,6 @@ async def _broadcast(
         await backend.publish_raw(room, text)
 
 
-def validate_ws_auth(token: str, api_key: str) -> bool:
-    """Validate WebSocket authentication credentials.
-
-    Accepts either a JWT access token or an API key.
-    Returns True if authentication succeeds, False otherwise.
-    """
-    if token:
-        try:
-            decode_access_token(token)
-            return True
-        except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError) as exc:
-            logger.warning(
-                "Collab WS auth: token validation failed",
-                exc_info=True,
-                extra={
-                    "event": "collab_ws_token_invalid",
-                    "error_type": type(exc).__name__,
-                },
-            )
-
-    return bool(api_key and hmac.compare_digest(api_key, get_api_key()))
-
-
 @router.websocket("/ws/collab/{crew_name}")
 async def collaborate(websocket: WebSocket, crew_name: str) -> None:
     """WebSocket endpoint for real-time canvas collaboration.
@@ -412,9 +384,9 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
         await websocket.close(code=4401, reason="Authentication required")
         return
 
+    request_id_var.set(str(uuid.uuid4()))
     await websocket.accept()
 
-    # Add to room
     async with _rooms_lock:
         is_new_room = crew_name not in _rooms
         if is_new_room:
@@ -546,14 +518,16 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
                 room_empty = True
 
         # Unsubscribe from Valkey when room is empty on this replica.
-        # Re-check under lock: another WS may have re-created the room
-        # between releasing _rooms_lock above and reaching this point.
+        # Hold _rooms_lock while calling unsubscribe to prevent a race
+        # where a new client subscribes between the empty-check and the
+        # unsubscribe, which would cancel the new client's subscription.
+        # Lock ordering: _rooms_lock → _subscriber_lock (no reverse path).
         if room_empty:
-            async with _rooms_lock:
-                still_empty = crew_name not in _rooms
             backend = _get_valkey_backend()
-            if still_empty and backend is not None:
-                await backend.unsubscribe(crew_name)
+            if backend is not None:
+                async with _rooms_lock:
+                    if crew_name not in _rooms:
+                        await backend.unsubscribe(crew_name)
 
         logger.info(
             "Collaboration: client left room %s (remaining=%d)",

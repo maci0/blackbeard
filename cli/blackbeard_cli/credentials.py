@@ -18,10 +18,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# Access token lifetime minus safety margin (14 min of 15 min token).
+# 15 min token minus 60s safety margin to refresh before expiry.
 ACCESS_TOKEN_LIFETIME_S = 840
 
-_CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "blackbeard"
+_CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")) / "blackbeard"
 _CREDENTIALS_FILE = _CONFIG_DIR / "credentials.json"
 
 
@@ -73,11 +73,10 @@ def save_credentials(
         "expires_at": expires_at,
     }
 
-    _CREDENTIALS_FILE.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
-    os.chmod(_CREDENTIALS_FILE, 0o600)
+    fd = os.open(str(_CREDENTIALS_FILE), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
 
 
 def clear_credentials() -> bool:

@@ -701,6 +701,7 @@ export default function ResourceDetail() {
           <p className="font-medium">{error ?? 'Resource not found'}</p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <button
+              type="button"
               onClick={() => void loadResource()}
               className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
@@ -751,6 +752,7 @@ export default function ResourceDetail() {
             {editMode ? (
               <>
                 <button
+                  type="button"
                   onClick={handleCancelEdit}
                   className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -758,6 +760,7 @@ export default function ResourceDetail() {
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={() => void handleSave()}
                   disabled={saving}
                   aria-busy={saving}
@@ -776,6 +779,7 @@ export default function ResourceDetail() {
               <>
                 {resource.kind === 'Crew' && (
                   <button
+                    type="button"
                     onClick={() => {
                       setShowRunDialog(true)
                       setRunError(null)
@@ -788,6 +792,7 @@ export default function ResourceDetail() {
                 )}
                 {resource.kind === 'LLMConnection' && (
                   <button
+                    type="button"
                     onClick={() => void handleTestModel()}
                     disabled={testingModel}
                     aria-busy={testingModel || undefined}
@@ -811,6 +816,7 @@ export default function ResourceDetail() {
                   </Link>
                 )}
                 <button
+                  type="button"
                   onClick={handleDownloadYaml}
                   title="Download as YAML"
                   className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -819,6 +825,7 @@ export default function ResourceDetail() {
                   YAML
                 </button>
                 <button
+                  type="button"
                   onClick={handleCopyYaml}
                   title="Copy YAML to clipboard"
                   className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -831,6 +838,7 @@ export default function ResourceDetail() {
                   Copy YAML
                 </button>
                 <button
+                  type="button"
                   onClick={() => void handleClone()}
                   title="Duplicate this resource"
                   className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -839,6 +847,7 @@ export default function ResourceDetail() {
                   Clone
                 </button>
                 <button
+                  type="button"
                   onClick={handleEdit}
                   className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -846,6 +855,7 @@ export default function ResourceDetail() {
                   Edit
                 </button>
                 <button
+                  type="button"
                   onClick={() => setDeleteOpen(true)}
                   className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >

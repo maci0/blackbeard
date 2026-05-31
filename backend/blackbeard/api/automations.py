@@ -170,6 +170,7 @@ async def trigger_automation(
         401: {"description": "Invalid webhook secret"},
         404: {"description": "Automation not found"},
         409: {"description": "Automation is disabled or not a webhook trigger"},
+        429: {"description": "Too many trigger requests"},
         500: {"description": "Trigger execution failed"},
     },
 )
@@ -209,10 +210,9 @@ async def webhook_trigger(
         bool(expected_secret)
         and len(expected_secret) >= 16
         and len(body.secret) >= 16
-        and hmac.compare_digest(body.secret, expected_secret)
+        and hmac.compare_digest(body.secret.encode(), expected_secret.encode())
     )
     if not secret_valid:
-        client_ip = get_client_ip(request) or "unknown"
         record_auth_failure(client_ip)
         logger.warning(
             "Webhook auth failed for automation '%s'",

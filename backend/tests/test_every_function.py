@@ -458,21 +458,21 @@ class TestAuthDependencies:
             )
         assert exc_info.value.status_code == 401
 
-    def test_require_jwt_user_exists(self) -> None:
+    def test_require_jwt_user_is_coroutine(self) -> None:
         from blackbeard.auth.dependencies import require_jwt_user
 
-        assert callable(require_jwt_user)
+        assert asyncio.iscoroutinefunction(require_jwt_user)
 
-    def test_check_strict_is_returned_by_require_permission(self) -> None:
+    def test_require_permission_returns_coroutine_dependency(self) -> None:
         from blackbeard.auth.dependencies import require_permission
 
         dep = require_permission("get", "Agent", require_identity=True)
-        assert callable(dep)
+        assert asyncio.iscoroutinefunction(dep)
 
-    def test_check_resource_permission_exists(self) -> None:
+    def test_check_resource_permission_is_coroutine(self) -> None:
         from blackbeard.auth.dependencies import check_resource_permission
 
-        assert callable(check_resource_permission)
+        assert asyncio.iscoroutinefunction(check_resource_permission)
 
 
 # ---------------------------------------------------------------------------
@@ -683,17 +683,23 @@ class TestResourceValidator:
 
 
 class TestResourceService:
-    def test_get_by_identity_exists(self) -> None:
+    def test_get_by_identity_is_method(self) -> None:
+        import inspect
+
         from blackbeard.resources.service import ResourceService
 
-        assert hasattr(ResourceService, "_get_by_identity")
-        assert callable(ResourceService._get_by_identity)
+        method = getattr(ResourceService, "_get_by_identity", None)
+        assert method is not None, "_get_by_identity not found on ResourceService"
+        assert inspect.iscoroutinefunction(method), "_get_by_identity should be async"
 
-    def test_update_existing_exists(self) -> None:
+    def test_update_existing_is_method(self) -> None:
+        import inspect
+
         from blackbeard.resources.service import ResourceService
 
-        assert hasattr(ResourceService, "_update_existing")
-        assert callable(ResourceService._update_existing)
+        method = getattr(ResourceService, "_update_existing", None)
+        assert method is not None, "_update_existing not found on ResourceService"
+        assert inspect.iscoroutinefunction(method), "_update_existing should be async"
 
 
 # ---------------------------------------------------------------------------
@@ -994,45 +1000,45 @@ class TestAuthAPI:
 
 
 class TestExecutionEndpoints:
-    def test_run_executor_exists(self) -> None:
+    def test_run_executor_is_coroutine(self) -> None:
         from blackbeard.api.executions import _run_executor
 
-        assert callable(_run_executor)
+        assert asyncio.iscoroutinefunction(_run_executor)
 
-    def test_train_crew_endpoint_exists(self) -> None:
+    def test_train_crew_endpoint_is_coroutine(self) -> None:
         from blackbeard.api.executions import train_crew_endpoint
 
-        assert callable(train_crew_endpoint)
+        assert asyncio.iscoroutinefunction(train_crew_endpoint)
 
-    def test_test_crew_endpoint_exists(self) -> None:
+    def test_test_crew_endpoint_is_coroutine(self) -> None:
         from blackbeard.api.executions import test_crew_endpoint
 
-        assert callable(test_crew_endpoint)
+        assert asyncio.iscoroutinefunction(test_crew_endpoint)
 
-    def test_run_flow_endpoint_exists(self) -> None:
+    def test_run_flow_endpoint_is_coroutine(self) -> None:
         from blackbeard.api.executions import run_flow_endpoint
 
-        assert callable(run_flow_endpoint)
+        assert asyncio.iscoroutinefunction(run_flow_endpoint)
 
-    def test_get_execution_spend_exists(self) -> None:
+    def test_get_execution_spend_is_coroutine(self) -> None:
         from blackbeard.api.executions import get_execution_spend
 
-        assert callable(get_execution_spend)
+        assert asyncio.iscoroutinefunction(get_execution_spend)
 
-    def test_respond_to_execution_exists(self) -> None:
+    def test_respond_to_execution_is_coroutine(self) -> None:
         from blackbeard.api.executions import respond_to_execution
 
-        assert callable(respond_to_execution)
+        assert asyncio.iscoroutinefunction(respond_to_execution)
 
-    def test_retry_execution_exists(self) -> None:
+    def test_retry_execution_is_coroutine(self) -> None:
         from blackbeard.api.executions import retry_execution
 
-        assert callable(retry_execution)
+        assert asyncio.iscoroutinefunction(retry_execution)
 
-    def test_ws_execution_exists(self) -> None:
+    def test_ws_execution_is_coroutine(self) -> None:
         from blackbeard.api.executions import ws_execution
 
-        assert callable(ws_execution)
+        assert asyncio.iscoroutinefunction(ws_execution)
 
 
 # ---------------------------------------------------------------------------
@@ -1092,7 +1098,7 @@ class TestHealthAPI:
         t0 = time.monotonic()
         result = _latency_ms(t0)
         assert isinstance(result, float)
-        assert result >= 0
+        assert 0 <= result < 1000, f"Latency should be < 1s for in-process call, got {result}ms"
 
     @pytest.mark.asyncio
     async def test_check_database_success(self) -> None:
@@ -1131,10 +1137,10 @@ class TestHealthAPI:
 
 
 class TestAssistantAPI:
-    def test_generate_crew_exists(self) -> None:
+    def test_generate_crew_is_coroutine(self) -> None:
         from blackbeard.api.assistant import generate_crew
 
-        assert callable(generate_crew)
+        assert asyncio.iscoroutinefunction(generate_crew)
 
 
 # ---------------------------------------------------------------------------
@@ -1256,16 +1262,16 @@ class TestCollaborationAPI:
     async def test_init_valkey_backend(self) -> None:
         from blackbeard.api.collaboration import _init_valkey_backend
 
-        # May return None if redis package is not installed or config missing
+        # Returns None when redis is unavailable (test env has no Valkey)
         result = await _init_valkey_backend()
-        assert result is None or result is not None  # just test it doesn't crash
+        assert result is None
 
     def test_get_valkey_backend(self) -> None:
         from blackbeard.api.collaboration import _get_valkey_backend
 
-        # Returns None before init or if unavailable
+        # Returns None before init
         result = _get_valkey_backend()
-        assert result is None or result is not None
+        assert result is None
 
     def test_collaborate_exists(self) -> None:
         from blackbeard.api.collaboration import collaborate
@@ -1420,6 +1426,8 @@ class TestToolsLibrary:
 
         catalog = _load_catalog()
         assert isinstance(catalog, list)
+        for entry in catalog:
+            assert isinstance(entry, dict), f"Catalog entry should be dict, got {type(entry)}"
 
     def test_list_library_tools_exists(self) -> None:
         from blackbeard.api.tools_library import list_library_tools
@@ -1744,9 +1752,9 @@ class TestExecutor:
         """_on_thread_error handles cancelled futures gracefully."""
         fut = MagicMock(spec=asyncio.Future)
         fut.cancelled.return_value = True
-        # Just verify it doesn't raise
-        # _on_thread_error is a closure, test the pattern
-        assert True
+        fut.exception.return_value = None
+        assert fut.cancelled() is True
+        assert fut.exception() is None
 
     def test_collect_exists(self) -> None:
         """_collect is defined in _snapshot_crew_resources."""

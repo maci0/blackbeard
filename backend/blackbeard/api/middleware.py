@@ -22,7 +22,13 @@ from blackbeard.auth.api_key import get_api_key
 from blackbeard.auth.dependencies import SSE_STREAM_RE
 from blackbeard.auth.jwt import decode_access_token
 from blackbeard.config import settings
-from blackbeard.logging_config import anonymize_ip, request_id_var, scrub_pii, user_id_var
+from blackbeard.logging_config import (
+    SENSITIVE_KEYS,
+    anonymize_ip,
+    request_id_var,
+    scrub_pii,
+    user_id_var,
+)
 from blackbeard.rate_limiter import is_rate_limited_with_count, record_auth_failure
 
 logger = logging.getLogger(__name__)
@@ -41,49 +47,20 @@ _AUTOMATION_WEBHOOK_RE = re.compile(r"^/api/v1/automations/[a-z0-9][a-z0-9\-]*/w
 _REQUEST_ID_PATTERN = re.compile(r"^[a-zA-Z0-9\-]{1,64}$")
 
 
-_SENSITIVE_QS_PARAMS = frozenset(
+_SENSITIVE_QS_PARAMS = SENSITIVE_KEYS | frozenset(
     {
-        "api_key",
-        "token",
-        "secret",
         "key",
-        "password",
-        "credential",
-        "access_token",
-        "refresh_token",
-        "email",
-        "ssn",
-        "phone",
-        "name",
-        "display_name",
-        "username",
-        "address",
-        "zip_code",
-        "postal_code",
-        "credit_card",
-        "card_number",
-        "date_of_birth",
-        "dob",
-        "birthdate",
-        "birthday",
-        "birth_date",
-        "ip_address",
-        "authorization",
         "bearer",
         "jwt",
-        "user_id",
-        "initiated_by",
-        "first_name",
-        "last_name",
-        "full_name",
-        "passport",
-        "driver_license",
-        "national_id",
-        "tax_id",
-        "nationality",
-        "gender",
-        "ethnicity",
-        "location",
+        "apikey",
+        "accesstoken",
+        "refreshtoken",
+        "secretkey",
+        "privatekey",
+        "masterkey",
+        "authtoken",
+        "databaseurl",
+        "connectionstring",
     }
 )
 
@@ -251,7 +228,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     api_key = request.headers.get("X-API-Key", "")
     if not api_key and SSE_STREAM_RE.match(path):
         api_key = request.query_params.get("api_key", "")
-    if not hmac.compare_digest(api_key, get_api_key()):
+    if not hmac.compare_digest(api_key.encode(), get_api_key().encode()):
         record_auth_failure(client_ip)
 
         response = JSONResponse(

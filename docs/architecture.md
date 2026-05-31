@@ -59,7 +59,7 @@ All entities in Blackbeard are **resources**. Every resource shares a common env
 
 ```yaml
 apiVersion: blackbeard/v1
-kind: Agent          # one of 13 kinds
+kind: Agent          # one of 14 kinds
 metadata:
   name: researcher
   project: default

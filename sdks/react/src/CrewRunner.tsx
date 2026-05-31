@@ -5,6 +5,8 @@ import { ExecutionStatus } from './ExecutionStatus'
 import type { Execution } from './types'
 import { BlackbeardApiError, TERMINAL_STATUSES } from './types'
 
+let _nsWarnedRunner = false
+
 export interface CrewRunnerProps {
   /** Name of the crew to run. */
   crewName: string
@@ -21,6 +23,10 @@ export interface CrewRunnerProps {
  * triggers a kickoff, and shows execution status while running.
  */
 export function CrewRunner({ crewName, project, namespace, onComplete }: CrewRunnerProps) {
+  if (namespace !== undefined && !_nsWarnedRunner) {
+    _nsWarnedRunner = true
+    console.warn('CrewRunner: "namespace" prop is deprecated. Use "project" instead.')
+  }
   const config = useBlackbeard()
   const [inputsJson, setInputsJson] = useState('{}')
   const [executionId, setExecutionId] = useState<string | null>(null)
@@ -93,9 +99,6 @@ export function CrewRunner({ crewName, project, namespace, onComplete }: CrewRun
       setSubmitting(false)
     }
   }, [config, crewName, project, namespace, inputsJson])
-
-  // Read-only resource fetch not needed — we accept raw JSON input to
-  // keep this widget dependency-free and simple.
 
   return (
     <div style={containerStyle}>

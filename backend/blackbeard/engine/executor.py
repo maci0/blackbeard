@@ -45,7 +45,7 @@ from blackbeard.engine.flow_runner import call_hook
 from blackbeard.engine.flow_runner import run_flow_steps as _run_flow_steps
 from blackbeard.engine.loader import ResourceLoader
 from blackbeard.kinds import ResourceKind
-from blackbeard.logging_config import log_task_exception, request_id_var
+from blackbeard.logging_config import log_task_exception, request_id_var, scrub_pii
 from blackbeard.models import (
     TERMINAL_STATUSES,
     Execution,
@@ -95,8 +95,6 @@ _MAX_ERROR_LENGTH = 500
 
 def _sanitize_error(error_msg: str) -> str:
     """Return a user-safe error string, redacting internal details and PII."""
-    from blackbeard.logging_config import scrub_pii
-
     if error_msg.startswith(_SAFE_ERROR_PREFIXES):
         sanitized = scrub_pii(error_msg)
         if len(sanitized) > _MAX_ERROR_LENGTH:
@@ -378,7 +376,7 @@ async def _submit_execution(
     n_iterations: int | None = None,
     training_file: str | None = None,
 ) -> Execution:
-    """Shared logic for creating and submitting train/test/flow executions."""
+    """Shared logic for creating and submitting all execution types (kickoff/train/test/flow)."""
     target_kind = "Flow" if execution_type == ExecutionType.FLOW else "Crew"
     resources = await _load_crew_resources(session, crew_name, project, target_kind=target_kind)
     crew_key = f"{target_kind}/{crew_name}"
@@ -463,6 +461,15 @@ async def _submit_execution(
         try:
             exc = fut.exception()
         except Exception:
+            logger.warning(
+                "Could not retrieve exception from execution %s thread future",
+                execution_id,
+                exc_info=True,
+                extra={
+                    "event": "execution_future_exception_retrieval_failed",
+                    "execution_id": str(execution_id),
+                },
+            )
             return
         if exc is not None:
             logger.error(
@@ -1323,6 +1330,8 @@ async def list_executions(
     By default, tasks are NOT eagerly loaded to keep list queries fast.
     Pass ``include_tasks=True`` to load tasks (e.g. for detail views).
     """
+    limit = max(1, min(limit, 1000))
+    offset = max(0, offset)
     filters = []
     if crew_name:
         filters.append(Execution.crew_name == crew_name)
@@ -1339,26 +1348,8 @@ async def list_executions(
         query = query.options(selectinload(Execution.tasks), defer(Execution.litellm_key))
     else:
         query = query.options(
-            load_only(
-                Execution.id,
-                Execution.crew_name,
-                Execution.crew_project,
-                Execution.execution_type,
-                Execution.status,
-                Execution.n_iterations,
-                Execution.training_file,
-                Execution.inputs,
-                Execution.error,
-                Execution.total_tokens,
-                Execution.prompt_tokens,
-                Execution.completion_tokens,
-                Execution.cost_usd,
-                Execution.initiated_by,
-                Execution.principal_chain,
-                Execution.created_at,
-                Execution.started_at,
-                Execution.completed_at,
-            )
+            defer(Execution.outputs),
+            defer(Execution.litellm_key),
         )
 
     query = (
@@ -1383,6 +1374,7 @@ async def list_execution_events(
     limit: int = 200,
 ) -> list[ExecutionEvent]:
     """List execution events after a given sequence number."""
+    limit = max(1, min(limit, 1000))
     result = await session.execute(
         select(ExecutionEvent)
         .where(ExecutionEvent.execution_id == execution_id, ExecutionEvent.sequence > after)
@@ -1417,8 +1409,7 @@ async def record_hitl_response(
                 ExecutionEvent.execution_id == execution_id
             )
         )
-        max_seq_val = result.scalar()
-        max_seq = max_seq_val if max_seq_val is not None else -1
+        max_seq = result.scalar_one()
         next_seq = max_seq + 1
 
         event = ExecutionEvent(

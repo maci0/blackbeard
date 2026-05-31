@@ -170,6 +170,7 @@ export function RunDialog({
 
   const handleDeletePreset = useCallback(
     (name: string) => {
+      if (!window.confirm(`Delete preset "${name}"?`)) return
       const next = presets.filter((p) => !(p.name === name && p.crewName === crewName))
       setPresets(next)
       savePresets(next)
@@ -251,6 +252,7 @@ export function RunDialog({
                   const MIcon = mc.icon
                   return (
                     <button
+                      type="button"
                       key={m}
                       role="radio"
                       aria-checked={mode === m}

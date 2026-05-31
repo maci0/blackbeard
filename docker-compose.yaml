@@ -28,6 +28,7 @@ services:
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
       CLOUD_ML_REGION: ${CLOUD_ML_REGION:-us-east5}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
     volumes:
       - ./examples:/app/examples:ro
@@ -45,7 +46,7 @@ services:
     mem_limit: 2g
     cpus: 2
     pids_limit: 256
-    # read_only: true — disabled; CrewAI needs ~/.local, asyncpg needs ~/.postgresql
+    # read_only: true — not enabled; CrewAI writes to ~/.local, asyncpg to ~/.postgresql
     tmpfs:
       - /tmp:size=100m
     security_opt:
@@ -73,7 +74,7 @@ services:
     restart: unless-stopped
     init: true
     logging: *default-logging
-    # read_only: true — disabled; nginx needs writable /var/cache, /var/run, and envsubst writes to /etc/nginx/conf.d
+    # read_only: true — not enabled; nginx writes to /var/cache, /var/run, and envsubst writes to /etc/nginx/conf.d
     tmpfs:
       - /tmp:size=10m
     security_opt:
@@ -139,6 +140,8 @@ services:
       - "-c"
       - "log_temp_files=0"
       - "-c"
+      - "log_statement=ddl"
+      - "-c"
       - "idle_in_transaction_session_timeout=300000"
       - "-c"
       - "statement_timeout=300000"
@@ -155,6 +158,10 @@ services:
     mem_limit: 2g
     cpus: 2
     pids_limit: 128
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -216,7 +223,7 @@ services:
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
       CLOUD_ML_REGION: ${CLOUD_ML_REGION:-us-east5}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
-      # Langfuse observability (optional — set keys in .env to enable)
+      # Langfuse observability (optional — set non-empty values in .env to enable)
       LANGFUSE_HOST: ${LANGFUSE_HOST:-}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import re
 import secrets
@@ -181,6 +182,7 @@ async def register(
     await _register_litellm_user(str(user.id))
 
     response.headers["Location"] = f"/api/v1/users/{user.id}"
+    response.headers["Cache-Control"] = "no-store"
     return _auth_response(user)
 
 
@@ -194,11 +196,12 @@ async def register(
 async def login(
     data: LoginRequest,
     request: Request,
+    response: Response,
     session: AsyncSession = Depends(get_session),
 ) -> AuthResponse:
     """Authenticate with email and password."""
     email = data.email.lower()
-    ip = get_client_ip(request)
+    ip = get_client_ip(request) or "unknown"
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
@@ -288,6 +291,7 @@ async def login(
         },
     )
 
+    response.headers["Cache-Control"] = "no-store"
     return _auth_response(user)
 
 
@@ -298,6 +302,7 @@ async def login(
 )
 async def refresh(
     data: RefreshRequest,
+    response: Response,
     session: AsyncSession = Depends(get_session),
 ) -> TokenResponse:
     """Exchange a refresh token for a new access token."""
@@ -356,6 +361,7 @@ async def refresh(
             "user_id": str(user.id),
         },
     )
+    response.headers["Cache-Control"] = "no-store"
     return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)
 
 
@@ -389,6 +395,7 @@ class ApiKeyResponse(BaseModel):
 )
 async def generate_api_key(
     request: Request,
+    response: Response,
     session: AsyncSession = Depends(get_session),
     user: User = Depends(require_jwt_user),
 ) -> ApiKeyResponse:
@@ -398,13 +405,13 @@ async def generate_api_key(
     Returns a new API key with ``bb-`` prefix.  Any previously issued
     key for this user is replaced.
     """
-    ip = get_client_ip(request)
+    ip = get_client_ip(request) or "unknown"
     # Re-fetch with row lock to prevent concurrent API key mutations.
     result = await session.execute(select(User).where(User.id == user.id).with_for_update())
     user = result.scalar_one()
     had_previous = user.api_key is not None
     new_key = f"bb-{secrets.token_urlsafe(32)}"
-    user.api_key = new_key
+    user.api_key = hashlib.sha256(new_key.encode()).hexdigest()
     action = "api_key_rotated" if had_previous else "api_key_generated"
     await log_audit(
         session,
@@ -430,6 +437,7 @@ async def generate_api_key(
         },
     )
 
+    response.headers["Cache-Control"] = "no-store"
     return ApiKeyResponse(api_key=new_key)
 
 
@@ -451,7 +459,7 @@ async def revoke_api_key(
     Requires JWT Bearer authentication (API key auth is not accepted).
     Idempotent: returns 204 even if the user has no active key.
     """
-    ip = get_client_ip(request)
+    ip = get_client_ip(request) or "unknown"
     # Re-fetch with row lock to prevent concurrent API key mutations.
     result = await session.execute(select(User).where(User.id == user.id).with_for_update())
     user = result.scalar_one()

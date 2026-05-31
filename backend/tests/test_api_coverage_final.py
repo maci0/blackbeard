@@ -881,11 +881,15 @@ class TestStartupValidation:
 
     def test_validate_startup_config_debug_mode_accepts_defaults(self) -> None:
         """In debug mode, default secrets are accepted with warnings."""
+        from blackbeard.auth.api_key import get_api_key
         from blackbeard.main import _validate_startup_config
 
         # The test environment has DEBUG=true, so default secrets should be accepted.
         # The autouse _preserve_api_key fixture handles save/restore of the global key.
         _validate_startup_config()
+        # In debug mode, a key must have been set (either existing or generated)
+        assert get_api_key() is not None
+        assert len(get_api_key()) >= 16
 
     def test_validate_startup_config_short_api_key_rejects(self) -> None:
         """API key shorter than 16 chars is rejected even in debug mode."""

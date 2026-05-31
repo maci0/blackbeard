@@ -34,6 +34,9 @@ logger = logging.getLogger(__name__)
 _MAX_OUTPUT_BYTES = 10 * 1024 * 1024
 
 
+_ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
 class FirecrackerError(Exception):
     """Base exception for Firecracker sandbox errors."""
 
@@ -216,9 +219,8 @@ class FirecrackerSandbox:
         # boot args.  Key names are validated to contain only
         # alphanumerics and underscores to prevent parameter injection.
         if env:
-            env_key_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
             for k, v in sorted(env.items()):
-                if not env_key_re.match(k):
+                if not _ENV_KEY_RE.match(k):
                     logger.warning(
                         "Firecracker: skipping env var with invalid key: %s",
                         k[:50],
@@ -306,6 +308,7 @@ class FirecrackerSandbox:
             with os.fdopen(config_fd, "w") as config_file:
                 json.dump(config, config_file)
 
+            t0 = asyncio.get_event_loop().time()
             logger.info(
                 "Firecracker execute: bin=%s kernel=%s timeout=%ds vcpus=%d mem=%dMiB",
                 self._bin,
@@ -363,16 +366,19 @@ class FirecrackerSandbox:
                 stderr=stderr_str,
             )
 
+            duration_ms = round((asyncio.get_event_loop().time() - t0) * 1000, 1)
             logger.info(
-                "Firecracker completed: exit_code=%d stdout_bytes=%d stderr_bytes=%d",
+                "Firecracker completed: exit=%d stdout=%d stderr=%d duration_ms=%.0f",
                 result.exit_code,
                 len(result.stdout),
                 len(result.stderr),
+                duration_ms,
                 extra={
                     "event": "firecracker_completed",
                     "exit_code": result.exit_code,
                     "stdout_bytes": len(result.stdout),
                     "stderr_bytes": len(result.stderr),
+                    "duration_ms": duration_ms,
                 },
             )
 

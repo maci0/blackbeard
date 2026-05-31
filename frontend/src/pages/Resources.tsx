@@ -353,8 +353,9 @@ export default function Resources() {
                 <button
                   type="button"
                   onClick={() => void fetchAllResources()}
+                  disabled={loading}
                   aria-label="Refresh resources"
-                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RefreshCw
                     className={cn(

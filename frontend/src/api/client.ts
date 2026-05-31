@@ -21,11 +21,15 @@ interface RequestOptions {
   headers?: Record<string, string>
 }
 
+const GET_CACHE_TTL_MS = 5_000
+const MAX_CACHE_ENTRIES = 200
+
 class ApiClient {
   private apiKey: string = ''
   private token: string = ''
   private unauthorizedHandler: (() => void) | null = null
   private inflightGets = new Map<string, Promise<unknown>>()
+  private getCache = new Map<string, { data: unknown; ts: number }>()
 
   setApiKey(key: string) {
     this.apiKey = key
@@ -94,7 +98,12 @@ class ApiClient {
 
     if (!response.ok) {
       const serverRequestId = response.headers.get('X-Request-Id') ?? requestId
-      const error = (await response.json().catch(() => ({ detail: response.statusText }))) as {
+      const error = (await response.json().catch(() => {
+        console.warn(
+          `[API] ${method} ${path} → ${response.status}: response body is not JSON (content-type: ${response.headers.get('content-type') ?? 'unknown'})`,
+        )
+        return { detail: response.statusText }
+      })) as {
         detail?: unknown
       }
       const detail: unknown = error.detail
@@ -129,27 +138,65 @@ class ApiClient {
     return response.json() as Promise<T>
   }
 
-  get<T>(path: string) {
+  get<T>(path: string, opts?: { skipCache?: boolean }) {
+    if (!opts?.skipCache) {
+      const cached = this.getCache.get(path)
+      if (cached && Date.now() - cached.ts < GET_CACHE_TTL_MS) {
+        return Promise.resolve(cached.data as T)
+      }
+    }
     const inflight = this.inflightGets.get(path)
     if (inflight) return inflight as Promise<T>
-    const promise = this.request<T>(path).finally(() => this.inflightGets.delete(path))
+    const promise = this.request<T>(path)
+      .then((data) => {
+        if (this.getCache.size >= MAX_CACHE_ENTRIES) {
+          const oldest = this.getCache.keys().next().value
+          if (oldest !== undefined) this.getCache.delete(oldest)
+        }
+        this.getCache.set(path, { data, ts: Date.now() })
+        return data
+      })
+      .finally(() => this.inflightGets.delete(path))
     this.inflightGets.set(path, promise)
     return promise
   }
 
+  invalidateCache(pathPrefix?: string) {
+    if (!pathPrefix) {
+      this.getCache.clear()
+      return
+    }
+    for (const key of this.getCache.keys()) {
+      if (key.startsWith(pathPrefix)) this.getCache.delete(key)
+    }
+  }
+
+  private _invalidateForMutation(path: string) {
+    const segments = path.split('/')
+    if (segments.length >= 4) {
+      this.invalidateCache(segments.slice(0, 4).join('/'))
+    } else {
+      this.invalidateCache()
+    }
+  }
+
   post<T>(path: string, body: unknown) {
+    this._invalidateForMutation(path)
     return this.request<T>(path, { method: 'POST', body })
   }
 
   put<T>(path: string, body: unknown) {
+    this._invalidateForMutation(path)
     return this.request<T>(path, { method: 'PUT', body })
   }
 
   patch<T>(path: string, body?: unknown) {
+    this._invalidateForMutation(path)
     return this.request<T>(path, { method: 'PATCH', ...(body !== undefined && { body }) })
   }
 
   delete<T>(path: string) {
+    this._invalidateForMutation(path)
     return this.request<T>(path, { method: 'DELETE' })
   }
 }

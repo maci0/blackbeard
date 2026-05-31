@@ -35,6 +35,7 @@ import { api } from '@/api/client'
 import { CopyButton } from '@/components/ui/CopyButton'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { DetailSkeleton } from '@/components/ui/Skeleton'
+import { useToastStore } from '@/stores/toastStore'
 
 /* ------------------------------------------------------------------ */
 /* Summary card                                                        */
@@ -706,6 +707,7 @@ function HITLPanel({
 }) {
   const [response, setResponse] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const toasts = useToastStore()
 
   const pendingRequest = useMemo(() => {
     let requestCount = 0
@@ -737,9 +739,10 @@ function HITLPanel({
         response: response.trim(),
       })
       setResponse('')
+      toasts.success('Response sent')
       onResponded()
-    } catch {
-      // Error handled by toast in parent
+    } catch (err) {
+      toasts.error(getErrorMessage(err, 'Failed to send response'))
     } finally {
       setSubmitting(false)
     }
@@ -818,6 +821,7 @@ function TasksSection({
         {tasks.length > 0 && hasTimingData && (
           <div className="flex items-center rounded-md border bg-muted/30 p-0.5">
             <button
+              type="button"
               onClick={() => setView('list')}
               className={cn(
                 'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -832,6 +836,7 @@ function TasksSection({
               List
             </button>
             <button
+              type="button"
               onClick={() => setView('timeline')}
               className={cn(
                 'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -917,6 +922,7 @@ export default function ExecutionDetail() {
     })),
   )
   const navigate = useNavigate()
+  const pageToasts = useToastStore()
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
@@ -929,11 +935,11 @@ export default function ExecutionDetail() {
       const result = await api.post<{ id: string }>(`/api/v1/executions/${id}/retry`, {})
       void navigate(`/executions/${result.id}`)
     } catch (err) {
-      setCancelError(getErrorMessage(err, 'Failed to retry execution'))
+      pageToasts.error(getErrorMessage(err, 'Failed to retry execution'))
     } finally {
       setRetrying(false)
     }
-  }, [id, navigate])
+  }, [id, navigate, pageToasts])
 
   const load = useCallback(async () => {
     await fetchExecution(id)
@@ -1026,8 +1032,6 @@ export default function ExecutionDetail() {
     }
   }, [id, isActive, addEvents, fetchExecution, fetchEvents])
 
-  // When execution reaches terminal status, do a final fetch to get complete data,
-  // fetch historical events, and fetch spend data (once per execution)
   const terminalFetchedRef = useRef<string | null>(null)
   useEffect(() => {
     if (!id || !isTerminal) return
@@ -1038,7 +1042,6 @@ export default function ExecutionDetail() {
     void fetchSpend(id)
   }, [id, isTerminal, fetchExecution, fetchEvents, fetchSpend])
 
-  // Fallback polling when SSE has disconnected
   const doPoll = useCallback(() => pollExecution(id), [pollExecution, id])
   usePolling(doPoll, 3000, isActive && sseDisconnected)
 
@@ -1066,6 +1069,7 @@ export default function ExecutionDetail() {
           <p className="font-medium">{error ?? 'Execution not found'}</p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <button
+              type="button"
               onClick={() => void load()}
               className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
@@ -1134,6 +1138,7 @@ export default function ExecutionDetail() {
           <div className="flex shrink-0 items-center gap-2">
             {isTerminal && (
               <button
+                type="button"
                 onClick={() => void handleRetry()}
                 disabled={retrying}
                 aria-busy={retrying || undefined}
@@ -1145,6 +1150,7 @@ export default function ExecutionDetail() {
             )}
             {isActive && (
               <button
+                type="button"
                 onClick={() => setShowCancelConfirm(true)}
                 className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >

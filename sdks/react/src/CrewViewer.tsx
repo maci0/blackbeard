@@ -26,6 +26,8 @@ function parseRef(ref: string): string {
   return ref
 }
 
+let _nsWarnedViewer = false
+
 const NODE_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   agent: { bg: '#f5f3ff', border: '#8b5cf6', text: '#5b21b6' },
   task: { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af' },
@@ -41,6 +43,10 @@ const NODE_COLORS: Record<string, { bg: string; border: string; text: string }> 
  * plain divs and SVG lines. No React Flow dependency.
  */
 export function CrewViewer({ crewName, project, namespace }: CrewViewerProps) {
+  if (namespace !== undefined && !_nsWarnedViewer) {
+    _nsWarnedViewer = true
+    console.warn('CrewViewer: "namespace" prop is deprecated. Use "project" instead.')
+  }
   const config = useBlackbeard()
   const markerId = `bb-arrow-${useId().replace(/:/g, '')}`
   const [agents, setAgents] = useState<Resource[]>([])

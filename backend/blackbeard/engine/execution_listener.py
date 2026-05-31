@@ -62,6 +62,14 @@ try:
 except ImportError:
     HAS_OTEL = False
 
+__all__ = [
+    "BlackbeardExecutionListener",
+    "dispose_sync_engine",
+    "invalidate_webhook_cache",
+    "shutdown_otel",
+    "shutdown_webhook_executor",
+]
+
 logger = logging.getLogger(__name__)
 
 _otel_tracer: Any = None
@@ -152,7 +160,7 @@ def _log_webhook_future_exception(future: Any) -> None:
     try:
         exc = future.exception()
     except Exception:
-        logger.debug(
+        logger.warning(
             "Could not retrieve webhook future exception (likely cancelled)",
             exc_info=True,
             extra={"event": "webhook_future_exception_retrieval_failed"},
@@ -171,6 +179,7 @@ def _log_webhook_future_exception(future: Any) -> None:
         )
 
 
+_WEBHOOK_LOAD_LIMIT = 1000
 _webhook_cache_entry: tuple[float, list[Any]] | None = None
 _webhook_cache_lock = threading.Lock()
 _WEBHOOK_CACHE_TTL = 300.0
@@ -180,6 +189,9 @@ def _get_cached_webhooks(db_url: str) -> list[Any]:
     """Return active webhooks, cached for 5min to avoid DB hit per event.
 
     Uses lock-always pattern (safe under both GIL and free-threaded Python).
+    The lock is held during the DB query to prevent cache stampede — all
+    threads hitting an expired cache simultaneously would otherwise all
+    query the DB.  The query is bounded (LIMIT 1001) and fast.
     """
     global _webhook_cache_entry
 
@@ -191,44 +203,56 @@ def _get_cached_webhooks(db_url: str) -> list[Any]:
             if (now - cache_time) < _WEBHOOK_CACHE_TTL:
                 return cache
 
-    from blackbeard.models.webhook import Webhook
+        from blackbeard.models.webhook import Webhook
 
-    session_factory = _get_sync_session_factory(db_url)
-    try:
-        with session_factory() as session:
-            result = session.execute(
-                sync_select(Webhook).where(Webhook.active.is_(True)).order_by(Webhook.id).limit(1000)
-            )
-            cached = list(result.scalars())
-            session.expunge_all()
-    except Exception as exc:
-        if entry is not None:
-            logger.warning(
-                "Failed to refresh webhook cache — using stale data (%d webhooks): %s",
-                len(entry[1]),
+        session_factory = _get_sync_session_factory(db_url)
+        try:
+            with session_factory() as session:
+                result = session.execute(
+                    sync_select(Webhook)
+                    .where(Webhook.active.is_(True))
+                    .order_by(Webhook.id)
+                    .limit(_WEBHOOK_LOAD_LIMIT + 1)
+                )
+                cached = list(result.scalars())
+                if len(cached) > _WEBHOOK_LOAD_LIMIT:
+                    logger.warning(
+                        "Active webhook count exceeds %d — some webhooks will not receive events",
+                        _WEBHOOK_LOAD_LIMIT,
+                        extra={
+                            "event": "webhook_limit_exceeded",
+                            "loaded": _WEBHOOK_LOAD_LIMIT,
+                        },
+                    )
+                    cached = cached[:_WEBHOOK_LOAD_LIMIT]
+                session.expunge_all()
+        except Exception as exc:
+            if entry is not None:
+                logger.warning(
+                    "Failed to refresh webhook cache — using stale data (%d webhooks): %s",
+                    len(entry[1]),
+                    exc,
+                    exc_info=True,
+                    extra={
+                        "event": "webhook_load_failed_using_stale",
+                        "error_type": type(exc).__name__,
+                    },
+                )
+                return entry[1]
+            logger.error(
+                "Failed to load webhooks for event delivery — "
+                "no stale cache available, webhook notifications will be skipped: %s",
                 exc,
                 exc_info=True,
                 extra={
-                    "event": "webhook_load_failed_using_stale",
+                    "event": "webhook_load_failed",
                     "error_type": type(exc).__name__,
                 },
             )
-            return entry[1]
-        logger.error(
-            "Failed to load webhooks for event delivery — "
-            "no stale cache available, webhook notifications will be skipped: %s",
-            exc,
-            exc_info=True,
-            extra={
-                "event": "webhook_load_failed",
-                "error_type": type(exc).__name__,
-            },
-        )
-        return []
+            return []
 
-    with _webhook_cache_lock:
         _webhook_cache_entry = (_time.monotonic(), cached)
-    return cached
+        return cached
 
 
 def invalidate_webhook_cache() -> None:
@@ -543,7 +567,14 @@ class BlackbeardExecutionListener(BaseEventListener):
             if isinstance(exc, IntegrityError):
                 self._renumber_events(to_flush)
             with self._lock:
+                if isinstance(exc, IntegrityError) and self._buffer:
+                    next_seq = self._seq
+                    for evt in self._buffer:
+                        evt.sequence = next_seq
+                        next_seq += 1
+                    self._seq = next_seq
                 self._buffer = to_flush + self._buffer
+            self._schedule_flush()
             logger.error(
                 "Re-queued %d events for %s (flush failed, will retry on next flush): %s",
                 len(to_flush),
@@ -581,7 +612,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 event.sequence = max_seq
                 max_seq += 1
             with self._lock:
-                self._seq = max_seq
+                self._seq = max(self._seq, max_seq)
             logger.info(
                 "Renumbered %d events for %s after sequence collision (new start=%d)",
                 len(events),
@@ -897,6 +928,12 @@ class BlackbeardExecutionListener(BaseEventListener):
             if isinstance(exc, IntegrityError):
                 self._renumber_events(to_flush)
             with self._lock:
+                if isinstance(exc, IntegrityError) and self._buffer:
+                    next_seq = self._seq
+                    for evt in self._buffer:
+                        evt.sequence = next_seq
+                        next_seq += 1
+                    self._seq = next_seq
                 self._buffer = to_flush + self._buffer
             self._schedule_flush()
             logger.exception(

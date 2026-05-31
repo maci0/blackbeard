@@ -1,8 +1,9 @@
 """Fuzz tests for every function that previously lacked fuzz coverage.
 
 Each function gets at least one test that imports it by name and exercises
-it with Hypothesis-generated inputs.  ``max_examples=5`` keeps CI fast —
-the goal is breadth (360 functions) not depth.
+it with Hypothesis-generated inputs.  ``max_examples=5`` keeps CI fast for
+low-risk functions; security-critical functions (auth, rate-limiting, SSRF,
+injection checks) use ``max_examples=50`` for meaningful depth.
 
 Functions grouped by source module.
 """
@@ -133,11 +134,8 @@ class TestLoggingConfig:
     def test_fuzz_safe_log_url(self, url: str) -> None:
         from blackbeard.logging_config import safe_log_url
 
-        try:
-            result = safe_log_url(url)
-            assert isinstance(result, str)
-        except Exception:
-            pass
+        result = safe_log_url(url)
+        assert isinstance(result, str), f"safe_log_url must return str, got {type(result)}"
 
     @given(debug=st.booleans(), log_level=st.sampled_from(["", "DEBUG", "INFO", "bad"]))
     @settings(max_examples=5)
@@ -155,9 +153,11 @@ class TestLoggingConfig:
 class TestAudit:
     @pytest.mark.asyncio
     async def test_fuzz_log_audit(self) -> None:
+        import asyncio
+
         from blackbeard.audit import log_audit
 
-        assert callable(log_audit)
+        assert asyncio.iscoroutinefunction(log_audit)
 
     def test_fuzz_get_client_ip(self) -> None:
         from blackbeard.audit import get_client_ip
@@ -186,20 +186,29 @@ class TestHttpClient:
 
         assert callable(_get_or_create)
 
-    def test_fuzz_get_client(self) -> None:
+    def test_fuzz_get_client_returns_async(self) -> None:
+        import httpx
+
         from blackbeard.http_client import get_client
 
-        assert callable(get_client)
+        client = get_client("_test_fuzz")
+        assert isinstance(client, httpx.AsyncClient)
 
-    def test_fuzz_get_sync_client(self) -> None:
+    def test_fuzz_get_sync_client_returns_sync(self) -> None:
+        import httpx
+
         from blackbeard.http_client import get_sync_client
 
-        assert callable(get_sync_client)
+        client = get_sync_client("_test_fuzz")
+        assert isinstance(client, httpx.Client)
 
-    def test_fuzz_get_litellm_client(self) -> None:
+    def test_fuzz_get_litellm_client_returns_async(self) -> None:
+        import httpx
+
         from blackbeard.http_client import get_litellm_client
 
-        assert callable(get_litellm_client)
+        client = get_litellm_client("_test_fuzz")
+        assert isinstance(client, httpx.AsyncClient)
 
     @pytest.mark.asyncio
     async def test_fuzz_close_client(self) -> None:
@@ -208,10 +217,12 @@ class TestHttpClient:
         await close_client("_test_nonexistent_xyz")
 
     @pytest.mark.asyncio
-    async def test_fuzz_close_all_clients(self) -> None:
+    async def test_fuzz_close_all_clients_is_coroutine(self) -> None:
+        import asyncio
+
         from blackbeard.http_client import close_all_clients
 
-        assert callable(close_all_clients)
+        assert asyncio.iscoroutinefunction(close_all_clients)
 
 
 # ===================================================================
@@ -221,7 +232,7 @@ class TestHttpClient:
 
 class TestRateLimiter:
     @given(ip=st.text(min_size=1, max_size=30))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_is_rate_limited_with_count(self, ip: str) -> None:
         from blackbeard.rate_limiter import is_rate_limited_with_count
 
@@ -229,7 +240,7 @@ class TestRateLimiter:
         assert isinstance(result, tuple)
 
     @given(ip=st.text(min_size=1, max_size=30))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_is_rate_limited(self, ip: str) -> None:
         from blackbeard.rate_limiter import is_rate_limited
 
@@ -237,7 +248,7 @@ class TestRateLimiter:
         assert isinstance(result, bool)
 
     @given(ip=st.text(min_size=1, max_size=30))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_record_auth_failure(self, ip: str) -> None:
         from blackbeard.rate_limiter import record_auth_failure
 
@@ -265,9 +276,12 @@ class TestRateLimiter:
 
 class TestMain:
     def test_fuzz_ref_lifespan(self) -> None:
+        from contextlib import AbstractAsyncContextManager
+
         from blackbeard.main import lifespan
 
-        assert callable(lifespan)
+        ctx = lifespan(MagicMock())
+        assert isinstance(ctx, AbstractAsyncContextManager), "lifespan should return an async context manager"
 
 
 # ===================================================================
@@ -294,7 +308,7 @@ class TestPii:
         assert callable(_add_llm_recognizer)
 
     @given(text=safe_text)
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_analyze(self, text: str) -> None:
         from blackbeard.pii import _get_analyzer
 
@@ -303,7 +317,7 @@ class TestPii:
         assert isinstance(results, list)
 
     @given(text=st.text(max_size=50))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_redact_text(self, text: str) -> None:
         from blackbeard.pii import redact_text
 
@@ -311,7 +325,7 @@ class TestPii:
         assert isinstance(result, str)
 
     @given(data=st.fixed_dictionaries({"key": safe_text}))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_redact_dict(self, data: dict[str, Any]) -> None:
         from blackbeard.pii import redact_dict
 
@@ -319,7 +333,7 @@ class TestPii:
         assert isinstance(result, dict)
 
     @given(val=st.one_of(safe_text, st.integers(), st.none()))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_redact_value(self, val: Any) -> None:
         from blackbeard.pii import _redact_value
 
@@ -358,7 +372,7 @@ class TestAuthorizer:
         rk=st.text(max_size=20),
         proj=st.text(max_size=20),
     )
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_cache_key(
         self, sk: str, sn: str, verb: str, rk: str, proj: str
     ) -> None:
@@ -368,7 +382,7 @@ class TestAuthorizer:
         assert isinstance(result, str)
 
     @given(key=st.text(max_size=50))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_get_cached(self, key: str) -> None:
         from blackbeard.auth.authorizer import _get_cached
 
@@ -377,7 +391,7 @@ class TestAuthorizer:
         assert result is None or isinstance(result, bool)
 
     @given(key=st.text(min_size=1, max_size=50), result=st.booleans())
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_set_cached(self, key: str, result: bool) -> None:
         from blackbeard.auth.authorizer import _set_cached
 
@@ -414,7 +428,7 @@ class TestAuthorizer:
 
 class TestApiKey:
     @given(key=st.text(min_size=16, max_size=64))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_set_api_key(self, key: str) -> None:
         from blackbeard.auth.api_key import get_api_key, set_api_key
 
@@ -439,7 +453,7 @@ class TestApiKey:
 
 class TestPasswords:
     @given(plain=st.text(min_size=1, max_size=50))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_prehash(self, plain: str) -> None:
         from blackbeard.auth.passwords import _prehash
 
@@ -522,7 +536,7 @@ class TestJwt:
         assert isinstance(token, str)
 
     @given(user_id=st.text(min_size=1, max_size=36))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_create_access_token(self, user_id: str) -> None:
         from blackbeard.auth.jwt import create_access_token
 
@@ -530,7 +544,7 @@ class TestJwt:
         assert isinstance(token, str)
 
     @given(user_id=st.text(min_size=1, max_size=36))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_create_refresh_token(self, user_id: str) -> None:
         from blackbeard.auth.jwt import create_refresh_token
 
@@ -538,12 +552,17 @@ class TestJwt:
         assert isinstance(token, str)
 
     @given(token=st.text(max_size=200))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_decode_access_token(self, token: str) -> None:
+        import jwt as pyjwt
+
         from blackbeard.auth.jwt import decode_access_token
 
-        with contextlib.suppress(Exception):
-            decode_access_token(token)
+        try:
+            result = decode_access_token(token)
+            assert isinstance(result, dict)
+        except pyjwt.PyJWTError:
+            pass
 
 
 # ===================================================================
@@ -563,7 +582,7 @@ class TestResourceValidator:
             ])
         )
     )
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_is_internal_ip(
         self, addr: ipaddress.IPv4Address | ipaddress.IPv6Address
     ) -> None:
@@ -580,7 +599,7 @@ class TestResourceValidator:
         assert isinstance(errors, list)
 
     @given(name=st.text(max_size=50))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_is_blocked_env_name(self, name: str) -> None:
         from blackbeard.resources.validator import is_blocked_env_name
 
@@ -588,7 +607,7 @@ class TestResourceValidator:
         assert isinstance(result, bool)
 
     @given(path=st.text(max_size=60))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_is_path_traversal(self, path: str) -> None:
         from blackbeard.resources.validator import _is_path_traversal
 
@@ -596,7 +615,7 @@ class TestResourceValidator:
         assert isinstance(result, bool)
 
     @given(url=url_text)
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_validate_url_ssrf(self, url: str) -> None:
         from blackbeard.resources.validator import _validate_url_ssrf
 
@@ -616,7 +635,7 @@ class TestResourceValidator:
         assert callable(shutdown_dns_executor)
 
     @given(hostname=st.text(min_size=1, max_size=30))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_dns_cache_get(self, hostname: str) -> None:
         from blackbeard.resources.validator import _dns_cache_get
 
@@ -624,7 +643,7 @@ class TestResourceValidator:
         assert isinstance(hit, bool)
 
     @given(hostname=st.text(min_size=1, max_size=30))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_dns_cache_put(self, hostname: str) -> None:
         from blackbeard.resources.validator import _dns_cache_put
 
@@ -650,7 +669,7 @@ class TestResourceValidator:
         assert isinstance(errors, list)
 
     @given(path=st.text(max_size=80))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_validate_function_path(self, path: str) -> None:
         from blackbeard.resources.validator import _validate_function_path
 
@@ -666,7 +685,7 @@ class TestResourceValidator:
         assert isinstance(errors, list)
 
     @given(val=st.text(max_size=60))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_check_value_injection(self, val: str) -> None:
         from blackbeard.resources.validator import _check_value_injection
 
@@ -675,7 +694,7 @@ class TestResourceValidator:
         assert isinstance(errors, list)
 
     @given(val=st.text(max_size=60))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_has_blocked_env_expansion(self, val: str) -> None:
         from blackbeard.resources.validator import _has_blocked_env_expansion
 
@@ -683,7 +702,7 @@ class TestResourceValidator:
         assert isinstance(result, bool)
 
     @given(val=st.text(max_size=40))
-    @settings(max_examples=5)
+    @settings(max_examples=50)
     def test_fuzz_is_blocked_env_reference(self, val: str) -> None:
         from blackbeard.resources.validator import _is_blocked_env_reference
 
@@ -1559,10 +1578,15 @@ class TestApiResources:
     @given(kind_plural=st.text(max_size=30))
     @settings(max_examples=5)
     def test_fuzz_resolve_kind(self, kind_plural: str) -> None:
+        from fastapi import HTTPException
+
         from blackbeard.api.resources import _resolve_kind
 
-        with contextlib.suppress(Exception):
-            _resolve_kind(kind_plural)
+        try:
+            result = _resolve_kind(kind_plural)
+            assert isinstance(result, str)
+        except HTTPException:
+            pass
 
     def test_fuzz_resource_to_document(self) -> None:
         from blackbeard.api.resources import _resource_to_document

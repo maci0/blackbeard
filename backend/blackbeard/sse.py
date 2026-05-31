@@ -33,13 +33,15 @@ async def acquire_stream() -> AsyncIterator[bool]:
     except TimeoutError:
         yield False
         return
-    with _active_lock:
-        _active_streams += 1
     try:
-        yield True
-    finally:
         with _active_lock:
-            _active_streams -= 1
+            _active_streams += 1
+        try:
+            yield True
+        finally:
+            with _active_lock:
+                _active_streams -= 1
+    finally:
         semaphore.release()
 
 

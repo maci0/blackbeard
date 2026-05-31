@@ -101,7 +101,10 @@ LiteLLM host
 {{- end }}
 
 {{/*
-Database URL for the API (asyncpg)
+Database URL for the API (asyncpg).
+WARNING: $(DATABASE_PASSWORD) is interpolated by Kubernetes at runtime without
+URL-encoding. Passwords containing @ : / ? # % or other URL-special characters
+will break the DSN. Use only alphanumeric + hyphen + underscore in passwords.
 */}}
 {{- define "blackbeard.databaseUrl" -}}
 postgresql+asyncpg://{{ .Values.database.user }}:$(DATABASE_PASSWORD)@{{ include "blackbeard.postgresHost" . }}:{{ .Values.postgres.service.port }}/{{ .Values.database.name }}

@@ -23,5 +23,9 @@ export type {
   ReadinessResponse,
   HITLResponseResult,
   SpendRecord,
+  AuditLogEntry,
+  VersionSummary,
+  VersionListResponse,
+  VersionDetail,
 } from './types'
 export { BlackbeardApiError, TERMINAL_STATUSES } from './types'

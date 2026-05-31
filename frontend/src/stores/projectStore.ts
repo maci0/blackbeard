@@ -34,7 +34,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         names.unshift('default')
       }
       set({ projects: names, loading: false })
-    } catch {
+    } catch (err) {
+      console.error('[projects] Failed to load projects:', err)
       set({ loading: false, error: 'Failed to load projects' })
     }
   },

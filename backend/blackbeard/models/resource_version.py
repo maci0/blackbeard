@@ -34,7 +34,9 @@ class ResourceVersion(Base):
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     spec: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    labels: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    labels: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True, default=None
+    )
     changed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

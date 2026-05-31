@@ -73,14 +73,14 @@ def role_list(ctx: click.Context, limit: int) -> None:
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
-    namespace = ctx.obj["project"]
+    project = ctx.obj["project"]
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             resp = client.get(
                 f"{server}/api/v1/roles",
                 headers=headers,
-                params={"project": namespace, "limit": limit},
+                params={"project": project, "limit": limit},
             )
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
@@ -136,14 +136,14 @@ def role_describe(ctx: click.Context, name: str) -> None:
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
-    namespace = ctx.obj["project"]
+    project = ctx.obj["project"]
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             resp = client.get(
                 f"{server}/api/v1/roles/{name}",
                 headers=headers,
-                params={"project": namespace},
+                params={"project": project},
             )
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
@@ -243,14 +243,14 @@ def rolebinding_list(ctx: click.Context, limit: int) -> None:
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
-    namespace = ctx.obj["project"]
+    project = ctx.obj["project"]
 
     try:
         with httpx.Client(timeout=ctx.obj["timeout"]) as client:
             resp = client.get(
                 f"{server}/api/v1/role-bindings",
                 headers=headers,
-                params={"project": namespace, "limit": limit},
+                params={"project": project, "limit": limit},
             )
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
@@ -327,6 +327,7 @@ def rolebinding_create(
 ) -> None:
     """Create a role binding."""
     validate_name(name)
+    validate_name(role_name)
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
@@ -405,10 +406,10 @@ def rolebinding_delete(ctx: click.Context, name: str, yes: bool) -> None:
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
-    namespace = ctx.obj["project"]
+    project = ctx.obj["project"]
 
     if not confirm_destructive(
-        ctx, f"Delete rolebinding {name} in project '{namespace}' on {server}?", yes=yes
+        ctx, f"Delete rolebinding {name} in project '{project}' on {server}?", yes=yes
     ):
         return
 
@@ -417,7 +418,7 @@ def rolebinding_delete(ctx: click.Context, name: str, yes: bool) -> None:
             resp = client.delete(
                 f"{server}/api/v1/role-bindings/{name}",
                 headers=headers,
-                params={"project": namespace},
+                params={"project": project},
             )
     except httpx.RequestError as exc:
         handle_request_error(server, exc)
@@ -426,10 +427,9 @@ def rolebinding_delete(ctx: click.Context, name: str, yes: bool) -> None:
         handle_http_error(resp)
 
     if ctx.obj["json"]:
-        print_json({"deleted": name, "project": namespace, "status": "deleted"})
+        print_json({"deleted": name, "project": project, "status": "deleted"})
         return
 
     out.print(
-        f"[green]✓[/] Deleted rolebinding [bold]{escape(name)}[/]"
-        f" from project '{escape(namespace)}'"
+        f"[green]✓[/] Deleted rolebinding [bold]{escape(name)}[/] from project '{escape(project)}'"
     )

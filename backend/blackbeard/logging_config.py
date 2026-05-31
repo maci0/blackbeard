@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     import asyncio
 
 __all__ = [
+    "SENSITIVE_KEYS",
     "anonymize_ip",
     "configure_logging",
     "log_task_exception",
@@ -72,7 +73,8 @@ _LOG_RECORD_BUILTIN = frozenset(
 
 # Keys that must never appear in structured log output — defense-in-depth
 # against accidental secret leakage through extra={} fields.
-_SENSITIVE_KEYS = frozenset(
+# Also used by middleware to redact query-string parameters.
+SENSITIVE_KEYS = frozenset(
     {
         "api_key",
         "api_secret",
@@ -140,7 +142,7 @@ _SENSITIVE_KEYS = frozenset(
     }
 )
 
-_SENSITIVE_SUFFIXES = tuple(f"_{s}" for s in _SENSITIVE_KEYS)
+_SENSITIVE_SUFFIXES = tuple(f"_{s}" for s in SENSITIVE_KEYS)
 
 _SCALAR_TYPES = (str, int, float, bool, type(None))
 
@@ -185,12 +187,22 @@ def log_task_exception(task: asyncio.Task[None]) -> None:
     """Callback for fire-and-forget asyncio tasks that logs exceptions silently swallowed."""
     if task.cancelled():
         return
+    _logger = logging.getLogger(__name__)
     try:
         exc = task.exception()
     except Exception:
+        task_name = task.get_name()
+        _logger.warning(
+            "Could not retrieve exception from background task '%s'",
+            task_name,
+            exc_info=True,
+            extra={
+                "event": "background_task_exception_retrieval_failed",
+                "task_name": task_name,
+            },
+        )
         return
     if exc is not None:
-        _logger = logging.getLogger(__name__)
         _logger.error(
             "Background task '%s' failed: %s",
             task.get_name(),
@@ -261,7 +273,7 @@ class _JsonFormatter(logging.Formatter):
         for key, val in record.__dict__.items():
             if key not in _LOG_RECORD_BUILTIN and key not in log_entry:
                 key_lower = key.lower()
-                if key_lower in _SENSITIVE_KEYS or key_lower.endswith(_SENSITIVE_SUFFIXES):
+                if key_lower in SENSITIVE_KEYS or key_lower.endswith(_SENSITIVE_SUFFIXES):
                     log_entry[key] = "[REDACTED]"
                 elif key_lower.endswith("error_message") and isinstance(val, str):
                     log_entry[key] = scrub_pii(val)

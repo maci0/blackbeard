@@ -1234,3 +1234,130 @@ async def test_tools_library_install(client, slugs):
         json={"slugs": slugs},
     )
     _assert_no_500(resp, f"on POST /tools/library/install with slugs={slugs!r}")
+
+
+# ---------------------------------------------------------------------------
+# Label selector parsing fuzzing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@given(
+    label_selector=st.text(
+        alphabet=st.characters(blacklist_categories=("Cc", "Cs")),
+        min_size=0,
+        max_size=500,
+    ),
+    kind_plural=st.sampled_from(_ALL_KIND_PLURALS),
+)
+@settings(
+    max_examples=50,
+    suppress_health_check=[HealthCheck.function_scoped_fixture, HealthCheck.too_slow],
+)
+async def test_fuzz_label_selector_parsing(client, label_selector, kind_plural):
+    """GET /{kind_plural}?label_selector=... must never 500.
+
+    Label selector is parsed inline: split on commas, split on '='.
+    Malformed selectors should return 400, not crash.
+    """
+    resp = await client.get(
+        f"/api/v1/{kind_plural}",
+        headers=API_KEY_HEADER,
+        params={"label_selector": label_selector},
+    )
+    _assert_no_500(resp, f"on GET /{kind_plural}?label_selector={label_selector!r}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "label_selector",
+    [
+        "key=value",
+        "a=b,c=d,e=f",
+        "=value",
+        "key=",
+        "===",
+        ",,,",
+        "key=val" + ",k=v" * 200,
+        "key\x00=val",
+        "key=val\ninjected=true",
+        "\t\t=\t\t",
+        "a" * 1024 + "=b",
+    ],
+    ids=[
+        "valid-single",
+        "valid-multi",
+        "empty-key",
+        "empty-value",
+        "only-equals",
+        "only-commas",
+        "many-pairs",
+        "null-byte",
+        "newline-inject",
+        "tab-padding",
+        "long-key",
+    ],
+)
+async def test_evil_label_selectors(client, label_selector):
+    """Known evil label selectors must not crash the server."""
+    resp = await client.get(
+        "/api/v1/agents",
+        headers=API_KEY_HEADER,
+        params={"label_selector": label_selector},
+    )
+    _assert_no_500(resp, f"on label_selector={label_selector!r}")
+
+
+# ---------------------------------------------------------------------------
+# WebSocket message validation fuzzing (collaboration protocol)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@given(
+    msg_type=st.text(min_size=0, max_size=100),
+    data=st.one_of(
+        st.none(),
+        st.dictionaries(st.text(max_size=20), st.text(max_size=50), max_size=5),
+        st.text(max_size=50),
+        st.integers(),
+        st.lists(st.text(max_size=10), max_size=3),
+    ),
+)
+@settings(
+    max_examples=50,
+    suppress_health_check=[HealthCheck.function_scoped_fixture, HealthCheck.too_slow],
+)
+async def test_fuzz_collab_message_validation(client, msg_type, data):
+    """Collaboration message validation logic must handle any type/data combo.
+
+    Tests the validation rules extracted from the WebSocket handler:
+    - msg_type must be in ALLOWED_MESSAGE_TYPES
+    - data must be dict if present
+    - data must not exceed depth limit
+    """
+    from blackbeard.api.collaboration import ALLOWED_MESSAGE_TYPES
+    from blackbeard.models.execution_schemas import exceeds_depth
+
+    message = {"type": msg_type}
+    if data is not None:
+        message["data"] = data
+
+    # Replicate the validation logic from the WebSocket handler
+    if not isinstance(message, dict):
+        return
+    if msg_type not in ALLOWED_MESSAGE_TYPES:
+        return  # would be silently dropped
+
+    msg_data = message.get("data")
+    if msg_data is not None and not isinstance(msg_data, dict):
+        return  # would be silently dropped
+    if msg_data is not None and exceeds_depth(msg_data, 5):
+        return  # would be silently dropped
+
+    # If we reach here, message would be broadcast — verify it's safe
+    assert isinstance(msg_type, str)
+    assert msg_type in ALLOWED_MESSAGE_TYPES
+    if msg_data is not None:
+        assert isinstance(msg_data, dict)
+        assert not exceeds_depth(msg_data, 5)

@@ -54,6 +54,7 @@ from blackbeard.models.execution_schemas import (
     KickoffRequest,
     TestRequest,
     TrainRequest,
+    redact_sensitive_values,
 )
 from blackbeard.rate_limiter import check_rate_limit, execution_limiter
 
@@ -64,22 +65,19 @@ _MAX_STREAM_POLLS = 400
 _SSE_ERROR_TOO_MANY = json.dumps({"detail": "Too many concurrent SSE streams"})
 _SSE_ERROR_INTERNAL = json.dumps({"detail": "Internal stream error"})
 
-# Phase thresholds for progressive poll backoff (shared by SSE + WS).
+# Phase threshold for progressive poll backoff (shared by SSE + WS).
 _PHASE2_THRESHOLD = 30
-_PHASE3_THRESHOLD = 60
 
 
 def _poll_backoff(polls: int) -> int:
-    """Return sleep seconds for progressive backoff: 1s → 3s → 5s."""
+    """Return sleep seconds for progressive backoff: 1s → 2s."""
     if polls < _PHASE2_THRESHOLD:
         return 1
-    if polls < _PHASE3_THRESHOLD:
-        return 3
-    return 5
+    return 2
 
 
 def _serialize_event(ev: ExecutionEvent) -> dict[str, object]:
-    data: dict[str, object] = dict(ev.data) if ev.data else {}
+    data: dict[str, object] = redact_sensitive_values(dict(ev.data)) if ev.data else {}
     data["sequence"] = ev.sequence
     data["timestamp"] = ev.timestamp.isoformat()
     return data
@@ -91,9 +89,9 @@ class _StreamEvent:
     __slots__ = ("data", "event_type", "kind")
 
     def __init__(self, kind: str, data: dict[str, object], event_type: str = "") -> None:
-        self.kind = kind  # "status" | "heartbeat" | "event" | "error" | "timeout"
+        self.kind = kind
         self.data = data
-        self.event_type = event_type  # only set for kind="event"
+        self.event_type = event_type
 
 
 _HEARTBEAT_EVENTS: dict[ExecutionStatus, _StreamEvent] = {
@@ -157,6 +155,7 @@ async def _poll_execution(execution_id: UUID) -> AsyncGenerator[_StreamEvent]:
                     yield _StreamEvent("event", _serialize_event(ev), event_type=ev.event_type)
                     last_event_seq = ev.sequence
             else:
+                # Reset so next poll re-checks for events
                 prev_had_events = True
 
             if current_status in TERMINAL_STATUSES:
@@ -610,7 +609,7 @@ async def list_execution_events(
                 sequence=e.sequence,
                 event_type=e.event_type,
                 timestamp=e.timestamp,
-                data=e.data if e.data else {},
+                data=redact_sensitive_values(e.data) if e.data else {},
             )
             for e in items
         ],
@@ -884,7 +883,7 @@ async def stream_execution(
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "X-Accel-Buffering": "no",
-            "X-Poll-Interval": "1s/3s/5s (progressive)",
+            "X-Poll-Interval": "1s/2s (progressive)",
         },
     )
 
@@ -901,7 +900,7 @@ async def ws_execution(
     cannot set custom headers, so credentials must be passed via query
     string.
     """
-    from blackbeard.api.collaboration import validate_ws_auth
+    from blackbeard.auth.dependencies import validate_ws_auth
     from blackbeard.rate_limiter import is_rate_limited, record_auth_failure
 
     client_ip = websocket.client.host if websocket.client else "unknown"

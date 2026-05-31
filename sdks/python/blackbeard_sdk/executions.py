@@ -6,6 +6,8 @@ import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
+from blackbeard_sdk.errors import BlackbeardApiError
+
 if TYPE_CHECKING:
     import httpx
 
@@ -281,7 +283,7 @@ class ExecutionMixin:
             Final execution dict.
 
         Raises:
-            TimeoutError: If the execution does not complete within the timeout.
+            BlackbeardApiError: If the execution does not complete within the timeout.
         """
         deadline = time.monotonic() + timeout
         while True:
@@ -289,8 +291,9 @@ class ExecutionMixin:
             if execution.get("status") in TERMINAL_STATUSES:
                 return execution
             if time.monotonic() >= deadline:
-                raise TimeoutError(
+                raise BlackbeardApiError(
+                    0,
                     f"Execution {execution_id} did not complete within {timeout}s "
-                    f"(current status: {execution.get('status')})"
+                    f"(current status: {execution.get('status')})",
                 )
             time.sleep(poll_interval)

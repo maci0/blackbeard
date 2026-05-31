@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import re
 from collections.abc import Callable, Coroutine
@@ -13,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
+from blackbeard.auth.api_key import get_api_key
 from blackbeard.auth.authorizer import Authorizer
 from blackbeard.auth.jwt import decode_access_token
 from blackbeard.config import settings
@@ -105,9 +108,10 @@ async def get_current_user(
     if not api_key and SSE_STREAM_RE.match(request.url.path):
         api_key = request.query_params.get("api_key", "")
     if api_key and len(api_key) >= 16:
+        api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
         result = await session.execute(
             select(User)
-            .where(User.api_key == api_key, User.is_active.is_(True))
+            .where(User.api_key == api_key_hash, User.is_active.is_(True))
             .options(defer(User.password_hash), defer(User.api_key))
         )
         user = result.scalar_one_or_none()
@@ -250,3 +254,29 @@ async def check_resource_permission(
             detail=f"Not authorized to {verb} {kind}",
         )
     return user
+
+
+def validate_ws_auth(token: str, api_key: str) -> bool:
+    """Validate WebSocket authentication credentials.
+
+    Accepts either a JWT access token or an API key.
+    Returns True if authentication succeeds, False otherwise.
+
+    WebSocket connections cannot set custom headers, so credentials
+    must be passed via query string parameters.
+    """
+    if token:
+        try:
+            decode_access_token(token)
+            return True
+        except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError) as exc:
+            logger.warning(
+                "WebSocket auth: token validation failed",
+                exc_info=True,
+                extra={
+                    "event": "ws_token_invalid",
+                    "error_type": type(exc).__name__,
+                },
+            )
+
+    return bool(api_key and hmac.compare_digest(api_key.encode(), get_api_key().encode()))

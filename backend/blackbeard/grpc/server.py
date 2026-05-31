@@ -114,7 +114,7 @@ class AuthInterceptor(grpc.aio.ServerInterceptor):
         if api_key:
             from blackbeard.auth.api_key import get_api_key
 
-            if hmac.compare_digest(api_key, get_api_key()):
+            if hmac.compare_digest(api_key.encode(), get_api_key().encode()):
                 return await continuation(handler_call_details)
 
             logger.warning(

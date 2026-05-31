@@ -454,6 +454,207 @@ class TestExportAll:
         assert "project=staging" in str(transport.requests[0].url)
 
 
+# -- Auth edge cases ----------------------------------------------------------
+
+
+class TestAuthEdgeCases:
+    def test_generate_api_key(
+        self, client: BlackbeardClient, transport: MockTransport
+    ) -> None:
+        transport.queue(
+            _mock_response(200, {"api_key": "bb-test-key-123"})
+        )
+        result = client.generate_api_key()
+        assert result["api_key"] == "bb-test-key-123"
+        req = transport.requests[0]
+        assert req.method == "POST"
+        assert req.url.path == "/api/v1/auth/api-key"
+
+    def test_revoke_api_key(
+        self, client: BlackbeardClient, transport: MockTransport
+    ) -> None:
+        transport.queue(_mock_response(204))
+        client.revoke_api_key()
+        req = transport.requests[0]
+        assert req.method == "DELETE"
+        assert req.url.path == "/api/v1/auth/api-key"
+
+
+# -- Versioning tests ---------------------------------------------------------
+
+
+class TestVersioning:
+    def test_list_versions(
+        self, client: BlackbeardClient, transport: MockTransport
+    ) -> None:
+        transport.queue(
+            _mock_response(
+                200,
+                {
+                    "versions": [
+                        {
+                            "version": 1,
+                            "changed_by": "user@test.com",
+                            "created_at": "2025-01-01T00:00:00Z",
+                            "changed_keys": ["spec"],
+                        },
+                        {
+                            "version": 2,
+                            "changed_by": "user@test.com",
+                            "created_at": "2025-01-02T00:00:00Z",
+                            "changed_keys": ["spec", "labels"],
+                        },
+                    ]
+                },
+            )
+        )
+        versions = client.list_versions("Agent", "researcher")
+        assert len(versions) == 2
+        assert versions[0]["version"] == 1
+        assert versions[1]["changed_keys"] == ["spec", "labels"]
+        req = transport.requests[0]
+        assert req.url.path == "/api/v1/agents/researcher/versions"
+        assert "project=default" in str(req.url)
+
+    def test_get_version(
+        self, client: BlackbeardClient, transport: MockTransport
+    ) -> None:
+        transport.queue(
+            _mock_response(
+                200,
+                {
+                    "version": 1,
+                    "changed_by": "user@test.com",
+                    "created_at": "2025-01-01T00:00:00Z",
+                    "spec": {"role": "Researcher"},
+                    "labels": {"env": "prod"},
+                },
+            )
+        )
+        result = client.get_version("Agent", "researcher", 1)
+        assert result["version"] == 1
+        assert result["spec"]["role"] == "Researcher"
+        req = transport.requests[0]
+        assert req.url.path == "/api/v1/agents/researcher/versions/1"
+
+    def test_rollback(
+        self, client: BlackbeardClient, transport: MockTransport
+    ) -> None:
+        transport.queue(
+            _mock_response(
+                200,
+                {
+                    "kind": "Agent",
+                    "metadata": {"name": "researcher"},
+                    "version": 3,
+                },
+            )
+        )
+        result = client.rollback("Agent", "researcher", to_version=1)
+        assert result["version"] == 3
+        req = transport.requests[0]
+        assert req.method == "POST"
+        assert req.url.path == "/api/v1/agents/researcher/rollback"
+        body = json.loads(req.content)
+        assert body["version"] == 1
+
+    def test_list_versions_custom_project(
+        self, client: BlackbeardClient, transport: MockTransport
+    ) -> None:
+        transport.queue(_mock_response(200, {"versions": []}))
+        client.list_versions("Agent", "test", project="staging")
+        assert "project=staging" in str(transport.requests[0].url)
+
+
+# -- Audit log tests ----------------------------------------------------------
+
+
+class TestAuditLogs:
+    def test_list_audit_logs(
+        self, client: BlackbeardClient, transport: MockTransport
+    ) -> None:
+        transport.queue(
+            _mock_response(
+                200,
+                {
+                    "items": [
+                        {
+                            "id": "log-1",
+                            "timestamp": "2025-01-01T00:00:00Z",
+                            "action": "resource_created",
+                            "actor_type": "user",
+                            "actor_id": "u1",
+                            "resource_type": "Agent",
+                            "resource_id": "r1",
+                        }
+                    ],
+                    "total": 1,
+                    "limit": 100,
+                    "offset": 0,
+                    "has_more": False,
+                },
+            )
+        )
+        items = client.list_audit_logs(action="resource_created")
+        assert len(items) == 1
+        assert items[0]["action"] == "resource_created"
+        req = transport.requests[0]
+        assert req.url.path == "/api/v1/audit-logs"
+        assert "action=resource_created" in str(req.url)
+
+    def test_list_audit_logs_all_filters(
+        self, client: BlackbeardClient, transport: MockTransport
+    ) -> None:
+        transport.queue(
+            _mock_response(
+                200,
+                {"items": [], "total": 0, "limit": 50, "offset": 0, "has_more": False},
+            )
+        )
+        client.list_audit_logs(
+            action="resource_updated",
+            actor_id="u1",
+            resource_type="Agent",
+            resource_id="r1",
+            limit=50,
+            offset=10,
+        )
+        url_str = str(transport.requests[0].url)
+        assert "action=resource_updated" in url_str
+        assert "actor_id=u1" in url_str
+        assert "resource_type=Agent" in url_str
+        assert "resource_id=r1" in url_str
+        assert "limit=50" in url_str
+        assert "offset=10" in url_str
+
+
+# -- Respond with feedback ---------------------------------------------------
+
+
+class TestRespondWithFeedback:
+    def test_respond_with_feedback(
+        self, client: BlackbeardClient, transport: MockTransport
+    ) -> None:
+        transport.queue(
+            _mock_response(200, {"status": "recorded", "execution_id": "e1"})
+        )
+        result = client.respond("e1", "Approved", feedback="Looks good")
+        assert result["status"] == "recorded"
+        body = json.loads(transport.requests[0].content)
+        assert body["response"] == "Approved"
+        assert body["feedback"] == "Looks good"
+
+    def test_respond_without_feedback_omits_key(
+        self, client: BlackbeardClient, transport: MockTransport
+    ) -> None:
+        transport.queue(
+            _mock_response(200, {"status": "recorded", "execution_id": "e1"})
+        )
+        client.respond("e1", "OK")
+        body = json.loads(transport.requests[0].content)
+        assert "feedback" not in body
+
+
 # -- kind_plural edge cases ---------------------------------------------------
 
 
@@ -472,7 +673,7 @@ class TestKindPluralEdge:
 
     def test_case_sensitive(self) -> None:
         """Kind lookup is case-sensitive."""
-        with pytest.raises(ValueError):
+        with pytest.raises(BlackbeardApiError):
             _kind_plural("agent")  # lowercase should fail
 
 

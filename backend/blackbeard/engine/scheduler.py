@@ -100,6 +100,15 @@ class AutomationScheduler:
         try:
             exc = task.exception()
         except Exception:
+            logger.warning(
+                "Could not retrieve exception from cron task '%s'",
+                task.get_name(),
+                exc_info=True,
+                extra={
+                    "event": "cron_task_exception_retrieval_failed",
+                    "task_name": task.get_name(),
+                },
+            )
             return
         if exc is not None:
             logger.error(

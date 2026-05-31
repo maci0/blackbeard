@@ -1,6 +1,7 @@
 import {
   BlackbeardApiError,
   TERMINAL_STATUSES,
+  type AuditLogEntry,
   type BlackbeardConfig,
   type Resource,
   type Execution,
@@ -13,6 +14,8 @@ import {
   type ReadinessResponse,
   type HITLResponseResult,
   type SpendRecord,
+  type VersionListResponse,
+  type VersionDetail,
 } from "./types.js";
 
 export const KIND_PLURALS: Record<string, string> = {
@@ -28,7 +31,8 @@ export const KIND_PLURALS: Record<string, string> = {
   Role: "roles",
   RoleBinding: "role-bindings",
   Automation: "automations",
-  Namespace: "namespaces",
+  Project: "projects",
+  ServiceAccount: "service-accounts",
 };
 
 export class BlackbeardClient {
@@ -122,10 +126,12 @@ export class BlackbeardClient {
 
   // ── Health ──
 
+  /** Check API liveness. */
   async health(): Promise<HealthResponse> {
     return this.request<HealthResponse>("GET", "/api/v1/health");
   }
 
+  /** Check API readiness (database, Valkey, LiteLLM connectivity). */
   async readiness(): Promise<ReadinessResponse> {
     return this.request<ReadinessResponse>(
       "GET",
@@ -135,6 +141,7 @@ export class BlackbeardClient {
 
   // ── Auth ──
 
+  /** Authenticate with email and password. Stores the access token for subsequent requests. */
   async login(email: string, password: string): Promise<AuthResponse> {
     const result = await this.request<AuthResponse>(
       "POST",
@@ -146,6 +153,7 @@ export class BlackbeardClient {
     return result;
   }
 
+  /** Register a new user account. Stores the access token for subsequent requests. */
   async register(
     email: string,
     password: string,
@@ -161,6 +169,7 @@ export class BlackbeardClient {
     return result;
   }
 
+  /** Exchange a refresh token for a new access token. Updates the stored token. */
   async refresh(refreshToken: string): Promise<TokenResponse> {
     const result = await this.request<TokenResponse>(
       "POST",
@@ -172,20 +181,24 @@ export class BlackbeardClient {
     return result;
   }
 
+  /** Get the currently authenticated user's profile. */
   async whoami(): Promise<User> {
     return this.request<User>("GET", "/api/v1/auth/me");
   }
 
+  /** Generate or rotate the current user's API key. Requires JWT auth. */
   async generateApiKey(): Promise<{ api_key: string }> {
     return this.request<{ api_key: string }>("POST", "/api/v1/auth/api-key");
   }
 
+  /** Revoke the current user's API key. Idempotent. Requires JWT auth. */
   async revokeApiKey(): Promise<void> {
     await this.request<void>("DELETE", "/api/v1/auth/api-key");
   }
 
   // ── Resources ──
 
+  /** Resolve a resource kind to its URL plural form. */
   private plural(kind: string): string {
     const p = KIND_PLURALS[kind];
     if (p) return p;
@@ -196,6 +209,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** List resources of a given kind with optional filters. */
   async list(
     kind: string,
     options?: {
@@ -217,6 +231,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** Get a single resource by kind and name. */
   async get(
     kind: string,
     name: string,
@@ -231,6 +246,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** Create a resource, or update it if one with the same kind/name/project exists. */
   async create(resource: Resource): Promise<Resource> {
     return this.request<Resource>(
       "POST",
@@ -239,6 +255,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** Update a resource by kind and name (optimistic locking via version). */
   async update(
     kind: string,
     name: string,
@@ -255,6 +272,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** Delete a resource by kind and name. Idempotent. */
   async delete(kind: string, name: string, project?: string): Promise<void> {
     const params = new URLSearchParams({
       project: project ?? "default",
@@ -265,31 +283,34 @@ export class BlackbeardClient {
     );
   }
 
+  /** List version snapshots for a resource. */
   async listVersions(
     kind: string,
     name: string,
     project?: string
-  ): Promise<{ versions: Array<{ version: number; changed_by: string | null; created_at: string; changed_keys: string[] }> }> {
+  ): Promise<VersionListResponse> {
     const params = new URLSearchParams({ project: project ?? "default" });
-    return this.request(
+    return this.request<VersionListResponse>(
       "GET",
       `/api/v1/${this.plural(kind)}/${encodeURIComponent(name)}/versions?${params}`
     );
   }
 
+  /** Get the full snapshot of a resource at a specific version. */
   async getVersion(
     kind: string,
     name: string,
     version: number,
     project?: string
-  ): Promise<{ version: number; changed_by: string | null; created_at: string; spec: Record<string, unknown>; labels: Record<string, string> | null }> {
+  ): Promise<VersionDetail> {
     const params = new URLSearchParams({ project: project ?? "default" });
-    return this.request(
+    return this.request<VersionDetail>(
       "GET",
       `/api/v1/${this.plural(kind)}/${encodeURIComponent(name)}/versions/${version}?${params}`
     );
   }
 
+  /** Rollback a resource to a previous version. */
   async rollback(
     kind: string,
     name: string,
@@ -300,21 +321,23 @@ export class BlackbeardClient {
     return this.request<Resource>(
       "POST",
       `/api/v1/${this.plural(kind)}/${encodeURIComponent(name)}/rollback?${params}`,
-      { version: version }
+      { version }
     );
   }
 
+  /** Create or update multiple resources (sequential upsert). */
   async apply(resources: Resource[]): Promise<Resource[]> {
     const results: Resource[] = [];
     for (let i = 0; i < resources.length; i++) {
+      const res = resources[i]!;
       try {
-        results.push(await this.create(resources[i]!));
+        results.push(await this.create(res));
       } catch (err) {
         if (err instanceof BlackbeardApiError) {
-          const name = resources[i]!.metadata?.name ?? "?";
+          const name = res.metadata?.name ?? "?";
           throw new BlackbeardApiError(
             err.status,
-            `[${i}] ${resources[i]!.kind}/${name}: ${err.detail}`,
+            `[${i}] ${res.kind}/${name}: ${err.detail}`,
             err.body,
             { cause: err },
           );
@@ -327,6 +350,7 @@ export class BlackbeardClient {
 
   // ── Executions ──
 
+  /** Kick off a crew execution. */
   async kickoff(
     crewName: string,
     inputs?: Record<string, unknown>,
@@ -342,6 +366,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** Start a crew training run. */
   async train(
     crewName: string,
     options?: {
@@ -365,6 +390,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** Start a crew test run. */
   async test(
     crewName: string,
     options?: {
@@ -386,6 +412,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** Run a flow. */
   async runFlow(
     flowName: string,
     inputs?: Record<string, unknown>,
@@ -401,6 +428,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** Get execution details by ID. */
   async getExecution(executionId: string): Promise<Execution> {
     return this.request<Execution>(
       "GET",
@@ -408,6 +436,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** List executions with optional filters. */
   async listExecutions(options?: {
     crew_name?: string;
     project?: string;
@@ -428,6 +457,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** Get LiteLLM spend data for an execution. */
   async getExecutionSpend(
     executionId: string
   ): Promise<SpendRecord[]> {
@@ -437,6 +467,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** List execution events for streaming/replay. */
   async getExecutionEvents(
     executionId: string,
     options?: { after?: number; limit?: number }
@@ -450,6 +481,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** Cancel a queued or running execution. */
   async cancel(executionId: string): Promise<Execution> {
     return this.request<Execution>(
       "PATCH",
@@ -457,6 +489,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** Submit a human-in-the-loop response to a paused execution. */
   async respond(
     executionId: string,
     response: string,
@@ -471,6 +504,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** Retry a terminal execution. Creates a new execution with the same inputs. */
   async retry(executionId: string): Promise<Execution> {
     return this.request<Execution>(
       "POST",
@@ -478,6 +512,7 @@ export class BlackbeardClient {
     );
   }
 
+  /** Wait for an execution to reach a terminal status. Polls until complete or timeout. */
   async wait(
     executionId: string,
     pollInterval = 2000,
@@ -498,6 +533,7 @@ export class BlackbeardClient {
     }
   }
 
+  /** List audit log entries with optional filters. */
   async listAuditLogs(options?: {
     action?: string;
     actor_id?: string;
@@ -505,7 +541,7 @@ export class BlackbeardClient {
     resource_id?: string;
     limit?: number;
     offset?: number;
-  }): Promise<ListResponse<{ id: string; timestamp: string; actor_type: string; actor_id: string; action: string; resource_type: string | null; resource_id: string | null; detail: Record<string, unknown> | null; request_id: string | null }>> {
+  }): Promise<ListResponse<AuditLogEntry>> {
     const params = new URLSearchParams();
     if (options?.action) params.set("action", options.action);
     if (options?.actor_id) params.set("actor_id", options.actor_id);
@@ -514,13 +550,13 @@ export class BlackbeardClient {
     params.set("limit", String(options?.limit ?? 100));
     params.set("offset", String(options?.offset ?? 0));
     const qs = params.toString();
-    return this.request(
+    return this.request<ListResponse<AuditLogEntry>>(
       "GET",
       `/api/v1/audit-logs${qs ? `?${qs}` : ""}`
     );
   }
 
-  /** Fetch all resources by listing each kind in parallel (13 requests). For a single-request alternative, use {@link exportYaml}. */
+  /** Fetch all resources by listing each kind in parallel (14 requests). For a single-request alternative, use {@link exportYaml}. */
   async exportAll(project = "default"): Promise<Resource[]> {
     const responses = await Promise.all(
       Object.keys(KIND_PLURALS).map((kind) =>

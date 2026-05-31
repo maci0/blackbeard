@@ -38,9 +38,10 @@ def _kind_plural(kind: str) -> str:
         # If already a plural (e.g. user passed "agents"), use as-is
         if kind in KIND_TO_PLURAL.values():
             return kind
-        raise ValueError(
+        raise BlackbeardApiError(
+            0,
             f"Unknown resource kind '{kind}'. "
-            f"Valid kinds: {', '.join(sorted(KIND_TO_PLURAL.keys()))}"
+            f"Valid kinds: {', '.join(sorted(KIND_TO_PLURAL.keys()))}",
         )
     return plural
 
@@ -102,7 +103,7 @@ class ResourceMixin:
         ).json()
 
     def create(self, resource: dict[str, Any]) -> dict[str, Any]:
-        """Create (or upsert) a resource.
+        """Create a resource, or update it if one with the same kind/name/project exists.
 
         The resource dict must contain a "kind" key and a "metadata" key
         with at least a "name" field.
@@ -111,11 +112,13 @@ class ResourceMixin:
             resource: Resource definition dict.
 
         Returns:
-            Created/updated resource dict.
+            Created or updated resource dict.
         """
         kind = resource.get("kind")
         if not kind:
-            raise ValueError("Resource dict must contain a 'kind' key")
+            raise BlackbeardApiError(
+                0, "Resource dict must contain a 'kind' key"
+            )
         plural = _kind_plural(kind)
         return self._send("POST", f"/api/v1/{plural}", json=resource).json()
 
@@ -259,7 +262,7 @@ class ResourceMixin:
             "POST",
             f"/api/v1/{plural}/{quote(name, safe='')}/rollback",
             params={"project": project},
-            json={"to_version": to_version},
+            json={"version": to_version},
         ).json()
 
     def export_all(self, project: str = "default") -> str:

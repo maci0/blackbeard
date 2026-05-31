@@ -201,6 +201,7 @@ class ExecutionTaskResponse(BaseModel):
     error: str | None = None
     tokens_used: int = 0
     cost_usd: Decimal = Decimal("0")
+    updated_at: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
 
@@ -232,6 +233,7 @@ class ExecutionResponse(BaseModel):
     initiated_by: str | None = None
     principal_chain: dict[str, Any] | None = None
     created_at: datetime
+    updated_at: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     tasks: list[ExecutionTaskResponse] = Field(default_factory=list)
@@ -264,6 +266,7 @@ class ExecutionResponse(BaseModel):
                     error=scrub_pii(t.error) if t.error else None,
                     tokens_used=t.tokens_used,
                     cost_usd=t.cost_usd,
+                    updated_at=t.updated_at,
                     started_at=t.started_at,
                     completed_at=t.completed_at,
                 )
@@ -303,6 +306,7 @@ class ExecutionResponse(BaseModel):
             initiated_by=str(initiated_by_raw) if initiated_by_raw else None,
             principal_chain=principal_chain,
             created_at=execution.created_at,
+            updated_at=execution.updated_at,
             started_at=execution.started_at,
             completed_at=execution.completed_at,
             tasks=tasks,

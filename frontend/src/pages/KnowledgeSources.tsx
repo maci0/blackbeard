@@ -535,7 +535,8 @@ export default function KnowledgeSources() {
                 <button
                   type="button"
                   onClick={() => void fetchResources('knowledge-sources')}
-                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Refresh knowledge sources"
                 >
                   <RefreshCw

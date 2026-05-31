@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 _HEADING_RE = re.compile(r"^#+\s+(.+)$", re.MULTILINE)
+_STRIP_AGENT_RE = re.compile(r"\s*(Agent|Personality).*$", re.IGNORECASE)
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+_SECTION_PATTERN_CACHE: dict[str, re.Pattern[str]] = {}
 
 
 def parse_frontmatter(content: str) -> dict[str, str]:
@@ -37,7 +40,12 @@ def parse_frontmatter(content: str) -> dict[str, str]:
 
 def _extract_section(content: str, heading_pattern: str) -> str:
     """Extract text under a heading matching the pattern, up to the next heading."""
-    pat = re.compile(heading_pattern, re.IGNORECASE)
+    pat = _SECTION_PATTERN_CACHE.get(heading_pattern)
+    if pat is None:
+        if len(_SECTION_PATTERN_CACHE) >= 64:
+            _SECTION_PATTERN_CACHE.clear()
+        pat = re.compile(heading_pattern, re.IGNORECASE)
+        _SECTION_PATTERN_CACHE[heading_pattern] = pat
     lines = content.split("\n")
     capturing = False
     result: list[str] = []
@@ -114,9 +122,7 @@ def parse_agency_agent_markdown(
         title_match = _HEADING_RE.search(content)
         if title_match:
             raw_title = title_match.group(1)
-            frontmatter["name"] = re.sub(
-                r"\s*(Agent|Personality).*$", "", raw_title, flags=re.IGNORECASE
-            ).strip()
+            frontmatter["name"] = _STRIP_AGENT_RE.sub("", raw_title).strip()
         elif filename:
             frontmatter["name"] = (
                 filename.replace(".md", "")
@@ -134,7 +140,7 @@ def parse_agency_agent_markdown(
         return None
 
     name = frontmatter["name"]
-    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    slug = _SLUG_RE.sub("-", name.lower()).strip("-")
 
     return {
         "name": slug,

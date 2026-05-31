@@ -64,6 +64,10 @@ class ResourceService:
         If a resource with the same kind/name/project exists, it is updated
         (version incremented). Returns (resource, created) where created=True
         for new resources and created=False for upserted existing resources.
+
+        Uses a nested transaction to handle concurrent insert races: if two
+        requests create the same resource simultaneously, the loser catches
+        IntegrityError and retries as an upsert.
         """
         t0 = time.monotonic()
         kind_enum = _parse_kind(data.kind)
@@ -176,6 +180,8 @@ class ResourceService:
         returned as -1.  Use for streaming/export callers that discard the
         total to avoid an extra round-trip per page.
         """
+        limit = max(1, min(limit, 1000))
+        offset = max(0, offset)
         filters = []
         if kind:
             filters.append(Resource.kind == _parse_kind(kind))
