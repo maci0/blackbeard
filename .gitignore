@@ -54,3 +54,4 @@ credentials.json
 test-*.png
 *.png
 !frontend/public/*.png
+backend/data/
