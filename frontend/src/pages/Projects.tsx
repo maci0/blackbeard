@@ -73,7 +73,9 @@ export default function Projects() {
                 aria-label="Refresh"
                 className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+                <RefreshCw
+                  className={cn('h-4 w-4', loading && 'animate-spin motion-reduce:animate-none')}
+                />
               </button>
               <button
                 type="button"
@@ -305,11 +307,16 @@ function CreateProjectDialog({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
+                aria-required="true"
                 autoFocus
                 pattern="[a-z0-9][a-z0-9\-]*"
+                aria-describedby="proj-name-hint"
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 placeholder="my-project"
               />
+              <p id="proj-name-hint" className="mt-1 text-xs text-muted-foreground">
+                Lowercase letters, numbers, and hyphens only
+              </p>
             </div>
             <div>
               <label htmlFor="proj-desc" className="mb-1.5 block text-sm font-medium">

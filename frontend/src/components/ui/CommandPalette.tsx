@@ -195,16 +195,16 @@ export function CommandPalette({
   }, [query, resourceItems])
 
   const grouped = useMemo(() => {
-    const groups: { category: string; items: CommandItem[] }[] = []
-    const seen = new Set<string>()
+    const groupMap = new Map<string, CommandItem[]>()
     for (const item of filtered) {
-      if (!seen.has(item.category)) {
-        seen.add(item.category)
-        groups.push({ category: item.category, items: [] })
+      let group = groupMap.get(item.category)
+      if (!group) {
+        group = []
+        groupMap.set(item.category, group)
       }
-      groups.find((g) => g.category === item.category)!.items.push(item)
+      group.push(item)
     }
-    return groups
+    return Array.from(groupMap, ([category, items]) => ({ category, items }))
   }, [filtered])
 
   useEffect(() => {

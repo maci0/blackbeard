@@ -30,13 +30,14 @@ KIND_TO_PLURAL: dict[str, str] = {
     "ServiceAccount": "service-accounts",
 }
 
+_PLURAL_VALUES: frozenset[str] = frozenset(KIND_TO_PLURAL.values())
+
 
 def _kind_plural(kind: str) -> str:
     """Resolve a kind name to its URL plural form."""
     plural = KIND_TO_PLURAL.get(kind)
     if plural is None:
-        # If already a plural (e.g. user passed "agents"), use as-is
-        if kind in KIND_TO_PLURAL.values():
+        if kind in _PLURAL_VALUES:
             return kind
         raise BlackbeardApiError(
             0,

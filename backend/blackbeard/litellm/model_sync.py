@@ -20,39 +20,13 @@ import httpx
 
 from blackbeard.config import settings
 from blackbeard.http_client import get_client
-from blackbeard.litellm.helpers import apply_model_params, apply_vertex_params, build_model_string
+from blackbeard.litellm.helpers import build_litellm_params
 
 logger = logging.getLogger(__name__)
 
 
 class LiteLLMSyncError(Exception):
     """Raised when a LiteLLM model sync operation fails."""
-
-
-def _build_litellm_params(spec: dict[str, Any]) -> dict[str, Any]:
-    """Build litellm_params dict from an LLMConnection spec."""
-    provider = spec.get("provider", "")
-    model = spec.get("model", "")
-    params = spec.get("parameters", {})
-    vertex = spec.get("vertex", {})
-
-    litellm_params: dict[str, Any] = {
-        "model": build_model_string(provider, model),
-    }
-
-    if provider == "vertex_ai":
-        apply_vertex_params(litellm_params, vertex)
-
-    api_key_env = spec.get("api_key_env")
-    if api_key_env:
-        litellm_params["api_key"] = f"os.environ/{api_key_env}"
-
-    base_url = spec.get("base_url")
-    if base_url:
-        litellm_params["api_base"] = base_url
-
-    apply_model_params(litellm_params, params)
-    return litellm_params
 
 
 def _build_model_info(spec: dict[str, Any]) -> dict[str, Any] | None:
@@ -87,7 +61,7 @@ def _get_client() -> httpx.AsyncClient:
 
 async def add_model(name: str, spec: dict[str, Any]) -> bool:
     """Add a model to LiteLLM proxy. Returns True on success."""
-    litellm_params = _build_litellm_params(spec)
+    litellm_params = build_litellm_params(spec)
     body: dict[str, Any] = {
         "model_name": name,
         "litellm_params": litellm_params,

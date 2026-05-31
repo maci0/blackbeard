@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from blackbeard.litellm.helpers import apply_model_params, apply_vertex_params, build_model_string
+from blackbeard.litellm.helpers import build_litellm_params
 
 if TYPE_CHECKING:
     from blackbeard.models import Resource
@@ -27,12 +27,8 @@ def generate_litellm_config(llm_connections: list[Resource]) -> str:
 
     for conn in llm_connections:
         spec = conn.spec
-        provider = spec.get("provider", "")
-        model = spec.get("model", "")
-        params = spec.get("parameters", {})
-        vertex = spec.get("vertex", {})
 
-        if not model:
+        if not spec.get("model"):
             logger.warning(
                 "LLMConnection '%s' has no model specified, skipping",
                 conn.name,
@@ -44,23 +40,7 @@ def generate_litellm_config(llm_connections: list[Resource]) -> str:
             skipped += 1
             continue
 
-        litellm_model = build_model_string(provider, model)
-
-        litellm_params: dict[str, Any] = {"model": litellm_model}
-
-        if provider == "vertex_ai":
-            apply_vertex_params(litellm_params, vertex)
-
-        api_key_env = spec.get("api_key_env")
-        if api_key_env:
-            # LiteLLM syntax: "os.environ/VAR" resolves the env var at proxy runtime
-            litellm_params["api_key"] = f"os.environ/{api_key_env}"
-
-        base_url = spec.get("base_url")
-        if base_url:
-            litellm_params["api_base"] = base_url
-
-        apply_model_params(litellm_params, params)
+        litellm_params = build_litellm_params(spec)
 
         model_entry = {
             "model_name": conn.name,

@@ -68,7 +68,7 @@ client.delete("Agent", "researcher")
 client.apply([agent_dict, task_dict, crew_dict])
 
 # Export all resources as YAML
-yaml_str = client.export_all(namespace="default")
+yaml_str = client.export_all(project="default")
 ```
 
 ### Crew Execution
@@ -156,6 +156,8 @@ with BlackbeardClient(base_url="http://localhost:8000", api_key="key") as client
 | Area | Methods |
 |------|---------|
 | Auth | `login`, `register`, `refresh`, `whoami`, `generate_api_key`, `revoke_api_key` |
-| Resources | `list`, `get`, `create`, `update`, `delete`, `apply`, `export_all` |
+| Resources | `list`, `get`, `create`, `update`, `delete`, `apply`, `export_all`, `list_versions`, `get_version`, `rollback` |
 | Executions | `kickoff`, `train`, `test`, `run_flow`, `cancel`, `retry`, `wait`, `respond`, `get_execution`, `list_executions`, `get_execution_events`, `get_execution_spend` |
+| Versioning | `list_versions`, `get_version`, `rollback` |
+| Audit | `list_audit_logs` |
 | Health | `health`, `readiness` |

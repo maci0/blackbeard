@@ -178,9 +178,15 @@ def _validate_startup_config() -> None:
                 "Refusing to start: OIDC_REDIRECT_URI must use https:// in production "
                 "(got http://). Set DEBUG=true for local development with http."
             )
+    if settings.allow_internal_urls and not settings.debug:
+        logger.warning(
+            "SECURITY: ALLOW_INTERNAL_URLS is True in production, SSRF validation is disabled. "
+            "Unset ALLOW_INTERNAL_URLS unless you have a specific reason to allow internal URLs.",
+            extra={"event": "allow_internal_urls_in_production"},
+        )
     if not settings.enforce_rbac and not settings.debug:
         logger.warning(
-            "SECURITY: ENFORCE_RBAC is False — all authenticated users have full access. "
+            "SECURITY: ENFORCE_RBAC is False, all authenticated users have full access. "
             "Set ENFORCE_RBAC=true and configure Role/RoleBinding resources for production.",
             extra={"event": "rbac_disabled_in_production"},
         )
@@ -225,6 +231,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             "db_pool_size": pool.size(),
             "db_pool_max_overflow": pool.overflow(),
             "db_pool_timeout": pool.timeout(),
+            "enforce_rbac": settings.enforce_rbac,
+            "allow_internal_urls": settings.allow_internal_urls,
+            "cors_origins": settings.cors_origins,
             "oidc_enabled": bool(settings.oidc_issuer),
             "otel_configured": bool(settings.otel_endpoint),
             "valkey_configured": bool(settings.valkey_url.get_secret_value()),
@@ -294,7 +303,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     try:
         from blackbeard.engine.git_store import init_git_store
 
-        init_git_store()
+        init_git_store(settings.git_resource_dir)
     except Exception:
         logger.debug("Git resource store not available", exc_info=True)
 
@@ -302,7 +311,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     try:
         from blackbeard.plugins.loader import load_plugins as _load_plugins
 
-        loaded_plugins = _load_plugins()
+        loaded_plugins = _load_plugins(settings.plugin_dir)
         if loaded_plugins:
             logger.info(
                 "Loaded %d plugin(s): %s",

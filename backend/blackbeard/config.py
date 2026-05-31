@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = Field(default=7, ge=1)
 
     enforce_rbac: bool = False
+    allow_internal_urls: bool = False
 
     otel_endpoint: str | None = None
 
@@ -56,6 +57,9 @@ class Settings(BaseSettings):
     oidc_client_secret: SecretStr | None = None
     oidc_redirect_uri: str | None = None
     oidc_scopes: str = "openid email profile"
+
+    git_resource_dir: str = "data/git-resources"
+    plugin_dir: str = "plugins"
 
     # Container sandbox settings
     container_runtime: str = "auto"  # "docker", "podman", or "auto"

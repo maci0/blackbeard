@@ -75,14 +75,14 @@ class TestMainStartupHelpers:
         value=_text_st,
         env_var=st.sampled_from(["JWT_SECRET", "LITELLM_MASTER_KEY", "BLACKBEARD_API_KEY"]),
         defaults=st.lists(_short_text, min_size=0, max_size=5).map(tuple),
+        debug=st.booleans(),
     )
     @settings(max_examples=50)
     def test_fuzz_check_secret_logic(
-        self, value: str, env_var: str, defaults: tuple[str, ...]
+        self, value: str, env_var: str, defaults: tuple[str, ...], debug: bool
     ) -> None:
-        """Replicate _check_secret logic and verify it never crashes."""
+        """Replicate _check_secret logic and verify correct raised/warned states."""
         min_secret_length = 16
-        debug = True  # In debug mode, defaults produce warnings not errors.
 
         raised = False
         warned = False
@@ -98,11 +98,18 @@ class TestMainStartupHelpers:
             # In debug mode, short non-default secrets still raise.
             raised = True
 
-        # The function should handle any string without crashing.
-        # We just verify the logic is sound — no assertion needed beyond
-        # reaching this point without an unhandled exception.
-        assert isinstance(raised, bool)
-        assert isinstance(warned, bool)
+        # Verify the correct relationship between inputs and outcomes.
+        if value in defaults and not debug:
+            assert raised is True
+            assert warned is False
+        elif value in defaults and debug:
+            assert warned is True
+            assert raised is False
+        elif len(value) < min_secret_length:
+            assert raised is True
+        elif value not in defaults and len(value) >= min_secret_length:
+            assert raised is False
+            assert warned is False
 
 
 # ===================================================================
@@ -111,9 +118,7 @@ class TestMainStartupHelpers:
 
 
 class TestOidcHelpers:
-    @settings(max_examples=10)
-    @given(data=st.just(None))
-    def test_fuzz_make_oidc_placeholder_hash(self, data: None) -> None:
+    def test_fuzz_make_oidc_placeholder_hash(self) -> None:
         """_make_oidc_placeholder_hash must return a non-empty bcrypt string."""
         from blackbeard.api.oidc import _make_oidc_placeholder_hash
 
@@ -238,6 +243,50 @@ class TestRequireExecution:
 
 
 class TestAutomationHelpers:
+    @given(
+        spec_inputs=st.dictionaries(_short_text, _short_text, max_size=5),
+        body_inputs=st.dictionaries(
+            st.from_regex(r"[a-zA-Z_][a-zA-Z0-9_]{0,10}", fullmatch=True),
+            _short_text,
+            max_size=5,
+        ),
+        spec_project=st.one_of(st.none(), _name_st),
+        spec_target=st.one_of(
+            st.just({}),
+            st.fixed_dictionaries({"kind": st.just("Crew"), "name": _name_st}),
+        ),
+        default_project=_name_st,
+    )
+    @settings(max_examples=50)
+    def test_fuzz_unpack_target(
+        self,
+        spec_inputs: dict[str, str],
+        body_inputs: dict[str, str],
+        spec_project: str | None,
+        spec_target: dict[str, Any],
+        default_project: str,
+    ) -> None:
+        """_unpack_target must merge inputs, resolve project, never crash."""
+        from blackbeard.api.automations import TriggerRequest, _unpack_target
+
+        spec: dict[str, Any] = {"target": spec_target, "inputs": spec_inputs}
+        if spec_project is not None:
+            spec["project"] = spec_project
+
+        body = TriggerRequest(inputs=body_inputs)
+        target, merged, project = _unpack_target(spec, body, default_project)
+
+        assert target is spec_target
+        for k, v in spec_inputs.items():
+            if k not in body_inputs:
+                assert merged[k] == v
+        for k, v in body_inputs.items():
+            assert merged[k] == v
+        if spec_project is not None:
+            assert project == spec_project
+        else:
+            assert project == default_project
+
     @given(
         spec=st.fixed_dictionaries(
             {},
@@ -855,8 +904,8 @@ class TestBudgetDerivation:
 
 
 # ===================================================================
-# 8. litellm/model_sync.py — _build_litellm_params, _build_model_info,
-#    sync_all
+# 8. litellm/helpers.py — build_litellm_params; litellm/model_sync.py —
+#    _build_model_info, sync_all
 # ===================================================================
 
 
@@ -878,7 +927,7 @@ class TestLiteLLMSync:
         temperature: float | None,
     ) -> None:
         """_build_litellm_params must always return a dict with a 'model' key."""
-        from blackbeard.litellm.model_sync import _build_litellm_params
+        from blackbeard.litellm.helpers import build_litellm_params as _build_litellm_params
 
         spec: dict[str, Any] = {"provider": provider, "model": model}
         if api_key_env is not None:
@@ -985,6 +1034,59 @@ class TestLiteLLMSync:
             result = await sync_all(connections)
             assert result == 0
             mock_add.assert_not_called()
+
+
+# ===================================================================
+# 8b. litellm/config_gen.py — generate_litellm_config
+# ===================================================================
+
+
+class TestLiteLLMConfigGen:
+    @given(
+        connections=st.lists(
+            st.fixed_dictionaries(
+                {
+                    "name": _name_st,
+                    "spec": st.fixed_dictionaries(
+                        {},
+                        optional={
+                            "model": st.one_of(st.just(""), _short_text),
+                            "provider": st.sampled_from(["openai", "anthropic", "vertex_ai", "ollama", ""]),
+                            "api_key_env": st.one_of(st.none(), _short_text),
+                            "base_url": st.one_of(st.none(), st.just("http://localhost:11434")),
+                            "parameters": st.dictionaries(_short_text, _json_primitives, max_size=3),
+                        },
+                    ),
+                }
+            ),
+            min_size=0,
+            max_size=5,
+        ),
+    )
+    @settings(max_examples=50)
+    def test_fuzz_generate_litellm_config(
+        self, connections: list[dict[str, Any]]
+    ) -> None:
+        """generate_litellm_config must return valid YAML for any mix of connections."""
+        import yaml as _yaml
+
+        from blackbeard.litellm.config_gen import generate_litellm_config
+
+        mock_resources = []
+        for conn in connections:
+            r = MagicMock()
+            r.name = conn["name"]
+            r.spec = conn["spec"]
+            mock_resources.append(r)
+
+        result = generate_litellm_config(mock_resources)
+        assert isinstance(result, str)
+        parsed = _yaml.safe_load(result)
+        assert isinstance(parsed, dict)
+        assert "model_list" in parsed
+        assert isinstance(parsed["model_list"], list)
+        non_empty = [c for c in connections if c["spec"].get("model")]
+        assert len(parsed["model_list"]) == len(non_empty)
 
 
 # ===================================================================

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import threading
 from pathlib import Path
@@ -22,8 +23,14 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+_yaml_dumper: Any = getattr(yaml, "CSafeDumper", yaml.SafeDumper)
+
 _GIT_DIR: Path | None = None
 _lock = threading.Lock()
+_SAFE_REF_RE = re.compile(r"^[a-zA-Z0-9_./^~\-]+$")
+_SAFE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._\-]*$")
+_SAFE_REMOTE_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._\-]*$")
+_SAFE_BRANCH_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/\-]*$")
 
 
 def _git_dir() -> Path:
@@ -69,9 +76,31 @@ def _run_git(cwd: Path, args: list[str], check: bool = True) -> subprocess.Compl
     )
 
 
+def _validate_ref(ref: str) -> str:
+    """Reject refs that look like git flags to prevent argument injection."""
+    if ref.startswith("-") or not _SAFE_REF_RE.match(ref):
+        raise ValueError(f"Invalid git ref: {ref!r}")
+    return ref
+
+
+def _validate_path_component(value: str, label: str) -> str:
+    """Reject path components that could cause traversal or argument injection."""
+    if not value or not _SAFE_NAME_RE.match(value):
+        raise ValueError(f"Invalid {label}: {value!r}")
+    if ".." in value:
+        raise ValueError(f"{label} must not contain '..': {value!r}")
+    return value
+
+
 def _resource_path(kind: str, name: str, project: str) -> Path:
     """Build the file path for a resource YAML file."""
-    return _git_dir() / project / kind.lower() / f"{name}.yaml"
+    _validate_path_component(name, "resource name")
+    _validate_path_component(kind, "kind")
+    _validate_path_component(project, "project")
+    result = _git_dir() / project / kind.lower() / f"{name}.yaml"
+    if not result.resolve().is_relative_to(_git_dir().resolve()):
+        raise ValueError(f"Path escapes git repository: {result}")
+    return result
 
 
 def _resource_to_yaml(
@@ -93,7 +122,13 @@ def _resource_to_yaml(
     }
     if labels:
         doc["metadata"]["labels"] = labels
-    return yaml.dump(doc, default_flow_style=False, sort_keys=False)
+    return yaml.dump(doc, Dumper=_yaml_dumper, default_flow_style=False, sort_keys=False)
+
+
+def _sanitize_author(author: str) -> str:
+    """Sanitize author string for git --author flag."""
+    sanitized = re.sub(r"[<>\n\r\x00]", "", author)[:100]
+    return sanitized or "system"
 
 
 def commit_resource(
@@ -125,11 +160,12 @@ def commit_resource(
             if not status.stdout.strip():
                 return None
 
+            safe_author = _sanitize_author(author)
             msg = f"{action} {kind}/{name}"
             _run_git(repo, [
                 "commit",
                 "-m", msg,
-                "--author", f"{author} <{author}@blackbeard>",
+                "--author", f"{safe_author} <{safe_author}@blackbeard>",
             ])
             commit_hash = _run_git(repo, ["rev-parse", "HEAD"])
             sha = commit_hash.stdout.strip()
@@ -176,11 +212,12 @@ def delete_resource(
             rel_path = str(file_path.relative_to(repo))
             _run_git(repo, ["rm", rel_path])
 
+            safe_author = _sanitize_author(author)
             msg = f"delete {kind}/{name}"
             _run_git(repo, [
                 "commit",
                 "-m", msg,
-                "--author", f"{author} <{author}@blackbeard>",
+                "--author", f"{safe_author} <{safe_author}@blackbeard>",
             ])
             commit_hash = _run_git(repo, ["rev-parse", "HEAD"])
             sha = commit_hash.stdout.strip()
@@ -222,6 +259,13 @@ def get_log(
         args.extend(["--follow", "--", rel_path])
 
     result = _run_git(repo, args, check=False)
+    if result.returncode != 0 and result.stderr.strip():
+        logger.warning(
+            "git log failed (rc=%d): %s",
+            result.returncode,
+            result.stderr.strip()[:200],
+            extra={"event": "git_log_failed", "kind": kind, "name": name},
+        )
     entries = []
     for line in result.stdout.strip().splitlines():
         parts = line.split("|", 4)
@@ -244,6 +288,8 @@ def get_diff(
     project: str = "default",
 ) -> str:
     """Get diff between two commits, optionally scoped to a resource."""
+    _validate_ref(commit_a)
+    _validate_ref(commit_b)
     repo = _git_dir()
     args = ["diff", commit_a, commit_b]
     if kind and name:
@@ -251,6 +297,17 @@ def get_diff(
         rel_path = str(file_path.relative_to(repo))
         args.extend(["--", rel_path])
     result = _run_git(repo, args, check=False)
+    if result.returncode != 0 and result.stderr.strip():
+        logger.warning(
+            "git diff failed (rc=%d): %s",
+            result.returncode,
+            result.stderr.strip()[:200],
+            extra={
+                "event": "git_diff_failed",
+                "commit_a": commit_a,
+                "commit_b": commit_b,
+            },
+        )
     return result.stdout
 
 
@@ -266,20 +323,50 @@ def get_blame(
         return ""
     rel_path = str(file_path.relative_to(repo))
     result = _run_git(repo, ["blame", rel_path], check=False)
+    if result.returncode != 0 and result.stderr.strip():
+        logger.warning(
+            "git blame failed for %s/%s (rc=%d): %s",
+            kind,
+            name,
+            result.returncode,
+            result.stderr.strip()[:200],
+            extra={"event": "git_blame_failed", "kind": kind, "name": name},
+        )
     return result.stdout
 
 
 def get_show(commit: str, kind: str, name: str, project: str = "default") -> str:
     """Get the content of a resource file at a specific commit."""
+    _validate_ref(commit)
     repo = _git_dir()
     file_path = _resource_path(kind, name, project)
     rel_path = str(file_path.relative_to(repo))
     result = _run_git(repo, ["show", f"{commit}:{rel_path}"], check=False)
+    if result.returncode != 0 and result.stderr.strip():
+        logger.warning(
+            "git show failed for %s/%s at %s (rc=%d): %s",
+            kind,
+            name,
+            commit,
+            result.returncode,
+            result.stderr.strip()[:200],
+            extra={"event": "git_show_failed", "kind": kind, "name": name, "commit": commit},
+        )
     return result.stdout
 
 
 def add_remote(name: str, url: str) -> bool:
-    """Add a git remote to the resource repository."""
+    """Add a git remote to the resource repository.
+
+    Only HTTPS URLs are accepted to prevent command execution via
+    git's ext:: protocol handler and SSRF via file:// or ssh://.
+    """
+    if not _SAFE_REMOTE_RE.match(name):
+        raise ValueError(f"Invalid remote name: {name!r}")
+    if not url.startswith("https://"):
+        raise ValueError("Only HTTPS remote URLs are allowed")
+    if "ext::" in url.lower():
+        raise ValueError("ext:: protocol is not allowed")
     repo = _git_dir()
     result = _run_git(repo, ["remote", "add", name, url], check=False)
     return result.returncode == 0
@@ -287,13 +374,35 @@ def add_remote(name: str, url: str) -> bool:
 
 def push(remote: str = "origin", branch: str = "main") -> bool:
     """Push commits to a remote."""
+    if not _SAFE_REMOTE_RE.match(remote):
+        raise ValueError(f"Invalid remote name: {remote!r}")
+    if not _SAFE_BRANCH_RE.match(branch):
+        raise ValueError(f"Invalid branch name: {branch!r}")
     repo = _git_dir()
     result = _run_git(repo, ["push", remote, branch], check=False)
+    if result.returncode != 0:
+        logger.warning(
+            "git push failed (rc=%d): %s",
+            result.returncode,
+            result.stderr.strip()[:300],
+            extra={"event": "git_push_failed", "remote": remote, "branch": branch},
+        )
     return result.returncode == 0
 
 
 def pull(remote: str = "origin", branch: str = "main") -> bool:
     """Pull from a remote."""
+    if not _SAFE_REMOTE_RE.match(remote):
+        raise ValueError(f"Invalid remote name: {remote!r}")
+    if not _SAFE_BRANCH_RE.match(branch):
+        raise ValueError(f"Invalid branch name: {branch!r}")
     repo = _git_dir()
     result = _run_git(repo, ["pull", "--rebase", remote, branch], check=False)
+    if result.returncode != 0:
+        logger.warning(
+            "git pull failed (rc=%d): %s",
+            result.returncode,
+            result.stderr.strip()[:300],
+            extra={"event": "git_pull_failed", "remote": remote, "branch": branch},
+        )
     return result.returncode == 0

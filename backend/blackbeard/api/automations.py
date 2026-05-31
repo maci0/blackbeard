@@ -80,6 +80,18 @@ def _require_enabled(spec: dict[str, Any], name: str) -> None:
         raise HTTPException(status_code=409, detail=f"Automation '{name}' is disabled")
 
 
+def _unpack_target(
+    spec: dict[str, Any],
+    body: TriggerRequest,
+    project: str,
+) -> tuple[dict[str, Any], dict[str, Any], str]:
+    """Extract target, merged inputs, and project from an automation spec."""
+    target = spec.get("target", {})
+    merged_inputs = {**spec.get("inputs", {}), **body.inputs}
+    target_project = spec.get("project", project)
+    return target, merged_inputs, target_project
+
+
 _TRIGGER_RATE_MSG = "Too many trigger requests. Try again later."
 
 
@@ -118,9 +130,7 @@ async def trigger_automation(
     spec = await _get_automation_spec(session, name, project)
     _require_enabled(spec, name)
 
-    target = spec.get("target", {})
-    merged_inputs = {**spec.get("inputs", {}), **body.inputs}
-    target_project = spec.get("project", project)
+    target, merged_inputs, target_project = _unpack_target(spec, body, project)
 
     execution = await _execute_target(session, target, merged_inputs, target_project, user)
 
@@ -229,9 +239,7 @@ async def webhook_trigger(
             headers={"WWW-Authenticate": "HMAC-SHA256"},
         )
 
-    target = spec.get("target", {})
-    merged_inputs = {**spec.get("inputs", {}), **body.inputs}
-    target_project = spec.get("project", project)
+    target, merged_inputs, target_project = _unpack_target(spec, body, project)
 
     execution = await _execute_target(session, target, merged_inputs, target_project, user=None)
 

@@ -172,7 +172,7 @@ def test_scheduler_init():
 
 def test_litellm_build_params_with_api_key():
     """_build_litellm_params propagates api_key_env into result."""
-    from blackbeard.litellm.model_sync import _build_litellm_params
+    from blackbeard.litellm.helpers import build_litellm_params as _build_litellm_params
 
     result = _build_litellm_params({
         "provider": "anthropic",
@@ -185,7 +185,7 @@ def test_litellm_build_params_with_api_key():
 
 def test_litellm_build_params():
     """_build_litellm_params should handle arbitrary specs without crashing."""
-    from blackbeard.litellm.model_sync import _build_litellm_params
+    from blackbeard.litellm.helpers import build_litellm_params as _build_litellm_params
 
     result = _build_litellm_params({"provider": "ollama", "model": "llama3"})
     assert isinstance(result, dict)

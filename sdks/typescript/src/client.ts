@@ -35,6 +35,8 @@ export const KIND_PLURALS: Record<string, string> = {
   ServiceAccount: "service-accounts",
 };
 
+const _PLURAL_SET: ReadonlySet<string> = new Set(Object.values(KIND_PLURALS));
+
 export class BlackbeardClient {
   private baseUrl: string;
   private apiKey?: string;
@@ -202,7 +204,7 @@ export class BlackbeardClient {
   private plural(kind: string): string {
     const p = KIND_PLURALS[kind];
     if (p) return p;
-    if (Object.values(KIND_PLURALS).includes(kind)) return kind;
+    if (_PLURAL_SET.has(kind)) return kind;
     throw new BlackbeardApiError(
       0,
       `Unknown resource kind '${kind}'. Valid kinds: ${Object.keys(KIND_PLURALS).sort().join(", ")}`

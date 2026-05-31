@@ -45,7 +45,12 @@ from blackbeard.engine.flow_runner import call_hook
 from blackbeard.engine.flow_runner import run_flow_steps as _run_flow_steps
 from blackbeard.engine.loader import ResourceLoader
 from blackbeard.kinds import ResourceKind
-from blackbeard.logging_config import log_task_exception, request_id_var, scrub_pii
+from blackbeard.logging_config import (
+    execution_id_var,
+    log_task_exception,
+    request_id_var,
+    scrub_pii,
+)
 from blackbeard.models import (
     TERMINAL_STATUSES,
     Execution,
@@ -758,6 +763,7 @@ def _run_crew_sync(
 ) -> None:
     """Run a crew in a dedicated event loop, blocking until completion (for ThreadPoolExecutor)."""
     request_id_var.set(str(execution_id))
+    execution_id_var.set(str(execution_id))
     logger.info(
         "Crew thread started: execution_id=%s crew=%s type=%s thread=%s",
         execution_id,
@@ -900,6 +906,8 @@ async def _run_crew_async(
     training_file: str = "training_data.pkl",
 ) -> None:
     """Run a crew and update the execution record with results."""
+    request_id_var.set(str(execution_id))
+    execution_id_var.set(str(execution_id))
     async with thread_session() as session:
         execution = await _get_execution_for_update(session, execution_id)
         if not execution:

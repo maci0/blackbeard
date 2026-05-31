@@ -141,6 +141,45 @@ function FieldGroup({ label, children }: { label: string; children: React.ReactN
 }
 
 const EMPTY_RESOURCES: Resource[] = []
+const EMPTY_STRINGS: string[] = []
+
+const TOOL_TYPE_OPTIONS = [
+  { label: 'Python', value: 'python' },
+  { label: 'WebAssembly', value: 'wasm' },
+  { label: 'Built-in', value: 'builtin' },
+]
+
+const SANDBOX_OPTIONS = [
+  { label: 'No sandbox', value: 'none' },
+  { label: 'WebAssembly (WASM)', value: 'wasm' },
+]
+
+const FLOW_STEP_TYPE_OPTIONS = [
+  { label: 'Crew', value: 'crew' },
+  { label: 'Function', value: 'function' },
+  { label: 'Router', value: 'router' },
+  { label: 'Condition', value: 'condition' },
+]
+
+const PII_PRESET_OPTIONS = [
+  { label: 'Custom', value: 'custom' },
+  { label: 'HIPAA', value: 'hipaa' },
+  { label: 'GDPR', value: 'gdpr' },
+  { label: 'PCI-DSS', value: 'pci-dss' },
+  { label: 'CCPA', value: 'ccpa' },
+]
+
+const PII_ACTION_OPTIONS = [
+  { label: 'Redact', value: 'redact' },
+  { label: 'Reject', value: 'reject' },
+  { label: 'Warn', value: 'warn' },
+]
+
+const PII_BACKEND_OPTIONS = [
+  { label: 'Default', value: 'default' },
+  { label: 'Presidio NLP', value: 'presidio-nlp' },
+  { label: 'LiteLLM', value: 'litellm' },
+]
 
 function LLMSelect({
   value,
@@ -327,11 +366,7 @@ function ToolForm({
         <SelectInput
           value={str(data, 'type') || 'python'}
           onChange={(v) => onChange('type', v)}
-          options={[
-            { label: 'Python', value: 'python' },
-            { label: 'WebAssembly', value: 'wasm' },
-            { label: 'Built-in', value: 'builtin' },
-          ]}
+          options={TOOL_TYPE_OPTIONS}
         />
       </FieldGroup>
       <FieldGroup label="Class Path">
@@ -353,10 +388,7 @@ function ToolForm({
         <SelectInput
           value={str(data, 'sandbox') || 'none'}
           onChange={(v) => onChange('sandbox', v)}
-          options={[
-            { label: 'No sandbox', value: 'none' },
-            { label: 'WebAssembly (WASM)', value: 'wasm' },
-          ]}
+          options={SANDBOX_OPTIONS}
         />
       </FieldGroup>
     </div>
@@ -418,12 +450,7 @@ function FlowStepForm({
         <SelectInput
           value={stepType}
           onChange={(v) => onChange('type', v)}
-          options={[
-            { label: 'Crew', value: 'crew' },
-            { label: 'Function', value: 'function' },
-            { label: 'Router', value: 'router' },
-            { label: 'Condition', value: 'condition' },
-          ]}
+          options={FLOW_STEP_TYPE_OPTIONS}
         />
       </FieldGroup>
 
@@ -544,7 +571,8 @@ function PIIForm({
   data: Record<string, unknown>
   onChange: (field: string, value: unknown) => void
 }) {
-  const entities = (data['entities'] as string[] | undefined) ?? []
+  const entities = (data['entities'] as string[] | undefined) ?? EMPTY_STRINGS
+  const entitySet = useMemo(() => new Set(entities), [entities])
   const preset = (data['preset'] as string | undefined) ?? 'custom'
   const backend = str(data, 'backend') || 'default'
 
@@ -561,13 +589,7 @@ function PIIForm({
         <SelectInput
           value={preset}
           onChange={handlePresetChange}
-          options={[
-            { label: 'Custom', value: 'custom' },
-            { label: 'HIPAA', value: 'hipaa' },
-            { label: 'GDPR', value: 'gdpr' },
-            { label: 'PCI-DSS', value: 'pci-dss' },
-            { label: 'CCPA', value: 'ccpa' },
-          ]}
+          options={PII_PRESET_OPTIONS}
         />
         {preset !== 'custom' && PII_PRESETS[preset] && (
           <p className="mt-1 text-[10px] text-muted-foreground">
@@ -582,7 +604,7 @@ function PIIForm({
             <CheckboxInput
               key={entity}
               label={entity.replace(/_/g, ' ')}
-              checked={entities.includes(entity)}
+              checked={entitySet.has(entity)}
               onChange={(checked) => {
                 const next = checked ? [...entities, entity] : entities.filter((e) => e !== entity)
                 onChange('entities', next)
@@ -596,22 +618,14 @@ function PIIForm({
         <SelectInput
           value={str(data, 'action') || 'redact'}
           onChange={(v) => onChange('action', v)}
-          options={[
-            { label: 'Redact', value: 'redact' },
-            { label: 'Reject', value: 'reject' },
-            { label: 'Warn', value: 'warn' },
-          ]}
+          options={PII_ACTION_OPTIONS}
         />
       </FieldGroup>
       <FieldGroup label="Backend">
         <SelectInput
           value={backend}
           onChange={(v) => onChange('backend', v)}
-          options={[
-            { label: 'Default', value: 'default' },
-            { label: 'Presidio NLP', value: 'presidio-nlp' },
-            { label: 'LiteLLM', value: 'litellm' },
-          ]}
+          options={PII_BACKEND_OPTIONS}
         />
       </FieldGroup>
       {backend === 'litellm' && (

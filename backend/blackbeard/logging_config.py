@@ -22,6 +22,7 @@ __all__ = [
     "SENSITIVE_KEYS",
     "anonymize_ip",
     "configure_logging",
+    "execution_id_var",
     "log_task_exception",
     "request_id_var",
     "safe_log_url",
@@ -31,14 +32,16 @@ __all__ = [
 
 request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
 user_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("user_id", default="")
+execution_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("execution_id", default="")
 
 
 class _RequestIdFilter(logging.Filter):
-    """Injects request_id and user_id from contextvars into every log record."""
+    """Injects request_id, user_id, and execution_id from contextvars into every log record."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.request_id = request_id_var.get("-")
         record.user_id = user_id_var.get("")
+        record.execution_id = execution_id_var.get("")
         return True
 
 
@@ -68,6 +71,7 @@ _LOG_RECORD_BUILTIN = frozenset(
         "taskName",
         "request_id",
         "user_id",
+        "execution_id",
     }
 )
 
@@ -261,6 +265,7 @@ class _JsonFormatter(logging.Formatter):
             "service": "blackbeard",
             "request_id": getattr(record, "request_id", "-"),
             "user_id": getattr(record, "user_id", "") or None,
+            "execution_id": getattr(record, "execution_id", "") or None,
             "thread": record.threadName,
             "pid": record.process,
         }

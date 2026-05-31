@@ -184,7 +184,10 @@ class TestHttpClient:
     def test_fuzz_get_or_create(self) -> None:
         from blackbeard.http_client import _get_or_create
 
-        assert callable(_get_or_create)
+        cache: dict[str, dict[str, str]] = {}
+        result = _get_or_create(cache, "_test_goc", dict, "test", {"a": "b"})
+        assert isinstance(result, dict)
+        assert cache["_test_goc"] is result
 
     def test_fuzz_get_client_returns_async(self) -> None:
         import httpx
@@ -218,11 +221,9 @@ class TestHttpClient:
 
     @pytest.mark.asyncio
     async def test_fuzz_close_all_clients_is_coroutine(self) -> None:
-        import asyncio
-
         from blackbeard.http_client import close_all_clients
 
-        assert asyncio.iscoroutinefunction(close_all_clients)
+        await close_all_clients()
 
 
 # ===================================================================
@@ -303,9 +304,13 @@ class TestPii:
         assert engine is not None
 
     def test_fuzz_add_llm_recognizer(self) -> None:
-        from blackbeard.pii import _add_llm_recognizer
+        from blackbeard.pii import _add_llm_recognizer, _get_analyzer, reset_engines
 
-        assert callable(_add_llm_recognizer)
+        analyzer = _get_analyzer()
+        _add_llm_recognizer(analyzer, {"model": "test/model"})
+        # Clean up the singleton so the LLM recognizer doesn't leak
+        # into subsequent tests that call analyzer.analyze().
+        reset_engines()
 
     @given(text=safe_text)
     @settings(max_examples=50)
@@ -476,27 +481,35 @@ class TestAuthDependencies:
 
     @pytest.mark.asyncio
     async def test_fuzz_resolve_bearer_user(self) -> None:
+        import asyncio
+
         from blackbeard.auth.dependencies import _resolve_bearer_user
 
-        assert callable(_resolve_bearer_user)
+        assert asyncio.iscoroutinefunction(_resolve_bearer_user)
 
     @pytest.mark.asyncio
     async def test_fuzz_get_current_user(self) -> None:
+        import asyncio
+
         from blackbeard.auth.dependencies import get_current_user
 
-        assert callable(get_current_user)
+        assert asyncio.iscoroutinefunction(get_current_user)
 
     @pytest.mark.asyncio
     async def test_fuzz_require_user(self) -> None:
+        import asyncio
+
         from blackbeard.auth.dependencies import require_user
 
-        assert callable(require_user)
+        assert asyncio.iscoroutinefunction(require_user)
 
     @pytest.mark.asyncio
     async def test_fuzz_require_jwt_user(self) -> None:
+        import asyncio
+
         from blackbeard.auth.dependencies import require_jwt_user
 
-        assert callable(require_jwt_user)
+        assert asyncio.iscoroutinefunction(require_jwt_user)
 
     def test_fuzz_require_permission(self) -> None:
         from blackbeard.auth.dependencies import require_permission
@@ -512,9 +525,11 @@ class TestAuthDependencies:
 
     @pytest.mark.asyncio
     async def test_fuzz_check_resource_permission(self) -> None:
+        import asyncio
+
         from blackbeard.auth.dependencies import check_resource_permission
 
-        assert callable(check_resource_permission)
+        assert asyncio.iscoroutinefunction(check_resource_permission)
 
 
 # ===================================================================
@@ -632,7 +647,7 @@ class TestResourceValidator:
     def test_fuzz_shutdown_dns_executor(self) -> None:
         from blackbeard.resources.validator import shutdown_dns_executor
 
-        assert callable(shutdown_dns_executor)
+        shutdown_dns_executor()
 
     @given(hostname=st.text(min_size=1, max_size=30))
     @settings(max_examples=50)
@@ -652,7 +667,9 @@ class TestResourceValidator:
     def test_fuzz_check_dns_resolution(self) -> None:
         from blackbeard.resources.validator import _check_dns_resolution
 
-        assert callable(_check_dns_resolution)
+        errors: list[Any] = []
+        _check_dns_resolution("localhost", "test_field", errors)
+        assert isinstance(errors, list)
 
     def test_fuzz_validate_knowledge_source_extra(self) -> None:
         from blackbeard.resources.validator import _validate_knowledge_source_extra
@@ -732,27 +749,39 @@ class TestResourceValidator:
 class TestResourceService:
     @pytest.mark.asyncio
     async def test_fuzz_list_resources(self) -> None:
+        import asyncio
+
         from blackbeard.resources.service import ResourceService
 
         assert hasattr(ResourceService, "list_resources")
+        assert asyncio.iscoroutinefunction(ResourceService.list_resources)
 
     @pytest.mark.asyncio
     async def test_fuzz_get_by_identity(self) -> None:
+        import asyncio
+
         from blackbeard.resources.service import ResourceService
 
         assert hasattr(ResourceService, "_get_by_identity")
+        assert asyncio.iscoroutinefunction(ResourceService._get_by_identity)
 
     @pytest.mark.asyncio
     async def test_fuzz_update_existing(self) -> None:
+        import asyncio
+
         from blackbeard.resources.service import ResourceService
 
         assert hasattr(ResourceService, "_update_existing")
+        assert asyncio.iscoroutinefunction(ResourceService._update_existing)
 
     @pytest.mark.asyncio
     async def test_fuzz_sync_refs(self) -> None:
+        import asyncio
+
         from blackbeard.resources.service import ResourceService
 
         assert hasattr(ResourceService, "_sync_refs")
+        assert asyncio.iscoroutinefunction(ResourceService._sync_refs)
 
 
 # ===================================================================

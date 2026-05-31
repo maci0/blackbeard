@@ -6,7 +6,6 @@ import collections
 import concurrent.futures
 import ipaddress
 import logging
-import os
 import re
 import socket
 import threading
@@ -250,7 +249,10 @@ def check_url_ssrf(url: str) -> str | None:
     return errors[0].message if errors else None
 
 
-_ALLOW_INTERNAL_URLS = os.environ.get("ALLOW_INTERNAL_URLS", "").lower() in ("1", "true", "yes")
+def _allow_internal_urls() -> bool:
+    from blackbeard.config import settings
+
+    return settings.allow_internal_urls
 
 
 def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError]) -> None:
@@ -264,7 +266,7 @@ def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError])
 
     Set ALLOW_INTERNAL_URLS=true to skip SSRF checks (local dev with Ollama, etc.).
     """
-    if _ALLOW_INTERNAL_URLS:
+    if _allow_internal_urls():
         return
     try:
         parsed = urlparse(url)

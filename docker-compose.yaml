@@ -243,6 +243,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=100m
+      - /home/litellm:size=10m
     security_opt:
       - no-new-privileges:true
     cap_drop:

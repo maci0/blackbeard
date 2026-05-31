@@ -8,6 +8,7 @@ since CrewAI callbacks run on a separate thread.
 from __future__ import annotations
 
 import collections
+import functools
 import hashlib
 import hmac
 import json
@@ -155,7 +156,7 @@ def shutdown_webhook_executor() -> None:
             _webhook_executor = None
 
 
-def _log_webhook_future_exception(future: Any) -> None:
+def _log_webhook_future_exception(future: Any, *, execution_id: str = "") -> None:
     """Log uncaught exceptions from webhook delivery futures."""
     try:
         exc = future.exception()
@@ -163,7 +164,10 @@ def _log_webhook_future_exception(future: Any) -> None:
         logger.warning(
             "Could not retrieve webhook future exception (likely cancelled)",
             exc_info=True,
-            extra={"event": "webhook_future_exception_retrieval_failed"},
+            extra={
+                "event": "webhook_future_exception_retrieval_failed",
+                "execution_id": execution_id,
+            },
         )
         return
     if exc is not None:
@@ -175,6 +179,7 @@ def _log_webhook_future_exception(future: Any) -> None:
                 "event": "webhook_delivery_thread_error",
                 "error_type": type(exc).__name__,
                 "error_message": str(exc)[:500],
+                "execution_id": execution_id,
             },
         )
 
@@ -785,7 +790,9 @@ class BlackbeardExecutionListener(BaseEventListener):
                 future = executor.submit(
                     _deliver_single_webhook, wh, payload, event_type, execution_id=exec_id
                 )
-                future.add_done_callback(_log_webhook_future_exception)
+                future.add_done_callback(
+                    functools.partial(_log_webhook_future_exception, execution_id=exec_id)
+                )
         except Exception as exc:
             logger.warning(
                 "Webhook dispatch skipped (executor unavailable): event=%s error=%s",

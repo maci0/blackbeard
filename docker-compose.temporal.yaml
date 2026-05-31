@@ -22,14 +22,15 @@ services:
 
   # Temporal server with auto-setup (creates namespace on first start)
   temporal:
-    image: temporalio/auto-setup:latest
+    image: temporalio/auto-setup:1.29.6
     ports:
       - "127.0.0.1:7233:7233"
     environment:
       DB: sqlite
       TEMPORAL_BROADCAST_ADDRESS: 0.0.0.0
-      # Create the blackbeard namespace automatically
       TEMPORAL_CLI_NAMESPACE: blackbeard
+    restart: unless-stopped
+    init: true
     healthcheck:
       test: ["CMD", "tctl", "--ns", "blackbeard", "namespace", "describe"]
       interval: 10s
@@ -41,10 +42,18 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks: [backend]
 
   # Temporal web UI for workflow visibility
   temporal-ui:
-    image: temporalio/ui:latest
+    image: temporalio/ui:2.49.1
     ports:
       - "127.0.0.1:8233:8080"
     environment:
@@ -53,8 +62,18 @@ services:
     depends_on:
       temporal:
         condition: service_healthy
+    restart: unless-stopped
+    init: true
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 64
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks: [backend]

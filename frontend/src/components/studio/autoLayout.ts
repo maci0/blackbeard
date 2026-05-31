@@ -80,8 +80,8 @@ export async function autoLayout(
   const result: Node[] = []
 
   for (const group of groupNodes) {
-    const childIds = nodes.filter((n) => n.parentId === group.id).map((n) => n.id)
-    const childLeaves = layoutedLeaves.filter((n) => childIds.includes(n.id))
+    const childIds = new Set(nodes.filter((n) => n.parentId === group.id).map((n) => n.id))
+    const childLeaves = layoutedLeaves.filter((n) => childIds.has(n.id))
 
     if (childLeaves.length === 0) {
       // Group with no children — keep as-is

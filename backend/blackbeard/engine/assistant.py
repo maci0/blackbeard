@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 _yaml_loader: Any = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _NAME_VALIDATE_RE = re.compile(NAME_PATTERN)
+_MARKDOWN_FENCE_RE = re.compile(r"^```(?:ya?ml)?\s*\n(.*?)```\s*$", re.DOTALL)
 
 SYSTEM_PROMPT = f"""\
 You are Blackbeard Assistant. Generate CrewAI agent/task/crew definitions as YAML.
@@ -102,7 +103,7 @@ def _get_assistant_client() -> httpx.AsyncClient:
 def _strip_markdown_fences(text: str) -> str:
     """Remove markdown code fences if the LLM wrapped its output in them."""
     stripped = text.strip()
-    match = re.match(r"^```(?:ya?ml)?\s*\n(.*?)```\s*$", stripped, re.DOTALL)
+    match = _MARKDOWN_FENCE_RE.match(stripped)
     if match:
         return match.group(1).strip()
     return stripped

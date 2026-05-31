@@ -39,7 +39,7 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
         tabIndex={mode === 'cards' ? 0 : -1}
         onClick={() => onChange('cards')}
         className={cn(
-          'flex h-9 w-9 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'flex h-11 w-11 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           mode === 'cards'
             ? 'bg-background text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground',
@@ -56,7 +56,7 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
         tabIndex={mode === 'list' ? 0 : -1}
         onClick={() => onChange('list')}
         className={cn(
-          'flex h-9 w-9 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'flex h-11 w-11 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           mode === 'list'
             ? 'bg-background text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground',

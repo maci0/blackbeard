@@ -171,8 +171,8 @@ async def list_credentials(
             name=c["name"],
             type=c["type"],
             description=c["description"],
-            created_at=cast(datetime, c["created_at"]),
-            updated_at=cast(datetime, c["updated_at"]),
+            created_at=cast("datetime", c["created_at"]),
+            updated_at=cast("datetime", c["updated_at"]),
             last_used_at=cast("datetime | None", c["last_used_at"]),
             masked_value=c["masked_value"],
         )

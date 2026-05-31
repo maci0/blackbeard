@@ -42,3 +42,29 @@ def apply_vertex_params(target: dict[str, Any], vertex: dict[str, Any]) -> None:
         target["vertex_project"] = project
     if location:
         target["vertex_location"] = location
+
+
+def build_litellm_params(spec: dict[str, Any]) -> dict[str, Any]:
+    """Build litellm_params dict from an LLMConnection spec."""
+    provider = spec.get("provider", "")
+    model = spec.get("model", "")
+    params = spec.get("parameters", {})
+    vertex = spec.get("vertex", {})
+
+    litellm_params: dict[str, Any] = {
+        "model": build_model_string(provider, model),
+    }
+
+    if provider == "vertex_ai":
+        apply_vertex_params(litellm_params, vertex)
+
+    api_key_env = spec.get("api_key_env")
+    if api_key_env:
+        litellm_params["api_key"] = f"os.environ/{api_key_env}"
+
+    base_url = spec.get("base_url")
+    if base_url:
+        litellm_params["api_base"] = base_url
+
+    apply_model_params(litellm_params, params)
+    return litellm_params

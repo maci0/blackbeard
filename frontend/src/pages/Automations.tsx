@@ -318,6 +318,7 @@ function CreateAutomationDialog({
                     id="automation-target-kind"
                     value={targetKind}
                     onChange={(e) => setTargetKind(e.target.value)}
+                    aria-required="true"
                     className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="Crew">Crew</option>
@@ -355,6 +356,7 @@ function CreateAutomationDialog({
                   id="automation-trigger"
                   value={triggerType}
                   onChange={(e) => setTriggerType(e.target.value)}
+                  aria-required="true"
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="cron">Cron (scheduled)</option>
@@ -374,6 +376,8 @@ function CreateAutomationDialog({
                     type="text"
                     value={schedule}
                     onChange={(e) => setSchedule(e.target.value)}
+                    required
+                    aria-required="true"
                     autoComplete="off"
                     spellCheck={false}
                     aria-describedby={

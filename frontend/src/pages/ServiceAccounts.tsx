@@ -38,9 +38,11 @@ export default function ServiceAccounts() {
               onClick={() => void fetchResources('service-accounts')}
               disabled={loading}
               aria-label="Refresh"
-              className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+              <RefreshCw
+                className={cn('h-4 w-4', loading && 'animate-spin motion-reduce:animate-none')}
+              />
             </button>
           }
         />

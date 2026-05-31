@@ -26,6 +26,6 @@
     "node": ">=18"
   },
   "sideEffects": false,
-  "files": ["dist"],
+  "files": ["dist", "src"],
   "license": "MIT"
 }

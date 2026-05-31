@@ -6,7 +6,12 @@ export function useCopyToClipboard(feedbackMs = 2000) {
 
   const copy = useCallback(
     async (text: string) => {
-      await navigator.clipboard.writeText(text)
+      try {
+        await navigator.clipboard.writeText(text)
+      } catch {
+        console.warn('[useCopyToClipboard] clipboard.writeText failed')
+        return
+      }
       if (timerRef.current) clearTimeout(timerRef.current)
       setCopied(true)
       timerRef.current = setTimeout(() => setCopied(false), feedbackMs)
