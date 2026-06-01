@@ -1,8 +1,8 @@
-# PRD 07 — Observability & Traces
+# PRD 07  -- Observability & Traces
 
 ## 1. Purpose
 
-Provide comprehensive visibility into every crew, flow, and agent execution through a **two-layer observability architecture** that requires no external trace backend:
+Provide full visibility into every crew, flow, and agent execution through a **two-layer observability architecture** that requires no external trace backend:
 
 1. **LLM-level observability**: LiteLLM handles all LLM request tracking -- tokens, cost, latency, success/failure, full request/response inspection. Accessible via LiteLLM's built-in dashboard at `:4000/ui` and spend APIs.
 
@@ -208,7 +208,7 @@ metadata:
 spec:
   # Execution event log (always enabled)
   execution_events:
-    enabled: true                          # cannot be disabled — core to the platform
+    enabled: true                          # cannot be disabled  -- core to the platform
     retention_days: 90                     # auto-cleanup of old events
 
   # LiteLLM observability (always enabled when LiteLLM is deployed)

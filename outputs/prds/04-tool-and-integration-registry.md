@@ -1,4 +1,4 @@
-# PRD 04 — Tool & Integration Registry
+# PRD 04  -- Tool & Integration Registry
 
 ## 1. Purpose
 
@@ -8,9 +8,9 @@ Provide a centralised catalogue for all tools, integrations, and MCP servers tha
 
 **Implemented:** Python tools (`BaseTool`), WASM tools (compiled and executed in Wasmtime sandbox), MCP tools (both stdio and HTTP transports), and builtin tool types are all supported. Tool discovery and the marketplace import from git (`blackbeard apply` from a git-cloned directory) are working. Tools are governed by AgentPolicy allowlist/denylist enforcement.
 
-**Implemented (post-MVP):** Agency Agents integration — import agent persona definitions from the [Agency Agents](https://github.com/msitarzewski/agency-agents) markdown library (144+ personas across 12 divisions). Backend parser converts markdown persona files into Blackbeard Agent resources by extracting role, goal, backstory, and tool suggestions from structured markdown sections. Import via API endpoint or Studio UI "Browse Templates" button.
+**Implemented (post-MVP):** Agency Agents integration  -- import agent persona definitions from the [Agency Agents](https://github.com/msitarzewski/agency-agents) markdown library (144+ personas across 12 divisions). Backend parser converts markdown persona files into Blackbeard Agent resources by extracting role, goal, backstory, and tool suggestions from structured markdown sections. Import via API endpoint or Studio UI "Browse Templates" button.
 
-**Implemented (post-MVP):** Skills & Tools Library — a curated browsable library of tools and skills accessible from the `/tools/library` page and Studio palette. Categories: Web (search, scrape, HTTP), Data (CSV, JSON, database), Code (interpreter, linter, formatter), Communication (email, Slack, webhook), File (read, write, convert), AI (summarize, translate, classify). Each library entry includes name, description, type (python/mcp/wasm), category, install command, and preview. One-click install creates the Tool resource in Blackbeard. Backend serves the library index from a bundled YAML catalog (`tools/library.yaml`) with support for custom catalogs via URL. API: `GET /api/v1/tools/library` (browse), `POST /api/v1/tools/library/install` (install by slug).
+**Implemented (post-MVP):** Skills & Tools Library  -- a curated browsable library of tools and skills accessible from the `/tools/library` page and Studio palette. Categories: Web (search, scrape, HTTP), Data (CSV, JSON, database), Code (interpreter, linter, formatter), Communication (email, Slack, webhook), File (read, write, convert), AI (summarize, translate, classify). Each library entry includes name, description, type (python/mcp/wasm), category, install command, and preview. One-click install creates the Tool resource in Blackbeard. Backend serves the library index from a bundled YAML catalog (`tools/library.yaml`) with support for custom catalogs via URL. API: `GET /api/v1/tools/library` (browse), `POST /api/v1/tools/library/install` (install by slug).
 
 **Implemented (post-MVP):** Tool versioning fields added to the Tool schema (`tool_version`, `deprecated`, `deprecated_message`).
 
@@ -30,13 +30,13 @@ Provide a centralised catalogue for all tools, integrations, and MCP servers tha
 | **Composio** | Composio-managed integration | `none` (remote call) | Pre-built OAuth connectors |
 | **Custom** | User-defined tool with arbitrary implementation | Configurable | Plugin SDK |
 
-All sandbox tiers (`none`, `wasm`, `docker`, `microvm`) are production-valid. The default shown above is a starting point — it can be overridden by the tool's `sandbox` field, the agent's AgentPolicy (PRD 03), or the org default. See PRD 05, section 6 for full sandbox architecture.
+All sandbox tiers (`none`, `wasm`, `docker`, `microvm`) are production-valid. The default shown above is a starting point  -- it can be overridden by the tool's `sandbox` field, the agent's AgentPolicy (PRD 03), or the org default. See PRD 05, section 6 for full sandbox architecture.
 
 **Auto-compilation note**: Python to WASM auto-compilation via componentize-py is best-effort. Not all Python packages are WASM-compatible (e.g., those with C extensions). If compilation fails, the tool falls back to its declared sandbox tier or the agent's policy default. The build log surfaces the failure with a clear message.
 
 ### WASM Tools
 
-WASM tools are first-class citizens — pre-compiled to `.wasm` and executed in the WASM sandbox tier (PRD 05, section 6). They provide strong isolation with near-zero overhead and are the **recommended format for distributing third-party tools**.
+WASM tools are first-class citizens  -- pre-compiled to `.wasm` and executed in the WASM sandbox tier (PRD 05, section 6). They provide strong isolation with near-zero overhead and are the **recommended format for distributing third-party tools**.
 
 **Supported source languages**: Rust, Go, C/C++, Python (via componentize-py), JavaScript/TypeScript (via javy or ComponentizeJS), Zig, Swift.
 
@@ -71,7 +71,7 @@ interface tool {
 world blackbeard-tool {
     export tool;
     
-    // Imported capabilities — granted by sandbox policy at instantiation
+    // Imported capabilities  -- granted by sandbox policy at instantiation
     import wasi:http/outgoing-handler@0.2.0;
     import wasi:filesystem/preopens@0.2.0;
     import wasi:io/streams@0.2.0;
@@ -89,7 +89,7 @@ blackbeard tool compile --lang python --input tools/my_tool.py --output tools/my
 **Why distribute as WASM**:
 - Runs identically on any OS/arch without dependency hell.
 - Cannot access host memory, network, or filesystem unless capabilities are explicitly granted.
-- Deterministic execution with fuel metering — no infinite loops.
+- Deterministic execution with fuel metering  -- no infinite loops.
 - ~5ms startup vs ~500ms for Docker.
 - Cacheable: compiled module is cached; instantiation is cheap.
 
@@ -150,7 +150,7 @@ spec:
   sandbox: null                       # none | wasm | docker | microvm (null = use default for type)
   trusted: false                      # informational: is this first-party reviewed code?
   
-  # ── Parameters (optional for Python tools — inferred from BaseTool.args_schema) ──
+  # ── Parameters (optional for Python tools  -- inferred from BaseTool.args_schema) ──
   parameters:                            # required for WASM tools (WIT interface is untyped)
     query:
       type: string
@@ -330,7 +330,7 @@ When an MCP server is registered:
 - **Usage examples**: Code snippets showing how to use in agent YAML.
 - **Agent usage**: List of agents currently using this tool.
 - **Metrics**: Invocation count, avg latency, error rate, cache hit rate.
-- **Health status**: For MCP and REST tools — last health check result, uptime, error rate.
+- **Health status**: For MCP and REST tools  -- last health check result, uptime, error rate.
 
 ### 6.3 Install / Enable
 
@@ -380,7 +380,7 @@ spec:
 
 ### Problem
 
-The standard approach — passing all tool schemas into every LLM prompt — wastes context window and degrades model performance. An agent with access to 20 tools pays ~2,000 tokens of tool schema overhead on every call, even when it only needs 1-2 tools for the current step.
+The standard approach  -- passing all tool schemas into every LLM prompt  -- wastes context window and degrades model performance. An agent with access to 20 tools pays ~2,000 tokens of tool schema overhead on every call, even when it only needs 1-2 tools for the current step.
 
 ### Solution: Registry-as-a-Tool
 
@@ -400,7 +400,7 @@ Instead of injecting all tool schemas into the prompt, give the agent a single m
 4. Agent calls `finance-api(symbol="AAPL")` → gets result
 5. Next task: agent may use a completely different tool, discovered the same way
 
-**RBAC filtering:** `search_tools` and `get_tool` only return tools the agent's policy allows. If an AgentPolicy restricts tools via `tools.mode: allowlist`, only allowed tools appear in search results. Denied tools are invisible — the agent doesn't know they exist.
+**RBAC filtering:** `search_tools` and `get_tool` only return tools the agent's policy allows. If an AgentPolicy restricts tools via `tools.mode: allowlist`, only allowed tools appear in search results. Denied tools are invisible  -- the agent doesn't know they exist.
 
 ### Context Window Impact
 
@@ -441,7 +441,7 @@ For agents that have a few "core" tools they always need (e.g., web search) plus
 - `search_tools` queries the Blackbeard resource API (`GET /api/v1/tools?search=...&namespace=...`) filtered by the agent's policy
 - `get_tool` fetches the full tool spec (`GET /api/v1/tools/{name}`) and formats it as a tool schema
 - Both meta-tools are registered as CrewAI tools that call back into the Blackbeard API
-- Search is lightweight (~5ms) — no performance concern from repeated calls
+- Search is lightweight (~5ms)  -- no performance concern from repeated calls
 - Tool schemas are cached per-execution to avoid redundant API calls within the same crew run
 
 ## 11. Acceptance Criteria

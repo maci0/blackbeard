@@ -1,6 +1,6 @@
 # Getting Started with Blackbeard
 
-> **See also:** For a more comprehensive walkthrough (marketplace import, train/test commands, YAML editor, group management), see [quickstart.md](quickstart.md).
+> **See also:** For a full walkthrough (marketplace import, train/test commands, YAML editor, group management), see [quickstart.md](quickstart.md).
 
 Blackbeard is an open, self-hosted Agent Management Platform built on top of CrewAI. This guide walks you through standing up the platform and running your first crew.
 

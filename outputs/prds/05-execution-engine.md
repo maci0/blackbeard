@@ -1,4 +1,4 @@
-# PRD 05 — Execution Engine
+# PRD 05  -- Execution Engine
 
 ## 1. Purpose
 
@@ -184,7 +184,7 @@ Cancelled by user or API request. Active LLM calls terminate best-effort; sandbo
 
 1. Fetch the Crew or Flow resource directly (MVP) or via the Automation record (post-MVP).
 2. Recursively resolve all `ref:` dependencies (agents, tasks, tools, knowledge sources).
-3. Resolve the **AgentPolicy** for each agent (agent-level > crew-level > namespace-level > org default — PRD 03, section 3.1).
+3. Resolve the **AgentPolicy** for each agent (agent-level > crew-level > namespace-level > org default  -- PRD 03, section 3.1).
 4. Resolve the **Sandbox profile** for each agent based on its policy's `code_execution.sandbox` and each tool's `sandbox` field.
 5. Build the execution graph (DAG for sequential; tree for hierarchical; event graph for flows).
 6. Validate the graph: no cycles (except explicit flow loops), all refs resolved, all tools available and policy-allowed.
@@ -253,7 +253,7 @@ spec:
   # The Sandbox resource's `network` section defines template defaults.
   # At runtime, the effective network rules come from the agent's
   # AgentPolicy `network.outbound` configuration (PRD 03, section 3).
-  # The AgentPolicy takes precedence — the Sandbox template is only
+  # The AgentPolicy takes precedence  -- the Sandbox template is only
   # used when no AgentPolicy is specified. All network patterns follow
   # the matching semantics defined in PRD 03, section 3 (suffix matching,
   # optional port).
@@ -316,7 +316,7 @@ spec:
 
 ### 6.2 Sandbox Tiers
 
-Four execution tiers, **all production-valid**. The right tier depends on trust level, performance requirements, and compliance posture — not on environment (dev vs prod).
+Four execution tiers, **all production-valid**. The right tier depends on trust level, performance requirements, and compliance posture  -- not on environment (dev vs prod).
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -340,20 +340,20 @@ Four execution tiers, **all production-valid**. The right tier depends on trust 
 
 | Tier | Startup | Isolation | Use Case | Network | FS | Subprocess |
 |------|---------|-----------|----------|---------|-------|------------|
-| **none** | ~0ms | None — runs in the engine's Python process. | First-party tools you own and trust: internal SDKs, search wrappers, RAG adapters, file readers, DB connectors. Ideal when tool code is version-controlled in the same repo as the crew and reviewed like any other production code. Also appropriate for performance-critical hot paths where even 5ms WASM overhead matters. | Host | Host | Host |
-| **WASM** | ~5ms | Memory-safe, capability-based. Code cannot escape the linear memory sandbox. Deterministic fuel metering prevents infinite loops. | **Recommended default.** Most tools: HTTP clients, parsers, data transforms, calculators, third-party tool packages. WASI capabilities granted granularly — no network or filesystem unless explicitly allowed. | Via `wasi:http` capability only | Via `wasi:filesystem` preopens only | Not possible |
+| **none** | ~0ms | None  -- runs in the engine's Python process. | First-party tools you own and trust: internal SDKs, search wrappers, RAG adapters, file readers, DB connectors. Ideal when tool code is version-controlled in the same repo as the crew and reviewed like any other production code. Also appropriate for performance-critical hot paths where even 5ms WASM overhead matters. | Host | Host | Host |
+| **WASM** | ~5ms | Memory-safe, capability-based. Code cannot escape the linear memory sandbox. Deterministic fuel metering prevents infinite loops. | **Recommended default.** Most tools: HTTP clients, parsers, data transforms, calculators, third-party tool packages. WASI capabilities granted granularly  -- no network or filesystem unless explicitly allowed. | Via `wasi:http` capability only | Via `wasi:filesystem` preopens only | Not possible |
 | **Docker** | ~500ms (warm: ~50ms) | OS-level namespace/cgroup isolation. Optional gVisor (`runsc`) for syscall filtering. | Tools that need a full POSIX environment: shell commands, pip packages, system libraries, multi-file code execution, tools that spawn subprocesses. | Via network policy / iptables | Via mount policy | Via PID namespace |
 | **MicroVM** | ~1-3s (warm: ~200ms) | Hardware virtualisation. Separate kernel. Strongest isolation boundary. | Highest assurance: running user-uploaded arbitrary code, multi-tenant agent execution, compliance-critical workloads (SOC2, HIPAA, FedRAMP). | Via virtual NIC + firewall | Via virtual block device | Fully isolated |
 
-#### Tier: `none` (non-sandboxed) — detail
+#### Tier: `none` (non-sandboxed)  -- detail
 
 Non-sandboxed execution is a **deliberate, policy-governed choice**, not a security gap:
 
 - **When to use**: The tool is authored by your team, lives in your repo, passes code review, and is deployed alongside the engine. Examples: a thin wrapper around your company's internal API client, a Pandas data transform, a custom RAG retriever.
 - **Policy control**: An AgentPolicy can explicitly allow or forbid `none` tier via `minimum_sandbox_tier: none`. An org-wide default can mandate `minimum_sandbox_tier: wasm` to prevent any agent from using `none` without an explicit override.
-- **Accountability**: Even in `none` mode, all tool calls are audit-logged (tool name, input hash, duration, output hash, calling agent, calling user). The tool runs under the engine's process identity with the same env vars the engine has — this is precisely why trust matters.
+- **Accountability**: Even in `none` mode, all tool calls are audit-logged (tool name, input hash, duration, output hash, calling agent, calling user). The tool runs under the engine's process identity with the same env vars the engine has  -- this is precisely why trust matters.
 - **Guardrails still apply**: AgentPolicy tool allowlists, invocation limits, and cost ceilings are enforced regardless of sandbox tier. Sandboxing controls *isolation*; policy controls *authorization*. They are orthogonal.
-- **Performance**: Zero serialisation overhead — input/output are native Python objects. No IPC, no container lifecycle, no fuel metering. For tools called hundreds of times per execution (e.g., a vector similarity function), this matters.
+- **Performance**: Zero serialisation overhead  -- input/output are native Python objects. No IPC, no container lifecycle, no fuel metering. For tools called hundreds of times per execution (e.g., a vector similarity function), this matters.
 
 ```yaml
 # Example: marking a tool as trusted / non-sandboxed
@@ -453,13 +453,13 @@ world blackbeard-tool {
 
 | Property | Benefit |
 |----------|---------|
-| Memory safety | Linear memory model — tool can't read engine memory |
+| Memory safety | Linear memory model  -- tool can't read engine memory |
 | Capability-based | No network/FS unless explicitly granted via WASI |
-| Fuel metering | Deterministic execution limits — no infinite loops |
-| Fast startup | ~5ms vs ~500ms for Docker — critical for per-tool-call sandboxing |
+| Fuel metering | Deterministic execution limits  -- no infinite loops |
+| Fast startup | ~5ms vs ~500ms for Docker  -- critical for per-tool-call sandboxing |
 | Portable | Same .wasm binary runs on Linux, macOS, ARM, x86 |
 | Language-agnostic | Compile from Rust, Go, C, Python (componentize-py), JS (javy), etc. |
-| No daemon | No Docker daemon needed — just a WASM runtime library |
+| No daemon | No Docker daemon needed  -- just a WASM runtime library |
 | Cacheable | Module compilation cached; instantiation is cheap |
 
 ### 6.4 Docker Sandbox Execution (Detail)
@@ -538,9 +538,9 @@ def select_sandbox(tool: Tool, agent_policy: AgentPolicy, org_config: OrgConfig)
 | (unset, python) | `none` | `wasm` | **wasm** | No explicit tier, defaults to policy default |
 | `docker` | `wasm` | `wasm` | **docker** | Tool requests docker, above policy floor |
 | `wasm` | `docker` | `docker` | **docker** | Tool wants wasm, but policy floor is docker |
-| (unset, mcp-http) | `wasm` | `wasm` | **none** | Remote HTTP call — no local code, no sandbox needed (floor doesn't apply to remote calls) |
+| (unset, mcp-http) | `wasm` | `wasm` | **none** | Remote HTTP call  -- no local code, no sandbox needed (floor doesn't apply to remote calls) |
 
-**Why remote tools bypass the policy floor**: Tools of type `mcp-http` and `rest` execute no local code — they make an outbound HTTP call to a remote service. Sandboxing local code execution is meaningless when no local code runs. Network-level restrictions for these tools are enforced by the agent's `network.outbound` policy (PRD 03), not by the sandbox tier.
+**Why remote tools bypass the policy floor**: Tools of type `mcp-http` and `rest` execute no local code  -- they make an outbound HTTP call to a remote service. Sandboxing local code execution is meaningless when no local code runs. Network-level restrictions for these tools are enforced by the agent's `network.outbound` policy (PRD 03), not by the sandbox tier.
 
 **Policy control**: This behavior is controlled by `AgentPolicy.sandbox.remote_tools_bypass_floor` (PRD 03). When set to `false`, remote tools are also subject to the minimum tier floor. Default is `true` for backward compatibility. (Though sandboxing a remote HTTP call has no practical isolation effect, enforcing the floor universally may be required for compliance-sensitive environments.)
 
@@ -573,7 +573,7 @@ agent_llm = LLM(
 )
 ```
 
-CrewAI doesn't know it's talking to LiteLLM — it sees an OpenAI-compatible API. LiteLLM handles provider dispatch, load balancing, fallbacks, and spend tracking.
+CrewAI doesn't know it's talking to LiteLLM  -- it sees an OpenAI-compatible API. LiteLLM handles provider dispatch, load balancing, fallbacks, and spend tracking.
 
 **Policy enforcement at the LLM layer:**
 - **Model access**: The agent's virtual key restricts which models it can call (PRD 06, section 4.2).
@@ -850,9 +850,9 @@ The ResourceLoader supports three tool loading strategies (see PRD 04 §10 for f
 
 1. `build_agent()` checks `crew.spec.tool_loading` (default: `jit`)
 2. In JIT mode: instead of resolving tool refs and building CrewAI tool objects, inject two meta-tools:
-   - `SearchToolsTool(api_url, api_key, namespace, agent_policy)` — queries the tool registry API
-   - `GetToolTool(api_url, api_key, namespace)` — fetches full tool spec and returns a dynamically constructed CrewAI tool
-3. RBAC is enforced at the API level — `search_tools` only returns tools the agent's policy allows
+   - `SearchToolsTool(api_url, api_key, namespace, agent_policy)`  -- queries the tool registry API
+   - `GetToolTool(api_url, api_key, namespace)`  -- fetches full tool spec and returns a dynamically constructed CrewAI tool
+3. RBAC is enforced at the API level  -- `search_tools` only returns tools the agent's policy allows
 4. Tool schemas are cached in-memory per execution to avoid redundant lookups
 
 **Agent policy integration:** The `search_tools` meta-tool filters results against the agent's `AgentPolicy.spec.tools` configuration:
@@ -877,7 +877,7 @@ The execution engine integrates features from multiple systems. Clear ownership 
 | Policy enforcement (tool allowlists, tier promotion) | **Blackbeard** | Build and maintain -- not provided by CrewAI |
 | Execution event log + SSE streaming | **Blackbeard** | Build and maintain -- CrewAI emits events, Blackbeard captures and stores them |
 | Resource loading (YAML to CrewAI objects) | **Blackbeard** | Build and maintain -- the bridge between resource model and CrewAI |
-| Training & testing (human feedback loop) | **CrewAI** | Expose via API + UI — Blackbeard orchestrates training sessions, CrewAI handles the feedback loop |
+| Training & testing (human feedback loop) | **CrewAI** | Expose via API + UI  -- Blackbeard orchestrates training sessions, CrewAI handles the feedback loop |
 
 ---
 
@@ -889,12 +889,12 @@ CrewAI provides a built-in training system that improves agent performance throu
 
 1. **Training loop**: `crew.train(n_iterations=N, inputs={...}, filename="trained_agents_data.pkl")` runs the crew N times. After each iteration, the human reviews each agent's output and provides feedback.
 2. **Feedback capture**: CrewAI stores per-agent, per-iteration data: initial output, human feedback, and improved output in a session-specific `training_data.pkl`.
-3. **Consolidated suggestions**: After training completes, CrewAI consolidates feedback into `trained_agents_data.pkl` — keyed by agent role, containing suggestions, quality metrics, and final summaries.
+3. **Consolidated suggestions**: After training completes, CrewAI consolidates feedback into `trained_agents_data.pkl`  -- keyed by agent role, containing suggestions, quality metrics, and final summaries.
 4. **Runtime use**: On subsequent `crew.kickoff()` calls, if the trained data file exists, agents automatically incorporate the consolidated suggestions into their prompts, producing higher-quality outputs without code changes.
 
 ### Crew Testing
 
-`crew.test(n_iterations=N, inputs={...}, openai_model_name="gpt-4o")` runs the crew N times and uses an evaluation model to score outputs. Returns average scores and per-task scores — useful for measuring improvement after training.
+`crew.test(n_iterations=N, inputs={...}, openai_model_name="gpt-4o")` runs the crew N times and uses an evaluation model to score outputs. Returns average scores and per-task scores  -- useful for measuring improvement after training.
 
 ### Task Replay
 
@@ -919,7 +919,7 @@ POST /api/v1/crews/{name}/train
 }
 ```
 
-Training sessions are interactive — after each iteration, the session pauses for human feedback:
+Training sessions are interactive  -- after each iteration, the session pauses for human feedback:
 
 ```
 GET /api/v1/training-sessions/{session_id}
@@ -1080,7 +1080,7 @@ The training panel is accessible from:
 | Backend | When to Use |
 |---------|-------------|
 | **In-process** | Development, testing, sync execution mode. Uses `concurrent.futures.ThreadPoolExecutor`. |
-| **Temporal** | Production. Durable execution — workflows survive crashes, restarts, deployments. Built-in retries, timeouts, visibility. |
+| **Temporal** | Production. Durable execution  -- workflows survive crashes, restarts, deployments. Built-in retries, timeouts, visibility. |
 
 The backend is selected via configuration (`EXECUTION_BACKEND=in-process|temporal`). The engine defines a `WorkflowBackend` interface; both backends implement it. Additional backends (e.g., Celery) can be added via the Plugin SDK (PRD 11) but are not shipped by default.
 
@@ -1093,7 +1093,7 @@ class WorkflowBackend(Protocol):
     async def start_execution(
         self, execution_id: str, crew_name: str, inputs: dict
     ) -> None:
-        """Start a crew/flow execution. Non-blocking — execution runs in background."""
+        """Start a crew/flow execution. Non-blocking  -- execution runs in background."""
         ...
 
     async def get_status(self, execution_id: str) -> ExecutionStatus:
@@ -1101,7 +1101,7 @@ class WorkflowBackend(Protocol):
         ...
 
     async def cancel(self, execution_id: str) -> None:
-        """Cancel a running execution. Best-effort — may not stop immediately."""
+        """Cancel a running execution. Best-effort  -- may not stop immediately."""
         ...
 
     async def resume(self, execution_id: str, feedback: dict) -> None:
@@ -1113,7 +1113,7 @@ The in-process backend implements this with `concurrent.futures.ThreadPoolExecut
 
 **Graceful shutdown**: When a worker receives SIGTERM:
 - **In-process**: Running executions are checkpointed and marked `paused`. On restart, they can be resumed from the checkpoint.
-- **Temporal**: Temporal handles this natively — activities are retried on another worker.
+- **Temporal**: Temporal handles this natively  -- activities are retried on another worker.
 
 Workers drain in-flight tool calls (up to 30s) before shutting down.
 
@@ -1126,7 +1126,7 @@ All callback fields in YAML (`callbacks.step`, `callbacks.on_complete`, etc.):
 1. Resolved to Python callables at load time.
 2. Called with a structured context object.
 3. Callback errors are caught, logged, and do not crash the execution (configurable: `callbacks_fail_open: true`).
-4. Callbacks run **outside** the agent's sandbox — they are engine-level hooks, not agent-invoked code.
+4. Callbacks run **outside** the agent's sandbox  -- they are engine-level hooks, not agent-invoked code.
 
 ---
 

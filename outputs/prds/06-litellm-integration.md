@@ -1,8 +1,8 @@
-# PRD 06 — LiteLLM Integration
+# PRD 06  -- LiteLLM Integration
 
 ## 1. Purpose
 
-Instead of building a custom LLM dispatcher, Blackbeard routes **all** LLM traffic through a co-deployed **LiteLLM Proxy**. This gives us model routing, load balancing, fallbacks, spend tracking, per-agent budget enforcement, and 100+ provider support — all without writing or maintaining provider-specific code.
+Instead of building a custom LLM dispatcher, Blackbeard routes **all** LLM traffic through a co-deployed **LiteLLM Proxy**. This gives us model routing, load balancing, fallbacks, spend tracking, per-agent budget enforcement, and 100+ provider support  -- all without writing or maintaining provider-specific code.
 
 Blackbeard's job is to:
 1. Generate and manage LiteLLM configuration from Blackbeard's resource model.
@@ -131,7 +131,7 @@ router_settings:
   redis_password: "${VALKEY_PASSWORD:-}"  # required if Valkey has auth enabled
 ```
 
-**Users never edit LiteLLM config directly** — they manage `LLMConnection` resources in Blackbeard, and Blackbeard regenerates the LiteLLM config on every change.
+**Users never edit LiteLLM config directly**  -- they manage `LLMConnection` resources in Blackbeard, and Blackbeard regenerates the LiteLLM config on every change.
 
 ### Config Lifecycle
 
@@ -214,7 +214,7 @@ Agent kickoff
 | Per-crew | Key shared by all agents in a crew across executions. | Timer-based |
 | Per-user | Key shared by all executions initiated by a user. | Timer-based |
 
-Per-agent with `budget_duration: 1d` means the agent can spend up to `max_budget` USD per 24-hour period across all executions. Budget enforcement is real-time via LiteLLM — the agent receives a 429 when exceeded.
+Per-agent with `budget_duration: 1d` means the agent can spend up to `max_budget` USD per 24-hour period across all executions. Budget enforcement is real-time via LiteLLM  -- the agent receives a 429 when exceeded.
 
 **Key cleanup**: Per-execution keys are deleted via `DELETE /key/delete` when the execution completes (success or failure). A background sweeper runs every hour to garbage-collect orphaned keys (executions that crashed without cleanup). Keys older than 24h with no recent spend are candidates for GC.
 
@@ -237,7 +237,7 @@ spec:
 
 ## 5. Routing Strategies
 
-LiteLLM supports these out of the box — Blackbeard exposes them as configuration:
+LiteLLM supports these out of the box  -- Blackbeard exposes them as configuration:
 
 ```yaml
 apiVersion: blackbeard/v1
@@ -412,7 +412,7 @@ The Models page (`/models`) displays rate limit information as badges on each mo
 - **Visual routing diagram**: Shows model → fallback → fallback chain.
 - **Strategy selector**: Dropdown for routing strategy.
 - **Tag routing editor**: Assign models to tags.
-- **Test route**: "If agent X requests model Y, which deployment handles it?" — instant answer.
+- **Test route**: "If agent X requests model Y, which deployment handles it?"  -- instant answer.
 
 ### 7.3 Spend & Budgets Tab
 
@@ -447,7 +447,7 @@ agent_llm = LLM(
     api_key=agent_virtual_key,               # per-agent virtual key with budget
 )
 
-# CrewAI agent uses this LLM — all calls go through LiteLLM
+# CrewAI agent uses this LLM  -- all calls go through LiteLLM
 agent = Agent(
     config=loaded_agent_config,
     llm=agent_llm,
@@ -514,7 +514,7 @@ If the LiteLLM Proxy is unreachable:
 
 1. **Health check**: Blackbeard workers ping `GET /health` on the proxy every 30s.
 2. **Circuit breaker**: After 3 consecutive failures, the worker marks LiteLLM as unhealthy and emits `litellm.proxy.unhealthy`.
-3. **Impact**: All `kickoff()` requests are rejected with `503 Service Unavailable` — the system does not attempt to call LLM providers directly (that would bypass budget enforcement).
+3. **Impact**: All `kickoff()` requests are rejected with `503 Service Unavailable`  -- the system does not attempt to call LLM providers directly (that would bypass budget enforcement).
 4. **Recovery**: When health checks pass again, the circuit closes and kickoffs resume. The `litellm.proxy.recovered` event is emitted.
 
 ## 10. Configuration Hot-Reload
@@ -523,7 +523,7 @@ When a `LLMConnection` or `LLMRoutingConfig` resource is created, updated, or de
 
 1. Blackbeard regenerates the LiteLLM config YAML.
 2. Blackbeard calls `POST /config/update` on the LiteLLM Proxy API with the new config.
-3. LiteLLM applies the change without restart — new models, routing rules, and fallbacks take effect immediately.
+3. LiteLLM applies the change without restart  -- new models, routing rules, and fallbacks take effect immediately.
 4. If the reload fails (e.g., invalid config), Blackbeard logs the error and emits a `litellm.config.reload_failed` event. The previous config remains active.
 5. As a last resort, the worker can restart the LiteLLM sidecar container.
 
@@ -564,7 +564,7 @@ This prevents a malformed LLMConnection resource from breaking the LLM routing l
 
 ## 12. Acceptance Criteria
 
-1. All LLM calls from CrewAI agents go through LiteLLM Proxy — no direct provider calls.
+1. All LLM calls from CrewAI agents go through LiteLLM Proxy  -- no direct provider calls.
 2. Creating a `LLMConnection` resource auto-generates valid LiteLLM config and the proxy picks it up.
 3. An agent with `llm.allow: [openai-gpt4o]` can only use that model; requests for other models are rejected by LiteLLM's virtual key model restrictions.
 4. An agent with `max_cost_per_execution_usd: 5.00` is stopped when the LiteLLM virtual key budget is exhausted.

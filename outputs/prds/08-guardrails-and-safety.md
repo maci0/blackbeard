@@ -1,4 +1,4 @@
-# PRD 08 — Guardrails & Safety
+# PRD 08  -- Guardrails & Safety
 
 ## 1. Purpose
 
@@ -13,9 +13,9 @@ Provide configurable safety mechanisms that validate, filter, and redact agent o
 **Implemented (beyond MVP):**
 - Guardrail Playground (`/guardrails/playground`): Interactive page for testing guardrails with sample input before deploying them to production tasks. Users select a guardrail resource, provide sample text, and see the validation result (pass/fail, score, feedback) in real-time. Supports function-based, LLM-based, and schema-based guardrail types.
 
-**Implemented (post-MVP):** Namespace-level guardrails — Namespace resources support a `spec.guardrails` array of guardrail refs. At execution time, namespace guardrails are prepended to task-level guardrails (namespace guardrails run first). Configured via Namespace resource YAML or UI.
+**Implemented (post-MVP):** Namespace-level guardrails  -- Namespace resources support a `spec.guardrails` array of guardrail refs. At execution time, namespace guardrails are prepended to task-level guardrails (namespace guardrails run first). Configured via Namespace resource YAML or UI.
 
-**Implemented (post-MVP):** PII compliance presets — Guardrail and AgentPolicy PII configs support a `preset` field with values `hipaa`, `gdpr`, `pci-dss`, `ccpa`, or `custom`. Each preset maps to a curated set of Presidio entity types per the relevant compliance standard:
+**Implemented (post-MVP):** PII compliance presets  -- Guardrail and AgentPolicy PII configs support a `preset` field with values `hipaa`, `gdpr`, `pci-dss`, `ccpa`, or `custom`. Each preset maps to a curated set of Presidio entity types per the relevant compliance standard:
 - **HIPAA**: PERSON, DATE_TIME, US_SSN, PHONE_NUMBER, EMAIL_ADDRESS, LOCATION, IP_ADDRESS, MEDICAL_LICENSE, US_DRIVER_LICENSE (9 entities)
 - **GDPR**: PERSON, EMAIL_ADDRESS, PHONE_NUMBER, LOCATION, IP_ADDRESS, DATE_TIME, IBAN_CODE, NRP (8 entities)
 - **PCI-DSS**: CREDIT_CARD, IBAN_CODE, US_BANK_NUMBER, PERSON (4 entities)
@@ -136,18 +136,18 @@ Namespace-level guardrails are configured in the Namespace resource's `spec.defa
 
 When guardrails are assigned at multiple levels, they execute in this order:
 
-1. **Namespace-level `defaults.guardrails`** — run first, cannot be skipped.
-2. **Crew-level `default_guardrails`** — run second, apply to all tasks in the crew.
-3. **Task-level `guardrails`** — run last, specific to the task.
+1. **Namespace-level `defaults.guardrails`**  -- run first, cannot be skipped.
+2. **Crew-level `default_guardrails`**  -- run second, apply to all tasks in the crew.
+3. **Task-level `guardrails`**  -- run last, specific to the task.
 
-Within each level, guardrails execute in the order they are listed. If any guardrail fails and retries are exhausted, the task fails — subsequent guardrails are not run.
+Within each level, guardrails execute in the order they are listed. If any guardrail fails and retries are exhausted, the task fails  -- subsequent guardrails are not run.
 
 **Conflict detection in `blackbeard validate`:** The validator performs basic conflict detection for obviously contradictory guardrails:
 - Word count: if any guardrail requires >= N words and another requires <= M words where M < N, validation fails with a clear error
 - Mutually exclusive formats: if one guardrail requires JSON output and another requires plain text, validation warns
 - Duplicate detection: if the same guardrail ref appears at multiple levels (namespace + task), validation warns about redundancy
 
-This detection is best-effort — it catches common contradictions but cannot reason about arbitrary LLM-based guardrail interactions.
+This detection is best-effort  -- it catches common contradictions but cannot reason about arbitrary LLM-based guardrail interactions.
 
 Runtime conflicts that cannot be statically detected (e.g., two LLM-based guardrails with contradictory criteria) will cause the task to fail after exhausting retries. The failure message includes the full guardrail chain for debugging.
 
@@ -173,7 +173,7 @@ spec:
   max_retries: 2
 ```
 
-**Cost consideration**: Each hallucination check makes an LLM call to the evaluator model. For a crew with N tasks, this adds N additional LLM calls (plus retries). Use a cheap, fast model (e.g., `gpt-4o-mini`) for evaluation, and apply hallucination guardrails selectively to tasks where factual accuracy is critical — not to every task by default.
+**Cost consideration**: Each hallucination check makes an LLM call to the evaluator model. For a crew with N tasks, this adds N additional LLM calls (plus retries). Use a cheap, fast model (e.g., `gpt-4o-mini`) for evaluation, and apply hallucination guardrails selectively to tasks where factual accuracy is critical  -- not to every task by default.
 
 ### 3.2 Evaluation Process
 
@@ -213,7 +213,7 @@ This prompt can be overridden per-guardrail via the `evaluation_prompt` field on
 
 ### 4.1 Overview
 
-PII redaction is powered by **Microsoft Presidio** (MIT license, 8k+ GitHub stars), an open-source framework for detecting, redacting, and anonymizing sensitive data. Presidio runs as a **library** embedded in Blackbeard workers — no separate service needed.
+PII redaction is powered by **Microsoft Presidio** (MIT license, 8k+ GitHub stars), an open-source framework for detecting, redacting, and anonymizing sensitive data. Presidio runs as a **library** embedded in Blackbeard workers  -- no separate service needed.
 
 **What Presidio provides (we don't build)**:
 - NLP-based entity detection (spaCy models) for names, locations, organizations
@@ -381,7 +381,7 @@ Agent produces output
          ▼
 ┌────────────────────┐
 │  PII Redaction     │  Mask sensitive data before storage
-│  (section 4)       │  (traces, logs — optionally outputs)
+│  (section 4)       │  (traces, logs  -- optionally outputs)
 └────────┬───────────┘
          │
          ▼

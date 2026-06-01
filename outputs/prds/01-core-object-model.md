@@ -1,8 +1,8 @@
-# PRD 01 — Core Object Model
+# PRD 01  -- Core Object Model
 
 ## 1. Purpose
 
-Define the canonical data model for every first-class resource in Blackbeard. All resources are YAML-serialisable, versionable, and exposed through a uniform CRUD API. Python code (callbacks, guardrails, tool implementations) is never inlined — it is referenced by a qualified import path and resolved at runtime.
+Define the canonical data model for every first-class resource in Blackbeard. All resources are YAML-serialisable, versionable, and exposed through a uniform CRUD API. Python code (callbacks, guardrails, tool implementations) is never inlined  -- it is referenced by a qualified import path and resolved at runtime.
 
 ## 1.1 MVP Scope
 
@@ -10,9 +10,9 @@ Define the canonical data model for every first-class resource in Blackbeard. Al
 
 **Implemented additionally:** Project as a first-class resource kind (14th kind) with description, labels, default_agent_policy, and resource_quota (max_resources, max_executions_per_hour). Default project seeded automatically.
 
-**Implementation note — Canvas layouts:** No `canvas_layouts` database table exists. Canvas state (node positions, viewport, zoom) persists in the browser only (Zustand store + localStorage). If no saved layout exists when opening a resource, ELK.js auto-layout runs on first open.
+**Implementation note  -- Canvas layouts:** No `canvas_layouts` database table exists. Canvas state (node positions, viewport, zoom) persists in the browser only (Zustand store + localStorage). If no saved layout exists when opening a resource, ELK.js auto-layout runs on first open.
 
-**Implementation note — LiteLLM dynamic sync:** LLMConnection CRUD operations now push configuration changes to the LiteLLM Proxy API in real time. Creating, updating, or deleting an LLMConnection resource triggers a corresponding model add/update/delete call to the co-deployed LiteLLM Proxy, keeping routing config in sync without requiring a proxy restart.
+**Implementation note  -- LiteLLM dynamic sync:** LLMConnection CRUD operations now push configuration changes to the LiteLLM Proxy API in real time. Creating, updating, or deleting an LLMConnection resource triggers a corresponding model add/update/delete call to the co-deployed LiteLLM Proxy, keeping routing config in sync without requiring a proxy restart.
 
 **Implemented (post-MVP):** ServiceAccount as a standalone resource kind with CRUD at `/api/v1/service-accounts`. Schema: description, project, permissions. Referenced by Agent `spec.serviceAccount` (defaults to `sa-<agent-name>`) for principal chain tracking. Project (formerly Namespace) as a resource kind at `/api/v1/projects` with description, labels, resource quotas, and project-level guardrails. Nested project hierarchy with `parent` ref and `inherit_policies` on the Project schema, enabling hierarchical trees (e.g., `org/team/project`) with policy inheritance.
 
@@ -82,7 +82,7 @@ metadata:
     tier: senior
 spec:
   role: "Senior Data Researcher"
-  goal: "Uncover cutting-edge developments in {topic}"
+  goal: "Uncover latest developments in {topic}"
   backstory: |
     You're a seasoned researcher with a knack for uncovering the latest
     developments in {topic}.
@@ -267,7 +267,7 @@ spec:
   stream: true
 ```
 
-**Routing source of truth**: The `routing` section is the canonical definition of router behavior. The `trigger.listen` values on downstream steps must match route labels defined in `routing.routes`. If a step has `trigger.listen: approved` but no upstream router defines an `approved` route, validation fails. The `routing` section can be omitted — in that case, `trigger.listen` values match step names (the step fires when the named step completes), and there is no routing logic.
+**Routing source of truth**: The `routing` section is the canonical definition of router behavior. The `trigger.listen` values on downstream steps must match route labels defined in `routing.routes`. If a step has `trigger.listen: approved` but no upstream router defines an `approved` route, validation fails. The `routing` section can be omitted  -- in that case, `trigger.listen` values match step names (the step fires when the named step completes), and there is no routing logic.
 
 ### 2.5 Tool
 
@@ -460,7 +460,7 @@ spec:
 ```
 
 **Design notes:**
-- ServiceAccounts are subjects in RBAC (PRD 03, section 2.1) — they can be bound to Roles via RoleBindings.
+- ServiceAccounts are subjects in RBAC (PRD 03, section 2.1)  -- they can be bound to Roles via RoleBindings.
 - Each Automation references a ServiceAccount via `spec.service_account` (PRD 09). When a scheduled trigger fires, the ServiceAccount is the initiating principal in the execution's principal chain.
 - API keys associated with ServiceAccounts are stored encrypted. For MVP, encryption uses `BLACKBEARD_API_KEY` as the key derivation input. Post-MVP, keys are stored in Infisical.
 - ServiceAccounts are namespace-scoped like all other resources.
@@ -483,7 +483,7 @@ Resources reference each other using `ref:` syntax. This is the canonical specif
 ### 3.2 Syntax Rules
 
 1. Every cross-resource pointer uses the **`ref:<kind-plural>/<name>`** form (quoted in YAML), e.g. `- "ref:tools/serper-search"` or `agent: "ref:agents/researcher"`.
-2. Do not split `ref` into a separate YAML mapping key for resource pointers — the stored value must be the full `ref:…` string so validation and loading match the JSON Schema (`items: { "type": "string" }` for `tools`, `agents`, etc.).
+2. Do not split `ref` into a separate YAML mapping key for resource pointers  -- the stored value must be the full `ref:…` string so validation and loading match the JSON Schema (`items: { "type": "string" }` for `tools`, `agents`, etc.).
 3. Label selectors are **quoted strings**, not refs. They are resolved at runtime, not at validation time.
 4. Repository refs require explicit version pinning for v1 (`@2.0.0`). `@latest` resolves to a specific version at install time.
 5. Cross-namespace refs require the referencing subject to have `get` permission on the target namespace.

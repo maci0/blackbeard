@@ -1,21 +1,21 @@
-# PRD 03 — RBAC & Identity
+# PRD 03  -- RBAC & Identity
 
 ## 1. Purpose
 
 Implement a Kubernetes-inspired Role-Based Access Control system for Blackbeard that governs **two distinct subject classes**:
 
-1. **Human users** — people who build, deploy, and manage agents through the UI/API/CLI.
-2. **Agents** — autonomous software entities that, at runtime, access tools, data, LLMs, other agents, the filesystem, and the network.
+1. **Human users**  -- people who build, deploy, and manage agents through the UI/API/CLI.
+2. **Agents**  -- autonomous software entities that, at runtime, access tools, data, LLMs, other agents, the filesystem, and the network.
 
-Both classes use the same primitives — Objects, Verbs, Roles, RoleBindings, Rules — but agents get an additional **AgentPolicy** resource that constrains what they can do inside the execution sandbox (PRD 05). This separation matters because a human "developer" might be allowed to *create* a web-scraping tool, but the agent they build should not be allowed to *invoke* it against internal URLs.
+Both classes use the same primitives  -- Objects, Verbs, Roles, RoleBindings, Rules  -- but agents get an additional **AgentPolicy** resource that constrains what they can do inside the execution sandbox (PRD 05). This separation matters because a human "developer" might be allowed to *create* a web-scraping tool, but the agent they build should not be allowed to *invoke* it against internal URLs.
 
 ---
 
 ## 1.1 MVP Scope
 
-**Implemented:** Built-in email/password auth with JWT tokens (access 15min + refresh 7d), User and Group models (with member management), Role and RoleBinding resource kinds, predefined roles and policies (owner/admin/developer/operator/viewer/policy-admin + agent-unrestricted/agent-standard/agent-read-only), RBAC enforcement via `require_permission()` dependency and `check_resource_permission()` utility with `enforce_rbac` config toggle — applied to all resource CRUD, execution, user management, and webhook endpoints. AgentPolicy resource kind (tool allowlist/denylist, delegation constraints, LLM budget enforcement via LiteLLM virtual keys), sandbox tier selection (none/wasm/docker/gVisor/microvm), visual RBAC editor in the UI (Roles tab, Users/Groups tab, AgentPolicy editor), principal chain tracking (User → Crew → Agent ServiceAccount), audit logging on all mutations, WebSocket auth, CLI `login`/`logout`/`whoami` with credential storage in `~/.config/blackbeard/`. SSO/OIDC integration via generic OIDC client (`api/oidc.py`). API key management: `POST /auth/api-key` (generate/rotate) and `DELETE /auth/api-key` (revoke), with UI controls on the Settings page.
+**Implemented:** Built-in email/password auth with JWT tokens (access 15min + refresh 7d), User and Group models (with member management), Role and RoleBinding resource kinds, predefined roles and policies (owner/admin/developer/operator/viewer/policy-admin + agent-unrestricted/agent-standard/agent-read-only), RBAC enforcement via `require_permission()` dependency and `check_resource_permission()` utility with `enforce_rbac` config toggle  -- applied to all resource CRUD, execution, user management, and webhook endpoints. AgentPolicy resource kind (tool allowlist/denylist, delegation constraints, LLM budget enforcement via LiteLLM virtual keys), sandbox tier selection (none/wasm/docker/gVisor/microvm), visual RBAC editor in the UI (Roles tab, Users/Groups tab, AgentPolicy editor), principal chain tracking (User → Crew → Agent ServiceAccount), audit logging on all mutations, WebSocket auth, CLI `login`/`logout`/`whoami` with credential storage in `~/.config/blackbeard/`. SSO/OIDC integration via generic OIDC client (`api/oidc.py`). API key management: `POST /auth/api-key` (generate/rotate) and `DELETE /auth/api-key` (revoke), with UI controls on the Settings page.
 
-**Partial:** Principal chain — policy enforcement exists in the resource loader (tool filtering via AgentPolicy allowlists, delegation control), but full intersection of user permissions with agent permissions (effective permissions = user role ∩ agent role) is not implemented.
+**Partial:** Principal chain  -- policy enforcement exists in the resource loader (tool filtering via AgentPolicy allowlists, delegation control), but full intersection of user permissions with agent permissions (effective permissions = user role ∩ agent role) is not implemented.
 
 **Implemented (post-MVP):** ServiceAccount as a standalone resource kind (`/api/v1/service-accounts`) with description, project, and permissions fields.
 
@@ -35,7 +35,7 @@ Both classes use the same primitives — Objects, Verbs, Roles, RoleBindings, Ru
 | `Agent` | A running agent instance | Resolved from agent resource name at execution time |
 | `Crew` | All agents within a crew | Resolved from crew resource at execution time |
 
-Agents and Crews are subjects just like Users. Every authorization check carries a **principal chain**: `User (who kicked off) → Crew → Agent` — any link in the chain can be denied.
+Agents and Crews are subjects just like Users. Every authorization check carries a **principal chain**: `User (who kicked off) → Crew → Agent`  -- any link in the chain can be denied.
 
 ### 2.2 Objects (API Resources)
 
@@ -47,9 +47,9 @@ Every entity in the system is an **Object** with a `kind` and optional `name`:
 | `Task` | `tasks/research-ai` | Yes (execution) |
 | `Crew` | `crews/research-crew` | Yes (sub-crew invocation) |
 | `Flow` | `flows/content-pipeline` | Yes (flow step) |
-| `Tool` | `tools/serper-search` | **Yes — primary agent concern** |
-| `LLMConnection` | `llm-connections/openai-prod` | **Yes — which models an agent may call** |
-| `KnowledgeSource` | `knowledge/company-docs` | **Yes — which data an agent may read** |
+| `Tool` | `tools/serper-search` | **Yes  -- primary agent concern** |
+| `LLMConnection` | `llm-connections/openai-prod` | **Yes  -- which models an agent may call** |
+| `KnowledgeSource` | `knowledge/company-docs` | **Yes  -- which data an agent may read** |
 | `EnvironmentVariable` | `env-vars/serper-api-key` | Yes (injected at runtime) |
 | `Automation` | `automations/prod-deploy-001` | No (human only) |
 | `Trace` | `traces/*` | No (human only) |
@@ -67,21 +67,21 @@ Every entity in the system is an **Object** with a `kind` and optional `name`:
 |------|-------------|-------|-------|
 | `get` | Read a single resource | ✓ | ✓ |
 | `list` | List resources of a kind | ✓ | ✓ |
-| `create` | Create a new resource | ✓ | — |
-| `update` | Modify an existing resource | ✓ | — |
-| `delete` | Remove a resource | ✓ | — |
+| `create` | Create a new resource | ✓ |  -- |
+| `update` | Modify an existing resource | ✓ |  -- |
+| `delete` | Remove a resource | ✓ |  -- |
 | `run` | Execute (kick off a crew/flow/automation) | ✓ | ✓ (sub-crew) |
-| `invoke` | Call a tool or LLM | — | **✓** |
-| `delegate` | Hand work to another agent | — | **✓** |
-| `read-data` | Read from a knowledge source | — | **✓** |
-| `write-data` | Write to filesystem / external store | — | **✓** |
-| `manage` | Full lifecycle (create+update+delete) | ✓ | — |
-| `approve` | Respond to HITL requests | ✓ | — |
-| `deploy` | Deploy an automation | ✓ | — |
-| `rollback` | Rollback an automation | ✓ | — |
-| `export` | Download / export a resource | ✓ | — |
-| `import` | Upload / import a resource | ✓ | — |
-| `bind` | Create role bindings | ✓ | — |
+| `invoke` | Call a tool or LLM |  -- | **✓** |
+| `delegate` | Hand work to another agent |  -- | **✓** |
+| `read-data` | Read from a knowledge source |  -- | **✓** |
+| `write-data` | Write to filesystem / external store |  -- | **✓** |
+| `manage` | Full lifecycle (create+update+delete) | ✓ |  -- |
+| `approve` | Respond to HITL requests | ✓ |  -- |
+| `deploy` | Deploy an automation | ✓ |  -- |
+| `rollback` | Rollback an automation | ✓ |  -- |
+| `export` | Download / export a resource | ✓ |  -- |
+| `import` | Upload / import a resource | ✓ |  -- |
+| `bind` | Create role bindings | ✓ |  -- |
 
 Note the agent-specific verbs: `invoke`, `delegate`, `read-data`, `write-data`. These are enforced by the Execution Engine (PRD 05) at every tool call, LLM dispatch, delegation attempt, and file write.
 
@@ -100,7 +100,7 @@ spec:
   conditions: []                      # optional: label selectors, field matchers
 ```
 
-**Standalone vs. embedded**: Rules are always embedded within Roles — they are not independently addressable resources. The `Rule` entry in the resource catalogue (PRD 01, section 2.9) indicates that Rules follow the same schema validation, but they do not have their own CRUD endpoints or database rows. Rules are created, updated, and deleted as part of their parent Role resource. The `kind: Rule` in the YAML above is for schema documentation; in practice, rules appear as entries in `spec.rules` arrays within Role resources.
+**Standalone vs. embedded**: Rules are always embedded within Roles  -- they are not independently addressable resources. The `Rule` entry in the resource catalogue (PRD 01, section 2.9) indicates that Rules follow the same schema validation, but they do not have their own CRUD endpoints or database rows. Rules are created, updated, and deleted as part of their parent Role resource. The `kind: Rule` in the YAML above is for schema documentation; in practice, rules appear as entries in `spec.rules` arrays within Role resources.
 
 ### 2.5 Role
 
@@ -322,11 +322,11 @@ spec:
 | `sandboxed` | `wasm` | All tool execution goes through WASM minimum. No non-sandboxed tools. All LLMs, limited delegation. |
 | `restricted` | `wasm` | Allowlisted tools/LLMs only, limited tokens/cost, no code execution. |
 | `hardened` | `docker` | All tools run in Docker (gVisor). Strict network allowlist, restricted filesystem, no delegation. |
-| `air-gapped` | `docker` | No outbound network, no code execution, read-only filesystem — LLM-only reasoning. |
+| `air-gapped` | `docker` | No outbound network, no code execution, read-only filesystem  -- LLM-only reasoning. |
 
 ### 3.3 Tool Visibility via RBAC
 
-When using JIT tool discovery (PRD 04 §10), the agent's `search_tools` meta-tool filters results against its AgentPolicy. Denied tools are invisible — the agent cannot discover, inspect, or call them. This is enforced at the API level, not client-side.
+When using JIT tool discovery (PRD 04 §10), the agent's `search_tools` meta-tool filters results against its AgentPolicy. Denied tools are invisible  -- the agent cannot discover, inspect, or call them. This is enforced at the API level, not client-side.
 
 | Policy Mode | `search_tools` returns | `get_tool` allows |
 |-------------|----------------------|-------------------|
@@ -356,7 +356,7 @@ Every denial emits an `agent.policy.denied` event with full context for audit.
 
 ---
 
-## 4. Human RBAC — Predefined Roles
+## 4. Human RBAC  -- Predefined Roles
 
 | Role | Description | Key Permissions |
 |------|-------------|-----------------|
@@ -374,7 +374,7 @@ Every denial emits an `agent.policy.denied` event with full context for audit.
 |------|-------------|-----------------|
 | `agent-unrestricted` | Full runtime access (dev only) | `invoke` all tools, `delegate` to any agent, `read-data` all |
 | `agent-standard` | Normal production agent | `invoke` registered tools, `delegate` if allowed, `read-data` allowed sources |
-| `agent-read-only` | Reasoning-only, no side effects | `get`, `list`, `read-data` only — no `invoke`, no `write-data`, no `delegate` |
+| `agent-read-only` | Reasoning-only, no side effects | `get`, `list`, `read-data` only  -- no `invoke`, no `write-data`, no `delegate` |
 
 ---
 
@@ -457,7 +457,7 @@ Action requested (by human OR agent)
 
 **Cache configuration:** Default cache TTL is 30 seconds. For security-critical deployments, set `AUTHZ_CACHE_TTL=0` to disable caching (every request checks the database). In multi-worker deployments, cache invalidation propagates via the event bus with a worst-case consistency window equal to the cache TTL. When `AUTHZ_CACHE_TTL=0`, every request queries the database directly. The event bus propagation delay is irrelevant in this mode since no cache exists to invalidate. Prefer configuring via `PlatformConfig.spec.auth.cache_ttl_seconds` (PRD 11) over the env var.
 
-For agents, policy denials are NOT silent 403s — they feed back into the agent's conversation as a system message: `"Policy violation: you are not allowed to invoke tool 'database-admin'. Available tools: [serper-search, wikipedia]."` This lets the agent adapt its approach rather than crash.
+For agents, policy denials are NOT silent 403s  -- they feed back into the agent's conversation as a system message: `"Policy violation: you are not allowed to invoke tool 'database-admin'. Available tools: [serper-search, wikipedia]."` This lets the agent adapt its approach rather than crash.
 
 ---
 
@@ -548,9 +548,9 @@ In practice, for most deployments the user has broad permissions and the agent's
 **Scheduled and triggered executions**: When an automation runs on a cron schedule, webhook trigger, or other non-human trigger, there is no human user in the principal chain. In this case:
 
 1. The automation's configured `ServiceAccount` is used as the principal (see PRD 09, `spec.runtime.service_account`).
-2. If no ServiceAccount is configured, the automation uses the **deploying user's** identity — the user who last deployed the automation. This means the automation inherits the deployer's permissions.
+2. If no ServiceAccount is configured, the automation uses the **deploying user's** identity  -- the user who last deployed the automation. This means the automation inherits the deployer's permissions.
 3. The principal chain becomes: `ServiceAccount (or deploying user) → Crew → Agent`.
-4. AgentPolicy constraints still apply in full — the ServiceAccount identity only affects the RBAC layer (steps 1-4), not the policy layer (step 5).
+4. AgentPolicy constraints still apply in full  -- the ServiceAccount identity only affects the RBAC layer (steps 1-4), not the policy layer (step 5).
 
 ```yaml
 # Example: ServiceAccount for a scheduled automation
@@ -572,7 +572,7 @@ This ensures scheduled executions have a well-defined, auditable identity rather
 
 ### 9.1 Roles Tab (Human Roles)
 - **Table view**: All roles (built-in + custom) with rule count, bound users, description.
-- **Create Role**: Rule Builder form — select resources (multi-select chips), verbs (checkboxes), optional resource names, optional namespace.
+- **Create Role**: Rule Builder form  -- select resources (multi-select chips), verbs (checkboxes), optional resource names, optional namespace.
 - **YAML Preview**: Side panel shows live YAML as the form is edited.
 - **Impact Preview**: Before saving, show "N users affected by this change".
 
@@ -581,12 +581,12 @@ This ensures scheduled executions have a well-defined, auditable identity rather
 - **Create/Edit Policy**:
   - **Tools section**: Allowlist/denylist builder with tool search and label selectors.
   - **LLM section**: Select allowed LLM connections, set token/cost budgets.
-  - **Delegation section**: Visual picker — show all agents, draw allowed delegation arrows.
+  - **Delegation section**: Visual picker  -- show all agents, draw allowed delegation arrows.
   - **Data section**: File path pattern editor, knowledge source picker, env var selector.
   - **Network section**: Domain/CIDR allowlist editor with "Test URL" button.
   - **Code Execution section**: Toggle on/off, select sandbox profile, set limits.
   - **Resource Limits section**: Sliders for CPU, memory, time, concurrency.
-- **Dry-Run Simulator**: "What would happen if agent X tried to call tool Y?" — instant pass/deny answer with the rule that matched.
+- **Dry-Run Simulator**: "What would happen if agent X tried to call tool Y?"  -- instant pass/deny answer with the rule that matched.
 - **YAML tab**: Full YAML editor with bidirectional sync.
 
 ### 9.3 Users & Groups Tab
@@ -688,7 +688,7 @@ The MVP uses a single `BLACKBEARD_API_KEY` environment variable for all API auth
 8. An agent with policy `tools.mode: allowlist` cannot invoke a tool not in the allow list; the denial is fed back as a system message and the agent adapts.
 9. An agent hitting `llm.max_tokens_per_execution` is stopped with a budget-exceeded error.
 10. An agent with `delegation.allowed: true` can delegate to listed targets; delegation to unlisted targets is denied.
-11. An agent with `network.outbound.mode: allowlist` cannot make HTTP calls to unlisted domains (enforced by sandbox — PRD 05).
+11. An agent with `network.outbound.mode: allowlist` cannot make HTTP calls to unlisted domains (enforced by sandbox  -- PRD 05).
 12. An agent with `code_execution.allowed: false` cannot run arbitrary code even if the tool supports it.
 13. Principal chain intersection works: if the kicking user lacks access to a knowledge source, the agent inherits that denial.
 

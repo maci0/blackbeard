@@ -1,4 +1,4 @@
-# PRD 13 — CLI Parity
+# PRD 13  -- CLI Parity
 
 ## 1. Purpose
 
@@ -47,8 +47,8 @@ Ensure every operation available in the Blackbeard UI can also be performed via 
 | Add user to group | `blackbeard group add-member <group> <email>` | P2 |
 | List roles | `blackbeard role list` | P1 |
 | Get role details | `blackbeard role get <name>` | P1 |
-| Create role from YAML | Already works via `blackbeard apply` | — |
-| Delete role | Already works via `blackbeard delete Role <name>` | — |
+| Create role from YAML | Already works via `blackbeard apply` |  -- |
+| Delete role | Already works via `blackbeard delete Role <name>` |  -- |
 | List role bindings | `blackbeard rolebinding list` | P1 |
 | Create role binding | `blackbeard rolebinding create` | P1 |
 | List executions | `blackbeard executions` | P0 |
@@ -175,12 +175,12 @@ All commands support:
 
 ## 6. Implementation Phases
 
-### Phase 1 (P0) — Core Gaps
+### Phase 1 (P0)  -- Core Gaps
 1. `blackbeard login` / `logout` / `whoami`
 2. `blackbeard executions` (list all)
 3. Credential storage with auto-refresh
 
-### Phase 2 (P1) — RBAC & Export
+### Phase 2 (P1)  -- RBAC & Export
 4. `blackbeard user list/invite`
 5. `blackbeard role list/get/describe`
 6. `blackbeard rolebinding list/create/delete`
@@ -190,7 +190,7 @@ All commands support:
 10. `blackbeard register`
 11. `blackbeard apikey generate/rotate/show`
 
-### Phase 3 (P2) — Full Parity
+### Phase 3 (P2)  -- Full Parity
 12. `blackbeard user deactivate/activate`
 13. `blackbeard group` commands
 14. `blackbeard apikey rotate`

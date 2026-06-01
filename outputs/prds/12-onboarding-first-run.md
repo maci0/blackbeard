@@ -1,12 +1,12 @@
-# PRD 12 — Onboarding & First-Run Experience
+# PRD 12  -- Onboarding & First-Run Experience
 
 ## 1. Purpose
 
-Provide a guided first-run experience that helps new users understand Blackbeard's value, navigate the platform, and successfully build and run their first crew — all within the first 5 minutes of opening the UI.
+Provide a guided first-run experience that helps new users understand Blackbeard's value, navigate the platform, and successfully build and run their first crew  -- all within the first 5 minutes of opening the UI.
 
 ### 1.1 MVP Scope
 
-**Implemented:** Onboarding wizard — a 5-step welcome dialog that introduces new users to the platform on first visit, stored in localStorage. The "Load Example" button is available on the empty canvas.
+**Implemented:** Onboarding wizard  -- a 5-step welcome dialog that introduces new users to the platform on first visit, stored in localStorage. The "Load Example" button is available on the empty canvas.
 
 **Implemented (beyond MVP):**
 - Global keyboard shortcuts: `Cmd+Shift+S` (save), `Cmd+Shift+E` (executions), `Cmd+Shift+N` (new resource), `Cmd+.` (settings), `?` (shortcuts dialog). Keyboard shortcuts dialog accessible from the Help menu or by pressing `?`.
@@ -38,7 +38,7 @@ Today, a new user who opens Blackbeard sees the Studio with an empty canvas and 
 | 2 | **Progressive disclosure** | Show only what's needed at each step. Don't overwhelm. |
 | 3 | **Learn by doing** | Guide users to perform real actions, not just read text. |
 | 4 | **Persistent but respectful** | Remember completion state in localStorage. Offer a "Restart tour" option in the sidebar. |
-| 5 | **Zero backend dependency** | The onboarding is purely frontend — no API calls, no database state. |
+| 5 | **Zero backend dependency** | The onboarding is purely frontend  -- no API calls, no database state. |
 
 ## 5. Components
 
@@ -50,9 +50,9 @@ A modal dialog shown on the very first visit (no `blackbeard_onboarding_complete
 - Blackbeard logo/name
 - One-line description: "Build, run, and manage AI agent crews visually"
 - Three value propositions with icons:
-  1. **Visual Studio** — Drag-and-drop agents, tasks, and tools on a canvas
-  2. **One-Click Run** — Execute crews and watch results in real-time
-  3. **Full Lifecycle** — Manage resources, monitor executions, track costs
+  1. **Visual Studio**  -- Drag-and-drop agents, tasks, and tools on a canvas
+  2. **One-Click Run**  -- Execute crews and watch results in real-time
+  3. **Full Lifecycle**  -- Manage resources, monitor executions, track costs
 - Two CTAs:
   - **"Get Started"** → Starts the guided tour (navigates to Studio)
   - **"Skip"** → Dismisses, sets localStorage flag, goes to Studio
@@ -65,7 +65,7 @@ After clicking "Get Started", a step-by-step tooltip tour highlights key UI elem
 |------|---------------|-------|-------------|
 | 1 | Palette sidebar | **Palette** | Drag agents, tasks, and tools from here onto the canvas. |
 | 2 | Canvas area | **Canvas** | This is your workspace. Connect nodes to define your crew's workflow. |
-| 3 | Crew name input | **Name Your Crew** | Give your crew a name — it becomes the resource identifier. |
+| 3 | Crew name input | **Name Your Crew** | Give your crew a name  -- it becomes the resource identifier. |
 | 4 | Save button | **Save** | Save your crew and all its resources to the server. |
 | 5 | Run button | **Run** | Execute your crew. You'll see results in the Executions page. |
 | 6 | Sidebar nav | **Navigation** | Use the sidebar to manage Resources, view Executions, configure Models, and browse Tools. |

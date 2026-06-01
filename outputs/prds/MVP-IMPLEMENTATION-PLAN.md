@@ -1,4 +1,4 @@
-# Blackbeard MVP — Implementation Plan
+# Blackbeard MVP  -- Implementation Plan
 
 ## MVP Definition
 
@@ -196,7 +196,7 @@ blackbeard/
 
 ## Phases
 
-### Phase 0 — Skeleton (Week 1)
+### Phase 0  -- Skeleton (Week 1)
 
 **Goal**: `docker compose up` boots all services; API returns health check; UI loads.
 
@@ -212,13 +212,13 @@ blackbeard/
 | 0.6 | Write the example `research-crew/` YAML files by hand | Valid YAML resources to test against | 0.5 |
 | 0.7 | WASM proof-of-concept spike: compile a simple Python tool to WASM via componentize-py, load in wasmtime-py with Component Model, invoke, measure startup | Spike report: works / doesn't work / needs fallback. If fail → switch Phase 4 to subprocess-based Wasmtime CLI | 2 |
 
-> **Gate:** The spike result gates Phase 4's approach. If the spike fails, Phase 4 switches to subprocess-based Wasmtime CLI immediately — do not wait until Phase 4 to discover this.
+> **Gate:** The spike result gates Phase 4's approach. If the spike fails, Phase 4 switches to subprocess-based Wasmtime CLI immediately  -- do not wait until Phase 4 to discover this.
 
 **Deliverable**: Run `docker compose up`, hit `localhost:3000` and see the UI shell, hit `localhost:8000/api/v1/health` and get 200, LiteLLM responds on `:4000` (dashboard at `:4000/ui`).
 
 ---
 
-### Phase 1 — Resource Model + API (Weeks 2–3)
+### Phase 1  -- Resource Model + API (Weeks 2–3)
 
 **Goal**: YAML resources can be created, validated, stored, and retrieved through the API.
 
@@ -228,8 +228,8 @@ blackbeard/
 | 1.2 | Create `resource_refs` SQLAlchemy model (source_id, target_kind, target_name, ref_field) | Table created via `Base.metadata.create_all()` | 0.5 |
 | 1.3 | Implement generic resource CRUD service | `create()`, `get()`, `list()`, `update()`, `delete()` with optimistic locking | 2 |
 | 1.4 | Implement JSON Schema validators for each kind (Agent, Task, Crew, Tool, LLMConnection) | Schema files + validation on create/update | 2 |
-| 1.5 | Implement `ref:` resolution — parse refs, build dependency graph, detect cycles | `ResourceLoader.resolve(name, kind) → Resource` | 2 |
-| 1.6 | Implement REST API endpoints (`/api/v1/agents`, `/api/v1/tasks`, etc. — lowercase plural CRUD) | OpenAPI spec auto-generated | 1 |
+| 1.5 | Implement `ref:` resolution  -- parse refs, build dependency graph, detect cycles | `ResourceLoader.resolve(name, kind) → Resource` | 2 |
+| 1.6 | Implement REST API endpoints (`/api/v1/agents`, `/api/v1/tasks`, etc.  -- lowercase plural CRUD) | OpenAPI spec auto-generated | 1 |
 | 1.7 | Implement `blackbeard validate` CLI command | Validates a directory of YAML files offline | 1 |
 | 1.8 | Implement `blackbeard apply` CLI command | Creates/updates resources from YAML files | 1 |
 | 1.9 | Write tests: CRUD, validation, ref resolution, cycle detection | ≥80% coverage on resource module | 1.5 |
@@ -249,7 +249,7 @@ curl localhost:8000/api/v1/crews/research-crew   # returns crew with resolved re
 
 ---
 
-### Phase 2 — Execution Engine (Weeks 3–5)
+### Phase 2  -- Execution Engine (Weeks 3–5)
 
 **Goal**: `blackbeard kickoff` runs a crew end-to-end using CrewAI, routed through LiteLLM.
 
@@ -257,7 +257,7 @@ curl localhost:8000/api/v1/crews/research-crew   # returns crew with resolved re
 |---|------|--------|------|
 | 2.0 | Create `executions`, `execution_tasks`, `execution_tool_calls` SQLAlchemy models | Tables created via `Base.metadata.create_all()` | 0.5 |
 | 2.1 | Implement Resource Loader: YAML resources → CrewAI Agent/Task/Crew objects | `loader.build_crew(crew_name) → crewai.Crew` | 3 |
-| 2.2 | Implement LiteLLM config generation: LLMConnection resources → `litellm_config.yaml` | Auto-regenerated on LLMConnection change. Includes schema validation before reload — malformed LLMConnection cannot crash LiteLLM (see PRD 06 config reload safety) | 2 |
+| 2.2 | Implement LiteLLM config generation: LLMConnection resources → `litellm_config.yaml` | Auto-regenerated on LLMConnection change. Includes schema validation before reload  -- malformed LLMConnection cannot crash LiteLLM (see PRD 06 config reload safety) | 2 |
 | 2.3 | Implement LiteLLM virtual key manager: create per-execution key with model restrictions | `key_manager.create_key(agent, execution) → api_key` | 2 |
 | 2.4 | Wire CrewAI `LLM` class to point at LiteLLM Proxy with per-agent virtual key | Agent LLM calls go through `http://litellm:4000` | 1 |
 | 2.5 | Implement execution lifecycle: `kickoff()` → create execution record → run crew → store result | `executions` table, status transitions | 2 |
@@ -294,7 +294,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 
 ---
 
-### Phase 3 — Execution Event System (Week 5)
+### Phase 3  -- Execution Event System (Week 5)
 
 **Goal**: Every execution produces a complete event log, streamed live to the frontend via SSE.
 
@@ -311,7 +311,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 
 ---
 
-### Phase 4 — WASM Sandbox (Weeks 5–6)
+### Phase 4  -- WASM Sandbox (Weeks 5–6)
 
 **Goal**: Tools compiled to `.wasm` execute in an isolated Wasmtime sandbox with capability-based access control.
 
@@ -319,7 +319,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 |---|------|--------|------|
 | 4.1 | Define WIT interface (`blackbeard:tool@0.1.0`) | `tool.wit` file | 0.5 |
 | 4.2 | Write a reference WASM tool in Rust that implements the WIT interface | `examples/tools/echo-tool.wasm` | 1 |
-| 4.3 | Implement Wasmtime wrapper: load `.wasm`, create instance with WASI capabilities, invoke, read result | `WasmSandbox.invoke(tool, input) → output` (budget extra time if Component Model or componentize-py integration proves difficult — see Technical Risks) | 3-5 |
+| 4.3 | Implement Wasmtime wrapper: load `.wasm`, create instance with WASI capabilities, invoke, read result | `WasmSandbox.invoke(tool, input) → output` (budget extra time if Component Model or componentize-py integration proves difficult  -- see Technical Risks) | 3-5 |
 | 4.4 | Implement capability grants: only enable `wasi:http` if tool declares it + policy allows it | Capability filtering at instantiation | 1 |
 | 4.5 | Implement fuel metering: set fuel limit, catch `OutOfFuelError` → return timeout to agent | Deterministic execution limits | 0.5 |
 | 4.6 | Implement module cache: compiled modules cached in memory, ~5ms instantiation | Cache with LRU eviction | 1 |
@@ -331,7 +331,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 
 ---
 
-### Phase 5 — Agent Policies (Week 7)
+### Phase 5  -- Agent Policies (Week 7)
 
 **Goal**: Basic agent policies restrict which tools and LLMs an agent can use.
 
@@ -351,7 +351,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 
 ---
 
-### Phase 6 — Studio (Visual Editor) (Weeks 7–10)
+### Phase 6  -- Studio (Visual Editor) (Weeks 7–10)
 
 **Goal**: Users can compose crews visually with drag-and-drop and see results.
 
@@ -378,7 +378,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 
 ---
 
-### Phase 7 — Resource Management UI (Week 10–11)
+### Phase 7  -- Resource Management UI (Week 10–11)
 
 **Goal**: Full web UI for managing resources and executions outside of Studio.
 
@@ -394,7 +394,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 
 ---
 
-### Phase 8 — Polish & Ship (Week 11–12)
+### Phase 8  -- Polish & Ship (Week 11–12)
 
 | # | Task | Output | Days |
 |---|------|--------|------|
@@ -402,7 +402,7 @@ curl litellm:4000/key/info -H "Authorization: Bearer $MASTER_KEY" -d '{"key": "s
 | 8.2 | Write `docs/getting-started.md` with a guided tutorial | Build first crew in Studio walkthrough | 1 |
 | 8.3 | Write `docs/yaml-reference.md` with all resource kinds and fields | Complete YAML reference | 1 |
 | 8.4 | End-to-end smoke test: `docker compose up` → apply examples → run from UI → check traces | Automated E2E test | 2 |
-| 8.5 | Performance sanity check: run a crew with 5 agents, 10 tasks — completes without issues | No obvious bottlenecks | 1 |
+| 8.5 | Performance sanity check: run a crew with 5 agents, 10 tasks  -- completes without issues | No obvious bottlenecks | 1 |
 | 8.6 | Security review: no secrets in logs, API key required, CORS configured | Basic security hygiene | 1 |
 | 8.7 | Cut v0.1.0 release, publish Docker images | `ghcr.io/blackbeard/{api,ui}:0.1.0` (worker is bundled in api for MVP) | 1 |
 
@@ -448,9 +448,9 @@ Phase 2            Phase 4               Phase 6.1–6.11
 Phase 3 (event system) │               Phase 6.12–6.13
     │                  │               (Run button +
     ├──────────────────┘                Execution View
-    ▼                                   — needs Phase 2)
+    ▼                                    -- needs Phase 2)
 Phase 5 (agent policies
- — needs Phase 3 +
+  -- needs Phase 3 +
    Phase 4 for sandbox
    tier promotion tests)
     │                                        │
@@ -474,7 +474,7 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 | **LiteLLM config reload** | LiteLLM supports config reload via API. Blackbeard calls `POST /config/update` on LLMConnection changes. If reload fails, fall back to container restart. |
 | **Wasmtime Python bindings maturity** | `wasmtime-py` is well-maintained but Component Model support is newer. Fallback: use subprocess-based Wasmtime CLI if Python bindings have issues. Budget 2x time for Phase 4 if Component Model or componentize-py integration proves difficult. |
 | **React Flow performance at scale** | Test with 100 nodes. If laggy, implement viewport culling (React Flow supports this). MVP likely <50 nodes. |
-| **YAML ↔ Canvas sync complexity** | Build unidirectional first (YAML → Canvas). Add Canvas → YAML second. Bidirectional sync with conflict resolution is Phase 6.7 — if it's too complex for MVP, ship one-way. |
+| **YAML ↔ Canvas sync complexity** | Build unidirectional first (YAML → Canvas). Add Canvas → YAML second. Bidirectional sync with conflict resolution is Phase 6.7  -- if it's too complex for MVP, ship one-way. |
 | **LiteLLM unavailability during execution** | LiteLLM is critical -- if down, kickoffs are rejected with 503. Health checks every 30s detect outages. Execution events are stored in the same PostgreSQL instance, so they are available as long as the DB is up. |
 
 ### Most Likely Failure Modes Per Phase
@@ -483,7 +483,7 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 |-------|--------------------------|------------|
 | 0 | Docker compose networking issues between services | Test service discovery early; use explicit network aliases |
 | 1 | Schema validation edge cases (valid YAML that produces invalid CrewAI objects) | Property-based testing with Hypothesis |
-| 2 | Resource Loader ↔ CrewAI constructor mismatch (field name differences, type coercion) | Build comprehensive field mapping table; test with real CrewAI |
+| 2 | Resource Loader ↔ CrewAI constructor mismatch (field name differences, type coercion) | Build detailed field mapping table; test with real CrewAI |
 | 3 | CrewAI event listener missing events or incorrect event ordering | Test with sample crew; verify event sequence completeness |
 | 4 | Component Model / componentize-py failure | Run spike in Phase 0; decide fallback before Phase 4 starts |
 | 5 | Policy enforcement gaps (valid tool calls denied or denied calls allowed) | Exhaustive test matrix: (tool_type × policy_mode × sandbox_tier) |
@@ -507,7 +507,7 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 **CI pipeline**: lint → type-check → unit tests → integration tests (with testcontainers) → build Docker images → E2E smoke test.
 
 **Recommended additions to testing strategy:**
-- **Property-based testing** (Hypothesis) for schema validation — catches edge cases in YAML parsing that hand-written tests miss
+- **Property-based testing** (Hypothesis) for schema validation  -- catches edge cases in YAML parsing that hand-written tests miss
 - **Load testing** definition: max concurrent executions (target: 4 per `MAX_CONCURRENT_EXECUTIONS`), max resources in DB (target: 1000+), max nodes on Studio canvas (target: 100)
 - **Accessibility testing** is deferred to post-MVP
 - **Frontend integration tests** for Studio should verify canvas ↔ API ↔ form consistency (e.g., drag node → API confirms resource → form shows correct values)
@@ -585,13 +585,13 @@ Phases 2, 4, and 6 can run **in parallel** after Phase 1. This is the main paral
 
 ### Post-MVP (implemented)
 
-- [x] A2A Protocol — `GET /.well-known/agent-card.json` auto-generates agent cards from crews with `spec.a2a.enabled`
-- [x] Resource version snapshots — `resource_versions` table with list/view/rollback endpoints
-- [x] Namespace-level guardrails — `spec.guardrails` on Namespace resources, merged with task guardrails at execution
-- [x] Credentials Manager — `/credentials` page + CRUD API for centralized secret management
-- [x] Inline Studio run log — collapsible bottom panel with real-time execution events
-- [x] Workflow summary bar — node counts + live execution status in Studio
-- [x] Multi-step pipeline sample — pre-loaded example with 3 agents, 3 tasks, 1 condition
+- [x] A2A Protocol  -- `GET /.well-known/agent-card.json` auto-generates agent cards from crews with `spec.a2a.enabled`
+- [x] Resource version snapshots  -- `resource_versions` table with list/view/rollback endpoints
+- [x] Namespace-level guardrails  -- `spec.guardrails` on Namespace resources, merged with task guardrails at execution
+- [x] Credentials Manager  -- `/credentials` page + CRUD API for centralized secret management
+- [x] Inline Studio run log  -- collapsible bottom panel with real-time execution events
+- [x] Workflow summary bar  -- node counts + live execution status in Studio
+- [x] Multi-step pipeline sample  -- pre-loaded example with 3 agents, 3 tasks, 1 condition
 - [x] UI: "Namespace" → "Project" in all user-facing labels (API field remains `project`)
 
 ---

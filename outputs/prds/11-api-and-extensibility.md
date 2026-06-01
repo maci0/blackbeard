@@ -1,4 +1,4 @@
-# PRD 11 — API & Extensibility
+# PRD 11  -- API & Extensibility
 
 ## 1. Purpose
 
@@ -234,7 +234,7 @@ spec:
   timeout_ms: 10000
 ```
 
-**Replay protection**: Each webhook delivery includes `X-Blackbeard-Timestamp` and `X-Blackbeard-Signature` (HMAC-SHA256 of `timestamp.body` using the webhook secret). Receivers should reject deliveries older than 5 minutes. Failed deliveries are retried with the same signature — receivers must be idempotent (use `execution_id` + `event` as dedup key).
+**Replay protection**: Each webhook delivery includes `X-Blackbeard-Timestamp` and `X-Blackbeard-Signature` (HMAC-SHA256 of `timestamp.body` using the webhook secret). Receivers should reject deliveries older than 5 minutes. Failed deliveries are retried with the same signature  -- receivers must be idempotent (use `execution_id` + `event` as dedup key).
 
 **Webhook management:** Webhook subscriptions are configured as part of the Automation resource's `spec.triggers` array (PRD 09). Webhooks support register/deliver with HMAC signing. Webhooks are managed through the Automation CRUD API:
 ```
@@ -368,8 +368,8 @@ All options live on the root `blackbeard` group and are available to every subco
 | `--server` | `BLACKBEARD_SERVER` | `http://localhost:8000` | API server URL |
 | `--api-key` | `BLACKBEARD_API_KEY` | *(required for server commands)* | API authentication key |
 | `-n, --project` | `BLACKBEARD_PROJECT` | `default` | Resource project |
-| `--json` | — | `false` | Output structured JSON instead of Rich tables/panels |
-| `--version` | — | — | Show version and exit |
+| `--json` |  -- | `false` | Output structured JSON instead of Rich tables/panels |
+| `--version` |  -- |  -- | Show version and exit |
 
 ### 6.3 Commands (MVP)
 
@@ -436,11 +436,11 @@ Every command supports two output modes:
 Two `Console` instances ensure clean stream separation:
 
 ```python
-console = Console(stderr=True)   # progress, errors, status — never pollutes stdout
-out = Console()                  # data output (JSON mode) — goes to stdout
+console = Console(stderr=True)   # progress, errors, status  -- never pollutes stdout
+out = Console()                  # data output (JSON mode)  -- goes to stdout
 ```
 
-This means `blackbeard --json status <id> 2>/dev/null | jq .status` works correctly — progress/errors go to stderr, data goes to stdout.
+This means `blackbeard --json status <id> 2>/dev/null | jq .status` works correctly  -- progress/errors go to stderr, data goes to stdout.
 
 #### Example: `validate` output
 
@@ -490,7 +490,7 @@ This means `blackbeard --json status <id> 2>/dev/null | jq .status` works correc
 ╰──────────────────────────────────────────────╯
 ╭─ Outputs ────────────────────────────────────╮
 │ {                                            │
-│   "raw": "A comprehensive report on..."     │
+│   "raw": "A detailed report on..."     │
 │ }                                            │
 ╰──────────────────────────────────────────────╯
                     Tasks
@@ -586,10 +586,10 @@ client = BlackbeardClient(url="https://blackbeard.sh", api_key="ck_...")
 # Create an agent
 agent = client.agents.create_from_yaml("agents/researcher.yaml")
 
-# Kickoff (MVP): Crew resource — matches POST /api/v1/crews/{name}/kickoff
+# Kickoff (MVP): Crew resource  -- matches POST /api/v1/crews/{name}/kickoff
 execution = client.crews.kickoff("research-crew", inputs={"topic": "AI"})
 
-# Kickoff (post-MVP): Automation with versioning / triggers — PRD 09
+# Kickoff (post-MVP): Automation with versioning / triggers  -- PRD 09
 # execution = client.automations.kickoff("research-pipeline-prod", inputs={"topic": "AI"})
 
 # Stream results
@@ -610,7 +610,7 @@ import { BlackbeardClient } from '@blackbeard/sdk';
 
 const client = new BlackbeardClient({ url: '...', apiKey: '...' });
 
-// MVP: Crew kickoff — matches POST /api/v1/crews/{name}/kickoff
+// MVP: Crew kickoff  -- matches POST /api/v1/crews/{name}/kickoff
 const execution = await client.crews.kickoff('research-crew', {
   inputs: { topic: 'AI' },
 });

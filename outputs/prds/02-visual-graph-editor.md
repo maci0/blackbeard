@@ -1,8 +1,8 @@
-# PRD 02 — Visual Graph Editor (Studio)
+# PRD 02  -- Visual Graph Editor (Studio)
 
 ## 1. Purpose
 
-Provide a browser-based drag-and-drop canvas where users compose agents, tasks, and flows visually. The graph IS the source of truth — every node and edge maps 1:1 to the YAML resource model (PRD 01). Changes on canvas instantly update the underlying YAML; edits to YAML instantly update the canvas.
+Provide a browser-based drag-and-drop canvas where users compose agents, tasks, and flows visually. The graph IS the source of truth  -- every node and edge maps 1:1 to the YAML resource model (PRD 01). Changes on canvas instantly update the underlying YAML; edits to YAML instantly update the canvas.
 
 ### 1.1 MVP Scope
 
@@ -24,7 +24,7 @@ Inspired by digital logic simulators (Logisim, Digital), the Studio gains a comp
 
 ### Crew-as-Component (Subcircuit Pattern)
 
-Any saved Crew can be used as a single node inside another Crew or Flow — like a subcircuit in Logisim. The crew-component node shows the crew's `spec.inputs` as labeled input ports on the left edge and a single output port on the right.
+Any saved Crew can be used as a single node inside another Crew or Flow  -- like a subcircuit in Logisim. The crew-component node shows the crew's `spec.inputs` as labeled input ports on the left edge and a single output port on the right.
 
 - **Save as component**: Right-click a CrewGroup → "Save as Component". The crew is saved to the API and appears in the palette under "My Components".
 - **Drag to canvas**: Drag a crew-component from the palette. It renders as a compact node with the crew name, agent/task count badge, and input/output ports.
@@ -119,7 +119,7 @@ During and after execution, edges (wires) display the data that flowed through t
 
 - **Display**: Tool name, type icon (Python / MCP / REST), description snippet.
 - **Ports**: Attach to Agent nodes via dashed edge (means "agent can use this tool").
-- **Not connectable to Task nodes directly** — tools are assigned through agents.
+- **Not connectable to Task nodes directly**  -- tools are assigned through agents.
 
 ### 3.5 Crew Node (compound)
 
@@ -183,7 +183,7 @@ When a node is selected, a right-side panel shows an auto-generated form from th
 - **Dropdowns** for `llm`, `process`, `code_execution_mode`, enums.
 - **Autocomplete** for `ref:` fields (search available agents, tasks, tools).
 - **Tag inputs** for `labels`.
-- **Code editor** (Monaco) for `callbacks.*` fields — shows the Python function path with a "Test Import" button.
+- **Code editor** (Monaco) for `callbacks.*` fields  -- shows the Python function path with a "Test Import" button.
 - **Guardrail editor**: Add function-based (Python path) or LLM-based (free-text string) guardrails.
 - **Toggle switches** for booleans (`memory`, `cache`, `verbose`, `reasoning`, etc.).
 - **Number inputs** with min/max validation for `max_iter`, `max_rpm`, etc.
@@ -334,9 +334,9 @@ When viewing an Agent resource detail page (navigated from Studio or Resources l
 
 1. **Select crew**: Dropdown shows all crews that reference this agent (queried via `ref:agents/{name}` lookup).
 2. **Configure**: Set iteration count (1-20) and provide sample inputs as JSON.
-3. **Start**: `POST /api/v1/crews/{name}/train` — session created, first iteration runs.
+3. **Start**: `POST /api/v1/crews/{name}/train`  -- session created, first iteration runs.
 4. **Review**: After each iteration, the UI displays agent outputs. Human types feedback in a text area.
-5. **Submit**: `POST /api/v1/training-sessions/{id}/feedback` — next iteration starts.
+5. **Submit**: `POST /api/v1/training-sessions/{id}/feedback`  -- next iteration starts.
 6. **Complete**: After all iterations, the summary shows per-agent quality scores and consolidated suggestions.
 7. **Test**: Optionally run `POST /api/v1/crews/{name}/test` to benchmark the trained agent with an eval model.
 

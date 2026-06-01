@@ -1,4 +1,4 @@
-# PRD 10 — Agent & Asset Repository
+# PRD 10  -- Agent & Asset Repository
 
 ## 1. Purpose
 
@@ -196,13 +196,13 @@ spec:
           - ref: tools/custom-energy-db      # add a project-specific tool
 ```
 
-**Merge semantics**: Overrides use **shallow merge at the `spec` level** — each top-level key in `overrides` replaces the corresponding key in the repository asset's `spec`. Nested objects are replaced entirely, not deep-merged.
+**Merge semantics**: Overrides use **shallow merge at the `spec` level**  -- each top-level key in `overrides` replaces the corresponding key in the repository asset's `spec`. Nested objects are replaced entirely, not deep-merged.
 
 | Repository asset | Override | Effective result |
 |-----------------|----------|------------------|
 | `tools: [A, B, C]` | `tools: [D]` | `tools: [D]` (replaced) |
 | `goal: "Research trends"` | `goal: "Research energy"` | `goal: "Research energy"` (replaced) |
-| `checkpoint: {enabled: true, max: 10}` | `checkpoint: {enabled: false}` | `checkpoint: {enabled: false}` (`max` is lost — full replace) |
+| `checkpoint: {enabled: true, max: 10}` | `checkpoint: {enabled: false}` | `checkpoint: {enabled: false}` (`max` is lost  -- full replace) |
 | `memory: true` | (not in overrides) | `memory: true` (unchanged) |
 
 **Warning:** Overriding a list field (e.g., `tools`) replaces the entire list, not extends it. To add a tool to a repository agent's existing tool list, you must include the original tools plus your addition in the override.
@@ -225,7 +225,7 @@ Fork creates a mutable copy of a repository asset in the user's project:
 blackbeard repo fork agents/market-research-agent@2.0.0 --as my-research-agent
 ```
 
-The forked asset is a standalone resource — it has no link back to the original. Changes to the original do not propagate. This is intentional: forks are for customization, not tracking.
+The forked asset is a standalone resource  -- it has no link back to the original. Changes to the original do not propagate. This is intentional: forks are for customization, not tracking.
 
 To stay in sync with upstream, use `ref: repo:` with `overrides` (section 5.3 of this PRD) instead of forking.
 

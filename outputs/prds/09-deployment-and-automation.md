@@ -1,4 +1,4 @@
-# PRD 09 — Deployment & Automation
+# PRD 09  -- Deployment & Automation
 
 ## 1. Purpose
 
@@ -8,7 +8,7 @@ Manage the full lifecycle of deployed crews and flows: build, deploy, version, r
 
 **Implemented:** Docker Compose deployment + Helm chart for Kubernetes. Automation resource kind with cron, webhook, and API triggers. Background cron scheduler runs in FastAPI lifespan. Webhook trigger endpoint validates HMAC secrets. Crews and Flows can be automated with configurable inputs and max concurrency. Webhooks with register/deliver and HMAC signing. Workflow hooks (before/after on crews and flow steps).
 
-**Implemented (post-MVP):** A2A Protocol — `GET /.well-known/agent-card.json` auto-generates agent cards from Crew resources with `spec.a2a.enabled: true`. Cards include skills (from task refs), auth schemes, capabilities. Cached 60s. Public endpoint. Resource version snapshots — `resource_versions` table stores spec/labels snapshot on every create/update. List versions (`GET /{kind}/{name}/versions`), view snapshot (`GET /{kind}/{name}/versions/{version}`), rollback (`POST /{kind}/{name}/rollback`). Admin credentials file — `seed.sh` saves admin credentials to `.admin-credentials` (mode 600).
+**Implemented (post-MVP):** A2A Protocol  -- `GET /.well-known/agent-card.json` auto-generates agent cards from Crew resources with `spec.a2a.enabled: true`. Cards include skills (from task refs), auth schemes, capabilities. Cached 60s. Public endpoint. Resource version snapshots  -- `resource_versions` table stores spec/labels snapshot on every create/update. List versions (`GET /{kind}/{name}/versions`), view snapshot (`GET /{kind}/{name}/versions/{version}`), rollback (`POST /{kind}/{name}/rollback`). Admin credentials file  -- `seed.sh` saves admin credentials to `.admin-credentials` (mode 600).
 
 **Implemented (post-MVP):** HPA autoscaling template added to the Helm chart. Multi-replica docker-compose config with nginx load balancer.
 
@@ -81,13 +81,13 @@ spec:
 **Storage:** The Automation resource is stored in the generic `resources` table (PRD 01, section 7), same as all other resources. Deployment-specific state is stored in the `automation_deployments` table (section 2.1 below). The Automation lifecycle state machine (created → building → deploying → deployed → degraded → deleted) is tracked in `automation_deployments.status`, not in the `resources` table.
 
 **Hot-updatable fields** (do not require re-deployment):
-- `spec.triggers` — cron schedules, webhook config
-- `spec.access` — visibility, allowed roles
+- `spec.triggers`  -- cron schedules, webhook config
+- `spec.access`  -- visibility, allowed roles
 - `spec.service_account`
 - `spec.runtime.environment_variables` (takes effect on next execution)
 
 **Cold fields** (require re-deployment):
-- `spec.source` — changing the crew/flow reference
+- `spec.source`  -- changing the crew/flow reference
 - `spec.runtime.default_agent_policy`, `spec.runtime.default_sandbox`
 - `spec.a2a`
 - `spec.versioning`
@@ -105,12 +105,12 @@ created → building → deploying → deployed → degraded → deleted
 |-------|-------------|
 | `created` | Automation resource saved but not yet built or deployed |
 | `building` | Build pipeline running (validate, resolve deps, compile WASM, package) |
-| `build_failed` | Build failed — error details in `status.error` |
+| `build_failed` | Build failed  -- error details in `status.error` |
 | `deploying` | Deploying to runtime (registering API endpoints, scheduling triggers) |
-| `deploy_failed` | Deployment failed — error details in `status.error` |
+| `deploy_failed` | Deployment failed  -- error details in `status.error` |
 | `deployed` | Active and accepting executions |
 | `degraded` | Deployed but health checks failing (e.g., LiteLLM unreachable, tool unavailable) |
-| `deleted` | Soft-deleted — executions stopped, triggers unregistered |
+| `deleted` | Soft-deleted  -- executions stopped, triggers unregistered |
 
 The Automation resource is stored in the generic `resources` table (PRD 01, section 7). Deployment-specific state is stored in a dedicated table:
 
@@ -181,7 +181,7 @@ Source (git/zip/studio)
 └────────────────────────┘
 ```
 
-**Build artifacts:** The build pipeline produces a **resource bundle** — a compressed archive containing:
+**Build artifacts:** The build pipeline produces a **resource bundle**  -- a compressed archive containing:
 - All resolved YAML resources (agents, tasks, tools, crews/flows)
 - Compiled WASM binaries for WASM tools
 - `metadata.json` with checksums (SHA-256), dependency versions, and build timestamp
@@ -197,9 +197,9 @@ Build artifacts are stored in MinIO at `s3://blackbeard-builds/{automation_name}
 | **Studio** | Same as above, generated from canvas state | Same |
 | **Registry** | Pre-built bundle from asset repository | MinIO (already stored) |
 
-**Resource snapshot**: At build time, all referenced resources (agents, tasks, tools, LLM connections, policies) are resolved and their current state is serialized into `resource_snapshot` (JSONB). This snapshot is immutable — the deployed version always uses these exact resource definitions, even if the source resources are later modified. This is what makes rollback instantaneous: restoring a previous version swaps the active snapshot pointer, not the resources.
+**Resource snapshot**: At build time, all referenced resources (agents, tasks, tools, LLM connections, policies) are resolved and their current state is serialized into `resource_snapshot` (JSONB). This snapshot is immutable  -- the deployed version always uses these exact resource definitions, even if the source resources are later modified. This is what makes rollback instantaneous: restoring a previous version swaps the active snapshot pointer, not the resources.
 
-**Snapshot mechanism:** At deploy time, the system takes a full snapshot of all referenced resources by recursively resolving all `ref:` dependencies and serializing them into a single JSONB document stored in `automation_deployments.resource_snapshot`. This snapshot is immutable — subsequent changes to the source resources do not affect deployed versions. To apply changes, a new version must be deployed.
+**Snapshot mechanism:** At deploy time, the system takes a full snapshot of all referenced resources by recursively resolving all `ref:` dependencies and serializing them into a single JSONB document stored in `automation_deployments.resource_snapshot`. This snapshot is immutable  -- subsequent changes to the source resources do not affect deployed versions. To apply changes, a new version must be deployed.
 
 **Python dependencies**: The build step generates a `requirements.txt` from all Python tool implementations and callback modules. Dependencies are installed into the worker's virtual environment. Workers use separate virtualenvs per automation to avoid dependency conflicts (post-MVP; MVP uses a shared environment).
 
@@ -211,7 +211,7 @@ Build artifacts are stored in MinIO at `s3://blackbeard-builds/{automation_name}
 
 | Trigger | Description |
 |---------|-------------|
-| **API** | `POST /api/v1/automations/{name}/kickoff` — always available |
+| **API** | `POST /api/v1/automations/{name}/kickoff`  -- always available |
 | **Webhook** | Receive HTTP POST from external systems (Zapier, Make, custom) |
 | **Schedule** | Cron-based recurring execution |
 | **Custom** | Webhook receiver with a CEL (Common Expression Language) filter that decides whether to kick off |
@@ -284,11 +284,11 @@ The principal chain for an A2A-initiated execution: `External ServiceAccount/Use
 
 | Check | Severity | Degraded if fails? | Unhealthy if fails? |
 |-------|----------|--------------------|--------------------|
-| Primary LLM reachable | Critical | — | Yes |
+| Primary LLM reachable | Critical |  -- | Yes |
 | Fallback LLM reachable | Warning | Yes | No |
 | All tools available | Warning | Yes (if any unavailable) | Yes (if required tool unavailable) |
-| Sandbox runtime ready | Critical | — | Yes |
-| LiteLLM Proxy healthy | Critical | — | Yes |
+| Sandbox runtime ready | Critical |  -- | Yes |
+| LiteLLM Proxy healthy | Critical |  -- | Yes |
 
 A 'degraded' automation accepts new executions but logs warnings. An 'unhealthy' automation rejects new kickoff requests with 503.
 

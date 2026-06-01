@@ -243,7 +243,7 @@ spec:
       - name: research-task
         description: Research the given topic
         agent: researcher
-        expected_output: A comprehensive report
+        expected_output: A detailed report
   agents:
     - researcher
   tasks:

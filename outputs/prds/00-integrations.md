@@ -1,4 +1,4 @@
-# Blackbeard — Third-Party Integration Map
+# Blackbeard  -- Third-Party Integration Map
 
 ## Philosophy
 
@@ -13,7 +13,7 @@ Build the **orchestration and UX layer**. Delegate infrastructure to battle-test
 
 ### Integration Status (MVP)
 
-**IMPLEMENTED:** CrewAI (agent/task/crew/flow primitives, guardrails, process modes), LiteLLM Proxy (model routing, spend tracking, virtual keys, config generation, budget enforcement, dynamic config sync — LLMConnection CRUD pushes to LiteLLM Proxy API in real time), PostgreSQL (resource and execution storage), Valkey (cache, pub/sub for live collaboration), React Flow (visual graph editor), Monaco Editor (YAML editing in Studio), Wasmtime (WASM sandbox for tool execution), Microsoft Presidio (PII redaction with regex/NLP/LLM backends), MuninnDB (cognitive memory backend with temporal priority, Hebbian learning, and semantic triggers -- optional, alongside lancedb/chromadb/qdrant), gVisor (syscall-level sandbox isolation via runsc), Docker/Podman (ContainerSandbox), Firecracker + libkrun (MicroVM sandbox), generic OIDC client (`api/oidc.py` -- SSO/OIDC without full Ory stack), OpenTelemetry (optional trace export), Bandit (security scanning in CI), Hypothesis (property-based fuzz testing in backend test suite).
+**IMPLEMENTED:** CrewAI (agent/task/crew/flow primitives, guardrails, process modes), LiteLLM Proxy (model routing, spend tracking, virtual keys, config generation, budget enforcement, dynamic config sync  -- LLMConnection CRUD pushes to LiteLLM Proxy API in real time), PostgreSQL (resource and execution storage), Valkey (cache, pub/sub for live collaboration), React Flow (visual graph editor), Monaco Editor (YAML editing in Studio), Wasmtime (WASM sandbox for tool execution), Microsoft Presidio (PII redaction with regex/NLP/LLM backends), MuninnDB (cognitive memory backend with temporal priority, Hebbian learning, and semantic triggers -- optional, alongside lancedb/chromadb/qdrant), gVisor (syscall-level sandbox isolation via runsc), Docker/Podman (ContainerSandbox), Firecracker + libkrun (MicroVM sandbox), generic OIDC client (`api/oidc.py` -- SSO/OIDC without full Ory stack), OpenTelemetry (optional trace export), Bandit (security scanning in CI), Hypothesis (property-based fuzz testing in backend test suite).
 
 **DEFERRED:** Ory Kratos/Hydra (full identity management -- using built-in JWT auth + generic OIDC instead), SpiceDB (relationship-based access control -- using PostgreSQL RBAC tables instead), OPA (policy-as-code -- using in-process Python policy evaluator instead), Temporal (workflow orchestration -- using in-process ThreadPoolExecutor instead), Infisical (secrets management -- using `.env` files instead), MinIO (object storage -- using git-based asset management instead).
 
@@ -25,13 +25,13 @@ Build the **orchestration and UX layer**. Delegate infrastructure to battle-test
 
 | Capability | CrewAI Module | Blackbeard Changes |
 |------------|---------------|--------------------|
-| Agent/Task/Crew/Flow primitives | `crewai.*` | None — import and use |
+| Agent/Task/Crew/Flow primitives | `crewai.*` | None  -- import and use |
 | YAML config (agents.yaml, tasks.yaml) | `crewai.project` | Extended with `apiVersion/kind/metadata/spec` envelope |
 | Memory (unified, scoped, composite scoring) | `crewai.Memory` | None |
 | Event bus & listeners | `crewai.events` | Register Blackbeard's own listeners |
-| Guardrails (function/LLM/composite) | `crewai.Task.guardrail` | None — add reusable `Guardrail` resource kind |
+| Guardrails (function/LLM/composite) | `crewai.Task.guardrail` | None  -- add reusable `Guardrail` resource kind |
 | Checkpointing (JSON/SQLite) | `crewai.state` | None |
-| Tools (`BaseTool`, `@tool` decorator, crewai_tools) | `crewai.tools`, `crewai_tools` | None — add WASM tools and registry |
+| Tools (`BaseTool`, `@tool` decorator, crewai_tools) | `crewai.tools`, `crewai_tools` | None  -- add WASM tools and registry |
 | Knowledge, Skills | `crewai.knowledge`, `crewai.skills` | None |
 | MCP integration | `crewai.mcp` | None |
 | A2A protocol | `crewai.a2a` | Extended with Blackbeard auth |
@@ -43,13 +43,13 @@ Build the **orchestration and UX layer**. Delegate infrastructure to battle-test
 | Concern | Library / Service | What it provides | What Blackbeard builds on top |
 |---------|-------------------|------------------|-------------------------------|
 | **LLM routing** | **LiteLLM Proxy** | 100+ providers, load balancing, fallbacks, spend tracking per key/team, rate limiting, health checks, virtual keys with budgets | PRD 06: Map AgentPolicy → LiteLLM virtual keys. Generate LiteLLM config from `LLMConnection` resources. Consume spend data for dashboards. |
-| **Policy engine** | **Open Policy Agent (OPA)** | General-purpose policy evaluation via Rego language. Sub-millisecond decisions. Used by K8s, Envoy, Terraform. | PRD 03: AgentPolicy YAML compiles to Rego policies. Every tool call, LLM call, delegation, file access is an OPA query. OPA runs as a sidecar. Rego is the internal policy language — users never write it, they use the GUI/YAML. |
+| **Policy engine** | **Open Policy Agent (OPA)** | General-purpose policy evaluation via Rego language. Sub-millisecond decisions. Used by K8s, Envoy, Terraform. | PRD 03: AgentPolicy YAML compiles to Rego policies. Every tool call, LLM call, delegation, file access is an OPA query. OPA runs as a sidecar. Rego is the internal policy language  -- users never write it, they use the GUI/YAML. |
 | **Identity & auth** | **Ory Kratos** (identity) + **Ory Hydra** (OAuth2/OIDC) | User registration, login, password/passwordless, MFA, SSO, OIDC provider, session management, account recovery | PRD 03: Blackbeard delegates all human authentication to Ory. No custom auth code. Users/sessions/SSO managed by Kratos. OAuth2 flows by Hydra. |
 | **Fine-grained authorization** | **SpiceDB** (Google Zanzibar) | Relationship-based access control. Schema + relationships → permission checks. Handles entity-level visibility, inheritance, and cross-cutting. Horizontally scalable. | PRD 03: Entity-level permissions (PRD 03, section 6) use SpiceDB instead of custom DB queries. "Can user X run crew Y?" and "Can agent A access tool B?" are SpiceDB checks. Project/org hierarchy modeled as SpiceDB relationships. |
 | **PII detection & redaction** | **Microsoft Presidio** | NLP + regex-based PII detection for 20+ entity types, customizable recognizers, anonymizer/deanonymizer. MIT licensed. 8k GitHub stars. | PRD 08: Presidio is the PII engine. `PIIConfig` YAML maps to Presidio recognizer config. Custom recognizers (regex/deny-list) added via Presidio's extension API. Presidio runs as a library, not a service. |
 | **Observability & traces** | **LiteLLM** (LLM-level) + **execution_events** (crew-level) | LiteLLM provides LLM request tracking, cost/token accounting, and a built-in dashboard at `:4000/ui`. Blackbeard's `execution_events` table provides crew/task/agent/tool event timeline with SSE streaming. | PRD 07: Two-layer observability. LLM-level: LiteLLM handles all LLM request logging and spend tracking. Crew-level: Blackbeard's append-only event log captures all CrewAI events. No external trace backend needed. |
 | **Secrets management** | **Infisical** | Secret storage, rotation, dynamic secrets, RBAC, audit logs, K8s operator, CLI, SDK. 26k GitHub stars. | All PRDs: `EnvironmentVariable` resources with `value_from: secret` resolve through Infisical's API. API keys, OAuth tokens, LLM keys stored in Infisical, never in Blackbeard's DB. |
-| **Workflow orchestration** | **Temporal** | Durable execution — workflows survive crashes, restarts, deployments. Built-in retries, timeouts, cron, visibility. Used by Netflix, Snap, Stripe. | PRD 05: Crew/Flow executions are Temporal workflows. Each `kickoff()` → Temporal workflow start. Task execution → Temporal activities. Checkpointing, HITL pauses, and resume are Temporal primitives. Replaces custom Celery/Hatchet layer. |
+| **Workflow orchestration** | **Temporal** | Durable execution  -- workflows survive crashes, restarts, deployments. Built-in retries, timeouts, cron, visibility. Used by Netflix, Snap, Stripe. | PRD 05: Crew/Flow executions are Temporal workflows. Each `kickoff()` → Temporal workflow start. Task execution → Temporal activities. Checkpointing, HITL pauses, and resume are Temporal primitives. Replaces custom Celery/Hatchet layer. |
 | **Object storage** | **MinIO** | S3-compatible object storage. Single binary, self-hosted. | All PRDs: Artifact storage (WASM binaries, ZIP deployments, exported files, trace attachments). `s3://` URIs resolve to MinIO. |
 | **Cache & pub/sub** | **Valkey** (Redis fork) | In-memory cache, pub/sub, streams. BSD-licensed Linux Foundation project. Drop-in Redis replacement. | Cross-cutting: Session cache, LiteLLM state backend, event bus transport, rate limiting, sandbox warm pool coordination. |
 | **WASM runtime** | **Wasmtime** | Production WASM runtime. Component Model support, WASI Preview 2, fuel metering. Bytecode Alliance. | PRD 05: Embedded in execution workers. All WASM tool execution goes through Wasmtime. |
@@ -216,6 +216,6 @@ Every integration has a simpler fallback for smaller deployments:
 | OPA | In-process Python policy evaluator | Loses Rego ecosystem, harder to audit |
 | MinIO | Local filesystem | Loses S3 API, distributed storage |
 
-The MVP implementations (in-process policy check, PostgreSQL-based RBAC) serve as the simple fallbacks listed above. Migration path: MVP ships with in-process checks → post-MVP adds OPA sidecar (same policy logic, different evaluation engine) → SpiceDB replaces PostgreSQL permission queries. Each migration is additive — the simpler implementation remains as a fallback configuration option.
+The MVP implementations (in-process policy check, PostgreSQL-based RBAC) serve as the simple fallbacks listed above. Migration path: MVP ships with in-process checks → post-MVP adds OPA sidecar (same policy logic, different evaluation engine) → SpiceDB replaces PostgreSQL permission queries. Each migration is additive  -- the simpler implementation remains as a fallback configuration option.
 
 The Helm chart / docker-compose supports profiles: `blackbeard --profile minimal` vs `blackbeard --profile full`.
