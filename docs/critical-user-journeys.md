@@ -466,3 +466,417 @@ Every journey below is a sequence a real user would follow to accomplish a goal.
 5. Simulate a failure mid-execution and confirm Temporal retries the workflow according to its retry policy
 
 **Success criteria:** Execution runs as a Temporal workflow, visible in Temporal UI, retries on failure.
+
+---
+
+## CUJ-28: Failed Execution Recovery
+
+**Actor:** Developer user  
+**Goal:** Diagnose a failed crew execution, fix the root cause, and re-run successfully  
+
+1. Navigate to `/executions`
+2. Locate an execution with `failed` status (red badge)
+3. Click to open execution detail page
+4. Expand the error panel to read the failure message and stack trace
+5. Identify the failing task and the error cause (e.g., missing tool reference, bad prompt, provider timeout)
+6. Click the crew name link to navigate to the crew's resource detail page
+7. Open the YAML editor and fix the broken spec (e.g., correct the tool ref, adjust the prompt)
+8. Save the updated resource, verify version increments
+9. Navigate back to `/studio`, load the crew
+10. Click Run, provide the same inputs as the failed execution
+11. Verify the new execution completes with `completed` status
+12. Compare the two executions to confirm the fix resolved the issue
+
+**Success criteria:** Failed execution error is readable, spec fix resolves the issue, re-run succeeds.
+
+---
+
+## CUJ-29: Optimistic Locking Conflict
+
+**Actor:** Two authenticated users editing the same resource concurrently  
+**Goal:** Detect and resolve a version conflict when two users edit the same resource  
+
+1. User A opens resource detail for `agents/researcher` (version 3)
+2. User B opens the same resource detail (also sees version 3)
+3. User A edits the backstory field and saves (version becomes 4)
+4. User B edits the goal field and attempts to save (still sending version 3)
+5. Backend returns `409 Conflict` because the resource version has changed
+6. UI shows a conflict notification explaining the resource was modified by another user
+7. User B reloads the resource to pick up User A's changes (now version 4)
+8. User B re-applies their goal edit on top of the current spec
+9. User B saves, version increments to 5
+10. Both users' changes are preserved in the final spec
+
+**Success criteria:** Concurrent edit detected with 409, no silent data loss, user can resolve and retry.
+
+---
+
+## CUJ-30: Rate Limit Handling
+
+**Actor:** Automated client or power user  
+**Goal:** Handle API rate limiting gracefully when making rapid requests  
+
+1. Send a burst of API requests exceeding the rate limit (e.g., 150 requests in under a minute)
+2. After the limit is exceeded, subsequent requests return `429 Too Many Requests`
+3. Response includes `Retry-After` header indicating when to retry
+4. Client pauses requests for the duration specified in the header
+5. After the backoff period, resume requests
+6. Verify requests succeed again with `200` responses
+7. Check that no data was lost or corrupted during the rate-limited period
+
+**Success criteria:** 429 returned with Retry-After header, requests succeed after backoff, no data loss.
+
+---
+
+## CUJ-31: Session Expiry and Re-authentication
+
+**Actor:** Authenticated user with an expired JWT  
+**Goal:** Re-authenticate after session expiry without losing context  
+
+1. User is logged in and actively working (access token valid for 15 minutes)
+2. User steps away, access token expires
+3. User returns and performs an action (e.g., clicks Save)
+4. API returns `401 Unauthorized` because the access token has expired
+5. Frontend attempts silent refresh using the refresh token (valid for 7 days)
+6. If refresh token is still valid: new access token issued, original action retries automatically
+7. If refresh token is also expired: session expired dialog appears
+8. User clicks "Log in again", redirected to `/login`
+9. User logs in with credentials
+10. User is redirected back to the page they were on before expiry
+
+**Success criteria:** Silent refresh works when possible, expired session shows clear dialog, re-login preserves navigation context.
+
+---
+
+## CUJ-32: End-to-End Crew Lifecycle
+
+**Actor:** Developer user  
+**Goal:** Walk through the complete lifecycle of building, running, and exporting a crew  
+
+1. Navigate to `/models`, add an LLM connection (e.g., OpenAI GPT-4)
+2. Navigate to `/tools`, install a web search tool from the tools library
+3. Navigate to `/studio`, create a new crew named `research-team`
+4. Add an Agent node: role "Researcher", goal "Find recent data", backstory, assign the LLM connection
+5. Add a Task node: description "Research topic X", expected output "Summary report", assign to the agent
+6. Connect the tool to the agent node
+7. Save the crew
+8. Click Run, enter inputs `{"topic": "renewable energy"}`, select Run mode
+9. Monitor execution progress (running state, task outputs appearing)
+10. Execution completes, review per-task outputs and token/cost metrics
+11. Navigate to `/executions`, verify the run appears in the list
+12. Navigate to the crew's resource detail page, open the run history tab
+13. Click "Re-run" on the completed execution
+14. Export all resources via the export button (multi-document YAML)
+15. Verify exported YAML contains the agent, task, tool ref, and crew definitions
+
+**Success criteria:** Full lifecycle from model setup through export works without errors, all artifacts are consistent.
+
+---
+
+## CUJ-33: RBAC Permission Denied Flow
+
+**Actor:** User with `developer` role  
+**Goal:** Understand what happens when a restricted action is attempted  
+
+1. Log in as a user with the `developer` role
+2. Navigate to `/users` (admin-only page)
+3. Verify the page shows a permission denied message or the sidebar hides the link entirely
+4. Attempt to create a Role resource via the API (`POST /api/v1/roles`)
+5. API returns `403 Forbidden` with an error message specifying the missing permission
+6. Navigate to `/settings`, verify admin-only settings sections are hidden or disabled
+7. Contact an admin user to request a role upgrade
+8. Admin assigns the `admin` role to the developer user
+9. Developer logs out and back in to pick up the new role
+10. Verify previously restricted pages and API calls now work
+
+**Success criteria:** 403 returned for unauthorized actions, error messages are specific, role upgrade grants access.
+
+---
+
+## CUJ-34: Resource Import from Git Repository
+
+**Actor:** Authenticated user  
+**Goal:** Import resources from an external git repository via the marketplace  
+
+1. Navigate to `/marketplace`
+2. Click "Import from Git"
+3. Enter a git repository URL containing Blackbeard YAML resource files
+4. Backend clones the repository and scans for YAML files
+5. Preview screen shows discovered resources with kind, name, and validation status
+6. Any validation errors are highlighted (e.g., invalid ref, missing required field)
+7. Fix or deselect invalid resources
+8. Click "Import Selected"
+9. Resources are created via upsert (existing resources updated, new ones created)
+10. If a resource name conflicts with an existing resource of the same kind, a conflict dialog appears
+11. Choose to overwrite, skip, or rename the conflicting resource
+12. Navigate to `/resources`, verify all imported resources are present with correct specs
+
+**Success criteria:** Git clone, validation, conflict resolution, and upsert all work, resources appear in resource list.
+
+---
+
+## CUJ-35: Bulk Resource Management
+
+**Actor:** Developer or admin user  
+**Goal:** Manage multiple resources at once using bulk operations  
+
+1. Navigate to `/resources`
+2. Switch to table view if not already in table mode
+3. Click the checkbox on three resources to multi-select them
+4. Bulk action bar appears at the top with "Delete Selected" button
+5. Click "Delete Selected", confirmation dialog appears listing the resources
+6. Confirm deletion, all three resources are removed
+7. Verify the resources no longer appear in the list
+8. Click the YAML import button, paste a multi-document YAML string containing five resources
+9. Submit, all five resources are created in a single batch
+10. Verify all five appear in the resource list with correct kinds and names
+
+**Success criteria:** Multi-select delete works, bulk YAML import creates all resources, UI updates immediately.
+
+---
+
+## CUJ-36: Crew with Budget Policy
+
+**Actor:** Admin user  
+**Goal:** Run a crew under a budget policy and verify spend is capped  
+
+1. Navigate to `/resources`, create an AgentPolicy resource with `budget.max_usd: 0.50` and `budget.max_tokens: 10000`
+2. Optionally set `budget.alerts.warn_at_usd: 0.30` for early warning
+3. Navigate to `/studio`, create or load a crew
+4. Assign the AgentPolicy to the crew's agents (via spec or property panel)
+5. Save the crew
+6. Run the crew with a prompt that would normally exceed the budget
+7. During execution, verify a `cost_alert` event fires when spend crosses the warning threshold
+8. Execution either completes within budget or fails with a budget-exceeded error
+9. Navigate to execution detail, verify token usage and cost are reported
+10. Verify the LiteLLM virtual key was created with the correct budget limits and deleted after execution
+
+**Success criteria:** Budget limits enforced, warning alert fires at threshold, spend data visible in execution detail.
+
+---
+
+## CUJ-37: Crew with Guardrails
+
+**Actor:** Developer user  
+**Goal:** Attach guardrails to a task and verify they trigger during crew execution  
+
+1. Navigate to `/guardrails/playground`, create and test a PII guardrail (e.g., block SSN patterns)
+2. Navigate to `/resources`, create a Guardrail resource with the tested configuration
+3. Navigate to `/studio`, load or create a crew
+4. Select a Task node, open the property panel
+5. Add the guardrail reference to the task's `guardrails` array
+6. Save the crew
+7. Run the crew with input that contains PII data matching the guardrail pattern
+8. During execution, the guardrail triggers and either redacts the content or blocks the task
+9. Navigate to execution detail, verify `guardrail_triggered` events appear in the execution log
+10. View the guardrail event details showing which rule matched and what action was taken
+
+**Success criteria:** Guardrail triggers during execution, event logged with match details, task output is filtered/blocked.
+
+---
+
+## CUJ-38: Crew with Knowledge Sources
+
+**Actor:** Developer user  
+**Goal:** Attach a knowledge source to an agent and verify RAG retrieval during execution  
+
+1. Navigate to `/knowledge`, create a knowledge source (e.g., text type with product FAQ content)
+2. Configure the vector store provider and save
+3. Navigate to `/studio`, load or create a crew
+4. Select an Agent node, open the property panel
+5. Add the knowledge source reference to the agent's spec
+6. Add a Task that asks a question answerable from the knowledge source content
+7. Save the crew
+8. Run the crew with appropriate inputs
+9. Execution completes, the task output references or incorporates content from the knowledge source
+10. Verify execution events show knowledge retrieval activity
+
+**Success criteria:** Knowledge source attached, RAG retrieval occurs during execution, task output reflects sourced content.
+
+---
+
+## CUJ-39: Flow Execution
+
+**Actor:** Developer user  
+**Goal:** Create and execute a multi-step flow with sequential step execution  
+
+1. Navigate to `/studio`, create a new Flow
+2. Add FlowStep nodes to the canvas representing sequential stages (e.g., "Research", "Analyze", "Report")
+3. Each FlowStep references a different crew or task
+4. Connect FlowSteps in order using edges to define execution sequence
+5. Optionally add a Condition node between steps (e.g., skip "Report" if "Analyze" finds no data)
+6. Save the flow
+7. Navigate to `/studio` toolbar, click Run, select the flow
+8. Enter inputs and start the flow execution
+9. Monitor execution progress as each step completes sequentially
+10. Verify each step's output is available and feeds into the next step as expected
+11. If a condition node is present, verify the conditional branch was evaluated correctly
+
+**Success criteria:** Flow executes steps in order, condition routing works, each step's output is accessible.
+
+---
+
+## CUJ-40: Webhook Event Delivery
+
+**Actor:** Admin user  
+**Goal:** Register a webhook endpoint and verify execution events are delivered with valid HMAC signatures  
+
+1. Navigate to `/webhooks`
+2. Click "Add Webhook", enter the destination URL (e.g., a RequestBin or local test server)
+3. Optionally filter to specific event types (e.g., `execution.completed`, `execution.failed`)
+4. Save the webhook, note the HMAC secret displayed
+5. Navigate to `/studio`, run a crew
+6. Execution starts and progresses through tasks
+7. On the webhook receiver, verify event payloads arrive for each execution lifecycle event
+8. Validate the `X-Signature` header on each payload by computing HMAC-SHA256 with the secret
+9. Verify the payload body contains execution ID, event type, timestamp, and relevant data
+10. Run a second execution that fails, verify a `execution.failed` event is delivered
+11. Delete the webhook via `/webhooks`, run another execution, verify no events are delivered
+
+**Success criteria:** Events delivered to webhook URL, HMAC signature validates, event filtering works, deletion stops delivery.
+
+---
+
+## CUJ-41: HITL Interaction
+
+**Actor:** Developer user  
+**Goal:** Handle a human-in-the-loop prompt during crew execution  
+
+1. Navigate to `/studio`, create or load a crew
+2. Select a Task node, enable `human_input: true` in the property panel
+3. Save the crew
+4. Run the crew with appropriate inputs
+5. Execution starts, progresses until it reaches the HITL task
+6. Execution status changes to indicate it is waiting for human input
+7. A `hitl_request` event appears in the execution log with the prompt text
+8. In the execution detail page, an input form appears asking for the human response
+9. Enter a response and submit via `POST /executions/{id}/respond`
+10. Execution resumes with the human response incorporated
+11. A `hitl_response` event is logged with the submitted text
+12. Execution completes, task output reflects the human input
+
+**Success criteria:** Execution pauses at HITL task, prompt displayed, response submitted and incorporated, execution completes.
+
+---
+
+## CUJ-42: User Lifecycle
+
+**Actor:** Admin user  
+**Goal:** Manage a user from invitation through deactivation  
+
+1. Navigate to `/users`, click "Invite User"
+2. Enter email, display name, and initial role (e.g., `developer`)
+3. Submit, user appears in the user list with `invited` status
+4. New user receives invitation, registers with the provided email
+5. User status changes to `active` after registration
+6. Admin navigates to the user's detail page
+7. Admin assigns an additional role (e.g., `operator`)
+8. Verify the user now has both `developer` and `operator` permissions
+9. Admin deactivates the user account
+10. User status changes to `inactive`
+11. Deactivated user attempts to log in, receives an "account deactivated" error
+12. Admin reactivates the user, user can log in again
+
+**Success criteria:** Full lifecycle (invite, activate, role assignment, deactivate, reactivate) works, deactivated users cannot authenticate.
+
+---
+
+## CUJ-43: API Key Management
+
+**Actor:** Authenticated user  
+**Goal:** Generate a personal API key, use it for authentication, then revoke it  
+
+1. Navigate to `/settings` or call `POST /api/v1/auth/api-key`
+2. Generate a new personal API key
+3. API key value is displayed once (not retrievable after dismissal)
+4. Copy the API key
+5. Make an API request using `X-API-Key` header with the generated key
+6. Verify the request succeeds and returns the expected data
+7. Verify the key identifies the correct user in audit logs
+8. Revoke the API key via `DELETE /api/v1/auth/api-key` or the UI
+9. Attempt to use the revoked key for an API request
+10. Verify the request returns `401 Unauthorized`
+
+**Success criteria:** Key generated and shown once, authenticates requests, revocation immediately prevents further use.
+
+---
+
+## CUJ-44: Resource Version Rollback
+
+**Actor:** Developer or admin user  
+**Goal:** Roll back a resource to a previous version after a bad update  
+
+1. Navigate to `/resources`, select a resource (e.g., `agents/researcher`)
+2. Note the current spec and version number (e.g., version 5)
+3. Edit the resource spec, introduce an intentional change (e.g., change the goal text)
+4. Save, version increments to 6
+5. Realize the change was a mistake
+6. Navigate to the resource's version history tab
+7. View the list of versions with timestamps and spec snapshots
+8. Click on version 5 to view its spec details
+9. Click "Rollback to this version" (calls `POST /{kind}/{name}/rollback`)
+10. Confirm the rollback in the dialog
+11. Resource spec reverts to the version 5 content, version number increments to 7
+12. Verify the rollback is logged in the audit trail
+
+**Success criteria:** Version history is browsable, rollback restores the old spec, new version is created (not overwritten), audit log records the rollback.
+
+---
+
+## CUJ-45: Dark Mode Toggle
+
+**Actor:** Authenticated user  
+**Goal:** Switch between light and dark themes and verify consistent rendering  
+
+1. Open the application in light mode (default)
+2. Click the theme toggle in the sidebar (or navigate to `/settings`)
+3. Select dark mode
+4. Verify the color scheme changes immediately (background, text, borders, cards)
+5. Navigate to `/studio`, verify the canvas, nodes, edges, and property panel use dark colors
+6. Navigate to `/chat`, verify message bubbles and input area render correctly in dark mode
+7. Navigate to `/executions`, verify table rows, status badges, and metric cards are legible
+8. Navigate to `/models`, verify model cards and provider badges have appropriate contrast
+9. Refresh the page, verify dark mode persists (saved in localStorage or user preferences)
+10. Toggle back to light mode, verify all pages return to the original color scheme
+
+**Success criteria:** Theme toggle applies across all pages, no contrast or readability issues, preference persists across sessions.
+
+---
+
+## CUJ-46: Mobile Responsive Layout
+
+**Actor:** Authenticated user on a mobile device or narrow viewport  
+**Goal:** Use the application on a small screen without layout breakage  
+
+1. Resize the browser viewport to 375px width (mobile portrait)
+2. Verify the sidebar collapses into a hamburger menu
+3. Tap the hamburger menu, verify sidebar slides in as an overlay
+4. Navigate to `/resources`, verify the resource list stacks vertically
+5. Navigate to a resource detail page, verify the content is scrollable and not clipped
+6. Navigate to `/executions`, verify the table scrolls horizontally or switches to a card layout
+7. Navigate to `/studio`, verify a message indicates that the visual editor requires a wider viewport (or that it functions with pan/zoom on touch)
+8. Verify all buttons and interactive elements meet minimum touch target size (44x44px)
+9. Resize back to desktop width (1440px), verify the layout restores to full sidebar and multi-column views
+10. Verify no horizontal overflow or content overlap at any intermediate width
+
+**Success criteria:** Layout adapts to mobile viewport, navigation is accessible, no content is hidden or broken, touch targets are adequate.
+
+---
+
+## CUJ-47: 404 and Error Pages
+
+**Actor:** Any user  
+**Goal:** Encounter error pages for invalid routes and verify graceful handling  
+
+1. Navigate to a URL that does not match any route (e.g., `/this-page-does-not-exist`)
+2. Verify a 404 page is displayed with a clear "Page not found" message
+3. Verify the 404 page includes a link or button to return to the dashboard
+4. Click the "Go to Dashboard" link, verify navigation to `/`
+5. Navigate to a valid resource detail page with a nonexistent resource name (e.g., `/resources/agents/nonexistent-agent-xyz`)
+6. Verify a "Resource not found" message is displayed (not a blank page or a crash)
+7. Use the browser back button, verify navigation returns to the previous page
+8. Trigger a server error by requesting a malformed API endpoint
+9. Verify the UI displays a generic error message (not a raw stack trace or JSON blob)
+10. Verify the error page does not expose internal implementation details (file paths, server versions)
+
+**Success criteria:** 404 page renders for unknown routes, resource-not-found handled gracefully, error pages are user-friendly and do not leak internals.
