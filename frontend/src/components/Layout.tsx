@@ -754,7 +754,7 @@ export default function Layout() {
               </span>
             </div>
             <span className={`text-xs text-muted-foreground ${collapsed ? 'md:hidden' : ''}`}>
-              v0.1.0
+              v0.2.0
             </span>
             <div ref={notifRef} className="relative">
               <button

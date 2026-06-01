@@ -2,7 +2,7 @@
 
 All notable changes to Blackbeard are documented here. Grouped by release, newest first.
 
-## Unreleased
+## 0.2.0
 
 ### Features
 - **Plugin SDK** with 4 extension types: tool, guardrail, auth_provider, execution_hook
