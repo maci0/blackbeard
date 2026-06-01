@@ -2107,7 +2107,7 @@ export interface operations {
     parameters: {
       query?: {
         /** @description Namespace containing the crew */
-        namespace?: string
+        project?: string
       }
       header?: never
       path: {
@@ -2131,7 +2131,7 @@ export interface operations {
           'application/json': components['schemas']['ExecutionResponse']
         }
       }
-      /** @description Crew not found in namespace */
+      /** @description Crew not found in project */
       404: {
         headers: {
           [name: string]: unknown
@@ -2158,7 +2158,7 @@ export interface operations {
     parameters: {
       query?: {
         /** @description Namespace containing the crew */
-        namespace?: string
+        project?: string
       }
       header?: never
       path: {
@@ -2182,7 +2182,7 @@ export interface operations {
           'application/json': components['schemas']['ExecutionResponse']
         }
       }
-      /** @description Crew not found in namespace */
+      /** @description Crew not found in project */
       404: {
         headers: {
           [name: string]: unknown
@@ -2209,7 +2209,7 @@ export interface operations {
     parameters: {
       query?: {
         /** @description Namespace containing the crew */
-        namespace?: string
+        project?: string
       }
       header?: never
       path: {
@@ -2233,7 +2233,7 @@ export interface operations {
           'application/json': components['schemas']['ExecutionResponse']
         }
       }
-      /** @description Crew not found in namespace */
+      /** @description Crew not found in project */
       404: {
         headers: {
           [name: string]: unknown
@@ -2260,7 +2260,7 @@ export interface operations {
     parameters: {
       query?: {
         /** @description Namespace containing the flow */
-        namespace?: string
+        project?: string
       }
       header?: never
       path: {
@@ -2307,8 +2307,8 @@ export interface operations {
       query?: {
         /** @description Filter by crew name */
         crew_name?: string | null
-        /** @description Filter by namespace (omit for all namespaces) */
-        namespace?: string | null
+        /** @description Filter by project (omit for all projects) */
+        project?: string | null
         /** @description Filter by execution status */
         status?: components['schemas']['ExecutionStatus'] | null
         /** @description Max results */
@@ -2566,8 +2566,8 @@ export interface operations {
   list_resources_api_v1__kind_plural__get: {
     parameters: {
       query?: {
-        /** @description Filter by namespace (omit for all namespaces) */
-        namespace?: string | null
+        /** @description Filter by project (omit for all projects) */
+        project?: string | null
         /** @description Comma-separated label filters, e.g. 'env=prod,team=ml' */
         label_selector?: string | null
         /** @description Max results */
@@ -2662,8 +2662,8 @@ export interface operations {
   get_resource_api_v1__kind_plural___name__get: {
     parameters: {
       query?: {
-        /** @description Resource namespace */
-        namespace?: string
+        /** @description Resource project */
+        project?: string
       }
       header?: never
       path: {
@@ -2705,8 +2705,8 @@ export interface operations {
   update_resource_api_v1__kind_plural___name__put: {
     parameters: {
       query?: {
-        /** @description Resource namespace */
-        namespace?: string
+        /** @description Resource project */
+        project?: string
       }
       header?: never
       path: {
@@ -2745,7 +2745,7 @@ export interface operations {
         }
         content?: never
       }
-      /** @description Validation error or name/namespace mismatch */
+      /** @description Validation error or name/project mismatch */
       422: {
         headers: {
           [name: string]: unknown
@@ -2757,8 +2757,8 @@ export interface operations {
   delete_resource_api_v1__kind_plural___name__delete: {
     parameters: {
       query?: {
-        /** @description Resource namespace */
-        namespace?: string
+        /** @description Resource project */
+        project?: string
       }
       header?: never
       path: {

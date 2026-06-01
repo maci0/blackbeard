@@ -64,22 +64,22 @@ spec:
 | `role` | string | ✅ | Agent's job title used in prompts |
 | `goal` | string | ✅ | What the agent strives to accomplish |
 | `backstory` | string | ✅ | Personality/background context for the agent |
-| `llm` | string | — | LLM to use; ref or literal model string |
-| `tools` | string[] | — | List of `ref:` tool references |
-| `allow_delegation` | boolean | — | Whether agent can delegate to others (default `false`) |
-| `verbose` | boolean | — | Log chain-of-thought (default `true`) |
-| `max_iter` | integer ≥ 1 | — | Max reasoning iterations |
-| `max_rpm` | integer ≥ 1 | — | Rate limit for LLM calls |
-| `memory` | boolean\|object | — | Enable cross-task memory; object form supports `enabled`, `recency_weight`, `semantic_weight`, `importance_weight` |
-| `cache` | boolean | — | Cache tool results |
-| `policy` | string | — | `ref:` to an AgentPolicy resource; enforced at crew-build time (tool filtering, delegation control) |
-| `tool_discovery` | boolean | — | Allow JIT tool discovery via meta-tools (default `true`) |
-| `skills` | string[] | — | Directory paths with domain instruction files |
-| `knowledge_sources` | string[] | — | `ref:` KnowledgeSource resources for RAG |
-| `system_template` | string | — | Custom system prompt template (stored but not yet passed to CrewAI at runtime) |
-| `prompt_template` | string | — | Custom task prompt template (stored but not yet passed to CrewAI at runtime) |
-| `response_template` | string | — | Custom response format template (stored but not yet passed to CrewAI at runtime) |
-| `serviceAccount` | string | — | Service account identity used for RBAC principal chain during execution (default `sa-<name>`); must match `^[a-z0-9][a-z0-9\-]*$` |
+| `llm` | string |  -- | LLM to use; ref or literal model string |
+| `tools` | string[] |  -- | List of `ref:` tool references |
+| `allow_delegation` | boolean |  -- | Whether agent can delegate to others (default `false`) |
+| `verbose` | boolean |  -- | Log chain-of-thought (default `true`) |
+| `max_iter` | integer ≥ 1 |  -- | Max reasoning iterations |
+| `max_rpm` | integer ≥ 1 |  -- | Rate limit for LLM calls |
+| `memory` | boolean\|object |  -- | Enable cross-task memory; object form supports `enabled`, `recency_weight`, `semantic_weight`, `importance_weight` |
+| `cache` | boolean |  -- | Cache tool results |
+| `policy` | string |  -- | `ref:` to an AgentPolicy resource; enforced at crew-build time (tool filtering, delegation control) |
+| `tool_discovery` | boolean |  -- | Allow JIT tool discovery via meta-tools (default `true`) |
+| `skills` | string[] |  -- | Directory paths with domain instruction files |
+| `knowledge_sources` | string[] |  -- | `ref:` KnowledgeSource resources for RAG |
+| `system_template` | string |  -- | Custom system prompt template (stored but not yet passed to CrewAI at runtime) |
+| `prompt_template` | string |  -- | Custom task prompt template (stored but not yet passed to CrewAI at runtime) |
+| `response_template` | string |  -- | Custom response format template (stored but not yet passed to CrewAI at runtime) |
+| `serviceAccount` | string |  -- | Service account identity used for RBAC principal chain during execution (default `sa-<name>`); must match `^[a-z0-9][a-z0-9\-]*$` |
 
 ---
 
@@ -126,15 +126,15 @@ spec:
 | `description` | string | ✅ | Task instructions; `{variable}` placeholders filled from crew inputs |
 | `expected_output` | string | ✅ | Human-readable description of a correct result |
 | `agent` | string | ✅ | `ref:` to the responsible agent |
-| `context` | string[] | — | Tasks whose output is injected as additional context |
-| `tools` | string[] | — | Tool refs that override the agent's default tools (stored but not yet passed to CrewAI at runtime) |
-| `async_execution` | boolean | — | Run concurrently (default `false`) |
-| `human_input` | boolean | — | Pause for human review (default `false`) |
-| `output_file` | string | — | Write output to a file (flat filename, no path separators) |
-| `output_pydantic` | string | — | Dotted class path to parse output into a Pydantic model (must be in allowed module prefixes) |
-| `output_json` | object | — | JSON Schema for structured output |
-| `callback` | string | — | Dotted callable path invoked on completion (stored but not yet passed to CrewAI at runtime) |
-| `guardrails` | string[] | — | `ref:` guardrail resources applied to output |
+| `context` | string[] |  -- | Tasks whose output is injected as additional context |
+| `tools` | string[] |  -- | Tool refs that override the agent's default tools (stored but not yet passed to CrewAI at runtime) |
+| `async_execution` | boolean |  -- | Run concurrently (default `false`) |
+| `human_input` | boolean |  -- | Pause for human review (default `false`) |
+| `output_file` | string |  -- | Write output to a file (flat filename, no path separators) |
+| `output_pydantic` | string |  -- | Dotted class path to parse output into a Pydantic model (must be in allowed module prefixes) |
+| `output_json` | object |  -- | JSON Schema for structured output |
+| `callback` | string |  -- | Dotted callable path invoked on completion (stored but not yet passed to CrewAI at runtime) |
+| `guardrails` | string[] |  -- | `ref:` guardrail resources applied to output |
 
 ---
 
@@ -189,31 +189,31 @@ spec:
 | `process` | `sequential`\|`hierarchical` | ✅ | Execution strategy |
 | `agents` | string[] (≥1) | ✅ | Ordered agent `ref:` list |
 | `tasks` | string[] (≥1) | ✅ | Ordered task `ref:` list |
-| `description` | string | — | Human-readable description |
-| `verbose` | boolean | — | Verbose logging (default `true`) |
-| `memory` | boolean\|object | — | Shared cross-agent memory; object form supports `enabled`, `provider` (`lancedb`\|`chromadb`\|`qdrant`), `config` |
-| `embedder` | object | — | Embedder config for RAG (`provider`, `config`) |
-| `cache` | boolean | — | Shared tool cache |
-| `max_rpm` | integer ≥ 1 | — | Crew-wide LLM rate limit |
-| `manager_llm` | string | — | LLM for the hierarchical manager |
-| `manager_agent` | string | — | Custom manager agent ref (hierarchical process only) |
-| `planning` | boolean | — | Pre-execution planning step (stored but not yet passed to CrewAI at runtime) |
-| `planning_llm` | string | — | LLM used during planning (stored but not yet passed to CrewAI at runtime) |
-| `tool_loading` | `jit`\|`eager`\|`hybrid` | — | Tool loading strategy (default `hybrid`) |
+| `description` | string |  -- | Human-readable description |
+| `verbose` | boolean |  -- | Verbose logging (default `true`) |
+| `memory` | boolean\|object |  -- | Shared cross-agent memory; object form supports `enabled`, `provider` (`lancedb`\|`chromadb`\|`qdrant`), `config` |
+| `embedder` | object |  -- | Embedder config for RAG (`provider`, `config`) |
+| `cache` | boolean |  -- | Shared tool cache |
+| `max_rpm` | integer ≥ 1 |  -- | Crew-wide LLM rate limit |
+| `manager_llm` | string |  -- | LLM for the hierarchical manager |
+| `manager_agent` | string |  -- | Custom manager agent ref (hierarchical process only) |
+| `planning` | boolean |  -- | Pre-execution planning step (stored but not yet passed to CrewAI at runtime) |
+| `planning_llm` | string |  -- | LLM used during planning (stored but not yet passed to CrewAI at runtime) |
+| `tool_loading` | `jit`\|`eager`\|`hybrid` |  -- | Tool loading strategy (default `hybrid`) |
 | `default_agent_policy` | string | -- | Default `AgentPolicy` ref for all agents |
 | `guardrails` | string[] | -- | `ref:` guardrail resources applied to all tasks in the crew (prepended to task-level guardrails) |
 | `inputs` | object[] | -- | Runtime input declarations |
 | `inputs[].name` | string | ✅ | Input variable name |
-| `inputs[].description` | string | — | Description shown in UI |
-| `inputs[].required` | boolean | — | Whether input is mandatory (default `true`) |
-| `inputs[].default` | any | — | Default value when not provided |
-| `inline` | object | — | Embed agents, tasks, and LLM connections directly in the crew YAML (see below) |
-| `a2a` | object | — | Agent-to-Agent protocol configuration |
-| `a2a.enabled` | boolean | — | Enable A2A protocol (default `false`) |
-| `a2a.protocol_versions` | string[] | — | Supported protocol versions |
-| `a2a.transports` | string[] | — | Supported transport protocols (`json-rpc`, `grpc`) |
-| `a2a.auth` | string | — | Authentication configuration |
-| `a2a.public` | boolean | — | Whether the crew is publicly discoverable (default `false`) |
+| `inputs[].description` | string |  -- | Description shown in UI |
+| `inputs[].required` | boolean |  -- | Whether input is mandatory (default `true`) |
+| `inputs[].default` | any |  -- | Default value when not provided |
+| `inline` | object |  -- | Embed agents, tasks, and LLM connections directly in the crew YAML (see below) |
+| `a2a` | object |  -- | Agent-to-Agent protocol configuration |
+| `a2a.enabled` | boolean |  -- | Enable A2A protocol (default `false`) |
+| `a2a.protocol_versions` | string[] |  -- | Supported protocol versions |
+| `a2a.transports` | string[] |  -- | Supported transport protocols (`json-rpc`, `grpc`) |
+| `a2a.auth` | string |  -- | Authentication configuration |
+| `a2a.public` | boolean |  -- | Whether the crew is publicly discoverable (default `false`) |
 
 ### Inline Resources
 
@@ -306,15 +306,15 @@ spec:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | `python`\|`wasm`\|`builtin`\|`mcp-stdio`\|`mcp-http` | ✅ | Tool implementation type |
-| `class_path` | string | — | Dotted path to Python `BaseTool` subclass (required for `python`; tool name for `builtin`) |
-| `description` | string | — | Human-readable description of what the tool does |
-| `sandbox` | `none`\|`wasm`\|`docker`\|`podman`\|`gvisor`\|`microvm` | — | Sandbox tier (default `none`); higher tiers = stronger isolation |
-| `wasm_module` | string | — | Path to `.wasm` module file (required for `wasm`) |
-| `capabilities` | string[] | — | WASI capability grants for WASM tools (e.g. `http_fetch`, `env`) |
-| `command` | string | — | Command to launch the MCP server (required for `mcp-stdio`) |
-| `args` | string[] | — | Arguments for the MCP server command (`mcp-stdio`) |
-| `url` | string | — | URL of the MCP HTTP server (required for `mcp-http`) |
-| `env` | object | — | Environment variables for the MCP server process (`mcp-stdio`) |
+| `class_path` | string |  -- | Dotted path to Python `BaseTool` subclass (required for `python`; tool name for `builtin`) |
+| `description` | string |  -- | Human-readable description of what the tool does |
+| `sandbox` | `none`\|`wasm`\|`docker`\|`podman`\|`gvisor`\|`microvm` |  -- | Sandbox tier (default `none`); higher tiers = stronger isolation |
+| `wasm_module` | string |  -- | Path to `.wasm` module file (required for `wasm`) |
+| `capabilities` | string[] |  -- | WASI capability grants for WASM tools (e.g. `http_fetch`, `env`) |
+| `command` | string |  -- | Command to launch the MCP server (required for `mcp-stdio`) |
+| `args` | string[] |  -- | Arguments for the MCP server command (`mcp-stdio`) |
+| `url` | string |  -- | URL of the MCP HTTP server (required for `mcp-http`) |
+| `env` | object |  -- | Environment variables for the MCP server process (`mcp-stdio`) |
 | `config` | object | -- | Constructor kwargs passed to the tool |
 | `tool_version` | string | -- | Semantic version string (e.g., `"1.0.0"`, `"2.1.0"`) |
 | `deprecated` | boolean | -- | Mark this tool as deprecated (default `false`); UI shows a warning badge |
@@ -372,17 +372,17 @@ spec:
 |-------|------|----------|-------------|
 | `provider` | string | ✅ | LiteLLM provider identifier (e.g. `vertex_ai`, `openai`, `anthropic`) |
 | `model` | string | ✅ | Model name within the provider |
-| `parameters.temperature` | number 0–2 | — | Sampling temperature |
-| `parameters.max_tokens` | integer ≥ 1 | — | Maximum response tokens |
-| `parameters.top_p` | number 0–1 | — | Nucleus sampling |
-| `parameters.frequency_penalty` | number | — | Frequency penalty |
-| `parameters.presence_penalty` | number | — | Presence penalty |
-| `parameters.stop` | string[] | — | Stop sequences |
-| `vertex.project` | string | — | GCP project (Vertex AI only) |
-| `vertex.location` | string | — | GCP region (Vertex AI only) |
-| `api_key_env` | string | — | Env var name holding the API key (must be uppercase, ending in `_API_KEY`, `_KEY`, or `_SECRET`) |
-| `base_url` | string | — | Custom API base URL |
-| `fallbacks` | string[] | — | Fallback model names to try if this model fails (max 5). LiteLLM retries with each in order on provider errors |
+| `parameters.temperature` | number 0–2 |  -- | Sampling temperature |
+| `parameters.max_tokens` | integer ≥ 1 |  -- | Maximum response tokens |
+| `parameters.top_p` | number 0–1 |  -- | Nucleus sampling |
+| `parameters.frequency_penalty` | number |  -- | Frequency penalty |
+| `parameters.presence_penalty` | number |  -- | Presence penalty |
+| `parameters.stop` | string[] |  -- | Stop sequences |
+| `vertex.project` | string |  -- | GCP project (Vertex AI only) |
+| `vertex.location` | string |  -- | GCP region (Vertex AI only) |
+| `api_key_env` | string |  -- | Env var name holding the API key (must be uppercase, ending in `_API_KEY`, `_KEY`, or `_SECRET`) |
+| `base_url` | string |  -- | Custom API base URL |
+| `fallbacks` | string[] |  -- | Fallback model names to try if this model fails (max 5). LiteLLM retries with each in order on provider errors |
 
 > **Note:** The `vertex` section is optional. If `vertex.project` or `vertex.location` are omitted, they fall back to the global `GOOGLE_CLOUD_PROJECT` and `CLOUD_ML_REGION` environment variables.
 
@@ -390,7 +390,7 @@ spec:
 
 ## AgentPolicy
 
-An AgentPolicy defines governance rules — tool access, spending budgets, and sandbox requirements — that are enforced at execution time.
+An AgentPolicy defines governance rules  -- tool access, spending budgets, and sandbox requirements  -- that are enforced at execution time.
 
 ```yaml
 apiVersion: blackbeard/v1
@@ -438,23 +438,23 @@ spec:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `tools.mode` | `all`\|`allowlist`\|`denylist` | — | Tool access strategy |
-| `tools.allow` | string[] | — | Allowed tool refs (used with `allowlist`) |
-| `tools.deny` | string[] | — | Denied tool refs (used with `denylist`) |
-| `budget.max_usd` | number ≥ 0 | — | Max spend in USD per execution |
-| `budget.max_tokens` | integer ≥ 1 | — | Max total tokens per execution |
-| `budget.alerts.warn_at_usd` | number ≥ 0 | — | Triggers `cost_alert` event when spend crosses this threshold |
-| `budget.alerts.warn_at_tokens` | integer ≥ 0 | — | Triggers `cost_alert` event when token count crosses this threshold |
-| `sandbox.minimum_tier` | `none`\|`wasm`\|`docker`\|`podman`\|`gvisor`\|`microvm` | — | Minimum sandbox isolation required |
-| `delegation.allowed` | boolean | — | Whether agent-to-agent delegation is permitted |
-| `delegation.targets` | string[] | — | Restrict which agents can receive delegated work (refs) |
-| `pii.enabled` | boolean | — | Enable PII redaction (default `false`) |
-| `pii.backend` | `default`\|`presidio-nlp`\|`litellm` | — | Recognizer backend (default `default`) |
-| `pii.model` | string | — | Model name for `litellm` backend |
-| `pii.preset` | `hipaa`\|`gdpr`\|`pci-dss`\|`ccpa`\|`custom` | — | Predefined entity set (default `custom`) |
-| `pii.entities` | string[] | — | Explicit PII entity types to detect (merged with preset) |
-| `pii.redact_outputs` | boolean | — | Redact execution outputs (default `true`) |
-| `pii.redact_events` | boolean | — | Redact execution events (default `true`) |
+| `tools.mode` | `all`\|`allowlist`\|`denylist` |  -- | Tool access strategy |
+| `tools.allow` | string[] |  -- | Allowed tool refs (used with `allowlist`) |
+| `tools.deny` | string[] |  -- | Denied tool refs (used with `denylist`) |
+| `budget.max_usd` | number ≥ 0 |  -- | Max spend in USD per execution |
+| `budget.max_tokens` | integer ≥ 1 |  -- | Max total tokens per execution |
+| `budget.alerts.warn_at_usd` | number ≥ 0 |  -- | Triggers `cost_alert` event when spend crosses this threshold |
+| `budget.alerts.warn_at_tokens` | integer ≥ 0 |  -- | Triggers `cost_alert` event when token count crosses this threshold |
+| `sandbox.minimum_tier` | `none`\|`wasm`\|`docker`\|`podman`\|`gvisor`\|`microvm` |  -- | Minimum sandbox isolation required |
+| `delegation.allowed` | boolean |  -- | Whether agent-to-agent delegation is permitted |
+| `delegation.targets` | string[] |  -- | Restrict which agents can receive delegated work (refs) |
+| `pii.enabled` | boolean |  -- | Enable PII redaction (default `false`) |
+| `pii.backend` | `default`\|`presidio-nlp`\|`litellm` |  -- | Recognizer backend (default `default`) |
+| `pii.model` | string |  -- | Model name for `litellm` backend |
+| `pii.preset` | `hipaa`\|`gdpr`\|`pci-dss`\|`ccpa`\|`custom` |  -- | Predefined entity set (default `custom`) |
+| `pii.entities` | string[] |  -- | Explicit PII entity types to detect (merged with preset) |
+| `pii.redact_outputs` | boolean |  -- | Redact execution outputs (default `true`) |
+| `pii.redact_events` | boolean |  -- | Redact execution events (default `true`) |
 
 > **Sandbox tiers:** `none`, `wasm`, `docker`/`podman`, `gvisor`, and `microvm` (Firecracker or libkrun). Higher tiers provide stronger isolation. If a policy minimum exceeds a tool's declared tier, the tool is promoted to the policy minimum.
 
@@ -576,15 +576,15 @@ spec:
 | `steps` | object[] (≥1) | ✅ | Ordered list of flow steps |
 | `steps[].name` | string | ✅ | Step identifier |
 | `steps[].type` | `crew`\|`function`\|`router`\|`condition` | ✅ | Step type |
-| `steps[].crew` | string | — | Crew ref (required for `crew` steps) |
-| `steps[].function_path` | string | — | `module:function` path (required for `function` steps) |
-| `steps[].listen_to` | string[] | — | Steps whose completion triggers this step |
-| `steps[].condition` | string | — | Condition expression (for `condition` steps) |
-| `steps[].routes` | object | — | Named routes mapping to step names (for `router` steps) |
-| `description` | string | — | Human-readable description |
-| `state_schema` | object | — | JSON Schema for shared flow state |
-| `memory` | boolean | — | Flow-level memory (default `false`) |
-| `verbose` | boolean | — | Verbose logging (default `true`) |
+| `steps[].crew` | string |  -- | Crew ref (required for `crew` steps) |
+| `steps[].function_path` | string |  -- | `module:function` path (required for `function` steps) |
+| `steps[].listen_to` | string[] |  -- | Steps whose completion triggers this step |
+| `steps[].condition` | string |  -- | Condition expression (for `condition` steps) |
+| `steps[].routes` | object |  -- | Named routes mapping to step names (for `router` steps) |
+| `description` | string |  -- | Human-readable description |
+| `state_schema` | object |  -- | JSON Schema for shared flow state |
+| `memory` | boolean |  -- | Flow-level memory (default `false`) |
+| `verbose` | boolean |  -- | Verbose logging (default `true`) |
 
 ---
 
@@ -619,12 +619,12 @@ spec:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | `text`\|`pdf`\|`csv`\|`json`\|`excel`\|`string`\|`url` | ✅ | Knowledge source format (see note below) |
-| `description` | string | — | Human-readable description |
-| `file_paths` | string[] | — | Paths to source files (required for file-based types) |
-| `content` | string | — | Inline text content (required for `string` type) |
-| `urls` | string[] | — | URLs to fetch content from (for `url` type) |
-| `chunk_size` | integer 100–10000 | — | Text chunk size (default `4000`) |
-| `chunk_overlap` | integer 0–1000 | — | Overlap between chunks (default `200`) |
+| `description` | string |  -- | Human-readable description |
+| `file_paths` | string[] |  -- | Paths to source files (required for file-based types) |
+| `content` | string |  -- | Inline text content (required for `string` type) |
+| `urls` | string[] |  -- | URLs to fetch content from (for `url` type) |
+| `chunk_size` | integer 100–10000 |  -- | Text chunk size (default `4000`) |
+| `chunk_overlap` | integer 0–1000 |  -- | Overlap between chunks (default `200`) |
 
 > **Note:** For MVP, only `text`, `pdf`, `csv`, `json`, and `string` types are supported at runtime. `excel` and `url` are accepted by the schema but not yet handled by the resource loader.
 
@@ -654,13 +654,13 @@ spec:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `description` | string | — | Human-readable description |
+| `description` | string |  -- | Human-readable description |
 | `rules` | object[] (≥1) | ✅ | Permission rules |
 | `rules[].resources` | string[] (≥1) | ✅ | Resource kind names (e.g. `"Agent"`, `"Crew"`) or `"*"` for all |
 | `rules[].verbs` | string[] (≥1) | ✅ | Allowed operations: `get`, `list`, `create`, `update`, `delete`, `run`, `invoke`, `delegate`, or `*` |
-| `rules[].resourceNames` | string[] | — | Restrict rule to specific resource names |
-| `rules[].namespaces` | string[] | — | Restrict rule to specific namespaces |
-| `subjectKinds` | string[] | — | Restrict which subject types can use this role: `User`, `Group`, `Agent`, `Crew` |
+| `rules[].resourceNames` | string[] |  -- | Restrict rule to specific resource names |
+| `rules[].namespaces` | string[] |  -- | Restrict rule to specific namespaces |
+| `subjectKinds` | string[] |  -- | Restrict which subject types can use this role: `User`, `Group`, `Agent`, `Crew` |
 
 ---
 
@@ -693,7 +693,7 @@ spec:
 | `subjects` | object[] (≥1) | ✅ | Subjects receiving the role's permissions |
 | `subjects[].kind` | `User`\|`Group`\|`Agent`\|`Crew` | ✅ | Subject type |
 | `subjects[].name` | string | ✅ | Subject identifier (email for users, resource name for agents/crews) |
-| `scope.project` | string | — | Limit the binding to a specific project |
+| `scope.project` | string |  -- | Limit the binding to a specific project |
 
 ---
 
@@ -722,17 +722,17 @@ spec:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `description` | string | — | Human-readable description (max 5000 chars) |
+| `description` | string |  -- | Human-readable description (max 5000 chars) |
 | `target` | object | ✅ | What to execute |
 | `target.kind` | `Crew`\|`Flow` | ✅ | Target resource type |
 | `target.name` | string | ✅ | Target resource name |
 | `trigger` | object | ✅ | When to execute |
 | `trigger.type` | `cron`\|`webhook`\|`api` | ✅ | Trigger mechanism |
-| `trigger.cron` | string | — | Cron expression (required when `type: cron`) |
-| `trigger.webhook_secret` | string | — | Shared secret for webhook validation (required when `type: webhook`) |
-| `inputs` | object | — | Key-value inputs passed to the target execution |
-| `enabled` | boolean | — | Whether the automation is active (default: `true`) |
-| `max_concurrent` | integer (1–10) | — | Maximum concurrent executions (default: `1`) |
+| `trigger.cron` | string |  -- | Cron expression (required when `type: cron`) |
+| `trigger.webhook_secret` | string |  -- | Shared secret for webhook validation (required when `type: webhook`) |
+| `inputs` | object |  -- | Key-value inputs passed to the target execution |
+| `enabled` | boolean |  -- | Whether the automation is active (default: `true`) |
+| `max_concurrent` | integer (1–10) |  -- | Maximum concurrent executions (default: `1`) |
 
 ---
 
@@ -791,6 +791,6 @@ spec:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `description` | string | — | Human-readable description (max 5000 chars) |
-| `project` | string | — | Project scope (max 255 chars) |
-| `permissions` | string[] | — | Permission strings for this service account (max 50) |
+| `description` | string |  -- | Human-readable description (max 5000 chars) |
+| `project` | string |  -- | Project scope (max 255 chars) |
+| `permissions` | string[] |  -- | Permission strings for this service account (max 50) |

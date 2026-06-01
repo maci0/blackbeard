@@ -243,7 +243,7 @@ A gRPC server (`blackbeard/grpc/server.py`) starts alongside FastAPI during the 
 ### Page Structure
 
 ```
-/                     → Dashboard (default) — execution metrics, resource counts, recent activity
+/                     → Dashboard (default)  -- execution metrics, resource counts, recent activity
 /studio               → Visual crew editor
 /resources            → Generic resource list (all kinds)
 /resources/:kindPlural/:name → Resource detail view
