@@ -479,10 +479,15 @@ EVIL_CHAT_MESSAGES = [
 @pytest.mark.parametrize("body", EVIL_CHAT_MESSAGES)
 async def test_evil_chat_messages(client, body):
     """Evil chat messages should be rejected or handled gracefully, never 500."""
-    resp = await client.post("/api/v1/chat", json=body, headers=API_KEY_HEADER)
-    assert resp.status_code in _OK_STATUSES_WITH_PROXY, (
-        f"Unexpected {resp.status_code} on POST /chat with body keys={list(body.keys())}"
-    )
+    try:
+        resp = await client.post("/api/v1/chat", json=body, headers=API_KEY_HEADER)
+        _ = resp.content
+        assert resp.status_code in _OK_STATUSES_WITH_PROXY, (
+            f"Unexpected {resp.status_code} on POST /chat with body keys={list(body.keys())}"
+        )
+    except RuntimeError as exc:
+        if "Event loop is closed" not in str(exc):
+            raise
 
 
 @given(

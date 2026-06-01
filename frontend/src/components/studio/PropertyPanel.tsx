@@ -586,11 +586,7 @@ function PIIForm({
   return (
     <div className="space-y-3">
       <FieldGroup label="Compliance Preset">
-        <SelectInput
-          value={preset}
-          onChange={handlePresetChange}
-          options={PII_PRESET_OPTIONS}
-        />
+        <SelectInput value={preset} onChange={handlePresetChange} options={PII_PRESET_OPTIONS} />
         {preset !== 'custom' && PII_PRESETS[preset] && (
           <p className="mt-1 text-[10px] text-muted-foreground">
             {PII_PRESETS[preset].entities.length} entities selected by {PII_PRESETS[preset].label}{' '}

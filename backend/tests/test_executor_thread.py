@@ -1757,7 +1757,7 @@ class TestShutdownWebhookExecutor:
 
             mod.shutdown_webhook_executor()
 
-            mock_executor.shutdown.assert_called_once_with(wait=False)
+            mock_executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
             assert mod._webhook_executor is None
         finally:
             mod._webhook_executor = original
