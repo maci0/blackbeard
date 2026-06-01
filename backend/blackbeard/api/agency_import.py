@@ -284,17 +284,17 @@ async def import_agency_agents(
         await asyncio.gather(*[_fetch_github_file(fp) for fp in paths_to_fetch])
 
     for slug in body.slugs:
-        file_path = slug_index.get(slug)
-        if file_path is None:
+        slug_path = slug_index.get(slug)
+        if slug_path is None:
             errors.append(f"{slug}: not found in any division")
             continue
 
-        content = await _fetch_github_file(file_path)
+        content = await _fetch_github_file(slug_path)
         if content is None:
             errors.append(f"Failed to fetch {slug}")
             continue
 
-        parsed = parse_agency_agent_markdown(content, file_path)
+        parsed = parse_agency_agent_markdown(content, slug_path)
         if not parsed:
             errors.append(f"Failed to parse {slug}")
             continue

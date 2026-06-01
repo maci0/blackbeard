@@ -112,17 +112,18 @@ def _resource_to_yaml(
     labels: dict[str, str] | None = None,
 ) -> str:
     """Convert a resource to YAML string."""
-    doc = {
-        "apiVersion": "blackbeard/v1",
-        "kind": kind,
-        "metadata": {
-            "name": name,
-            "project": project,
-        },
-        "spec": spec,
+    metadata: dict[str, Any] = {
+        "name": name,
+        "project": project,
     }
     if labels:
-        doc["metadata"]["labels"] = labels
+        metadata["labels"] = labels
+    doc: dict[str, Any] = {
+        "apiVersion": "blackbeard/v1",
+        "kind": kind,
+        "metadata": metadata,
+        "spec": spec,
+    }
     return yaml.dump(doc, Dumper=_yaml_dumper, default_flow_style=False, sort_keys=False)
 
 
