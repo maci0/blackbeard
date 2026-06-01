@@ -91,7 +91,7 @@ const COLOR_CLASSES: Record<
 
 const SHAPE_CLASSES: Record<NodeShape, string> = {
   rectangle: 'rounded-lg',
-  chamfered: 'rounded-[2px_12px_12px_2px]',
+  chamfered: 'rounded-[0px_14px_14px_0px]',
   'diamond-top': '',
   hexagonal: '',
   pill: 'rounded-3xl',
