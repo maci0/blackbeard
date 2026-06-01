@@ -30,6 +30,10 @@ interface PaletteItem {
   iconBg: string
   textColor: string
   borderColor: string
+  cardShape?: {
+    className?: string
+    style?: React.CSSProperties
+  }
 }
 
 function addNodeFromPalette(type: string) {
@@ -93,6 +97,9 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-rose-700 dark:text-rose-300',
     borderColor:
       'border-rose-200 hover:border-rose-400 dark:border-rose-800 dark:hover:border-rose-600',
+    cardShape: {
+      style: { clipPath: 'polygon(0% 0%, 100% 0%, 100% 80%, 50% 100%, 0% 80%)' },
+    },
   },
   {
     type: 'condition',
@@ -103,6 +110,11 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-amber-700 dark:text-amber-300',
     borderColor:
       'border-amber-200 hover:border-amber-400 dark:border-amber-800 dark:hover:border-amber-600',
+    cardShape: {
+      style: {
+        clipPath: 'polygon(6px 0%, calc(100% - 6px) 0%, 100% 6px, 100% 100%, 0% 100%, 0% 6px)',
+      },
+    },
   },
   {
     type: 'router',
@@ -113,6 +125,7 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-cyan-700 dark:text-cyan-300',
     borderColor:
       'border-cyan-200 hover:border-cyan-400 dark:border-cyan-800 dark:hover:border-cyan-600',
+    cardShape: { className: 'rounded-[12px]' },
   },
   {
     type: 'parallel',
@@ -123,6 +136,7 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-purple-700 dark:text-purple-300',
     borderColor:
       'border-purple-200 hover:border-purple-400 dark:border-purple-800 dark:hover:border-purple-600',
+    cardShape: { className: 'rounded-2xl' },
   },
   {
     type: 'ifElse',
@@ -133,6 +147,11 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-amber-700 dark:text-amber-300',
     borderColor:
       'border-amber-200 hover:border-amber-400 dark:border-amber-800 dark:hover:border-amber-600',
+    cardShape: {
+      style: {
+        clipPath: 'polygon(6px 0%, calc(100% - 6px) 0%, 100% 6px, 100% 100%, 0% 100%, 0% 6px)',
+      },
+    },
   },
   {
     type: 'switch',
@@ -143,6 +162,7 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-cyan-700 dark:text-cyan-300',
     borderColor:
       'border-cyan-200 hover:border-cyan-400 dark:border-cyan-800 dark:hover:border-cyan-600',
+    cardShape: { className: 'rounded-[12px]' },
   },
   {
     type: 'merge',
@@ -153,6 +173,7 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-indigo-700 dark:text-indigo-300',
     borderColor:
       'border-indigo-200 hover:border-indigo-400 dark:border-indigo-800 dark:hover:border-indigo-600',
+    cardShape: { className: 'rounded-2xl' },
   },
   {
     type: 'filter',
@@ -163,6 +184,11 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-orange-700 dark:text-orange-300',
     borderColor:
       'border-orange-200 hover:border-orange-400 dark:border-orange-800 dark:hover:border-orange-600',
+    cardShape: {
+      style: {
+        clipPath: 'polygon(6px 0%, calc(100% - 6px) 0%, 100% 6px, 100% 100%, 0% 100%, 0% 6px)',
+      },
+    },
   },
   {
     type: 'gate',
@@ -173,6 +199,7 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-teal-700 dark:text-teal-300',
     borderColor:
       'border-teal-200 hover:border-teal-400 dark:border-teal-800 dark:hover:border-teal-600',
+    cardShape: { className: 'rounded-2xl' },
   },
   {
     type: 'loop',
@@ -183,6 +210,7 @@ const ITEMS: PaletteItem[] = [
     textColor: 'text-pink-700 dark:text-pink-300',
     borderColor:
       'border-pink-200 hover:border-pink-400 dark:border-pink-800 dark:hover:border-pink-600',
+    cardShape: { className: 'rounded-xl' },
   },
   {
     type: 'stickyNote',
@@ -220,7 +248,8 @@ function PaletteCard({ item }: { item: PaletteItem }) {
       role="button"
       title={item.label}
       aria-label={`Add ${item.label} node to canvas`}
-      className={`cursor-grab select-none overflow-hidden rounded-lg border bg-card shadow-sm transition-all duration-150 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing ${item.borderColor}`}
+      className={`cursor-grab select-none overflow-hidden ${item.cardShape?.className ?? 'rounded-lg'} border bg-card shadow-sm transition-all duration-150 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing ${item.borderColor}`}
+      style={item.cardShape?.style}
     >
       {/* Mini header matching the node style */}
       <div className={`flex items-center justify-center gap-1.5 py-2 ${item.headerBg}`}>

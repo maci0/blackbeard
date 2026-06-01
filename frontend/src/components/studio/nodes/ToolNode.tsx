@@ -27,6 +27,8 @@ export default memo(function ToolNode({ data, selected }: NodeProps) {
       label="Tool"
       ariaLabel={`Tool: ${name || 'Unnamed Tool'}`}
       selected={!!selected}
+      shape="chamfered"
+      width="w-[160px]"
       targetPosition={Position.Left}
       sourcePosition={Position.Right}
     >

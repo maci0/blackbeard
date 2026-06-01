@@ -125,6 +125,43 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Node shape accents                                                  */
+/* ------------------------------------------------------------------ */
+.node-accent-left {
+  position: relative;
+}
+.node-accent-left::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 8px 0 0 8px;
+  background: inherit;
+  background: var(--tw-gradient-from, hsl(var(--primary)));
+  z-index: 1;
+}
+
+.node-fold {
+  position: relative;
+}
+.node-fold::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(135deg, transparent 50%, rgba(0, 0, 0, 0.06) 50%);
+  border-bottom-left-radius: 3px;
+  z-index: 1;
+}
+.dark .node-fold::after {
+  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.06) 50%);
+}
+
+/* ------------------------------------------------------------------ */
 /* Save-success flash                                                  */
 /* ------------------------------------------------------------------ */
 @keyframes save-flash {

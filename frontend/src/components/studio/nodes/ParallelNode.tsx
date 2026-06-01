@@ -15,6 +15,7 @@ export default memo(function ParallelNode({ data, selected }: NodeProps) {
       label="Parallel"
       ariaLabel={`Parallel: ${name || 'Unnamed Parallel'}`}
       selected={!!selected}
+      shape="pill"
       width="w-[180px]"
     >
       <p

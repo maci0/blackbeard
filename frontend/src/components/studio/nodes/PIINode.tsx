@@ -64,6 +64,7 @@ export default memo(function PIINode({ data, selected }: NodeProps) {
       label="PII Redaction"
       ariaLabel={`PII Redaction: ${preset} preset, ${action}, ${entities.length} entit${entities.length === 1 ? 'y' : 'ies'}`}
       selected={!!selected}
+      shape="shield"
       width="w-[160px]"
       headerGradientTo="to-red-500"
     >

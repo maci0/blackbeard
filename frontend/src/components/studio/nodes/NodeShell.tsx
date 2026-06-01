@@ -1,8 +1,17 @@
-import { type ReactNode } from 'react'
+import { type CSSProperties, type ReactNode } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { cn } from '@/lib/utils'
 
 type NodeColor = 'violet' | 'blue' | 'emerald' | 'amber' | 'rose' | 'cyan' | 'purple'
+
+export type NodeShape =
+  | 'rectangle'
+  | 'chamfered'
+  | 'diamond-top'
+  | 'hexagonal'
+  | 'pill'
+  | 'shield'
+  | 'loop'
 
 interface NodeShellProps {
   color: NodeColor
@@ -10,6 +19,7 @@ interface NodeShellProps {
   label: string
   ariaLabel: string
   selected: boolean
+  shape?: NodeShape
   width?: string
   targetPosition?: Position
   sourcePosition?: Position
@@ -79,12 +89,34 @@ const COLOR_CLASSES: Record<
   },
 }
 
+const SHAPE_CLASSES: Record<NodeShape, string> = {
+  rectangle: 'rounded-lg',
+  chamfered: 'rounded-[2px_12px_12px_2px]',
+  'diamond-top': '',
+  hexagonal: '',
+  pill: 'rounded-3xl',
+  shield: '',
+  loop: 'rounded-2xl',
+}
+
+const SHAPE_CLIP_PATHS: Partial<Record<NodeShape, string>> = {
+  'diamond-top': 'polygon(12px 0%, calc(100% - 12px) 0%, 100% 12px, 100% 100%, 0% 100%, 0% 12px)',
+  hexagonal: 'polygon(8% 0%, 92% 0%, 100% 50%, 92% 100%, 8% 100%, 0% 50%)',
+  shield: 'polygon(0% 0%, 100% 0%, 100% 75%, 50% 100%, 0% 75%)',
+}
+
+const SHAPE_BODY_CLASSES: Partial<Record<NodeShape, string>> = {
+  hexagonal: 'px-4',
+  shield: 'pb-6',
+}
+
 export function NodeShell({
   color,
   icon: Icon,
   label,
   ariaLabel,
   selected,
+  shape = 'rectangle',
   width = 'w-[200px]',
   targetPosition = Position.Top,
   sourcePosition = Position.Bottom,
@@ -92,15 +124,14 @@ export function NodeShell({
   children,
 }: NodeShellProps) {
   const theme = COLOR_CLASSES[color]
+  const shapeClass = SHAPE_CLASSES[shape]
+  const clipPath = SHAPE_CLIP_PATHS[shape]
+  const bodyExtra = SHAPE_BODY_CLASSES[shape]
+
+  const innerStyle: CSSProperties | undefined = clipPath ? { clipPath } : undefined
+
   return (
-    <div
-      aria-label={ariaLabel}
-      className={cn(
-        width,
-        'overflow-hidden rounded-lg border bg-card shadow-sm transition-all duration-150',
-        selected ? theme.selected : theme.unselected,
-      )}
-    >
+    <div aria-label={ariaLabel} className={cn(width, 'relative')}>
       <Handle
         type="target"
         position={targetPosition}
@@ -109,18 +140,28 @@ export function NodeShell({
 
       <div
         className={cn(
-          'flex h-6 items-center gap-1 bg-gradient-to-r px-1.5',
-          theme.from,
-          headerGradientTo ?? theme.to,
+          'overflow-hidden border bg-card shadow-sm transition-all duration-150',
+          shapeClass,
+          shape === 'rectangle' && 'node-accent-left',
+          selected ? theme.selected : theme.unselected,
         )}
+        style={innerStyle}
       >
-        <Icon className="h-3 w-3 shrink-0 text-white/90" />
-        <span className="text-[10px] font-bold uppercase tracking-wider text-white/90">
-          {label}
-        </span>
-      </div>
+        <div
+          className={cn(
+            'flex h-6 items-center gap-1 bg-gradient-to-r px-1.5',
+            theme.from,
+            headerGradientTo ?? theme.to,
+          )}
+        >
+          <Icon className="h-3 w-3 shrink-0 text-white/90" />
+          <span className="text-[10px] font-bold uppercase tracking-wider text-white/90">
+            {label}
+          </span>
+        </div>
 
-      <div className="space-y-0.5 px-2 py-1.5">{children}</div>
+        <div className={cn('space-y-0.5 px-2 py-1.5', bodyExtra)}>{children}</div>
+      </div>
 
       <Handle
         type="source"

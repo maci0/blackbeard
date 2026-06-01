@@ -43,7 +43,8 @@ export default memo(function FlowStepNode({ data, selected }: NodeProps) {
       label="Step"
       ariaLabel={`Flow step: ${name || 'Unnamed Step'}`}
       selected={!!selected}
-      width="w-[140px]"
+      shape="chamfered"
+      width="w-[160px]"
     >
       <p
         className="truncate text-xs font-semibold leading-tight text-foreground"

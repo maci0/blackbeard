@@ -21,6 +21,8 @@ export default memo(function TaskNode({ data, selected }: NodeProps) {
       label="Task"
       ariaLabel={`Task: ${name || 'Unnamed Task'}`}
       selected={!!selected}
+      shape="rectangle"
+      width="w-[220px]"
     >
       <p
         className="truncate text-xs font-semibold leading-tight text-foreground"

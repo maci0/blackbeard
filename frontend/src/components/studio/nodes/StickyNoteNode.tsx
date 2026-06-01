@@ -56,7 +56,7 @@ export default memo(function StickyNoteNode({ id, data, selected }: NodeProps) {
     <div
       aria-label={`Sticky note: ${text.slice(0, 40) || 'empty'}`}
       className={cn(
-        'w-[180px] rounded-lg border shadow-sm transition-all duration-150',
+        'node-fold w-[180px] rotate-[0.5deg] rounded-lg border shadow-sm transition-all duration-150',
         style.bg,
         style.border,
         selected && 'shadow-md ring-2 ring-amber-300 ring-offset-1 dark:ring-offset-slate-900',

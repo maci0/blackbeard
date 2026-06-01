@@ -17,7 +17,8 @@ export default memo(function ConditionNode({ data, selected }: NodeProps) {
       label="Condition"
       ariaLabel={`Condition: ${name || 'Unnamed Condition'}`}
       selected={!!selected}
-      width="w-[160px]"
+      shape="diamond-top"
+      width="w-[170px]"
       headerGradientTo="to-yellow-500"
     >
       <p

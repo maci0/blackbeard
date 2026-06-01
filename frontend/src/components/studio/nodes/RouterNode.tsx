@@ -15,7 +15,8 @@ export default memo(function RouterNode({ data, selected }: NodeProps) {
       label="Router"
       ariaLabel={`Router: ${name || 'Unnamed Router'}`}
       selected={!!selected}
-      width="w-[160px]"
+      shape="hexagonal"
+      width="w-[170px]"
     >
       <p
         className="truncate text-xs font-semibold leading-tight text-foreground"
