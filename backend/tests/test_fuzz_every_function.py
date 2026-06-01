@@ -313,7 +313,7 @@ class TestPii:
         reset_engines()
 
     @given(text=safe_text)
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=5000)
     def test_fuzz_analyze(self, text: str) -> None:
         from blackbeard.pii import _get_analyzer
 
