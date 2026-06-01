@@ -28,6 +28,7 @@ import { modKey } from '@/lib/platform'
 import { useStudioStore } from '@/stores/studioStore'
 import { useToastStore } from '@/stores/toastStore'
 import type { RunStatus } from '@/lib/types'
+import { Tooltip } from '@/components/ui/Tooltip'
 import { RunStatusBadge } from './RunStatusBadge'
 import { KeyboardShortcuts } from './KeyboardShortcuts'
 import { PresenceAvatars } from '@/components/ui/PresenceAvatars'
@@ -287,111 +288,120 @@ export function Toolbar({
       {/* Actions */}
       <div className="flex items-center gap-2">
         {/* Undo / Redo */}
-        <button
-          type="button"
-          onClick={undo}
-          disabled={!canUndo}
-          className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          aria-label="Undo"
-          title={`Undo (${modKey}+Z)`}
-        >
-          <Undo2 className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={redo}
-          disabled={!canRedo}
-          className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          aria-label="Redo"
-          title={`Redo (${modKey}+Shift+Z)`}
-        >
-          <Redo2 className="h-3.5 w-3.5" />
-        </button>
+        <Tooltip content={`Undo (${modKey}+Z)`}>
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!canUndo}
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            aria-label="Undo"
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </button>
+        </Tooltip>
+        <Tooltip content={`Redo (${modKey}+Shift+Z)`}>
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!canRedo}
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            aria-label="Redo"
+          >
+            <Redo2 className="h-3.5 w-3.5" />
+          </button>
+        </Tooltip>
 
-        <button
-          type="button"
-          data-tour="save-button"
-          onClick={onSave}
-          disabled={status === 'saving' || status === 'loading'}
-          title={`Save (${modKey}+S)`}
-          aria-label={`Save crew${dirty ? ' (unsaved changes)' : ''}`}
-          className="btn-press flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        >
-          {status === 'saving' ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
-          ) : (
-            <Save className="h-3.5 w-3.5" />
-          )}
-          Save
-          {dirty && (
-            <>
-              <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden="true" />
-              <span className="sr-only">(unsaved changes)</span>
-            </>
-          )}
-        </button>
+        <Tooltip content={`Save (${modKey}+S)`}>
+          <button
+            type="button"
+            data-tour="save-button"
+            onClick={onSave}
+            disabled={status === 'saving' || status === 'loading'}
+            aria-label={`Save crew${dirty ? ' (unsaved changes)' : ''}`}
+            className="btn-press flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            {status === 'saving' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+            ) : (
+              <Save className="h-3.5 w-3.5" />
+            )}
+            Save
+            {dirty && (
+              <>
+                <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden="true" />
+                <span className="sr-only">(unsaved changes)</span>
+              </>
+            )}
+          </button>
+        </Tooltip>
 
-        <button
-          type="button"
-          data-tour="run-button"
-          onClick={onRunClick}
-          disabled={status === 'running' || status === 'saving' || status === 'loading'}
-          aria-label={`Run crew ${crewName}`}
-          title={
+        <Tooltip
+          content={
             status === 'running'
               ? 'Crew is already running'
               : status === 'saving'
-                ? 'Saving in progress…'
+                ? 'Saving in progress...'
                 : status === 'loading'
-                  ? 'Loading crew…'
+                  ? 'Loading crew...'
                   : 'Run this crew'
           }
-          className="btn-press flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600"
         >
-          {status === 'running' ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
-          ) : (
-            <Play className="h-3.5 w-3.5" />
-          )}
-          Run
-        </button>
-
-        {hasExecResults && onClearExecResults && (
           <button
             type="button"
-            onClick={onClearExecResults}
-            aria-label="Clear execution results from canvas"
-            title="Clear results"
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            data-tour="run-button"
+            onClick={onRunClick}
+            disabled={status === 'running' || status === 'saving' || status === 'loading'}
+            aria-label={`Run crew ${crewName}`}
+            className="btn-press flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600"
           >
-            <XCircle className="h-3.5 w-3.5" />
-            Clear results
+            {status === 'running' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+            ) : (
+              <Play className="h-3.5 w-3.5" />
+            )}
+            Run
           </button>
+        </Tooltip>
+
+        {hasExecResults && onClearExecResults && (
+          <Tooltip content="Clear execution results">
+            <button
+              type="button"
+              onClick={onClearExecResults}
+              aria-label="Clear execution results from canvas"
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              Clear results
+            </button>
+          </Tooltip>
         )}
 
         {/* Crew settings */}
-        <button
-          type="button"
-          onClick={onCrewSettingsClick}
-          aria-label="Crew settings"
-          title="Crew Settings"
-          className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Settings className="h-3.5 w-3.5" />
-        </button>
+        <Tooltip content="Crew Settings">
+          <button
+            type="button"
+            onClick={onCrewSettingsClick}
+            aria-label="Crew settings"
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </button>
+        </Tooltip>
 
         {/* AI Assistant */}
-        <button
-          type="button"
-          onClick={onAssistantClick}
-          disabled={status === 'saving' || status === 'loading'}
-          aria-label="AI Assistant — generate crew from prompt"
-          title="AI Assistant"
-          className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-950"
-        >
-          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-          Assistant
-        </button>
+        <Tooltip content="Generate crew from prompt">
+          <button
+            type="button"
+            onClick={onAssistantClick}
+            disabled={status === 'saving' || status === 'loading'}
+            aria-label="AI Assistant, generate crew from prompt"
+            className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-950"
+          >
+            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+            Assistant
+          </button>
+        </Tooltip>
 
         {/* Export dropdown */}
         <DropdownMenu.Root>
@@ -446,60 +456,67 @@ export function Toolbar({
         </DropdownMenu.Root>
 
         {/* YAML editor toggle */}
-        <button
-          type="button"
-          onClick={onYamlToggle}
-          aria-label={yamlOpen ? 'Close YAML editor' : 'Open YAML editor'}
-          aria-pressed={yamlOpen}
-          title="Toggle YAML editor"
-          className={`flex h-[44px] w-[44px] items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-            yamlOpen ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:bg-muted'
-          }`}
-        >
-          <FileCode2 className="h-3.5 w-3.5" />
-        </button>
+        <Tooltip content="Toggle YAML editor">
+          <button
+            type="button"
+            onClick={onYamlToggle}
+            aria-label={yamlOpen ? 'Close YAML editor' : 'Open YAML editor'}
+            aria-pressed={yamlOpen}
+            className={`flex h-[44px] w-[44px] items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              yamlOpen
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border hover:bg-muted'
+            }`}
+          >
+            <FileCode2 className="h-3.5 w-3.5" />
+          </button>
+        </Tooltip>
 
         {/* Auto layout */}
-        <button
-          type="button"
-          onClick={onAutoLayout}
-          disabled={layouting}
-          aria-label="Auto-arrange nodes"
-          title="Auto layout"
-          className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        >
-          {layouting ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
-          ) : (
-            <LayoutGrid className="h-3.5 w-3.5" />
-          )}
-        </button>
+        <Tooltip content="Auto layout">
+          <button
+            type="button"
+            onClick={onAutoLayout}
+            disabled={layouting}
+            aria-label="Auto-arrange nodes"
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            {layouting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+            ) : (
+              <LayoutGrid className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </Tooltip>
 
         {/* Collaboration toggle + participant count */}
         {onCollabToggle && (
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={onCollabToggle}
-              aria-label={
-                collabEnabled ? 'Disable live collaboration' : 'Enable live collaboration'
-              }
-              aria-pressed={collabEnabled}
-              title={
+            <Tooltip
+              content={
                 collabEnabled
-                  ? 'Collaboration active — click to disconnect'
+                  ? 'Collaboration active, click to disconnect'
                   : 'Enable live collaboration'
               }
-              className={`flex h-[44px] w-[44px] items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                collabEnabled && collabConnected
-                  ? 'border-emerald-500 bg-emerald-500/10 text-emerald-500'
-                  : collabEnabled
-                    ? 'border-amber-500 bg-amber-500/10 text-amber-500'
-                    : 'border-border hover:bg-muted'
-              }`}
             >
-              <Radio className="h-3.5 w-3.5" />
-            </button>
+              <button
+                type="button"
+                onClick={onCollabToggle}
+                aria-label={
+                  collabEnabled ? 'Disable live collaboration' : 'Enable live collaboration'
+                }
+                aria-pressed={collabEnabled}
+                className={`flex h-[44px] w-[44px] items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  collabEnabled && collabConnected
+                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-500'
+                    : collabEnabled
+                      ? 'border-amber-500 bg-amber-500/10 text-amber-500'
+                      : 'border-border hover:bg-muted'
+                }`}
+              >
+                <Radio className="h-3.5 w-3.5" />
+              </button>
+            </Tooltip>
             {collabEnabled && collabConnected && (collabParticipants ?? 1) > 1 && (
               <span
                 className="flex items-center gap-1 text-xs font-medium text-emerald-500"
@@ -515,15 +532,16 @@ export function Toolbar({
         {presenceUsers && presenceUsers.length > 0 && <PresenceAvatars users={presenceUsers} />}
 
         {/* Keyboard shortcuts */}
-        <button
-          type="button"
-          onClick={() => setShortcutsOpen(true)}
-          aria-label="Keyboard shortcuts"
-          title={`Keyboard shortcuts (${modKey}+/)`}
-          className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Keyboard className="h-3.5 w-3.5" />
-        </button>
+        <Tooltip content={`Keyboard shortcuts (${modKey}+/)`}>
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            aria-label="Keyboard shortcuts"
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Keyboard className="h-3.5 w-3.5" />
+          </button>
+        </Tooltip>
       </div>
 
       <KeyboardShortcuts open={shortcutsOpen} onOpenChange={setShortcutsOpen} />

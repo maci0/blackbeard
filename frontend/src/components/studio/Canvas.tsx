@@ -29,6 +29,7 @@ import {
 import { useShallow } from 'zustand/react/shallow'
 import { useStudioStore } from '@/stores/studioStore'
 import { DATAFLOW_MARKER_END, getDefaultNodeData } from './defaults'
+import { NodeContextMenu, type NodeContextMenuState } from './NodeContextMenu'
 import AgentNode from './nodes/AgentNode'
 import TaskNode from './nodes/TaskNode'
 import ToolNode from './nodes/ToolNode'
@@ -161,6 +162,8 @@ function CanvasInner() {
     })
     return () => observer.disconnect()
   }, [])
+  const [contextMenu, setContextMenu] = useState<NodeContextMenuState | null>(null)
+
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, setSelectedNode } =
     useStudioStore(
       useShallow((s) => ({
@@ -272,7 +275,22 @@ function CanvasInner() {
 
   const onPaneClick = useCallback(() => {
     setSelectedNode(null)
+    setContextMenu(null)
   }, [setSelectedNode])
+
+  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+    event.preventDefault()
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      nodeId: node.id,
+      nodeType: node.type ?? '',
+    })
+  }, [])
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null)
+  }, [])
 
   return (
     <ReactFlow
@@ -287,6 +305,7 @@ function CanvasInner() {
       edgeTypes={EDGE_TYPES}
       onNodeClick={onNodeClick}
       onPaneClick={onPaneClick}
+      onNodeContextMenu={onNodeContextMenu}
       onDrop={onDrop}
       onDragOver={onDragOver}
       fitView
@@ -320,6 +339,7 @@ function CanvasInner() {
         pannable
         zoomable
       />
+      {contextMenu && <NodeContextMenu menu={contextMenu} onClose={closeContextMenu} />}
     </ReactFlow>
   )
 }

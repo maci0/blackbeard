@@ -6,7 +6,9 @@ import { useShallow } from 'zustand/react/shallow'
 import { useStudioStore } from '@/stores/studioStore'
 import { api } from '@/api/client'
 import { capitalize, toResourceName, parseRef, getErrorMessage } from '@/lib/utils'
-import { useCollaboration, useDocumentTitle, usePresence } from '@/hooks'
+import { useCollaboration, useDocumentTitle, useMediaQuery, usePresence } from '@/hooks'
+import { Group, Panel, Separator } from 'react-resizable-panels'
+import { useDefaultLayout } from 'react-resizable-panels'
 import { API_VERSION, KIND_TO_PLURAL } from '@/lib/kinds'
 import { DATAFLOW_MARKER_END } from '@/components/studio/defaults'
 import Palette, { MobilePalette } from '@/components/studio/Palette'
@@ -211,6 +213,24 @@ function StudioInner() {
   const { users: presenceUsers, connected: presenceConnected } = usePresence(presenceRoomId)
 
   useDocumentTitle('Studio')
+
+  // sm breakpoint (640px) -- panels only on desktop
+  const isDesktop = useMediaQuery('(min-width: 640px)')
+
+  // Persist panel sizes to localStorage across page reloads.
+  // Panel ids change when the PropertyPanel is shown/hidden,
+  // so we pass panelIds to let the hook cache each configuration.
+  const panelIds = [
+    'palette',
+    'canvas',
+    ...(selectedNodeId ? ['properties'] : []),
+    ...(yamlOpen ? ['yaml'] : []),
+  ]
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: 'studio-layout',
+    panelIds,
+    storage: localStorage,
+  })
 
   const lastCursorBroadcast = useRef(0)
   const throttledBroadcastCursor = useMemo(() => {
@@ -936,16 +956,58 @@ function StudioInner() {
         className="relative flex flex-1 overflow-hidden"
         onMouseMove={collabEnabled && collabConnected ? throttledBroadcastCursor : undefined}
       >
-        <Palette />
-        <Canvas onLoadExample={handleLoadExample} />
-        {collabEnabled && collabConnected && (
-          <CursorOverlay cursors={Array.from(remoteCursors.values())} />
-        )}
-        {selectedNodeId && <PropertyPanel />}
-        {yamlOpen && (
-          <div className="w-[360px] shrink-0">
-            <YamlEditor />
-          </div>
+        {isDesktop ? (
+          <Group
+            orientation="horizontal"
+            defaultLayout={defaultLayout}
+            onLayoutChanged={onLayoutChanged}
+          >
+            <Panel id="palette" defaultSize={8} minSize={5} maxSize={20} collapsible>
+              <Palette />
+            </Panel>
+            <Separator className="group relative w-1 bg-transparent transition-colors hover:bg-primary/20 active:bg-primary/30">
+              <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border group-hover:bg-primary/40" />
+            </Separator>
+            <Panel id="canvas" defaultSize={selectedNodeId ? 70 : 92}>
+              <Canvas onLoadExample={handleLoadExample} />
+              {collabEnabled && collabConnected && (
+                <CursorOverlay cursors={Array.from(remoteCursors.values())} />
+              )}
+            </Panel>
+            {selectedNodeId && (
+              <>
+                <Separator className="group relative w-1 bg-transparent transition-colors hover:bg-primary/20 active:bg-primary/30">
+                  <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border group-hover:bg-primary/40" />
+                </Separator>
+                <Panel id="properties" defaultSize={22} minSize={15} maxSize={40}>
+                  <PropertyPanel />
+                </Panel>
+              </>
+            )}
+            {yamlOpen && (
+              <>
+                <Separator className="group relative w-1 bg-transparent transition-colors hover:bg-primary/20 active:bg-primary/30">
+                  <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border group-hover:bg-primary/40" />
+                </Separator>
+                <Panel id="yaml" defaultSize={22} minSize={10} maxSize={40}>
+                  <YamlEditor />
+                </Panel>
+              </>
+            )}
+          </Group>
+        ) : (
+          <>
+            <Canvas onLoadExample={handleLoadExample} />
+            {collabEnabled && collabConnected && (
+              <CursorOverlay cursors={Array.from(remoteCursors.values())} />
+            )}
+            {selectedNodeId && <PropertyPanel />}
+            {yamlOpen && (
+              <div className="w-[360px] shrink-0">
+                <YamlEditor />
+              </div>
+            )}
+          </>
         )}
       </div>
       <MobilePalette />

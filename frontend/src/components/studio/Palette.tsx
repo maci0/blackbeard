@@ -358,7 +358,7 @@ export default function Palette() {
     <aside
       aria-label="Node palette"
       data-tour="palette"
-      className="hidden w-[108px] shrink-0 flex-col border-r bg-card sm:flex"
+      className="flex h-full w-full flex-col border-r bg-card"
     >
       <div className="border-b px-2 pb-2 pt-3">
         <div className="relative">

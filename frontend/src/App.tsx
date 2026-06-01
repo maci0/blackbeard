@@ -7,6 +7,7 @@ import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
 import { useDocumentTitle, useOnboarding } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
 import { ToastContainer } from '@/components/ui/Toast'
+import { TooltipProvider } from '@/components/ui/Tooltip'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/api/client'
 
@@ -113,7 +114,7 @@ function App() {
   }, [token, fetchMe])
 
   return (
-    <>
+    <TooltipProvider delayDuration={300}>
       {token && showOnboarding && <OnboardingWizard onDismiss={dismissOnboarding} />}
       <ErrorBoundary>
         <Suspense
@@ -163,7 +164,7 @@ function App() {
         </Suspense>
       </ErrorBoundary>
       <ToastContainer />
-    </>
+    </TooltipProvider>
   )
 }
 

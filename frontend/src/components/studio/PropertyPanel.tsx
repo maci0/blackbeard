@@ -1462,7 +1462,7 @@ export default function PropertyPanel() {
     return (
       <aside
         aria-label="Node properties"
-        className="hidden w-[300px] shrink-0 flex-col items-center justify-center border-l bg-card p-6 text-center sm:flex"
+        className="hidden shrink-0 flex-col items-center justify-center border-l bg-card p-6 text-center sm:flex sm:h-full sm:w-full"
       >
         <p className="text-sm font-medium text-muted-foreground">No node selected</p>
         <p className="mt-1 text-xs text-muted-foreground/70">
@@ -1475,7 +1475,7 @@ export default function PropertyPanel() {
   return (
     <aside
       aria-label="Node properties"
-      className="absolute right-0 top-0 z-20 flex h-full w-[300px] shrink-0 flex-col overflow-hidden border-l bg-card shadow-lg sm:static sm:z-auto sm:shadow-none"
+      className="absolute right-0 top-0 z-20 flex h-full w-[300px] shrink-0 flex-col overflow-hidden border-l bg-card shadow-lg sm:static sm:z-auto sm:w-full sm:shadow-none"
     >
       {/* Header */}
       <div
