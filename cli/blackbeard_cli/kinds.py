@@ -1,6 +1,6 @@
-"""Resource kind registry — copied from backend/blackbeard/kinds.py.
+"""Resource kind registry — synced from backend/blackbeard/kinds.py.
 
-Keep in sync with the backend's canonical registry.
+Run ``cli/scripts/sync_schemas.sh`` after backend kind changes.
 """
 
 from __future__ import annotations

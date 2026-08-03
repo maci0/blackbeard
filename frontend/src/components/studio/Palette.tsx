@@ -21,6 +21,7 @@ import { useStudioStore } from '@/stores/studioStore'
 import { useResourceStore } from '@/stores/resourceStore'
 import type { Resource } from '@/lib/types'
 import { getDefaultNodeData } from './defaults'
+import { CLIP_PATHS } from './nodes/shapes'
 
 interface PaletteItem {
   type: string
@@ -98,7 +99,7 @@ const ITEMS: PaletteItem[] = [
     borderColor:
       'border-rose-200 hover:border-rose-400 dark:border-rose-800 dark:hover:border-rose-600',
     cardShape: {
-      style: { clipPath: 'polygon(0% 0%, 100% 0%, 100% 80%, 50% 100%, 0% 80%)' },
+      style: { clipPath: CLIP_PATHS.shieldSm },
     },
   },
   {
@@ -111,9 +112,7 @@ const ITEMS: PaletteItem[] = [
     borderColor:
       'border-amber-200 hover:border-amber-400 dark:border-amber-800 dark:hover:border-amber-600',
     cardShape: {
-      style: {
-        clipPath: 'polygon(6px 0%, calc(100% - 6px) 0%, 100% 6px, 100% 100%, 0% 100%, 0% 6px)',
-      },
+      style: { clipPath: CLIP_PATHS.diamondTopSm },
     },
   },
   {
@@ -148,9 +147,7 @@ const ITEMS: PaletteItem[] = [
     borderColor:
       'border-amber-200 hover:border-amber-400 dark:border-amber-800 dark:hover:border-amber-600',
     cardShape: {
-      style: {
-        clipPath: 'polygon(6px 0%, calc(100% - 6px) 0%, 100% 6px, 100% 100%, 0% 100%, 0% 6px)',
-      },
+      style: { clipPath: CLIP_PATHS.diamondTopSm },
     },
   },
   {
@@ -185,9 +182,7 @@ const ITEMS: PaletteItem[] = [
     borderColor:
       'border-orange-200 hover:border-orange-400 dark:border-orange-800 dark:hover:border-orange-600',
     cardShape: {
-      style: {
-        clipPath: 'polygon(6px 0%, calc(100% - 6px) 0%, 100% 6px, 100% 100%, 0% 100%, 0% 6px)',
-      },
+      style: { clipPath: CLIP_PATHS.diamondTopSm },
     },
   },
   {

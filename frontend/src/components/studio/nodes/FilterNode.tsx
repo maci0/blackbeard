@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { type NodeProps, Handle, Position } from '@xyflow/react'
 import { Filter } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { CLIP_PATHS } from './shapes'
 
 export default memo(function FilterNode({ data, selected }: NodeProps) {
   const condition = (data['condition'] as string | undefined) ?? ''
@@ -22,10 +23,7 @@ export default memo(function FilterNode({ data, selected }: NodeProps) {
             ? 'border-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.25)] ring-2 ring-orange-300 ring-offset-1 dark:shadow-[0_0_15px_rgba(249,115,22,0.15)] dark:ring-offset-slate-900'
             : 'border-slate-200 hover:border-orange-200 hover:shadow-md dark:border-slate-700',
         )}
-        style={{
-          clipPath:
-            'polygon(12px 0%, calc(100% - 12px) 0%, 100% 12px, 100% 100%, 0% 100%, 0% 12px)',
-        }}
+        style={{ clipPath: CLIP_PATHS.diamondTop }}
       >
         <div className="flex items-center gap-1.5 bg-gradient-to-r from-orange-500 to-orange-400 px-2 py-1.5">
           <Filter className="h-3.5 w-3.5 text-white/90" />

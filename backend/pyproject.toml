@@ -24,7 +24,6 @@ dependencies = [
     "httpx>=0.28,<1",
     "jsonschema>=4.23,<5",
     "croniter>=2.0,<3",
-    "grpcio>=1.70,<2",
     "crewai-tools>=1.14.5,<2",
     "pyjwt>=2.10,<3",
     "bcrypt>=4.3,<5",
@@ -32,6 +31,7 @@ dependencies = [
     "presidio-analyzer>=2.2,<3",
     "presidio-anonymizer>=2.2,<3",
     "authlib>=1.7.2,<2",
+    "itsdangerous>=2.2,<3",
 ]
 
 [tool.uv]
@@ -53,7 +53,6 @@ dev = [
     "aiosqlite>=0.20,<1",
     "pip-audit>=2.9,<3",
     "hypothesis>=6.100,<7",
-    "grpcio-tools>=1.70,<2",
     "bandit[toml]>=1.8,<2",
 ]
 temporal = [
@@ -66,8 +65,6 @@ muninn = [
 [tool.ruff]
 target-version = "py313"
 line-length = 100
-extend-exclude = ["blackbeard/grpc/blackbeard_pb2.py", "blackbeard/grpc/blackbeard_pb2_grpc.py"]
-
 [tool.ruff.lint]
 select = [
     "E", "F", "I", "N", "W",   # core
@@ -94,7 +91,6 @@ ignore = [
 "blackbeard/models/resource_schemas.py" = ["N815"]  # apiVersion is API contract
 "blackbeard/engine/executor.py" = ["PT"]  # test_crew is not a pytest test
 "blackbeard/resources/refs.py" = ["N806"]  # WHITE/GRAY/BLACK graph constants
-"blackbeard/grpc/**" = ["ANN", "N802", "E501", "TCH"]  # gRPC method names match proto; generated code
 
 [tool.ruff.lint.flake8-type-checking]
 runtime-evaluated-base-classes = ["pydantic.BaseModel"]
@@ -118,3 +114,4 @@ disallow_untyped_decorators = false
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+

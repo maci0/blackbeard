@@ -21,7 +21,6 @@ export default memo(function AgentNode({ data, selected }: NodeProps) {
       label="Agent"
       ariaLabel={`Agent: ${role || 'Unnamed Agent'}`}
       selected={!!selected}
-      shape="rectangle"
       width="w-[220px]"
     >
       <p

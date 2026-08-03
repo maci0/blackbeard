@@ -1353,3 +1353,112 @@ def test_loader_caches_are_per_instance(mock_llm_cls):
 
     # Each loader builds its own instance
     assert mock_llm_cls.call_count == 2
+
+# ---------------------------------------------------------------------------
+# Sandbox tier selection at agent load
+# ---------------------------------------------------------------------------
+
+
+@patch("blackbeard.engine.loader.importlib")
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.logger")
+def test_build_agent_selects_sandbox_tier(
+    mock_logger, mock_agent_cls, mock_llm_cls, mock_importlib
+):
+    """Policy minimum promotes tool sandbox tier and emits structured log."""
+    fake_tool_cls = MagicMock(name="SearchTool")
+    fake_module = ModuleType("crewai_tools.search")
+    fake_module.SearchTool = fake_tool_cls  # type: ignore[attr-defined]
+    mock_importlib.import_module.return_value = fake_module
+
+    tool = make_resource(
+        ResourceKind.TOOL,
+        "search",
+        {
+            "type": "python",
+            "class_path": "crewai_tools.search.SearchTool",
+            "description": "search",
+            "sandbox": "none",
+        },
+    )
+    agent = make_resource(
+        ResourceKind.AGENT,
+        "tooled",
+        {
+            "role": "r",
+            "goal": "g",
+            "backstory": "b",
+            "tools": ["ref:tools/search"],
+            "policy": "ref:agent-policies/strict",
+        },
+    )
+    policy = make_resource(
+        ResourceKind.AGENT_POLICY,
+        "strict",
+        {"sandbox": {"minimum_tier": "docker"}},
+    )
+    loader = ResourceLoader(
+        _resource_map(tool, agent, policy),
+        policies={"strict": policy.spec},
+    )
+    loader.build_agent("ref:agents/tooled")
+
+    extras = [
+        c.kwargs.get("extra")
+        for c in mock_logger.info.call_args_list
+        if c.kwargs.get("extra")
+    ]
+    tier_events = [e for e in extras if e and e.get("event") == "sandbox_tier_selected"]
+    assert tier_events, "expected sandbox_tier_selected log event"
+    assert tier_events[0]["effective_tier"] == "docker"
+    assert tier_events[0]["tool_tier"] == "none"
+    assert tier_events[0]["policy_minimum"] == "docker"
+    assert tier_events[0]["tool_name"] == "search"
+    assert tier_events[0]["agent_name"] == "tooled"
+
+
+@patch("blackbeard.engine.loader.importlib")
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.logger")
+def test_build_agent_sandbox_default_none(
+    mock_logger, mock_agent_cls, mock_llm_cls, mock_importlib
+):
+    """Without policy, tool sandbox default none stays none."""
+    fake_tool_cls = MagicMock(name="PlainTool")
+    fake_module = ModuleType("crewai_tools.plain")
+    fake_module.PlainTool = fake_tool_cls  # type: ignore[attr-defined]
+    mock_importlib.import_module.return_value = fake_module
+
+    tool = make_resource(
+        ResourceKind.TOOL,
+        "plain",
+        {
+            "type": "python",
+            "class_path": "crewai_tools.plain.PlainTool",
+            "description": "plain",
+        },
+    )
+    agent = make_resource(
+        ResourceKind.AGENT,
+        "a",
+        {
+            "role": "r",
+            "goal": "g",
+            "backstory": "b",
+            "tools": ["ref:tools/plain"],
+        },
+    )
+    loader = ResourceLoader(_resource_map(tool, agent))
+    loader.build_agent("ref:agents/a")
+
+    extras = [
+        c.kwargs.get("extra")
+        for c in mock_logger.info.call_args_list
+        if c.kwargs.get("extra")
+    ]
+    tier_events = [e for e in extras if e and e.get("event") == "sandbox_tier_selected"]
+    assert tier_events
+    assert tier_events[0]["effective_tier"] == "none"
+

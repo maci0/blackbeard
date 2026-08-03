@@ -1,17 +1,16 @@
 import { type CSSProperties, type ReactNode } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { cn } from '@/lib/utils'
+import {
+  SHAPE_BODY_CLASSES,
+  SHAPE_CLASSES,
+  SHAPE_CLIP_PATHS,
+  type NodeShape,
+} from './shapes'
+
+export type { NodeShape }
 
 type NodeColor = 'violet' | 'blue' | 'emerald' | 'amber' | 'rose' | 'cyan' | 'purple'
-
-export type NodeShape =
-  | 'rectangle'
-  | 'chamfered'
-  | 'diamond-top'
-  | 'hexagonal'
-  | 'pill'
-  | 'shield'
-  | 'loop'
 
 interface NodeShellProps {
   color: NodeColor
@@ -87,27 +86,6 @@ const COLOR_CLASSES: Record<
     from: 'from-purple-600',
     to: 'to-purple-500',
   },
-}
-
-const SHAPE_CLASSES: Record<NodeShape, string> = {
-  rectangle: 'rounded-lg',
-  chamfered: 'rounded-[0px_14px_14px_0px]',
-  'diamond-top': '',
-  hexagonal: '',
-  pill: 'rounded-3xl',
-  shield: '',
-  loop: 'rounded-2xl',
-}
-
-const SHAPE_CLIP_PATHS: Partial<Record<NodeShape, string>> = {
-  'diamond-top': 'polygon(12px 0%, calc(100% - 12px) 0%, 100% 12px, 100% 100%, 0% 100%, 0% 12px)',
-  hexagonal: 'polygon(8% 0%, 92% 0%, 100% 50%, 92% 100%, 8% 100%, 0% 50%)',
-  shield: 'polygon(0% 0%, 100% 0%, 100% 75%, 50% 100%, 0% 75%)',
-}
-
-const SHAPE_BODY_CLASSES: Partial<Record<NodeShape, string>> = {
-  hexagonal: 'px-4',
-  shield: 'pb-6',
 }
 
 export function NodeShell({

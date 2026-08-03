@@ -39,7 +39,6 @@ import {
   Library,
   FlaskConical,
   UserCog,
-  BarChart3,
 } from 'lucide-react'
 import { useDarkMode, useHealthCheck } from '@/hooks'
 import { Spinner } from '@/components/ui/Spinner'
@@ -84,7 +83,6 @@ const navSections: Array<{ key: string; label: string; items: NavItem[] }> = [
       { to: '/executions', label: 'Executions', icon: Play },
       { to: '/chat', label: 'Chat', icon: MessageSquare },
       { to: '/automations', label: 'Automations', icon: Timer },
-      { to: '/observability', label: 'Observability', icon: BarChart3 },
       { to: '/guardrails/playground', label: 'Guardrails', icon: FlaskConical },
     ],
   },

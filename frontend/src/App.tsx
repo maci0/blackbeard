@@ -36,7 +36,6 @@ const Credentials = lazy(() => import('@/pages/Credentials'))
 const ToolsLibrary = lazy(() => import('@/pages/ToolsLibrary'))
 const Projects = lazy(() => import('@/pages/Projects'))
 const ServiceAccounts = lazy(() => import('@/pages/ServiceAccounts'))
-const Observability = lazy(() => import('@/pages/Observability'))
 
 const PUBLIC_PATHS = new Set(['/login', '/register'])
 
@@ -154,7 +153,7 @@ function App() {
                 <Route path="projects" element={<Projects />} />
                 <Route path="service-accounts" element={<ServiceAccounts />} />
                 <Route path="tools/library" element={<ToolsLibrary />} />
-                <Route path="observability" element={<Observability />} />
+                <Route path="observability" element={<Navigate to="/" replace />} />
                 <Route path="guardrails/playground" element={<GuardrailPlayground />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="*" element={<NotFound />} />

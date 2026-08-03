@@ -30,7 +30,6 @@ from blackbeard.api.chat import router as chat_router
 from blackbeard.api.collaboration import router as collaboration_router
 from blackbeard.api.credentials import router as credentials_router
 from blackbeard.api.executions import router as executions_router
-from blackbeard.api.git import router as git_router
 from blackbeard.api.health import router as health_router
 from blackbeard.api.health import shutdown_health_clients
 from blackbeard.api.marketplace import router as marketplace_router
@@ -285,36 +284,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             extra={"event": "litellm_startup_sync_failed"},
         )
 
-    # Start gRPC server alongside FastAPI
-    grpc_server = None
-    try:
-        from blackbeard.grpc.server import start_grpc_server
-
-        grpc_port = settings.grpc_port
-        grpc_server = await start_grpc_server(port=grpc_port)
-        logger.info(
-            "gRPC server started on port %d",
-            grpc_port,
-            extra={"event": "grpc_server_started", "port": grpc_port},
-        )
-    except Exception:
-        logger.warning(
-            "gRPC server failed to start — continuing without gRPC",
-            exc_info=True,
-            extra={"event": "grpc_server_start_failed"},
-        )
-
-    try:
-        from blackbeard.engine.git_store import init_git_store
-
-        init_git_store(settings.git_resource_dir)
-    except Exception:
-        logger.warning(
-            "Git resource store init failed — resource git history will be unavailable",
-            exc_info=True,
-            extra={"event": "git_store_init_failed"},
-        )
-
     # Discover and load plugins
     try:
         from blackbeard.plugins.loader import load_plugins as _load_plugins
@@ -388,9 +357,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     logger.info("Shutdown starting", extra={"event": "app_shutdown_start"})
     try:
         await scheduler.stop()
-        if grpc_server is not None:
-            await grpc_server.stop(grace=5)
-            logger.info("gRPC server stopped", extra={"event": "grpc_server_stopped"})
         if temporal_running:
             try:
                 from blackbeard.engine.temporal import stop_temporal_worker
@@ -544,7 +510,6 @@ app.include_router(a2a_router)
 app.include_router(asyncapi_router)
 app.include_router(agency_import_router, prefix="/api/v1")
 app.include_router(tools_library_router, prefix="/api/v1")
-app.include_router(git_router, prefix="/api/v1")
 app.include_router(plugins_router, prefix="/api/v1")
 
 if settings.oidc_issuer:

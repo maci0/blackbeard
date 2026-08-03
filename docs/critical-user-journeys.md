@@ -389,19 +389,17 @@ Every journey below is a sequence a real user would follow to accomplish a goal.
 
 ---
 
-## CUJ-23: Observability Dashboard
+## CUJ-23: Dashboard Metrics
 
 **Actor:** Admin or developer user  
 **Goal:** Monitor platform health, spend, and execution metrics at a glance  
 
-1. Navigate to `/observability`
-2. View budget utilization cards (current spend, remaining budget, spend rate)
-3. View execution metrics (total runs, success rate, average duration, active count)
-4. View token usage breakdown by crew
-5. View policy and safety stats (permission denials, guardrail triggers, budget exceeded events)
-6. Click a stat card to navigate to the related detail page (e.g., click spend to go to executions, click guardrail triggers to go to guardrails)
+1. Navigate to `/` (Dashboard)
+2. View execution metrics (total runs, success rate, average duration, active count)
+3. View resource counts and recent activity
+4. Click a stat card to navigate to the related detail page (e.g., executions, resources)
 
-**Success criteria:** Dashboard renders all metric groups, cards link to correct detail pages.
+**Success criteria:** Dashboard renders metric groups, cards link to correct detail pages.
 
 ---
 
@@ -421,19 +419,18 @@ Every journey below is a sequence a real user would follow to accomplish a goal.
 
 ---
 
-## CUJ-25: Git Version Control
+## CUJ-25: Resource Version History
 
 **Actor:** Developer or admin user  
-**Goal:** Track resource changes through git-backed version control  
+**Goal:** Track and roll back resource changes via database snapshots  
 
-1. Create or update a resource (triggers a git commit on the backing repo)
-2. View git log at `GET /api/v1/git/log` to see commit history
-3. View diff between two commits to inspect what changed
-4. View blame for a specific resource file to see who changed each line
-5. View resource content at a specific commit to inspect historical state
-6. Add a remote via `POST /api/v1/git/remotes` and push to sync with an external repository
+1. Create or update a resource (triggers a version snapshot)
+2. List versions at `GET /api/v1/{kind}/{name}/versions`
+3. Inspect a specific version at `GET /api/v1/{kind}/{name}/versions/{version}`
+4. Roll back via `POST /api/v1/{kind}/{name}/rollback` with `{"version": N}`
+5. Confirm the resource spec matches the restored snapshot
 
-**Success criteria:** Resource mutations produce git commits, history is browsable, push to remote works.
+**Success criteria:** Mutations produce snapshots, history is listable, rollback restores prior state.
 
 ---
 

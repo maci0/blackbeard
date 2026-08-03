@@ -58,7 +58,6 @@ class Settings(BaseSettings):
     oidc_redirect_uri: str | None = None
     oidc_scopes: str = "openid email profile"
 
-    git_resource_dir: str = "data/git-resources"
     plugin_dir: str = "plugins"
 
     # Container sandbox settings
@@ -104,7 +103,6 @@ class Settings(BaseSettings):
 
     host: str = "0.0.0.0"  # nosec B104 -- intentional-for-containerized-deployment
     port: int = Field(default=8000, ge=1, le=65535)
-    grpc_port: int = Field(default=50051, ge=1, le=65535)
     web_concurrency: int = Field(default=1, ge=1)
     forwarded_allow_ips: str = "127.0.0.1"
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]

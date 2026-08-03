@@ -1,14 +1,13 @@
 """JSON Schema definitions for each resource kind.
 
 Used to validate the `spec` field of resources on create/update.
-Copied from backend/blackbeard/resources/spec_schemas.py — keep in sync.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from blackbeard_cli.kinds import ALL_KINDS
+from blackbeard.kinds import ALL_KINDS
 
 AGENT_SCHEMA = {
     "type": "object",
@@ -685,20 +684,6 @@ AUTOMATION_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
-SERVICE_ACCOUNT_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "description": {"type": "string", "maxLength": 5000},
-        "project": {"type": "string", "maxLength": 255},
-        "permissions": {
-            "type": "array",
-            "items": {"type": "string", "maxLength": 255},
-            "maxItems": 50,
-        },
-    },
-    "additionalProperties": False,
-}
-
 PROJECT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -723,6 +708,20 @@ PROJECT_SCHEMA: dict[str, Any] = {
             "type": "array",
             "items": {"type": "string", "maxLength": 500},
             "maxItems": 20,
+        },
+    },
+    "additionalProperties": False,
+}
+
+SERVICE_ACCOUNT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "description": {"type": "string", "maxLength": 5000},
+        "project": {"type": "string", "maxLength": 255},
+        "permissions": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 255},
+            "maxItems": 50,
         },
     },
     "additionalProperties": False,

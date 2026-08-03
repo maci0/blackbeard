@@ -2,6 +2,15 @@
 
 All notable changes to Blackbeard are documented here. Grouped by release, newest first.
 
+## Unreleased
+
+### Removed
+- **Git-backed resource store** (auto-commit, log/diff/blame/show, remotes). Database resource versioning (list/rollback) remains.
+- **gRPC API** (proto, server on port 50051, grpcio dependency). REST + SSE remain the public API surface.
+- **Observability page** at `/observability` (Dashboard covers high-level metrics; OTEL/Prometheus/Grafana stack unchanged).
+- Coverage-theater test suites and non-CUJ e2e duplicates of CUJ specs.
+- Unused frontend deps: `@radix-ui/react-context-menu`, `scroll-area`, `select`, `recharts`.
+
 ## 0.2.0
 
 ### Features

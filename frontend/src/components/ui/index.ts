@@ -29,11 +29,3 @@ export { StatusBadge } from './StatusBadge'
 export { ToastContainer } from './Toast'
 export { Tooltip, TooltipProvider } from './Tooltip'
 export { ViewToggle } from './ViewToggle'
-export {
-  ContextMenu,
-  ContextMenuTrigger,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuLabel,
-} from './ContextMenu'

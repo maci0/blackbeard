@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { type NodeProps, Handle, Position } from '@xyflow/react'
 import { GitBranch } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { CLIP_PATHS } from './shapes'
 
 export default memo(function IfElseNode({ data, selected }: NodeProps) {
   const condition = (data['condition'] as string | undefined) ?? ''
@@ -24,10 +25,7 @@ export default memo(function IfElseNode({ data, selected }: NodeProps) {
             ? 'border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.25)] ring-2 ring-amber-300 ring-offset-1 dark:shadow-[0_0_15px_rgba(245,158,11,0.15)] dark:ring-offset-slate-900'
             : 'border-slate-200 hover:border-amber-200 hover:shadow-md dark:border-slate-700',
         )}
-        style={{
-          clipPath:
-            'polygon(12px 0%, calc(100% - 12px) 0%, 100% 12px, 100% 100%, 0% 100%, 0% 12px)',
-        }}
+        style={{ clipPath: CLIP_PATHS.diamondTop }}
       >
         {/* Diamond-inspired header */}
         <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-yellow-400 px-2 py-1.5">

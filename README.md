@@ -102,9 +102,9 @@ uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
                                     └──────────────┘
 ```
 
-**Backend (FastAPI):** All resources are stored as generic rows with a JSONB `spec` column, validated against per-kind JSON schemas. Crew executions run via Temporal workflows when configured, or in background threads via `ThreadPoolExecutor` (each with an isolated asyncio event loop). A git-backed store auto-commits on every resource mutation, providing log/diff/blame/show endpoints. The plugin SDK supports 4 extension types: tool, guardrail, auth_provider, and execution_hook. Auth supports both API key (`X-API-Key`) and JWT Bearer tokens.
+**Backend (FastAPI):** All resources are stored as generic rows with a JSONB `spec` column, validated against per-kind JSON schemas. Crew executions run via Temporal workflows when configured, or in background threads via `ThreadPoolExecutor` (each with an isolated asyncio event loop). Resource mutations are snapshotted for list/rollback. The plugin SDK supports 4 extension types: tool, guardrail, auth_provider, and execution_hook. Auth supports both API key (`X-API-Key`) and JWT Bearer tokens.
 
-**Frontend (React + React Flow):** 27 pages including the Studio visual editor, Observability dashboard, and all resource management views. The Studio lets you drag Agent, Task, and Tool nodes onto a canvas, configure them via a property panel, save as resources, kick off executions, and export the canvas as PNG or SVG. State is managed with Zustand (undo/redo with 30-snapshot history).
+**Frontend (React + React Flow):** Studio visual editor and resource management views. The Studio lets you drag Agent, Task, and Tool nodes onto a canvas, configure them via a property panel, save as resources, kick off executions, and export the canvas as PNG or SVG. State is managed with Zustand (undo/redo with 30-snapshot history).
 
 **CLI:** Standalone Python package (`blackbeard-cli`) with 30 commands and no server dependencies. Validates YAML offline, applies resources in dependency order, and manages executions, users, roles, and exports. The `blackbeard shell` command launches an interactive TUI REPL for exploratory use.
 
@@ -122,7 +122,6 @@ uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 - **Execution streaming** -- SSE and WebSocket streams with event replay for real-time execution monitoring
 - **Tool ecosystem** -- Python tools, builtin CrewAI tools, sandboxed tools (WASM/Docker/gVisor/MicroVM), MCP servers (stdio + HTTP), with tool versioning and deprecation support
 - **Plugin SDK** -- 4 extension types (tool, guardrail, auth_provider, execution_hook) for extending the platform
-- **Git-backed versioning** -- auto-commit on every resource mutation, with log/diff/blame/show API endpoints
 - **Temporal integration** -- optional Temporal workflow engine for durable execution (falls back to ThreadPoolExecutor when not configured)
 - **Marketplace** -- import crews from git repositories (`blackbeard pull`)
 - **Train/test** -- CrewAI native training and testing via CLI or API
@@ -132,15 +131,13 @@ uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 - **A2A protocol** -- agent-to-agent discovery via `/.well-known/agent-card.json`
 - **Resource versioning** -- snapshot on every mutation, list versions, rollback to any point
 - **Nested projects** -- hierarchical project structure with parent refs and inherited policies
-- **Observability dashboard** -- `/observability` page with traces, metrics, and system health
 - **AsyncAPI spec** -- machine-readable event schema at `/api/v1/asyncapi.json`
 - **Agency Agents import** -- one-click import of 200+ agent personas from the Agency Agents library
 - **Tools Library** -- bundled catalog of tools ready to install
 - **Credentials manager** -- centralized secret storage for API keys and tokens
 - **Helm chart** -- Kubernetes deployment via `deploy/helm/blackbeard/`, with HPA autoscaling
 - **Multi-replica compose** -- nginx load balancer for horizontal scaling in Docker Compose
-- **Monitoring stack** -- Prometheus, Grafana, and alerting rules
-- **gRPC API** -- full resource CRUD and execution management on port 50051
+- **Monitoring stack** -- Prometheus, Grafana, and alerting rules (optional OpenTelemetry via `OTEL_ENDPOINT`)
 - **SDKs** -- Python, TypeScript, and React client libraries in `sdks/`
 
 ## Resource Kinds
@@ -255,7 +252,6 @@ blackbeard/
 │   │   ├── api/               # REST endpoints
 │   │   ├── auth/              # JWT auth, RBAC
 │   │   ├── engine/            # Execution engine + sandbox runtimes
-│   │   ├── engine/git_store.py # Git-backed resource version control
 │   │   ├── litellm/           # LiteLLM config + key management
 │   │   ├── models/            # SQLAlchemy + Pydantic models
 │   │   ├── plugins/           # Plugin SDK (tool, guardrail, auth, hooks)
@@ -264,10 +260,10 @@ blackbeard/
 │   └── tests/
 ├── cli/                       # Standalone CLI package (blackbeard-cli)
 │   └── blackbeard_cli/
-├── frontend/                  # React + TypeScript SPA (27 pages)
+├── frontend/                  # React + TypeScript SPA
 │   └── src/
 │       ├── components/studio/ # Visual editor (React Flow)
-│       ├── pages/             # Studio, Resources, Executions, Observability, etc.
+│       ├── pages/             # Studio, Resources, Executions, etc.
 │       └── stores/            # Zustand state management
 ├── sdks/                      # Client libraries
 │   ├── python/                # Python SDK

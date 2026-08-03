@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Blackbeard
 
-Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount) with a visual graph editor (27 frontend pages), async execution engine (ThreadPoolExecutor or optional Temporal workflows), RBAC, LiteLLM proxy for model routing (with built-in spend/token/latency tracking), plugin SDK (4 extension types: tool, guardrail, auth_provider, execution_hook), and git-backed resource version control (auto-commit on mutation, log/diff/blame/show API).
+Self-hosted agent management platform wrapping CrewAI. Kubernetes-inspired resource model (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount) with a visual graph editor, async execution engine (ThreadPoolExecutor or optional Temporal workflows), RBAC, LiteLLM proxy for model routing (with built-in spend/token/latency tracking), plugin SDK (4 extension types: tool, guardrail, auth_provider, execution_hook), and database-backed resource version snapshots (list/rollback).
 
 ## Commands
 
@@ -89,8 +89,6 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Resource versioning**: `resource_versions` table stores spec/labels snapshots on every create/update. Endpoints: `GET /{kind}/{name}/versions` (list), `GET /{kind}/{name}/versions/{version}` (detail), `POST /{kind}/{name}/rollback` (restore from snapshot).
 
-**Git-backed resource store**: Every resource mutation (create/update/delete) triggers an auto-commit to a local git repository. Provides `GET /{kind}/{name}/git/log`, `GET /{kind}/{name}/git/diff`, `GET /{kind}/{name}/git/blame`, and `GET /{kind}/{name}/git/show` endpoints for version control operations on resources.
-
 **Plugin SDK**: Extension system with 4 plugin types: `tool` (custom tool implementations), `guardrail` (custom validation logic), `auth_provider` (external auth integration), and `execution_hook` (pre/post execution callbacks). Plugins are registered via entry points or the plugin API.
 
 **Temporal workflow engine**: Optional durable workflow execution via Temporal. When `TEMPORAL_ADDRESS` is configured, crew executions run as Temporal workflows instead of ThreadPoolExecutor threads. Falls back to ThreadPoolExecutor when Temporal is not available. Configuration in `backend/blackbeard/temporal/`.
@@ -132,8 +130,6 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 **Guardrail Playground**: `/guardrails/playground` for testing guardrails with sample input before deploying to tasks.
 
 **Execution Comparison**: `/executions/compare?a=&b=` for side-by-side metrics diff of two executions.
-
-**Observability**: `/observability` page with traces, metrics, and system health overview. Integrates with OpenTelemetry, Prometheus, and Grafana.
 
 **Streaming chat**: `POST /api/v1/chat/stream` provides real SSE streaming. Chat page renders tokens as they arrive with a stop button for in-flight cancellation.
 

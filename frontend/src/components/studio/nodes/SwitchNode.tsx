@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { type NodeProps, Handle, Position } from '@xyflow/react'
 import { ToggleLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { CLIP_PATHS } from './shapes'
 
 export default memo(function SwitchNode({ data, selected }: NodeProps) {
   const expression = (data['expression'] as string | undefined) ?? ''
@@ -26,9 +27,7 @@ export default memo(function SwitchNode({ data, selected }: NodeProps) {
             ? 'border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.25)] ring-2 ring-cyan-300 ring-offset-1 dark:shadow-[0_0_15px_rgba(6,182,212,0.15)] dark:ring-offset-slate-900'
             : 'border-slate-200 hover:border-cyan-200 hover:shadow-md dark:border-slate-700',
         )}
-        style={{
-          clipPath: 'polygon(8% 0%, 92% 0%, 100% 50%, 92% 100%, 8% 100%, 0% 50%)',
-        }}
+        style={{ clipPath: CLIP_PATHS.hexagonal }}
       >
         <div className="flex items-center gap-1.5 bg-gradient-to-r from-cyan-600 to-cyan-400 px-4 py-1.5">
           <ToggleLeft className="h-3.5 w-3.5 text-white/90" />

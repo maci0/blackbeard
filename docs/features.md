@@ -267,20 +267,6 @@ function App() {
 
 ---
 
-## gRPC API
-
-The gRPC API runs on port 50051 and mirrors the REST API for resource CRUD and execution management. Auth uses the same JWT/API key mechanism via metadata headers.
-
-Proto definition: `backend/proto/blackbeard.proto`
-
-```bash
-# Example using grpcurl
-grpcurl -plaintext -H "authorization: Bearer $TOKEN" \
-  localhost:50051 blackbeard.BlackbeardService/ListResources
-```
-
----
-
 ## Bulk Operations
 
 ### Multi-select delete
@@ -376,48 +362,28 @@ When `TEMPORAL_ADDRESS` is not set, Blackbeard falls back to ThreadPoolExecutor 
 
 ---
 
-## Git-Backed Resource Versioning
+## Resource Versioning
 
-Every resource mutation (create, update, delete) is auto-committed to a local git repository maintained by the API server. This gives you a complete history of every change to every resource.
-
-### API Endpoints
+Every resource mutation (create, update, delete) is snapshotted in the database. List versions, inspect a snapshot, and roll back via the REST API:
 
 ```bash
-# View commit log for a resource
+# List versions for a resource
 curl -H "X-API-Key: $KEY" \
-  http://localhost:8000/api/v1/agents/researcher/git/log
+  http://localhost:8000/api/v1/agents/researcher/versions
 
-# Show diff between versions
+# Get a specific version
 curl -H "X-API-Key: $KEY" \
-  http://localhost:8000/api/v1/agents/researcher/git/diff
+  http://localhost:8000/api/v1/agents/researcher/versions/3
 
-# Blame (who changed what)
-curl -H "X-API-Key: $KEY" \
-  http://localhost:8000/api/v1/agents/researcher/git/blame
-
-# Show a specific commit
-curl -H "X-API-Key: $KEY" \
-  "http://localhost:8000/api/v1/agents/researcher/git/show?ref=abc1234"
+# Roll back to a previous version
+curl -X POST -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{"version": 3}' \
+  http://localhost:8000/api/v1/agents/researcher/rollback
 ```
-
-This is separate from the database-level resource versioning (snapshot/rollback). The git store provides full commit history with diffs and blame, while database versioning provides fast snapshot/rollback.
-
----
-
-## Observability Dashboard
-
-The `/observability` page provides a unified view of system health, traces, and metrics. It integrates with OpenTelemetry (traces), Prometheus (metrics), and Grafana (dashboards).
-
-Navigate to **Observability** in the sidebar to view:
-
-- Active and recent traces
-- Execution latency and throughput metrics
-- System health indicators (API, database, LiteLLM, Valkey)
-- Error rates and budget consumption
 
 ### Monitoring Stack
 
-The `deploy/monitoring/` directory includes Prometheus scrape configs, Grafana dashboard JSON, and alerting rules for production deployments.
+Optional OpenTelemetry export via `OTEL_ENDPOINT`. The `deploy/monitoring/` directory includes Prometheus scrape configs, Grafana dashboard JSON, and alerting rules for production deployments.
 
 ---
 

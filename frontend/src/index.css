@@ -138,7 +138,6 @@
   bottom: 0;
   width: 4px;
   border-radius: 8px 0 0 8px;
-  background: inherit;
   background: var(--tw-gradient-from, hsl(var(--primary)));
   z-index: 1;
 }

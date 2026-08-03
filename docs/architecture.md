@@ -220,10 +220,6 @@ The API server manages LiteLLM's configuration and uses it as a proxy for all LL
 
 LiteLLM's own data (spend tracking, virtual keys) is stored in a separate `litellm` database within the same PostgreSQL instance.
 
-### gRPC Interface
-
-A gRPC server (`blackbeard/grpc/server.py`) starts alongside FastAPI during the application lifespan on port `GRPC_PORT` (default 50051). It delegates to the same `ResourceService` and executor used by the REST API, providing a high-performance interface for programmatic clients. Auth uses the same API key validation (via gRPC metadata). If the gRPC server fails to start, the application continues without it.
-
 ---
 
 ## Frontend Architecture
@@ -265,7 +261,6 @@ A gRPC server (`blackbeard/grpc/server.py`) starts alongside FastAPI during the 
 /credentials          → Credentials Manager (centralized secret management)
 /guardrails/playground → Guardrail Playground (test guardrails with sample input)
 /executions/compare   → Execution Comparison (side-by-side metrics diff, ?a=&b= params)
-/observability        → Observability dashboard (traces, metrics, system health)
 ```
 
 **Command palette:** Press `Cmd+K` (macOS) or `Ctrl+K` (Windows/Linux) to open the command palette for quick navigation to any page, resource, or action.
@@ -665,23 +660,6 @@ The plugin SDK (`backend/blackbeard/plugins/`) provides 4 extension points for c
 | `execution_hook` | `ExecutionHookPlugin` | Pre/post execution callbacks for logging, metrics, or side effects |
 
 Plugins are discovered via Python entry points (`blackbeard.plugins` group) or registered programmatically through the plugin API. Each plugin type defines a base class with abstract methods that implementations must provide.
-
----
-
-## Git-Backed Resource Store
-
-The git store (`backend/blackbeard/engine/git_store.py`) maintains a local git repository that records every resource mutation as a commit. This provides a complete, diffable history separate from the database-level version snapshots.
-
-**Endpoints:**
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /{kind}/{name}/git/log` | Commit log for a resource |
-| `GET /{kind}/{name}/git/diff` | Diff between versions |
-| `GET /{kind}/{name}/git/blame` | Line-by-line attribution |
-| `GET /{kind}/{name}/git/show?ref=<sha>` | Show a specific commit |
-
-Each resource is stored as a YAML file in the git repository, organized by kind and name. Commits include the authenticated user as the author.
 
 ---
 

@@ -25,6 +25,7 @@ from crewai import LLM, Agent, Crew, Process, Task
 
 from blackbeard.config import settings
 from blackbeard.engine.policy import AgentPolicy, resolve_policy
+from blackbeard.engine.sandbox.selector import select_sandbox
 from blackbeard.kinds import SAFE_FILENAME as _SAFE_FILENAME
 from blackbeard.kinds import ResourceKind
 from blackbeard.litellm import apply_model_params, apply_vertex_params
@@ -388,6 +389,46 @@ class ResourceLoader:
             )
         return tool_instance
 
+
+    def _select_tool_sandbox_tiers(
+        self,
+        tool_refs: list[str],
+        policy: AgentPolicy,
+        agent_name: str,
+    ) -> None:
+        """Resolve effective sandbox tier per tool (tool spec vs policy floor).
+
+        Logs structured events. Does not wrap in-process Python tools yet;
+        container/wasm isolation still requires a dedicated execution path.
+        """
+        policy_min = policy.minimum_sandbox_tier
+        for ref in tool_refs:
+            try:
+                tool_resource = self._resolve_ref(ref)
+            except LoaderError:
+                continue
+            if tool_resource.kind != ResourceKind.TOOL:
+                continue
+            tool_tier = str(tool_resource.spec.get("sandbox", "none") or "none")
+            effective = select_sandbox(tool_tier=tool_tier, policy_minimum=policy_min)
+            logger.info(
+                "Sandbox tier selected: agent=%s tool=%s effective=%s "
+                "(tool_tier=%s policy_min=%s)",
+                agent_name,
+                tool_resource.name,
+                effective,
+                tool_tier,
+                policy_min,
+                extra={
+                    "event": "sandbox_tier_selected",
+                    "agent_name": agent_name,
+                    "tool_name": tool_resource.name,
+                    "effective_tier": effective,
+                    "tool_tier": tool_tier,
+                    "policy_minimum": policy_min,
+                },
+            )
+
     def _filter_tools_by_policy(
         self,
         tools: list[Any],
@@ -463,9 +504,14 @@ class ResourceLoader:
             if tools:
                 agent_kwargs["tools"] = tools
 
+        # Always resolve policy (defaults when none configured) so sandbox
+        # selection and optional tool filtering share one resolution path.
+        policy = resolve_policy(spec, policies=self._policies)
+        if tool_refs:
+            self._select_tool_sandbox_tiers(tool_refs, policy, resource.name)
+
         # --- Policy enforcement ---
         if self._policies:
-            policy = resolve_policy(spec, policies=self._policies)
             if "tools" in agent_kwargs:
                 agent_kwargs["tools"] = self._filter_tools_by_policy(
                     agent_kwargs["tools"], policy, resource.name
