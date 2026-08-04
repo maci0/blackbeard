@@ -215,18 +215,22 @@ class TestOidcLogin:
     """GET /api/v1/auth/oidc/login."""
 
     async def test_redirects_to_provider(self, oidc_client: AsyncClient):
-        """Should call authorize_redirect and return the provider's redirect."""
+        """Should call authorize_redirect with the configured redirect_uri."""
         provider = _mock_oauth_provider()
         oauth = _build_mock_oauth(provider)
 
-        with patch("blackbeard.api.oidc._oauth", oauth):
+        with (
+            patch("blackbeard.api.oidc._oauth", oauth),
+            patch("blackbeard.api.oidc.settings") as mock_settings,
+        ):
+            mock_settings.oidc_redirect_uri = "http://localhost:3000/api/v1/auth/oidc/callback"
             await oidc_client.get("/api/v1/auth/oidc/login")
 
-        # The endpoint returns the RedirectResponse from authorize_redirect
+        # The endpoint returns the RedirectResponse from authorize_redirect,
+        # called with the configured redirect_uri (not an attacker-influenced one).
         provider.authorize_redirect.assert_awaited_once()
-        # Verify the redirect_uri argument was passed
-        call_args = provider.authorize_redirect.call_args
-        assert call_args is not None
+        _, redirect_uri = provider.authorize_redirect.call_args.args
+        assert redirect_uri == "http://localhost:3000/api/v1/auth/oidc/callback"
 
 
 # ---------------------------------------------------------------------------

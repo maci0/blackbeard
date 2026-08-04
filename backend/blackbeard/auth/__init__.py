@@ -1,4 +1,13 @@
-"""Authentication and authorization package."""
+"""Authentication and authorization package.
+
+- ``api_key`` — process-wide API key getter/setter
+- ``jwt`` — access/refresh token create and decode
+- ``passwords`` — hash/verify helpers
+- ``authorizer`` — RBAC evaluation against Role/RoleBinding resources
+- ``dependencies`` — FastAPI deps (``require_permission``, user/JWT guards)
+
+Import from this package root for the stable surface listed in ``__all__``.
+"""
 
 from __future__ import annotations
 

@@ -20,12 +20,12 @@ import { useExecutionStore } from '@/stores/executionStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { TERMINAL_STATUSES } from '@/lib/types'
 import type { Execution } from '@/lib/types'
-import { cn } from '@/lib/utils'
+import { caseFold, cn, compareStrings } from '@/lib/utils'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
-import { getDuration, formatCost, parseCost } from '@/lib/formatters'
+import { getDuration, formatCost, formatCostZero, parseCost } from '@/lib/formatters'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { Pagination } from '@/components/ui/Pagination'
 
@@ -69,10 +69,10 @@ function compareExecutions(a: Execution, b: Execution, field: SortField, dir: So
       cmp = a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
       break
     case 'status':
-      cmp = a.status.localeCompare(b.status)
+      cmp = compareStrings(a.status, b.status)
       break
     case 'crew_name':
-      cmp = a.crew_name.localeCompare(b.crew_name)
+      cmp = compareStrings(a.crew_name, b.crew_name)
       break
   }
   return dir === 'asc' ? cmp : -cmp
@@ -209,11 +209,11 @@ export default function Executions() {
   }, [executions])
 
   const filtered = useMemo(() => {
-    const searchLower = deferredCrewSearch ? deferredCrewSearch.toLowerCase() : ''
+    const searchLower = deferredCrewSearch ? caseFold(deferredCrewSearch) : ''
     const result = executions.filter((e) => {
       if (statusFilter !== 'all' && e.status !== statusFilter) return false
       if (typeFilter !== 'all' && e.execution_type !== typeFilter) return false
-      if (searchLower && !e.crew_name.toLowerCase().includes(searchLower)) return false
+      if (searchLower && !caseFold(e.crew_name).includes(searchLower)) return false
       return true
     })
     result.sort((a, b) => compareExecutions(a, b, sortField, sortDir))
@@ -279,7 +279,9 @@ export default function Executions() {
               <Coins className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
               <span className="text-sm text-muted-foreground">Spend</span>
               <span className="font-mono text-sm font-semibold tabular-nums">
-                {formatCost(stats.totalCost) === '—' ? '$0.00' : formatCost(stats.totalCost)}
+                {formatCost(stats.totalCost) === '—'
+                  ? formatCostZero()
+                  : formatCost(stats.totalCost)}
               </span>
             </div>
             <div className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">

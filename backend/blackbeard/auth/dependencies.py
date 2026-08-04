@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import logging
 import re
+import uuid
 from collections.abc import Callable, Coroutine
 from typing import Any
 
@@ -67,17 +68,27 @@ async def _resolve_bearer_user(
         logger.warning("JWT missing sub claim", extra={"event": "jwt_missing_sub"})
         raise bearer_401("Invalid token payload")
 
+    try:
+        user_uuid = uuid.UUID(str(user_id))
+    except (ValueError, TypeError, AttributeError):
+        logger.warning(
+            "JWT sub is not a valid UUID: sub=%s",
+            user_id,
+            extra={"event": "jwt_invalid_sub", "user_id": str(user_id)[:64]},
+        )
+        raise bearer_401("Invalid token payload") from None
+
     result = await session.execute(
         select(User)
-        .where(User.id == user_id)
+        .where(User.id == user_uuid, User.is_active.is_(True))
         .options(defer(User.password_hash), defer(User.api_key))
     )
     user = result.scalar_one_or_none()
-    if user is None or not user.is_active:
+    if user is None:
         logger.warning(
             "JWT user not found or inactive: sub=%s",
-            user_id,
-            extra={"event": "jwt_user_invalid", "user_id": str(user_id)},
+            user_uuid,
+            extra={"event": "jwt_user_invalid", "user_id": str(user_uuid)},
         )
         raise bearer_401("User not found or inactive")
     return user
@@ -241,6 +252,10 @@ async def check_resource_permission(
     path_parts = request.url.path.rstrip("/").split("/")
     if request.method == "GET" and path_parts[-1] == kind_plural:
         verb = "list"
+    # POST /{kind}/{name}/rollback mutates an existing resource — that is an
+    # update, not a create.
+    if request.method == "POST" and path_parts[-1] == "rollback":
+        verb = "update"
 
     kind = PLURAL_TO_KIND.get(kind_plural)
     if kind is None:

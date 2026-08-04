@@ -133,7 +133,7 @@ class ContainerSandbox:
         # SECURITY: Validate the image name to prevent argument injection.
         # A malicious image like ``--privileged`` would be interpreted as
         # a Docker flag rather than an image reference.
-        if not self._IMAGE_RE.match(image):
+        if not self._IMAGE_RE.fullmatch(image):
             raise ContainerRuntimeError(f"Invalid container image name: {image!r}")
 
         cmd: list[str] = [
@@ -163,7 +163,7 @@ class ContainerSandbox:
         # the POSIX env var character set.
         if env:
             for k, v in sorted(env.items()):
-                if not self._ENV_KEY_RE.match(k):
+                if not self._ENV_KEY_RE.fullmatch(k):
                     logger.warning(
                         "Container: skipping env var with invalid key: %s",
                         k[:50],

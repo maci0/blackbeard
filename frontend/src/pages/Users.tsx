@@ -16,7 +16,7 @@ import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { cn, getErrorMessage } from '@/lib/utils'
+import { caseFold, cn, getErrorMessage } from '@/lib/utils'
 import { formatDate } from '@/lib/formatters'
 import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
@@ -416,12 +416,12 @@ export default function Users() {
 
   const filtered = useMemo(() => {
     if (!search.trim()) return users
-    const q = search.toLowerCase()
+    const q = caseFold(search)
     return users.filter(
       (u) =>
-        u.email.toLowerCase().includes(q) ||
-        u.display_name.toLowerCase().includes(q) ||
-        u.role.toLowerCase().includes(q),
+        caseFold(u.email).includes(q) ||
+        caseFold(u.display_name).includes(q) ||
+        caseFold(u.role).includes(q),
     )
   }, [users, search])
 

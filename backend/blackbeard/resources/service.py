@@ -236,6 +236,14 @@ class ResourceService:
         t0 = time.monotonic()
         kind_enum = _parse_kind(kind)
 
+        # Validate before row lock: DNS/schema checks can take hundreds of ms
+        # and must not hold FOR UPDATE (blocks concurrent updates of the row).
+        validated_refs = None
+        if data.spec is not None:
+            errors, validated_refs = await asyncio.to_thread(validate_resource, kind, data.spec)
+            if errors:
+                raise ResourceValidationError(errors)
+
         resource = await self._get_by_identity(kind_enum, name, project, for_update=True)
         if not resource:
             raise ResourceNotFoundError(kind, name, project)
@@ -243,12 +251,8 @@ class ResourceService:
         if resource.version != data.version:
             raise ResourceConflictError(kind, name, data.version, resource.version)
 
-        validated_refs = None
         has_changes = False
         if data.spec is not None:
-            errors, validated_refs = await asyncio.to_thread(validate_resource, kind, data.spec)
-            if errors:
-                raise ResourceValidationError(errors)
             resource.spec = data.spec
             has_changes = True
 

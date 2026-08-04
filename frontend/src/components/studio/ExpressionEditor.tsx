@@ -72,7 +72,7 @@ export function ExpressionEditor({ value, onChange, placeholder, fieldId }: Expr
 
   useEffect(() => {
     if (!helpOpen) return
-    const handler = (e: MouseEvent) => {
+    const onPointer = (e: MouseEvent) => {
       if (
         helpRef.current &&
         !helpRef.current.contains(e.target as Node) &&
@@ -82,9 +82,22 @@ export function ExpressionEditor({ value, onChange, placeholder, fieldId }: Expr
         setHelpOpen(false)
       }
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        setHelpOpen(false)
+        btnRef.current?.focus()
+      }
+    }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
   }, [helpOpen])
+
+  const errorId = fieldId ? `${fieldId}-error` : 'expression-editor-error'
 
   return (
     <div className="relative">
@@ -93,7 +106,7 @@ export function ExpressionEditor({ value, onChange, placeholder, fieldId }: Expr
           id={fieldId || undefined}
           className={cn(
             'w-full resize-none rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            validationError ? 'border-red-400 dark:border-red-600' : 'border-border',
+            validationError ? 'border-destructive' : 'border-border',
           )}
           rows={3}
           value={value}
@@ -101,6 +114,8 @@ export function ExpressionEditor({ value, onChange, placeholder, fieldId }: Expr
           placeholder={placeholder}
           autoComplete="off"
           spellCheck={false}
+          aria-invalid={validationError ? true : undefined}
+          aria-describedby={validationError ? errorId : undefined}
         />
         <button
           ref={btnRef}
@@ -110,12 +125,16 @@ export function ExpressionEditor({ value, onChange, placeholder, fieldId }: Expr
           aria-expanded={helpOpen}
           className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <HelpCircle className="h-3.5 w-3.5" />
+          <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </div>
 
       {validationError && (
-        <div className="mt-1 flex items-center gap-1 text-[10px] text-red-500 dark:text-red-400">
+        <div
+          id={errorId}
+          role="alert"
+          className="mt-1 flex items-center gap-1 text-[10px] text-destructive"
+        >
           <AlertCircle className="h-3 w-3 shrink-0" aria-hidden="true" />
           <span>{validationError}</span>
         </div>
@@ -136,7 +155,7 @@ export function ExpressionEditor({ value, onChange, placeholder, fieldId }: Expr
               className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Close help"
             >
-              <X className="h-3 w-3" />
+              <X className="h-3 w-3" aria-hidden="true" />
             </button>
           </div>
 

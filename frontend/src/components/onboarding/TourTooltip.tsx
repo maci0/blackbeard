@@ -106,9 +106,13 @@ export function TourTooltip({
     return () => clearTimeout(timer)
   }, [step])
 
-  // Trap focus within the tooltip while the tour is active
+  // Trap focus within the tooltip while the tour is active; Escape skips
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onSkip()
+        return
+      }
       if (e.key !== 'Tab') return
       const container = tooltipRef.current
       if (!container) return
@@ -136,7 +140,7 @@ export function TourTooltip({
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [onSkip])
 
   return (
     <div
@@ -173,19 +177,27 @@ export function TourTooltip({
             <h3 className="mt-0.5 text-sm font-bold leading-snug text-foreground">{title}</h3>
           </div>
           <button
+            type="button"
             onClick={onSkip}
             aria-label="Skip tour"
             className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
 
         {/* Progress bar */}
         <div className="mb-3 px-4">
-          <div className="h-0.5 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-0.5 w-full overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-valuenow={step + 1}
+            aria-valuemin={1}
+            aria-valuemax={totalSteps}
+            aria-label={`Tour progress: step ${step + 1} of ${totalSteps}`}
+          >
             <div
-              className="h-full rounded-full bg-primary transition-all duration-300 ease-out"
+              className="h-full rounded-full bg-primary transition-all duration-300 ease-out motion-reduce:transition-none"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -197,6 +209,7 @@ export function TourTooltip({
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-border bg-muted/20 px-4 py-3">
           <button
+            type="button"
             onClick={onSkip}
             className="text-2xs rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
@@ -206,19 +219,21 @@ export function TourTooltip({
           <div className="flex items-center gap-2">
             {!isFirst && (
               <button
+                type="button"
                 onClick={onBack}
                 className="flex items-center gap-1 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <ChevronLeft className="h-3.5 w-3.5" />
+                <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
                 Back
               </button>
             )}
             <button
+              type="button"
               onClick={onNext}
               className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {isLast ? 'Finish' : 'Next'}
-              {!isLast && <ChevronRight className="h-3.5 w-3.5" />}
+              {!isLast && <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />}
             </button>
           </div>
         </div>

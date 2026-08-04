@@ -155,13 +155,9 @@ async def _resolve_model_name(
                 "Example: POST /api/v1/llm-connections with provider='ollama' and model='llama3'."
             )
 
-    spec = resource.spec
-    provider: str = str(spec.get("provider", ""))
-    model: str = str(spec.get("model", ""))
-
-    if provider and provider.lower() not in ("openai", ""):
-        return f"{provider}/{model}"
-    return model
+    # LiteLLM registers the model under the resource name, not the provider
+    # model string (see model_sync and ResourceLoader.build_llm).
+    return str(resource.name)
 
 
 def _parse_yaml_response(raw: str) -> list[dict[str, Any]]:
@@ -257,7 +253,7 @@ def _validate_and_filter(docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         # name pattern.  An LLM could produce names with illegal chars
         # or empty strings after sanitization.
         final_name = doc["metadata"].get("name", "")
-        if not final_name or not _NAME_VALIDATE_RE.match(final_name):
+        if not final_name or not _NAME_VALIDATE_RE.fullmatch(final_name):
             doc["metadata"]["name"] = f"{kind.lower()}-{len(validated)}"
 
         # Truncate overly long names (max 255 chars per NAME_PATTERN usage)

@@ -159,7 +159,7 @@ describe('fuzz: capitalize', () => {
         fc.string({ minLength: 1 }).filter((s) => /^[a-zA-Z]/.test(s)),
         (s) => {
           const result = capitalize(s)
-          expect(result[0]).toBe(s[0]!.toUpperCase())
+          expect(result[0]).toBe(s[0]!.toLocaleUpperCase())
         },
       ),
       { numRuns: NUM_RUNS },
@@ -172,7 +172,7 @@ describe('fuzz: capitalize', () => {
         const result = capitalize(s)
         expect(result.length).toBe(s.length)
         if (s.length > 0) {
-          expect(result[0]).toBe(s[0]!.toUpperCase())
+          expect(result[0]).toBe(s[0]!.toLocaleUpperCase())
         }
       }),
       { numRuns: NUM_RUNS },

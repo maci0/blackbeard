@@ -67,14 +67,17 @@ export default function Login() {
 
     if (!email.trim() && !password.trim()) {
       setLocalError('Email and password are required.')
+      document.getElementById('login-email')?.focus()
       return
     }
     if (!email.trim()) {
       setLocalError('Email is required.')
+      document.getElementById('login-email')?.focus()
       return
     }
     if (!password.trim()) {
       setLocalError('Password is required.')
+      document.getElementById('login-password')?.focus()
       return
     }
 
@@ -83,7 +86,8 @@ export default function Login() {
       setPassword('')
       void navigate(redirectTo, { replace: true })
     } catch {
-      // Error is set in the store
+      // Error is set in the store — move focus so screen readers announce it
+      document.getElementById('login-email')?.focus()
     }
   }
 
@@ -170,7 +174,11 @@ export default function Login() {
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                     className="absolute right-1 top-1/2 flex h-[44px] w-[44px] -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <Eye className="h-4 w-4" aria-hidden="true" />
+                    )}
                   </button>
                 </div>
                 {passwordMissing && !password.trim() && (
@@ -189,7 +197,7 @@ export default function Login() {
                 {loading ? (
                   <Spinner size="sm" className="text-current" />
                 ) : (
-                  <LogIn className="h-4 w-4" />
+                  <LogIn className="h-4 w-4" aria-hidden="true" />
                 )}
                 {loading ? 'Signing in…' : 'Sign in'}
               </button>

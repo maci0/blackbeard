@@ -179,6 +179,14 @@ class Base(DeclarativeBase):
 
 
 async def get_session() -> AsyncGenerator[AsyncSession]:
-    """Dependency that yields a database session."""
+    """Dependency that yields a database session.
+
+    Callers must commit explicitly. On unhandled exceptions the session is
+    rolled back so a half-written transaction cannot linger until close.
+    """
     async with async_session() as session:
-        yield session
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise

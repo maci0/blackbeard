@@ -440,6 +440,9 @@ class TestContainerSandboxExecution:
             pytest.raises(ContainerTimeoutError, match="timed out after 5s"),
         ):
             await sandbox.execute("img", ["cmd"], timeout=5)
+        # Timed-out container must be killed and reaped, not leaked.
+        mock_proc.kill.assert_called_once()
+        mock_proc.wait.assert_awaited_once()
 
     async def test_execute_runtime_not_found(self):
         sandbox = self._make_sandbox()
@@ -659,6 +662,9 @@ class TestMicroVMSandboxExecution:
             pytest.raises(MicroVMTimeoutError, match="timed out after 10s"),
         ):
             await sandbox.execute("img", ["cmd"], timeout=10)
+        # Timed-out VM must be killed and reaped, not leaked.
+        mock_proc.kill.assert_called_once()
+        mock_proc.wait.assert_awaited_once()
 
     async def test_execute_default_timeout_60s(self):
         """MicroVM default timeout is 60s (higher than container tier)."""
@@ -675,6 +681,8 @@ class TestMicroVMSandboxExecution:
             pytest.raises(MicroVMTimeoutError, match="timed out after 60s"),
         ):
             await sandbox.execute("img", ["cmd"])
+        mock_proc.kill.assert_called_once()
+        mock_proc.wait.assert_awaited_once()
 
     async def test_execute_runtime_not_found(self):
         sandbox = self._make_sandbox()

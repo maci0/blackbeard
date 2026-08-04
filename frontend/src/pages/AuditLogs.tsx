@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { cn, getErrorMessage } from '@/lib/utils'
+import { plural } from '@/lib/formatters'
 import { useDocumentTitle, usePolling } from '@/hooks'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { Pagination } from '@/components/ui/Pagination'
@@ -88,6 +89,8 @@ function ActionBadge({ action }: { action: string }) {
 function DetailPopover({ detail }: { detail: Record<string, unknown> }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!open) return
@@ -97,10 +100,15 @@ function DetailPopover({ detail }: { detail: Record<string, unknown> }) {
       }
     }
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key === 'Escape') {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     document.addEventListener('keydown', handleKeyDown)
+    // Move focus into the dialog so keyboard users can reach close immediately
+    closeRef.current?.focus()
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('keydown', handleKeyDown)
@@ -110,6 +118,7 @@ function DetailPopover({ detail }: { detail: Record<string, unknown> }) {
   return (
     <div className="relative" ref={ref}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={(e) => {
           e.stopPropagation()
@@ -117,7 +126,7 @@ function DetailPopover({ detail }: { detail: Record<string, unknown> }) {
         }}
         aria-label="View details"
         aria-expanded={open}
-        aria-haspopup="true"
+        aria-haspopup="dialog"
         className="rounded px-1.5 py-0.5 text-xs text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         details
@@ -125,9 +134,24 @@ function DetailPopover({ detail }: { detail: Record<string, unknown> }) {
       {open && (
         <div
           role="dialog"
+          aria-modal="true"
           aria-label="Entry details"
           className="absolute right-0 top-full z-20 mt-1 max-h-60 w-72 overflow-auto rounded-md border bg-card p-3 shadow-lg"
         >
+          <div className="mb-2 flex items-center justify-end">
+            <button
+              ref={closeRef}
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                triggerRef.current?.focus()
+              }}
+              aria-label="Close details"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
           <pre className="whitespace-pre-wrap text-xs text-muted-foreground">
             {JSON.stringify(detail, null, 2)}
           </pre>
@@ -218,7 +242,7 @@ export default function AuditLogs() {
             title="Audit Logs"
             description={
               total > 0
-                ? `${total.toLocaleString()} log ${total !== 1 ? 'entries' : 'entry'}`
+                ? `${total.toLocaleString()} log ${plural(total, { one: 'entry', other: 'entries' })}`
                 : 'Security audit trail'
             }
             actions={

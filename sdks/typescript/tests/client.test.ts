@@ -922,6 +922,70 @@ describe("BlackbeardClient", () => {
       }
     });
 
+    it("formats FastAPI validation list details as a string", async () => {
+      const client = new BlackbeardClient({
+        baseUrl: "http://localhost:8000",
+        apiKey: "k",
+      });
+      fetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            detail: [
+              {
+                loc: ["body", "spec", "role"],
+                msg: "field required",
+                type: "value_error.missing",
+              },
+            ],
+          }),
+          {
+            status: 422,
+            statusText: "Unprocessable Entity",
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+      try {
+        await client.create(sampleResource);
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(BlackbeardApiError);
+        const apiErr = err as BlackbeardApiError;
+        expect(typeof apiErr.detail).toBe("string");
+        expect(apiErr.detail).toContain("spec.role");
+        expect(apiErr.detail).toContain("field required");
+        expect(apiErr.isTimeout).toBe(false);
+      }
+    });
+
+    it("captures X-Request-Id and Retry-After on errors", async () => {
+      const client = new BlackbeardClient({
+        baseUrl: "http://localhost:8000",
+        apiKey: "k",
+      });
+      fetchSpy.mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: "Rate limited" }), {
+          status: 429,
+          statusText: "Too Many Requests",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Request-Id": "req-xyz",
+            "Retry-After": "15",
+          },
+        }),
+      );
+      try {
+        await client.list("Agent");
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(BlackbeardApiError);
+        const apiErr = err as BlackbeardApiError;
+        expect(apiErr.isRateLimited).toBe(true);
+        expect(apiErr.requestId).toBe("req-xyz");
+        expect(apiErr.retryAfter).toBe(15);
+      }
+    });
+
     it("wraps network errors in BlackbeardApiError with status 0", async () => {
       const client = new BlackbeardClient({
         baseUrl: "http://localhost:8000",

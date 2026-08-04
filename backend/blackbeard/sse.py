@@ -22,26 +22,34 @@ _max_sse = settings.max_concurrent_sse
 semaphore = asyncio.Semaphore(_max_sse)
 _active_streams = 0
 _active_lock = threading.Lock()
+# Serializes the locked()+acquire pair so concurrent connects cannot slip
+# past a free-slot check and then block forever on a depleted semaphore
+# (the previous check-then-await-acquire path was a TOCTOU).
+_slot_lock = asyncio.Lock()
 
 
 @asynccontextmanager
 async def acquire_stream() -> AsyncIterator[bool]:
     """Try to acquire an SSE slot. Yields True on success, False if full."""
     global _active_streams
-    try:
-        await asyncio.wait_for(semaphore.acquire(), timeout=0)
-    except TimeoutError:
+    acquired = False
+    async with _slot_lock:
+        # Under the lock the locked()/acquire pair is atomic w.r.t. other
+        # acquire_stream callers, so we either take a free permit immediately
+        # or reject without waiting for a release.
+        if not semaphore.locked():
+            await semaphore.acquire()
+            acquired = True
+            with _active_lock:
+                _active_streams += 1
+    if not acquired:
         yield False
         return
     try:
-        with _active_lock:
-            _active_streams += 1
-        try:
-            yield True
-        finally:
-            with _active_lock:
-                _active_streams -= 1
+        yield True
     finally:
+        with _active_lock:
+            _active_streams -= 1
         semaphore.release()
 
 

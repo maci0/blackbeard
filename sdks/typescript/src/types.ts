@@ -185,18 +185,62 @@ export interface VersionDetail {
   labels: Record<string, string> | null;
 }
 
+/** Options for constructing a {@link BlackbeardApiError}. */
+export interface BlackbeardApiErrorOptions extends ErrorOptions {
+  /** Value of the X-Request-Id response header, if present. */
+  requestId?: string;
+  /** Parsed Retry-After header in seconds, if present. */
+  retryAfter?: number;
+}
+
+/**
+ * Normalize API error detail (string, list, or object) to a single string.
+ * FastAPI validation errors return detail as an array of {loc, msg, type}.
+ */
+export function formatErrorDetail(detail: unknown, fallback: string): string {
+  if (detail == null) return fallback;
+  if (typeof detail === "string") return detail || fallback;
+  if (Array.isArray(detail)) {
+    const parts = detail.map((item) => {
+      if (item && typeof item === "object" && "msg" in item) {
+        const rec = item as { loc?: unknown[]; msg?: string };
+        const locParts = (rec.loc ?? [])
+          .filter((x) => x !== "body")
+          .map(String);
+        const locStr = locParts.join(".");
+        const msg = rec.msg ?? String(item);
+        return locStr ? `${locStr}: ${msg}` : msg;
+      }
+      return String(item);
+    });
+    return parts.length > 0 ? parts.join("; ") : fallback;
+  }
+  return String(detail);
+}
+
 /** Error thrown when the API returns a non-OK response or a network failure occurs. */
 export class BlackbeardApiError extends Error {
   readonly status: number;
   readonly detail: string;
   readonly body?: Record<string, unknown>;
+  /** Value of the X-Request-Id response header, if present. */
+  readonly requestId?: string;
+  /** Parsed Retry-After header in seconds, if present. */
+  readonly retryAfter?: number;
 
-  constructor(status: number, detail: string, body?: Record<string, unknown>, options?: ErrorOptions) {
+  constructor(
+    status: number,
+    detail: string,
+    body?: Record<string, unknown>,
+    options?: BlackbeardApiErrorOptions,
+  ) {
     super(`HTTP ${status}: ${detail}`, options);
     this.name = "BlackbeardApiError";
     this.status = status;
     this.detail = detail;
     this.body = body;
+    this.requestId = options?.requestId;
+    this.retryAfter = options?.retryAfter;
   }
 
   get isClientError(): boolean {

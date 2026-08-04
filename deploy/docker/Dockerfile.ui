@@ -1,6 +1,11 @@
 # Stage 1: Build
 FROM oven/bun:1.2.17-alpine AS build
 WORKDIR /app
+# Optional: pass --build-arg SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct) for
+# bit-for-bit stable asset hashes when tooling honors it.
+ARG SOURCE_DATE_EPOCH
+ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH} \
+    NODE_ENV=production
 COPY package.json bun.lock ./
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install --frozen-lockfile
@@ -10,8 +15,8 @@ COPY . .
 # For local dev, set VITE_API_KEY in frontend/.env.local.
 RUN bun run build
 
-# Stage 2: Serve with nginx
-FROM nginxinc/nginx-unprivileged:1.29-alpine
+# Stage 2: Serve with nginx (patch-pinned for reproducible base layers)
+FROM nginxinc/nginx-unprivileged:1.29.8-alpine
 LABEL org.opencontainers.image.source="https://github.com/blackbeard" \
       org.opencontainers.image.title="blackbeard-ui" \
       org.opencontainers.image.description="Blackbeard Agent Management Platform — UI"

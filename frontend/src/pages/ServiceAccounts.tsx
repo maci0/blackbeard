@@ -4,9 +4,10 @@ import { UserCog, RefreshCw } from 'lucide-react'
 import { useResourceStore } from '@/stores/resourceStore'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { SmartTime } from '@/components/ui/SmartTime'
-import { cn } from '@/lib/utils'
+import { cn, compareStrings } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks'
 
 export default function ServiceAccounts() {
@@ -15,6 +16,7 @@ export default function ServiceAccounts() {
   const rawResources = useResourceStore((s) => s.resources['service-accounts'])
   const resources = useMemo(() => rawResources ?? [], [rawResources])
   const loading = useResourceStore((s) => s.loadingKinds['service-accounts'] ?? false)
+  const error = useResourceStore((s) => s.error)
   const fetchResources = useResourceStore((s) => s.fetchResources)
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export default function ServiceAccounts() {
   }, [fetchResources])
 
   const sorted = useMemo(
-    () => [...resources].sort((a, b) => a.metadata.name.localeCompare(b.metadata.name)),
+    () => [...resources].sort((a, b) => compareStrings(a.metadata.name, b.metadata.name)),
     [resources],
   )
 
@@ -50,22 +52,39 @@ export default function ServiceAccounts() {
         <div className="mt-6">
           {loading ? (
             <TableSkeleton />
+          ) : error && resources.length === 0 ? (
+            <ErrorAlert
+              message={error}
+              onAction={() => void fetchResources('service-accounts')}
+              ariaLabel="Retry loading service accounts"
+            />
           ) : resources.length === 0 ? (
             <EmptyState
               icon={<UserCog className="h-10 w-10" />}
               title="No service accounts"
-              description="Service accounts are created automatically when agents run. You can also create them manually via the API or YAML."
+              description="Service accounts are created automatically when agents run. You can also create them as resources in Studio or via YAML."
+              action={{ label: 'Browse resources', href: '/resources' }}
             />
           ) : (
             <div className="overflow-hidden rounded-lg border">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm" aria-label="Service accounts">
                 <thead>
                   <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Project</th>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3">Version</th>
-                    <th className="px-4 py-3">Updated</th>
+                    <th scope="col" className="px-4 py-3">
+                      Name
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      Project
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      Description
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      Version
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      Updated
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">

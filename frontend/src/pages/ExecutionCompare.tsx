@@ -18,7 +18,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { Spinner } from '@/components/ui/Spinner'
 import { cn, getErrorMessage } from '@/lib/utils'
-import { getDuration, formatCost, parseCost } from '@/lib/formatters'
+import { getDuration, formatCost, formatPercent, parseCost } from '@/lib/formatters'
 import type { Execution, ExecutionTask } from '@/lib/types'
 
 function MetricCard({
@@ -73,7 +73,7 @@ function MetricCard({
           <DiffIcon className="h-3 w-3" aria-hidden="true" />
           <span>
             {diff > 0 ? '+' : ''}
-            {formatFn(diff)} ({pctChange.toFixed(1)}%)
+            {formatFn(diff)} ({formatPercent(pctChange)})
           </span>
         </div>
       )}
@@ -267,7 +267,7 @@ export default function ExecutionCompare() {
   if (error) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <div className="text-center">
+        <div role="alert" className="text-center">
           <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" aria-hidden="true" />
           <p className="font-medium">{error}</p>
           <div className="mt-4 flex items-center justify-center gap-2">
@@ -351,7 +351,7 @@ export default function ExecutionCompare() {
             className="mb-6 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
           >
             <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-            Cost differs by {costDiffPct.toFixed(1)}% between runs
+            Cost differs by {formatPercent(costDiffPct)} between runs
           </div>
         )}
 

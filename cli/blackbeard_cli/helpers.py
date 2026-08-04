@@ -58,13 +58,13 @@ class HelpCommand(click.Command):
 
 
 def print_json(data: object, *, compact: bool = False) -> None:
+    """Emit machine-readable JSON on stdout with no ANSI/markup (safe for jq/scripts)."""
     if compact:
-        out.print(
-            json.dumps(data, default=str, ensure_ascii=False, separators=(",", ":")),
-            highlight=False,
-        )
+        text = json.dumps(data, default=str, ensure_ascii=False, separators=(",", ":"))
     else:
-        out.print_json(json.dumps(data, default=str, ensure_ascii=False))
+        text = json.dumps(data, default=str, ensure_ascii=False, indent=2)
+    # Never syntax-highlight: --json is for machines, not terminals.
+    out.print(text, highlight=False, markup=False)
 
 
 def extract_detail(response: httpx.Response) -> str:

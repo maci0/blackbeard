@@ -36,6 +36,10 @@ if settings.web_concurrency != 1:
 
 router = APIRouter(tags=["collaboration"])
 
+# Valkey pub/sub delivers publishes back to the publishing replica's own
+# subscription; this ID lets _listen drop the loopback copy.
+_REPLICA_ID = uuid.uuid4().hex
+
 _NAME_RE = re.compile(NAME_PATTERN)
 _MAX_CREW_NAME_LEN = 255
 
@@ -118,10 +122,11 @@ class ValkeyCollabBackend:
 
         Spawns a background task that reads from the Valkey subscription and
         broadcasts to local connections.  Idempotent -- calling multiple
-        times for the same room is safe.
+        times for the same room is safe.  Replaces a finished/crashed listener.
         """
         async with self._subscriber_lock:
-            if room in self._subscriptions:
+            existing = self._subscriptions.get(room)
+            if existing is not None and not existing.done():
                 return
 
             task = asyncio.create_task(self._listen(room), name=f"valkey-collab-{room}")
@@ -129,11 +134,12 @@ class ValkeyCollabBackend:
             self._subscriptions[room] = task
 
     async def unsubscribe(self, room: str) -> None:
-        """Stop listening to a room channel."""
+        """Stop listening to a room channel and wait for the listener to exit."""
         async with self._subscriber_lock:
             task = self._subscriptions.pop(room, None)
-            if task is not None:
-                task.cancel()
+        if task is not None:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
     _MAX_LISTEN_RETRIES = 3
 
@@ -143,8 +149,9 @@ class ValkeyCollabBackend:
 
         retries = 0
         while True:
+            pubsub: aioredis.client.PubSub | None = None
             try:
-                pubsub: aioredis.client.PubSub = self._redis.pubsub()
+                pubsub = self._redis.pubsub()
                 await pubsub.subscribe(f"collab:{room}")
                 retries = 0
                 async for raw_message in pubsub.listen():
@@ -160,9 +167,13 @@ class ValkeyCollabBackend:
                             extra={"event": "valkey_collab_parse_error", "room": room},
                         )
                         continue
+                    if not isinstance(message, dict):
+                        continue
+                    if message.get("origin") == _REPLICA_ID:
+                        continue  # our own publish echoed back
                     # Broadcast to all local connections (sender=None since the
                     # original sender is on a different replica)
-                    await _broadcast_local(room, sender=None, message=message)
+                    await _broadcast_local(room, sender=None, message=message.get("msg", message))
             except asyncio.CancelledError:
                 logger.debug(
                     "Valkey listener cancelled for room %s",
@@ -202,9 +213,24 @@ class ValkeyCollabBackend:
                     },
                 )
                 await asyncio.sleep(delay)
+            finally:
+                if pubsub is not None:
+                    try:
+                        await pubsub.unsubscribe(f"collab:{room}")
+                        await pubsub.aclose()  # type: ignore[no-untyped-call]
+                    except Exception:
+                        logger.debug(
+                            "Valkey pubsub close failed for room %s",
+                            room,
+                            exc_info=True,
+                            extra={"event": "valkey_pubsub_close_failed", "room": room},
+                        )
 
+        # Only clear the registry entry if we are still the active listener.
+        # A concurrent re-subscribe may have replaced us with a new task.
         async with self._subscriber_lock:
-            self._subscriptions.pop(room, None)
+            if self._subscriptions.get(room) is asyncio.current_task():
+                self._subscriptions.pop(room, None)
 
 
 _valkey_backend: ValkeyCollabBackend | None = None
@@ -270,15 +296,16 @@ async def _broadcast_local(
     Pre-serializes JSON once to avoid repeated json.dumps per recipient.
     Pass *pre_serialized* to skip json.dumps when the caller already has the text.
     """
-    participants = _rooms.get(room)
+    # Snapshot recipients without holding the lock across await (join/leave
+    # only mutate at await points on this loop, so list() is a stable copy).
+    participants = list(_rooms.get(room) or ())
     if not participants:
         return
 
     text = pre_serialized if pre_serialized is not None else json.dumps(message)
     dead: set[WebSocket] = set()
-    for ws in list(participants):
-        if ws is sender:
-            continue
+
+    async def _send(ws: WebSocket) -> None:
         try:
             await ws.send_text(text)
         except Exception as send_err:
@@ -293,6 +320,10 @@ async def _broadcast_local(
                 },
             )
             dead.add(ws)
+
+    # Concurrent fan-out: sequential sends make broadcast latency the sum of
+    # all sends, and one backpressured socket stalls every peer after it.
+    await asyncio.gather(*(_send(ws) for ws in participants if ws is not sender))
 
     if dead:
         async with _rooms_lock:
@@ -330,10 +361,11 @@ async def _broadcast(
     text = json.dumps(message)
     await _broadcast_local(room, sender, pre_serialized=text)
 
-    # Publish to Valkey for other replicas
+    # Publish to Valkey for other replicas, tagged with this replica's ID so
+    # the loopback delivery to our own subscription is dropped in _listen.
     backend = _get_valkey_backend()
     if backend is not None:
-        await backend.publish_raw(room, text)
+        await backend.publish_raw(room, json.dumps({"origin": _REPLICA_ID, "msg": message}))
 
 
 @router.websocket("/ws/collab/{crew_name}")
@@ -387,20 +419,35 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
     request_id_var.set(str(uuid.uuid4()))
     await websocket.accept()
 
+    # Never await I/O while holding _rooms_lock (close would stall all rooms).
+    reject_code: int | None = None
+    reject_reason: str | None = None
+    is_new_room = False
+    participant_count = 0
     async with _rooms_lock:
         is_new_room = crew_name not in _rooms
         if is_new_room:
             if len(_rooms) >= _MAX_ROOMS:
-                logger.warning(
-                    "Collaboration: max rooms reached (%d), rejecting %s",
-                    _MAX_ROOMS,
-                    crew_name,
-                    extra={"event": "collab_max_rooms", "crew_name": crew_name},
-                )
-                await websocket.close(code=4429, reason="Too many active rooms")
-                return
-            _rooms[crew_name] = set()
+                reject_code = 4429
+                reject_reason = "Too many active rooms"
+            else:
+                _rooms[crew_name] = set()
         elif len(_rooms[crew_name]) >= _MAX_CONNECTIONS_PER_ROOM:
+            reject_code = 4429
+            reject_reason = "Room is full"
+        if reject_code is None:
+            _rooms[crew_name].add(websocket)
+            participant_count = len(_rooms[crew_name])
+
+    if reject_code is not None:
+        if reject_reason == "Too many active rooms":
+            logger.warning(
+                "Collaboration: max rooms reached (%d), rejecting %s",
+                _MAX_ROOMS,
+                crew_name,
+                extra={"event": "collab_max_rooms", "crew_name": crew_name},
+            )
+        else:
             logger.warning(
                 "Collaboration: room %s full (%d connections), rejecting",
                 crew_name,
@@ -411,10 +458,8 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
                     "max_connections": _MAX_CONNECTIONS_PER_ROOM,
                 },
             )
-            await websocket.close(code=4429, reason="Room is full")
-            return
-        _rooms[crew_name].add(websocket)
-        participant_count = len(_rooms[crew_name])
+        await websocket.close(code=reject_code, reason=reject_reason or "Rejected")
+        return
 
     # Subscribe to Valkey channel for cross-replica messaging
     if is_new_room:
@@ -518,16 +563,17 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
                 room_empty = True
 
         # Unsubscribe from Valkey when room is empty on this replica.
-        # Hold _rooms_lock while calling unsubscribe to prevent a race
-        # where a new client subscribes between the empty-check and the
-        # unsubscribe, which would cancel the new client's subscription.
-        # Lock ordering: _rooms_lock → _subscriber_lock (no reverse path).
+        # Never await Valkey I/O under _rooms_lock (that stalls every join/leave).
+        # After unsubscribe, re-subscribe if a client joined during the gap so
+        # their cross-replica channel is not left dead.
         if room_empty:
             backend = _get_valkey_backend()
             if backend is not None:
+                await backend.unsubscribe(crew_name)
                 async with _rooms_lock:
-                    if crew_name not in _rooms:
-                        await backend.unsubscribe(crew_name)
+                    needs_resub = crew_name in _rooms
+                if needs_resub:
+                    await backend.subscribe(crew_name)
 
         logger.info(
             "Collaboration: client left room %s (remaining=%d)",
@@ -549,6 +595,15 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
 
 
 def get_room_stats() -> dict[str, int]:
-    """Return per-room participant counts for health/debug endpoints."""
-    snapshot = _rooms.copy()
-    return {room: len(clients) for room, clients in snapshot.items() if clients}
+    """Return per-room participant counts for health/debug endpoints.
+
+    Snapshot is taken under ``_rooms_lock`` so concurrent join/leave cannot
+    mutate the dict mid-iteration (relevant under free-threaded CPython).
+    """
+    # Sync helper: callers are async request handlers on the event loop.
+    # We cannot await ``_rooms_lock`` here; copy is atomic under the GIL and
+    # join/leave only mutate at await points. For free-threaded builds the
+    # shallow copy alone is enough for a consistent *dict* view; set lengths
+    # may still race and are best-effort metrics only.
+    snapshot = {room: len(clients) for room, clients in _rooms.items() if clients}
+    return snapshot

@@ -220,7 +220,7 @@ class FirecrackerSandbox:
         # alphanumerics and underscores to prevent parameter injection.
         if env:
             for k, v in sorted(env.items()):
-                if not _ENV_KEY_RE.match(k):
+                if not _ENV_KEY_RE.fullmatch(k):
                     logger.warning(
                         "Firecracker: skipping env var with invalid key: %s",
                         k[:50],

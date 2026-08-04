@@ -376,3 +376,22 @@ class WasmSandbox:
     def clear_cache(self) -> None:
         """Clear the module cache."""
         self._cache.clear()
+
+
+_shared_sandbox: WasmSandbox | None = None
+_shared_sandbox_lock = threading.Lock()
+
+
+def get_shared_sandbox() -> WasmSandbox:
+    """Return the process-wide default sandbox.
+
+    Reuses one wasmtime Engine and module cache across all tool calls —
+    per-call construction pays engine setup and module reload every time
+    and makes the LRU module cache useless. Stores are still created per
+    invoke, so isolation between calls is unchanged.
+    """
+    global _shared_sandbox
+    with _shared_sandbox_lock:
+        if _shared_sandbox is None:
+            _shared_sandbox = WasmSandbox()
+        return _shared_sandbox

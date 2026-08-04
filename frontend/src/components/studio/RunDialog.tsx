@@ -231,7 +231,7 @@ export function RunDialog({
               aria-label="Close"
               title="Close"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </Dialog.Close>
           </div>
 
@@ -255,8 +255,30 @@ export function RunDialog({
                       type="button"
                       key={m}
                       role="radio"
+                      data-mode={m}
                       aria-checked={mode === m}
+                      tabIndex={mode === m ? 0 : -1}
                       onClick={() => setMode(m)}
+                      onKeyDown={(e) => {
+                        const order = ['run', 'train', 'test'] as const
+                        const idx = order.indexOf(m)
+                        let next: (typeof order)[number] | undefined
+                        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                          e.preventDefault()
+                          next = order[(idx + 1) % order.length]
+                        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                          e.preventDefault()
+                          next = order[(idx - 1 + order.length) % order.length]
+                        }
+                        if (!next) return
+                        setMode(next)
+                        const group = e.currentTarget.parentElement
+                        requestAnimationFrame(() => {
+                          group
+                            ?.querySelector<HTMLElement>(`[role="radio"][data-mode="${next}"]`)
+                            ?.focus()
+                        })
+                      }}
                       className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                         mode === m
                           ? 'bg-background text-foreground shadow-sm'

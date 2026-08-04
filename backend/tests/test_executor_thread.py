@@ -154,6 +154,7 @@ class TestRunCrewSync:
         with (
             patch("blackbeard.engine.executor.asyncio.new_event_loop", return_value=mock_loop),
             patch("blackbeard.engine.executor._thread_session_factory", return_value=mock_factory),
+            patch("blackbeard.engine.executor._run_crew_async") as mock_async,
         ):
             _run_crew_sync(
                 eid,
@@ -166,10 +167,11 @@ class TestRunCrewSync:
             )
 
         assert mock_loop.run_until_complete.call_count == 1
-        # Verify the coroutine was created with correct execution_type and iterations
-        # _run_crew_sync passes these kwargs through to _run_crew_async via run_until_complete
-        coro_arg = mock_loop.run_until_complete.call_args[0][0]
-        assert coro_arg is not None
+        # _run_crew_sync passes these kwargs through to _run_crew_async
+        kwargs = mock_async.call_args.kwargs
+        assert kwargs["execution_type"] == ExecutionType.TRAIN
+        assert kwargs["n_iterations"] == 5
+        assert kwargs["training_file"] == "my_training.pkl"
 
 
 # ===========================================================================

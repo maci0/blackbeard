@@ -56,12 +56,12 @@ export function ConfirmDialog({
           >
             {description}
           </Dialog.Description>
-          <div className="mt-6 flex justify-end gap-3">
+          <div className="mt-6 flex flex-col-reverse justify-end gap-3 sm:flex-row">
             <Dialog.Close asChild>
               <button
                 type="button"
                 autoFocus
-                className="rounded-md border px-4 py-2 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-md border px-4 py-2 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Cancel
               </button>
@@ -71,7 +71,7 @@ export function ConfirmDialog({
               onClick={() => void handleConfirm()}
               disabled={busy}
               aria-busy={busy}
-              className={`btn-press inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${btnClass}`}
+              className={`btn-press inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${btnClass}`}
             >
               {busy && <Spinner size="sm" className="text-current" />}
               {confirmLabel}
@@ -84,7 +84,7 @@ export function ConfirmDialog({
               aria-label="Close"
               title="Close"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </Dialog.Close>
         </Dialog.Content>

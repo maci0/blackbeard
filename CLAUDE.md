@@ -91,7 +91,7 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Plugin SDK**: Extension system with 4 plugin types: `tool` (custom tool implementations), `guardrail` (custom validation logic), `auth_provider` (external auth integration), and `execution_hook` (pre/post execution callbacks). Plugins are registered via entry points or the plugin API.
 
-**Temporal workflow engine**: Optional durable workflow execution via Temporal. When `TEMPORAL_ADDRESS` is configured, crew executions run as Temporal workflows instead of ThreadPoolExecutor threads. Falls back to ThreadPoolExecutor when Temporal is not available. Configuration in `backend/blackbeard/temporal/`.
+**Temporal workflow engine**: Optional durable workflow execution via Temporal. When `TEMPORAL_HOST` is configured, crew executions run as Temporal workflows instead of ThreadPoolExecutor threads. Falls back to ThreadPoolExecutor when Temporal is not available. Configuration in `backend/blackbeard/engine/temporal.py`.
 
 **Project-level guardrails**: Project resources support `spec.guardrails` array. At execution time, project guardrails are prepended to task-level guardrails.
 

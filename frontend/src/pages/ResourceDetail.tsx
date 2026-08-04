@@ -32,7 +32,7 @@ import { api } from '@/api/client'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { useDocumentTitle, usePresence, useDeleteError, useCopyToClipboard } from '@/hooks'
 import { resourceToYaml, parseYaml } from '@/lib/yaml'
-import { formatDate, getDuration, formatCost, parseCost } from '@/lib/formatters'
+import { formatDate, getDuration, formatCost, formatCostZero, parseCost } from '@/lib/formatters'
 import { KindBadge } from '@/components/ui/KindBadge'
 import { PLURAL_TO_KIND } from '@/lib/kinds'
 import { extractRefs } from '@/lib/refs'
@@ -388,7 +388,9 @@ function RunsTab({ crewName }: { crewName: string }) {
           <RunStatChip
             icon={DollarSign}
             label="Total Cost"
-            value={formatCost(stats.totalCost) === '—' ? '$0.00' : formatCost(stats.totalCost)}
+            value={
+              formatCost(stats.totalCost) === '—' ? formatCostZero() : formatCost(stats.totalCost)
+            }
           />
         </div>
       )}
@@ -402,19 +404,34 @@ function RunsTab({ crewName }: { crewName: string }) {
           <table className="w-full text-sm" aria-label="Run history">
             <thead>
               <tr className="border-b bg-muted/30">
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                <th
+                  scope="col"
+                  className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground"
+                >
                   Status
                 </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                <th
+                  scope="col"
+                  className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground"
+                >
                   Type
                 </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                <th
+                  scope="col"
+                  className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground"
+                >
                   Duration
                 </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                <th
+                  scope="col"
+                  className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground"
+                >
                   Cost
                 </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                <th
+                  scope="col"
+                  className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground"
+                >
                   Created
                 </th>
               </tr>

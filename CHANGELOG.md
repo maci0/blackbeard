@@ -4,6 +4,16 @@ All notable changes to Blackbeard are documented here. Grouped by release, newes
 
 ## Unreleased
 
+### Breaking
+- **gRPC API removed** (port 50051 and the proto package). Migrate to the REST API (`/api/v1`) or the Python/TypeScript SDKs, which cover the same surface.
+- **Git-backed resource store removed** (auto-commit, log/diff/blame/show, remotes). Use database resource versioning instead: `GET /{kind}/{name}/versions` and `POST /{kind}/{name}/rollback`. Existing git history is not migrated; keep the old repo if you need it.
+- **Sandboxed tools lose network access by default**: containers now run with `--network none` unless the Tool spec declares `capabilities: [network]`. Add that field to any existing sandboxed tool that calls external APIs.
+- **Sandbox tiers enforced at load and call time**: tools whose spec tier falls below the AgentPolicy sandbox floor now fail instead of running unsandboxed. Raise the tool's tier or relax the policy.
+
+### Fixed
+- **Multi-replica cron dedup**: every API replica runs its own scheduler; a new `automation_runs` table (unique on automation + firing time) ensures each cron firing triggers exactly once across replicas. Replicas also resync schedules from the database every 5 minutes, so Automation changes propagate beyond the replica that served the mutation.
+- **Multi-replica startup recovery**: executions now record the owning instance (`executions.worker_id`, override via `BLACKBEARD_WORKER_ID`); a restarting replica only fails its own interrupted executions (plus rows orphaned for over 2 hours), instead of failing work still running on healthy replicas or in Temporal, and no longer deletes their in-use LiteLLM virtual keys.
+
 ### Features
 - **MCP tools**: `mcp-stdio` and `mcp-http` Tool resources attach as CrewAI `mcps` on agents (stdio/HTTP/SSE), with SSRF checks and policy allow/deny by name.
 - **Sandbox enforcement** at tool call time: select tier from tool spec + policy floor, run `command` tools and python tools in docker/podman/gvisor/microvm, load `type: wasm` via WasmSandbox.

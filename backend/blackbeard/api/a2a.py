@@ -32,14 +32,14 @@ _CACHE_TTL_S = 60.0
 def _derive_base_url(request: Request) -> str:
     """Derive the external base URL from the incoming request.
 
-    Uses ``X-Forwarded-Proto`` and ``X-Forwarded-Host`` when present
-    (reverse proxy), otherwise falls back to the request's own URL.
+    Uses only the scheme/host that the ASGI server resolved (which honours
+    ``X-Forwarded-*`` from trusted proxies via uvicorn's ``forwarded-allow-ips``).
+    Raw ``X-Forwarded-Host`` / ``X-Forwarded-Proto`` request headers are NOT
+    trusted here: this response is cached globally for 60s, so honouring an
+    attacker-supplied forwarded host would let any unauthenticated client
+    poison the agent card's URLs for every consumer (CWE-113 / CWE-644),
+    redirecting A2A credentials to an attacker-controlled host.
     """
-    proto = request.headers.get("X-Forwarded-Proto", request.url.scheme)
-    host = request.headers.get("X-Forwarded-Host", request.headers.get("Host", ""))
-    if host:
-        return f"{proto}://{host}"
-    # Fallback: reconstruct from request URL
     return f"{request.url.scheme}://{request.url.netloc}"
 
 

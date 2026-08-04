@@ -37,6 +37,7 @@ from blackbeard.resources import (
     ResourceNotFoundError,
     ResourceService,
     ResourceValidationError,
+    validate_resource,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,7 @@ def _fire_and_forget(coro: Any) -> None:
 
 
 async def drain_background_tasks(timeout: float = 5.0) -> None:
-    """Wait for in-flight background tasks (git commits, LiteLLM sync, etc.).
+    """Wait for in-flight background tasks (LiteLLM sync, etc.).
 
     Called during shutdown to avoid losing fire-and-forget mutations.
     """
@@ -66,9 +67,10 @@ async def drain_background_tasks(timeout: float = 5.0) -> None:
     if not tasks:
         return
     _done, pending = await asyncio.wait(tasks, timeout=timeout)
-    for task in pending:
-        task.cancel()
     if pending:
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
         logger.warning(
             "Cancelled %d background tasks that did not finish within %.1fs",
             len(pending),
@@ -119,7 +121,7 @@ async def _sync_llm_to_litellm(kind: str, name: str, spec: dict[str, Any] | None
 _VERSION_LIST_LIMIT = 500
 
 
-async def _save_version_snapshot(
+async def save_version_snapshot(
     session: AsyncSession,
     resource: Any,
     user: User | None,
@@ -392,7 +394,7 @@ async def create_resource(
             resource_id=data.metadata.name,
             **audit_from_request(request, user),
         )
-        await _save_version_snapshot(session, resource, user)
+        await save_version_snapshot(session, resource, user)
         await session.commit()
     except ResourceValidationError as exc:
         logger.warning(
@@ -507,14 +509,18 @@ async def update_resource(
     service = ResourceService(session)
     try:
         resource = await service.update(kind, name, data, project=project)
-        await log_audit(
-            session,
-            action="resource_updated",
-            resource_type=kind,
-            resource_id=name,
-            **audit_from_request(request, user),
-        )
-        await _save_version_snapshot(session, resource, user)
+        # Only snapshot when the version advanced. No-op updates keep the same
+        # version and must not re-insert into the unique (resource_id, version) key.
+        version_advanced = resource.version != data.version
+        if version_advanced:
+            await log_audit(
+                session,
+                action="resource_updated",
+                resource_type=kind,
+                resource_id=name,
+                **audit_from_request(request, user),
+            )
+            await save_version_snapshot(session, resource, user)
         await session.commit()
     except ResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -736,7 +742,7 @@ async def get_resource_version(
         version=snapshot.version,
         changed_by=snapshot.changed_by,
         created_at=snapshot.created_at,
-        spec=snapshot.spec,
+        spec=redact_automation_spec(kind, snapshot.spec),
         labels=snapshot.labels,
     )
 
@@ -791,10 +797,20 @@ async def rollback_resource(
             detail=f"Version {body.version} not found for {kind}/{name}",
         )
 
-    # Restore spec and labels from the snapshot, bump version
+    # A snapshot may predate schema changes; never restore an invalid spec.
+    errors, _refs = validate_resource(kind, snapshot.spec)
+    if errors:
+        msgs = "; ".join(f"{e.field}: {e.message}" for e in errors)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Snapshot version {body.version} is invalid under the current schema: {msgs}",
+        )
+
+    # Restore spec and labels from the snapshot, bump version, re-sync refs
     resource.spec = snapshot.spec
     resource.labels = snapshot.labels or {}
     resource.version += 1
+    await service._sync_refs(resource)
 
     await log_audit(
         session,
@@ -804,7 +820,7 @@ async def rollback_resource(
         detail={"rollback_to_version": body.version, "new_version": resource.version},
         **audit_from_request(request, user),
     )
-    await _save_version_snapshot(session, resource, user)
+    await save_version_snapshot(session, resource, user)
     await session.commit()
 
     _post_mutation_hooks(request, kind, name, resource.spec)

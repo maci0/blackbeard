@@ -246,7 +246,7 @@ def _is_path_traversal(path: str) -> bool:
     normalized = path.replace("\\", "/")
     if ".." in normalized.split("/"):
         return True
-    return not _SAFE_PATH_PATTERN.match(path)
+    return not _SAFE_PATH_PATTERN.fullmatch(path)
 
 
 def check_url_ssrf(url: str) -> str | None:

@@ -269,7 +269,7 @@ def test_flow_router_step_continues():
 
 
 def test_flow_function_step_blocked_module():
-    """Function step referencing a blocked module should be rejected."""
+    """Function step referencing a blocked module should fail the flow."""
     resource_snapshot = {
         "Flow/blocked-flow": {
             "kind": "Flow",
@@ -291,15 +291,15 @@ def test_flow_function_step_blocked_module():
     mock_listener = MagicMock()
 
     with patch("importlib.import_module") as mock_import:
-        result = _run_flow_steps(mock_loader, resource_snapshot, "blocked-flow", {}, mock_listener)
+        with pytest.raises(LoaderError, match="failed at steps"):
+            _run_flow_steps(mock_loader, resource_snapshot, "blocked-flow", {}, mock_listener)
 
     # Blocked module must never be imported
     mock_import.assert_not_called()
-    assert result is None
 
 
 def test_flow_function_step_not_in_allowlist():
-    """Function step with path not in allowlist must not be imported."""
+    """Function step with path not in allowlist must not be imported and fails the flow."""
     resource_snapshot = {
         "Flow/noallow-flow": {
             "kind": "Flow",
@@ -321,10 +321,10 @@ def test_flow_function_step_not_in_allowlist():
     mock_listener = MagicMock()
 
     with patch("importlib.import_module") as mock_import:
-        result = _run_flow_steps(mock_loader, resource_snapshot, "noallow-flow", {}, mock_listener)
+        with pytest.raises(LoaderError, match="failed at steps"):
+            _run_flow_steps(mock_loader, resource_snapshot, "noallow-flow", {}, mock_listener)
 
     mock_import.assert_not_called()
-    assert result is None
 
 
 def test_flow_empty_steps():

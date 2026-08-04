@@ -1,12 +1,7 @@
 import { type CSSProperties, type ReactNode } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { cn } from '@/lib/utils'
-import {
-  SHAPE_BODY_CLASSES,
-  SHAPE_CLASSES,
-  SHAPE_CLIP_PATHS,
-  type NodeShape,
-} from './shapes'
+import { SHAPE_BODY_CLASSES, SHAPE_CLASSES, SHAPE_CLIP_PATHS, type NodeShape } from './shapes'
 
 export type { NodeShape }
 

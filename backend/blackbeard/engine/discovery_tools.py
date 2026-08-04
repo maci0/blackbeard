@@ -112,7 +112,7 @@ class GetToolTool(_DiscoveryBaseTool):
 
     def _run(self, tool_name: str) -> str:
         """Get tool details by name."""
-        if not _SAFE_NAME.match(tool_name):
+        if not _SAFE_NAME.fullmatch(tool_name):
             return f"Invalid tool name '{tool_name}': must be lowercase alphanumeric/hyphens."
         try:
             client = get_sync_client("tool-discovery", timeout=10)

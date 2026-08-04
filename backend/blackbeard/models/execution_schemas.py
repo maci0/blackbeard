@@ -88,6 +88,19 @@ def redact_sensitive_values(inputs: dict[str, Any], _depth: int = 0) -> dict[str
     return redacted if redacted is not None else inputs
 
 
+def contains_redacted_values(obj: object, _depth: int = 0) -> bool:
+    """True if obj holds any value redacted by redact_sensitive_values."""
+    if _depth >= _MAX_REDACT_DEPTH:
+        return False
+    if obj == _REDACTED:
+        return True
+    if isinstance(obj, dict):
+        return any(contains_redacted_values(v, _depth + 1) for v in obj.values())
+    if isinstance(obj, list):
+        return any(contains_redacted_values(v, _depth + 1) for v in obj)
+    return False
+
+
 def exceeds_depth(obj: object, limit: int = 10, current: int = 0) -> bool:
     if current >= limit:
         return True

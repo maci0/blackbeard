@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { api } from '@/api/client'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { CardSkeleton } from '@/components/ui/Skeleton'
 import { cn, getErrorMessage } from '@/lib/utils'
@@ -189,12 +190,13 @@ export default function ToolsLibrary() {
             />
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Category filters">
             <button
               type="button"
               onClick={() => setActiveCategory(null)}
+              aria-pressed={activeCategory === null}
               className={cn(
-                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                'min-h-[44px] rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 activeCategory === null
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-border text-muted-foreground hover:text-foreground',
@@ -207,8 +209,9 @@ export default function ToolsLibrary() {
                 key={cat}
                 type="button"
                 onClick={() => setActiveCategory(cat === activeCategory ? null : cat)}
+                aria-pressed={cat === activeCategory}
                 className={cn(
-                  'rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors',
+                  'min-h-[44px] rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   cat === activeCategory
                     ? 'border-primary bg-primary/10 text-primary'
                     : 'border-border text-muted-foreground hover:text-foreground',
@@ -235,9 +238,18 @@ export default function ToolsLibrary() {
           {loading ? (
             <CardSkeleton count={6} />
           ) : filtered.length === 0 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              No tools match your search.
-            </p>
+            <EmptyState
+              icon={<Search className="h-10 w-10" />}
+              title="No tools match your search"
+              description="Try a different term or clear filters to browse the full library."
+              action={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setFilter('')
+                  setActiveCategory(null)
+                },
+              }}
+            />
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((tool) => {

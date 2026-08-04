@@ -57,7 +57,7 @@ class User(Base):
     )
 
     __table_args__ = (
-        Index("ix_users_api_key", "api_key", postgresql_where=text("api_key IS NOT NULL")),
+        # api_key has unique=True on the column (covers lookups + uniqueness).
         Index("ix_users_created_at", "created_at"),
         Index("ix_users_email_lower", text("lower(email)"), unique=True),
         CheckConstraint("length(email) >= 1", name="ck_user_email_nonempty"),

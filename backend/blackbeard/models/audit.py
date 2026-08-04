@@ -40,7 +40,12 @@ class AuditLog(Base):
         Index("ix_audit_actor_time", "actor_id", timestamp.desc()),
         Index("ix_audit_action_time", "action", timestamp.desc()),
         Index("ix_audit_resource_time", "resource_type", "resource_id", timestamp.desc()),
-        Index("ix_audit_request_id", "request_id"),
+        # Partial: request_id is often NULL; avoid indexing empty entries.
+        Index(
+            "ix_audit_request_id",
+            "request_id",
+            postgresql_where=text("request_id IS NOT NULL"),
+        ),
         CheckConstraint("length(actor_type) >= 1", name="ck_audit_actor_type_nonempty"),
         CheckConstraint(
             "actor_type IN ('user', 'api_key', 'system')",

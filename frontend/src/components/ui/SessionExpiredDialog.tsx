@@ -27,7 +27,7 @@ export function SessionExpiredDialog({ open }: SessionExpiredDialogProps) {
         >
           <Dialog.Title className="text-lg font-semibold">Session Expired</Dialog.Title>
           <Dialog.Description className="mt-2 text-sm text-muted-foreground">
-            Your session has expired. Click below to return to the login page.
+            Your session has expired. Use the button below to return to the login page.
           </Dialog.Description>
           <div className="mt-6 flex justify-end">
             <button

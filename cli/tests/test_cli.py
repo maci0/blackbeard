@@ -69,6 +69,8 @@ def test_cli_version():
         "pull",
         "train",
         "test-crew",
+        "completion",
+        "shell",
     ],
 )
 def test_subcommand_help(cmd):
@@ -129,7 +131,8 @@ def test_validate_examples_json_output():
     """Validate examples with --json output."""
     result = runner.invoke(cli, ["validate", "-f", str(_EXAMPLES_DIR), "--json"])
     assert result.exit_code == 0, f"Validation failed: {result.output}"
-    data = json.loads(result.output)
+    # Use stdout only — stderr may contain warnings/status (Click 8.4 mixes into .output).
+    data = json.loads(result.stdout)
     assert data["valid"] is True
     assert data["total"] > 0
     assert data["errors"] == []
@@ -359,7 +362,7 @@ def test_logout_json_output():
     with patch("blackbeard_cli.auth_cmds.clear_credentials", return_value=True):
         result = runner.invoke(cli, ["logout", "--json"])
     assert result.exit_code == 0
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert data["status"] == "logged_out"
 
 
@@ -415,7 +418,8 @@ spec:
                 ["-k", "test-key", "apply", "-f", f.name, "--dry-run", "--json"],
             )
             assert result.exit_code == 0
-            data = json.loads(result.output)
+            # stdout only: API-key warning is on stderr; Click 8.4 mixes both into .output
+            data = json.loads(result.stdout)
             assert data["dry_run"] is True
             assert len(data["resources"]) == 1
         finally:

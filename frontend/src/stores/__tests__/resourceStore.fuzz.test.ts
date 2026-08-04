@@ -58,22 +58,20 @@ describe('fuzz: resourceStore', () => {
   })
 
   describe('KIND_TO_PLURAL mapping', () => {
-    it('createResource rejects any kind not in KIND_TO_PLURAL', () => {
-      fc.assert(
-        fc.property(
+    it('createResource rejects any kind not in KIND_TO_PLURAL', async () => {
+      await fc.assert(
+        fc.asyncProperty(
           fc.string({ minLength: 1, maxLength: 30 }).filter((s) => !(s in KIND_TO_PLURAL)),
-          (unknownKind) => {
+          async (unknownKind) => {
             resetStore()
-            void {
-              apiVersion: 'blackbeard/v1',
-              kind: unknownKind,
-              metadata: { name: 'test' },
-              spec: {},
-            }
-            expect(() => {
-              const plural = KIND_TO_PLURAL[unknownKind]
-              if (!plural) throw new Error(`Unknown kind: ${unknownKind}`)
-            }).toThrow()
+            await expect(
+              useResourceStore.getState().createResource({
+                apiVersion: 'blackbeard/v1',
+                kind: unknownKind,
+                metadata: { name: 'test' },
+                spec: {},
+              }),
+            ).rejects.toThrow('Unknown kind')
           },
         ),
         { numRuns: NUM_RUNS },

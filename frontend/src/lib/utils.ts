@@ -1,12 +1,31 @@
+/** Shared UI helpers: class names, locale strings, storage keys, errors. */
+
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+
+// Re-export so existing `@/lib/utils` consumers keep working; prefer `@/lib/refs`.
+export { parseRef } from './refs'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/** Locale-aware first-letter capitalization (handles Turkish İ/i, etc.). */
 export function capitalize(s: string): string {
-  return s.length > 0 ? s.charAt(0).toUpperCase() + s.slice(1) : ''
+  return s.length > 0 ? s.charAt(0).toLocaleUpperCase() + s.slice(1) : ''
+}
+
+/**
+ * Locale-aware case fold for search/filter matching.
+ * Prefer this over toLowerCase() so Turkish and other locales compare correctly.
+ */
+export function caseFold(s: string): string {
+  return s.toLocaleLowerCase()
+}
+
+/** Locale-aware string comparison for user-facing sorted lists. */
+export function compareStrings(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { sensitivity: 'base' })
 }
 
 export function toResourceName(s: string): string {
@@ -17,11 +36,6 @@ export function toResourceName(s: string): string {
       .replace(/[^a-z0-9-]/g, '')
       .replace(/^-+|-+$/g, '') || 'unnamed'
   )
-}
-
-export function parseRef(ref: string): string {
-  const idx = ref.lastIndexOf('/')
-  return idx >= 0 ? ref.slice(idx + 1) : ref
 }
 
 export function getErrorMessage(err: unknown, fallback: string): string {

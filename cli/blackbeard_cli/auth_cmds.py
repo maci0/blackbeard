@@ -71,6 +71,11 @@ Examples:
 @click.pass_context
 def login(ctx: click.Context, email: str, password: str) -> None:
     """Log in and store credentials locally."""
+    if ctx.get_parameter_source("password") == click.core.ParameterSource.COMMANDLINE:
+        console.print(
+            "[yellow]Warning:[/] Password passed on command line is visible in process listings.\n"
+            "  [dim]Prefer interactive prompt (omit -p) for interactive use.[/]"
+        )
     server = ctx.obj["server"]
     _warn_insecure_http(server)
 
@@ -224,6 +229,11 @@ def register(
     display_name: str,
 ) -> None:
     """Register a new user account."""
+    if ctx.get_parameter_source("password") == click.core.ParameterSource.COMMANDLINE:
+        console.print(
+            "[yellow]Warning:[/] Password passed on command line is visible in process listings.\n"
+            "  [dim]Prefer interactive prompt (omit -p) for interactive use.[/]"
+        )
     server = ctx.obj["server"]
     _warn_insecure_http(server)
 

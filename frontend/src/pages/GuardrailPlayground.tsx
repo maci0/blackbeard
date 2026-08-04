@@ -316,7 +316,7 @@ export default function GuardrailPlayground() {
   if (error) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <div className="text-center">
+        <div role="alert" className="text-center">
           <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" aria-hidden="true" />
           <p className="font-medium">{error}</p>
           <button
@@ -423,14 +423,14 @@ export default function GuardrailPlayground() {
             Run Test
           </button>
 
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Sample inputs">
             <button
               type="button"
               onClick={() =>
                 setTestInput('Contact me at john.doe@example.com or call 555-123-4567')
               }
               aria-label="Load PII sample into test input"
-              className="rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex min-h-[44px] items-center rounded-md border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               PII sample
             </button>
@@ -438,7 +438,7 @@ export default function GuardrailPlayground() {
               type="button"
               onClick={() => setTestInput('My SSN is 123-45-6789 and card is 4111 1111 1111 1111')}
               aria-label="Load sensitive data sample into test input"
-              className="rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex min-h-[44px] items-center rounded-md border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Sensitive data
             </button>
@@ -446,7 +446,7 @@ export default function GuardrailPlayground() {
               type="button"
               onClick={() => setTestInput('This is a clean message with no sensitive information.')}
               aria-label="Load clean text sample into test input"
-              className="rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex min-h-[44px] items-center rounded-md border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Clean text
             </button>

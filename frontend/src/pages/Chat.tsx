@@ -182,7 +182,9 @@ export default function Chat() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const reduceMotion =
+      typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    messagesEndRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' })
   }, [])
 
   useEffect(() => {
@@ -473,7 +475,10 @@ export default function Chat() {
             {modelsLoading ? (
               <ModelSelectorSkeleton />
             ) : modelsError ? (
-              <div className="flex h-9 items-center gap-2 rounded-md border border-destructive/30 px-3 text-sm text-destructive">
+              <div
+                role="alert"
+                className="flex h-9 items-center gap-2 rounded-md border border-destructive/30 px-3 text-sm text-destructive"
+              >
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <span className="flex-1 truncate">{modelsError}</span>
                 <button

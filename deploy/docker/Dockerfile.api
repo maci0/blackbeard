@@ -1,7 +1,10 @@
-FROM python:3.13-slim
+# Pin patch-level tag for reproducible base layers (dependabot can bump).
+FROM python:3.13.14-slim
 LABEL org.opencontainers.image.source="https://github.com/blackbeard" \
       org.opencontainers.image.title="blackbeard-api" \
       org.opencontainers.image.description="Blackbeard Agent Management Platform — API"
+# Accepted for CI parity with the UI image; wheel builds do not embed it today.
+ARG SOURCE_DATE_EPOCH
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \

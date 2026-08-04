@@ -28,6 +28,7 @@ import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
+import { formatCompact } from '@/lib/formatters'
 import { ViewToggle } from '@/components/ui/ViewToggle'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { useToastStore } from '@/stores/toastStore'
@@ -89,9 +90,7 @@ function ProviderBadge({ provider }: { provider: string }) {
 /* ------------------------------------------------------------------ */
 
 function formatRateLimit(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}M`
-  if (value >= 1_000) return `${(value / 1_000).toFixed(value % 1_000 === 0 ? 0 : 1)}K`
-  return String(value)
+  return formatCompact(value)
 }
 
 function ModelCard({

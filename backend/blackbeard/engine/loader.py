@@ -149,6 +149,8 @@ class ResourceLoader:
         self._tools_skipped = 0
         self._discovery_tools_cache: dict[str, list[Any]] = {}
         self._crew_guardrail_refs: list[str] = []
+        # Set during build_crew so resolve_policy can apply crew default_agent_policy.
+        self._crew_spec: dict[str, Any] | None = None
 
     def _resolve_ref(self, ref_str: str) -> Resource:
         """Resolve a ref string to a Resource object."""
@@ -261,14 +263,13 @@ class ResourceLoader:
 
             module_path, class_name = entry
             cache_key = f"{module_path}.{class_name}"
-            cls = _ks_class_cache.get(cache_key)
-            if cls is None:
-                with _ks_class_cache_lock:
-                    cls = _ks_class_cache.get(cache_key)
-                    if cls is None:
-                        module = importlib.import_module(module_path)
-                        cls = getattr(module, class_name)
-                        _ks_class_cache[cache_key] = cls
+            # Lock-always: dict access must be synchronized under free-threaded Python.
+            with _ks_class_cache_lock:
+                cls = _ks_class_cache.get(cache_key)
+                if cls is None:
+                    module = importlib.import_module(module_path)
+                    cls = getattr(module, class_name)
+                    _ks_class_cache[cache_key] = cls
 
             kwargs: dict[str, Any] = (
                 {"content": content} if ks_type == "string" else {"file_paths": file_paths}
@@ -341,7 +342,7 @@ class ResourceLoader:
 
         elif tool_type == "builtin":
             builtin_name = spec.get("class_path") or resource.name
-            if not _SAFE_BUILTIN_NAME.match(builtin_name):
+            if not _SAFE_BUILTIN_NAME.fullmatch(builtin_name):
                 raise LoaderError(
                     f"Builtin tool name '{builtin_name}' is not a valid PascalCase identifier"
                 )
@@ -434,7 +435,6 @@ class ResourceLoader:
             )
         return tool_instance
 
-
     def _build_mcp_server(self, resource: Resource) -> Any:
         """Build a CrewAI MCP server config from a Tool resource."""
         from crewai.mcp import MCPServerHTTP, MCPServerSSE, MCPServerStdio
@@ -444,9 +444,7 @@ class ResourceLoader:
         if tool_type == "mcp-stdio":
             command = spec.get("command")
             if not command or not isinstance(command, str):
-                raise LoaderError(
-                    f"Tool '{resource.name}' type=mcp-stdio requires spec.command"
-                )
+                raise LoaderError(f"Tool '{resource.name}' type=mcp-stdio requires spec.command")
             env_raw = spec.get("env") or {}
             env = {str(k): str(v) for k, v in env_raw.items()} if env_raw else None
             return MCPServerStdio(
@@ -457,9 +455,7 @@ class ResourceLoader:
         if tool_type == "mcp-http":
             url = spec.get("url")
             if not url or not isinstance(url, str):
-                raise LoaderError(
-                    f"Tool '{resource.name}' type=mcp-http requires spec.url"
-                )
+                raise LoaderError(f"Tool '{resource.name}' type=mcp-http requires spec.url")
             url_err = check_url_ssrf(url)
             if url_err:
                 raise LoaderError(f"Tool '{resource.name}': {url_err}")
@@ -475,9 +471,7 @@ class ResourceLoader:
             if config and "streamable" in config:
                 streamable = bool(config["streamable"])
             return MCPServerHTTP(url=url, headers=headers, streamable=streamable)
-        raise LoaderError(
-            f"Tool '{resource.name}': not an MCP type ({tool_type!r})"
-        )
+        raise LoaderError(f"Tool '{resource.name}': not an MCP type ({tool_type!r})")
 
     def _build_agent_tools(
         self,
@@ -497,8 +491,31 @@ class ResourceLoader:
             try:
                 tool_resource = self._resolve_ref(ref)
             except LoaderError:
+                logger.warning(
+                    "Tool ref '%s' for agent '%s' failed to resolve — agent will run without it",
+                    ref,
+                    agent_name,
+                    exc_info=True,
+                    extra={
+                        "event": "agent_tool_ref_failed",
+                        "ref": ref,
+                        "agent_name": agent_name,
+                    },
+                )
                 continue
             if tool_resource.kind != ResourceKind.TOOL:
+                logger.warning(
+                    "Tool ref '%s' for agent '%s' resolved to kind %s, expected Tool — skipping",
+                    ref,
+                    agent_name,
+                    tool_resource.kind.value,
+                    extra={
+                        "event": "agent_tool_ref_wrong_kind",
+                        "ref": ref,
+                        "agent_name": agent_name,
+                        "resolved_kind": tool_resource.kind.value,
+                    },
+                )
                 continue
             tool_spec = tool_resource.spec
             tool_type = str(tool_spec.get("type", "python"))
@@ -557,8 +574,7 @@ class ResourceLoader:
             selected = select_sandbox(tool_tier=tool_tier, policy_minimum=policy_min)
             effective = runtime_tier_for_tool(selected, tool_type)
             logger.info(
-                "Sandbox tier selected: agent=%s tool=%s effective=%s "
-                "(tool_tier=%s policy_min=%s)",
+                "Sandbox tier selected: agent=%s tool=%s effective=%s (tool_tier=%s policy_min=%s)",
                 agent_name,
                 tool_resource.name,
                 effective,
@@ -661,7 +677,8 @@ class ResourceLoader:
         tool_refs = spec.get("tools", [])
         # Always resolve policy (defaults when none configured) so sandbox
         # selection and optional tool filtering share one resolution path.
-        policy = resolve_policy(spec, policies=self._policies)
+        # crew_spec is set by build_crew so default_agent_policy is honored.
+        policy = resolve_policy(spec, crew_spec=self._crew_spec, policies=self._policies)
         if tool_refs:
             tools, mcps = self._build_agent_tools(tool_refs, policy, resource.name)
             if tools:
@@ -940,17 +957,13 @@ class ResourceLoader:
                     f"[Composite guardrail '{guardrail_name}': ALL of the "
                     f"following checks must pass]\n\n"
                 )
-                return header + "\n\n".join(
-                    f"Check {i + 1}: {c}" for i, c in enumerate(children)
-                )
+                return header + "\n\n".join(f"Check {i + 1}: {c}" for i, c in enumerate(children))
             else:
                 header = (
                     f"[Composite guardrail '{guardrail_name}': ANY ONE of the "
                     f"following checks must pass]\n\n"
                 )
-                return header + "\n\n".join(
-                    f"Check {i + 1}: {c}" for i, c in enumerate(children)
-                )
+                return header + "\n\n".join(f"Check {i + 1}: {c}" for i, c in enumerate(children))
 
         # Mixed or all-callable children: wrap in a function
         def _composite_guardrail(output: str) -> str:
@@ -964,18 +977,19 @@ class ResourceLoader:
                     child(output)
                     if operator == "or" and short_circuit:
                         return output
-                except (ValueError, Exception) as exc:
+                except Exception as exc:
                     if operator == "and" and short_circuit:
                         raise
                     errors.append(str(exc))
 
             if operator == "and" and errors:
                 raise ValueError(
-                    f"Composite guardrail '{guardrail_name}' failed: "
-                    + "; ".join(errors)
+                    f"Composite guardrail '{guardrail_name}' failed: " + "; ".join(errors)
                 )
-            if operator == "or" and errors and len(errors) >= len(
-                [c for c in children if not isinstance(c, str)]
+            if (
+                operator == "or"
+                and errors
+                and len(errors) >= len([c for c in children if not isinstance(c, str)])
             ):
                 raise ValueError(
                     f"Composite guardrail '{guardrail_name}': all checks failed: "
@@ -1070,7 +1084,7 @@ class ResourceLoader:
                 task_kwargs[key] = spec[key]
         if "output_file" in spec:
             output_file = spec["output_file"]
-            if not _SAFE_FILENAME.match(output_file) or len(output_file) > 255:
+            if not _SAFE_FILENAME.fullmatch(output_file) or len(output_file) > 255:
                 raise LoaderError(f"output_file must be a plain filename, got '{output_file}'")
             task_kwargs["output_file"] = output_file
 
@@ -1231,80 +1245,92 @@ class ResourceLoader:
         spec = resource.spec
         tool_loading = spec.get("tool_loading", "hybrid")
 
-        agent_refs = spec.get("agents", [])
-        agents: list[Agent] = []
-        for ref_str in agent_refs:
-            agent = self.build_agent(ref_str)
-            agents.append(agent)
-            ref = parse_ref(ref_str)
-            if ref:
-                agent_resource = self._resources.get(f"{ref.kind.value}/{ref.name}")
-                if agent_resource:
-                    self._inject_discovery_tools(
-                        agent, agent_resource, tool_loading, resource.project
+        # Expose crew spec so build_agent/build_task resolve default_agent_policy
+        # for this crew build (including manager_agent).
+        prev_crew_spec = self._crew_spec
+        self._crew_spec = spec
+        # Agents/tasks are cached with this crew's policy filtering and
+        # guardrails baked in, so a shared loader (e.g. flow steps) must not
+        # reuse them across crews.
+        self._agent_cache.clear()
+        self._task_cache.clear()
+        try:
+            agent_refs = spec.get("agents", [])
+            agents: list[Agent] = []
+            for ref_str in agent_refs:
+                agent = self.build_agent(ref_str)
+                agents.append(agent)
+                ref = parse_ref(ref_str)
+                if ref:
+                    agent_resource = self._resources.get(f"{ref.kind.value}/{ref.name}")
+                    if agent_resource:
+                        self._inject_discovery_tools(
+                            agent, agent_resource, tool_loading, resource.project
+                        )
+
+            # Set crew-level guardrails so build_task() can prepend them
+            self._crew_guardrail_refs = list(spec.get("guardrails", []))
+
+            task_refs = spec.get("tasks", [])
+            tasks = [self.build_task(ref) for ref in task_refs]
+
+            # Clear crew guardrails after tasks are built
+            self._crew_guardrail_refs = []
+
+            process_str = spec.get("process", "sequential")
+            process = _PROCESS_MAP.get(process_str, Process.sequential)
+
+            crew_kwargs: dict[str, Any] = {
+                "agents": agents,
+                "tasks": tasks,
+                "process": process,
+                "verbose": spec.get("verbose", True),
+            }
+
+            for key in ("cache", "max_rpm"):
+                if key in spec:
+                    crew_kwargs[key] = spec[key]
+
+            # Memory + RAG provider config
+            memory_spec = spec.get("memory")
+            if isinstance(memory_spec, bool):
+                crew_kwargs["memory"] = memory_spec
+            elif isinstance(memory_spec, dict):
+                crew_kwargs["memory"] = memory_spec.get("enabled", True)
+                provider = memory_spec.get("provider")
+                if provider == "muninndb":
+                    crew_kwargs["_muninndb_backend"] = self._build_muninndb_backend(
+                        memory_spec, resource.project
                     )
 
-        # Set crew-level guardrails so build_task() can prepend them
-        self._crew_guardrail_refs = list(spec.get("guardrails", []))
+            embedder_spec = spec.get("embedder")
+            if embedder_spec:
+                crew_kwargs["embedder"] = embedder_spec
 
-        task_refs = spec.get("tasks", [])
-        tasks = [self.build_task(ref) for ref in task_refs]
+            # Manager LLM for hierarchical process
+            manager_llm_ref = spec.get("manager_llm")
+            if manager_llm_ref:
+                crew_kwargs["manager_llm"] = self.build_llm(manager_llm_ref)
 
-        # Clear crew guardrails after tasks are built
-        self._crew_guardrail_refs = []
+            # Manager agent for hierarchical process
+            manager_agent_ref = spec.get("manager_agent")
+            if manager_agent_ref:
+                crew_kwargs["manager_agent"] = self.build_agent(manager_agent_ref)
 
-        process_str = spec.get("process", "sequential")
-        process = _PROCESS_MAP.get(process_str, Process.sequential)
-
-        crew_kwargs: dict[str, Any] = {
-            "agents": agents,
-            "tasks": tasks,
-            "process": process,
-            "verbose": spec.get("verbose", True),
-        }
-
-        for key in ("cache", "max_rpm"):
-            if key in spec:
-                crew_kwargs[key] = spec[key]
-
-        # Memory + RAG provider config
-        memory_spec = spec.get("memory")
-        if isinstance(memory_spec, bool):
-            crew_kwargs["memory"] = memory_spec
-        elif isinstance(memory_spec, dict):
-            crew_kwargs["memory"] = memory_spec.get("enabled", True)
-            provider = memory_spec.get("provider")
-            if provider == "muninndb":
-                crew_kwargs["_muninndb_backend"] = self._build_muninndb_backend(
-                    memory_spec, resource.project
+            # Validate hierarchical process has a manager configured
+            if (
+                process is Process.hierarchical
+                and "manager_llm" not in crew_kwargs
+                and "manager_agent" not in crew_kwargs
+            ):
+                raise LoaderError(
+                    f"Crew '{crew_name}' uses hierarchical process but has neither "
+                    f"'manager_llm' nor 'manager_agent' configured"
                 )
 
-        embedder_spec = spec.get("embedder")
-        if embedder_spec:
-            crew_kwargs["embedder"] = embedder_spec
-
-        # Manager LLM for hierarchical process
-        manager_llm_ref = spec.get("manager_llm")
-        if manager_llm_ref:
-            crew_kwargs["manager_llm"] = self.build_llm(manager_llm_ref)
-
-        # Manager agent for hierarchical process
-        manager_agent_ref = spec.get("manager_agent")
-        if manager_agent_ref:
-            crew_kwargs["manager_agent"] = self.build_agent(manager_agent_ref)
-
-        # Validate hierarchical process has a manager configured
-        if (
-            process is Process.hierarchical
-            and "manager_llm" not in crew_kwargs
-            and "manager_agent" not in crew_kwargs
-        ):
-            raise LoaderError(
-                f"Crew '{crew_name}' uses hierarchical process but has neither "
-                f"'manager_llm' nor 'manager_agent' configured"
-            )
-
-        crew = Crew(**crew_kwargs)
+            crew = Crew(**crew_kwargs)
+        finally:
+            self._crew_spec = prev_crew_spec
         build_ms = round((time.monotonic() - t0) * 1000, 1)
         logger.info(
             "Crew built: %s agents=%d tasks=%d tools=%d skipped=%d process=%s (%.0fms)",

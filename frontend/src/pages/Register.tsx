@@ -49,6 +49,13 @@ export default function Register() {
     const validationError = validate()
     if (validationError) {
       setLocalError(validationError)
+      const focusId =
+        validationError === 'Email is required.'
+          ? 'register-email'
+          : validationError === 'Display name is required.'
+            ? 'register-display-name'
+            : 'register-password'
+      document.getElementById(focusId)?.focus()
       return
     }
 
@@ -57,7 +64,8 @@ export default function Register() {
       setPassword('')
       void navigate('/studio', { replace: true })
     } catch {
-      // Error is set in the store
+      // Error is set in the store — move focus so screen readers announce it
+      document.getElementById('register-email')?.focus()
     }
   }
 
@@ -183,7 +191,11 @@ export default function Register() {
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                   className="absolute right-1 top-1/2 flex h-[44px] w-[44px] -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  )}
                 </button>
               </div>
               {password.length > 0 && password.length < 8 ? (
@@ -217,7 +229,7 @@ export default function Register() {
               {loading ? (
                 <Spinner size="sm" className="text-current" />
               ) : (
-                <UserPlus className="h-4 w-4" />
+                <UserPlus className="h-4 w-4" aria-hidden="true" />
               )}
               {loading ? 'Creating account…' : 'Create account'}
             </button>

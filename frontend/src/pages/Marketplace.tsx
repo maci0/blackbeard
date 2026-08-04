@@ -564,10 +564,11 @@ export default function Marketplace() {
               {CATEGORIES.map((category) => (
                 <button
                   key={category}
+                  type="button"
                   onClick={() => setActiveCategory(category)}
                   aria-pressed={activeCategory === category}
                   className={cn(
-                    'rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    'min-h-[44px] rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     activeCategory === category
                       ? 'border-primary bg-primary text-primary-foreground'
                       : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -587,6 +588,16 @@ export default function Marketplace() {
               <p className="mt-1 text-xs text-muted-foreground/70">
                 Try adjusting your search or category filter.
               </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('')
+                  setActiveCategory('All')
+                }}
+                className="mt-4 inline-flex min-h-[44px] items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Clear filters
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

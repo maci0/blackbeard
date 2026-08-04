@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from blackbeard.kinds import ALL_KINDS
+from blackbeard_cli.kinds import ALL_KINDS
 
 AGENT_SCHEMA = {
     "type": "object",

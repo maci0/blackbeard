@@ -24,7 +24,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ApiError } from '@/api/client'
-import { cn, getErrorMessage } from '@/lib/utils'
+import { caseFold, cn, getErrorMessage } from '@/lib/utils'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { KIND_TO_PLURAL, API_VERSION, NAME_RE } from '@/lib/kinds'
 import { useDocumentTitle } from '@/hooks'
@@ -268,9 +268,8 @@ export default function Resources() {
     return allResources.filter((r) => {
       if (kindFilter && r.kindPlural !== kindFilter) return false
       if (deferredSearch) {
-        const q = deferredSearch.toLowerCase()
-        if (!r.metadata.name.toLowerCase().includes(q) && !r.kind.toLowerCase().includes(q))
-          return false
+        const q = caseFold(deferredSearch)
+        if (!caseFold(r.metadata.name).includes(q) && !caseFold(r.kind).includes(q)) return false
       }
       return true
     })

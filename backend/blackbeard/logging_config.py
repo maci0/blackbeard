@@ -35,13 +35,33 @@ user_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("user_id", def
 execution_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("execution_id", default="")
 
 
+def _current_trace_ids() -> tuple[str | None, str | None]:
+    """Return (trace_id, span_id) from the active OpenTelemetry span, if any.
+
+    Avoids importing OTEL at module load so optional tracing stays zero-cost
+    when the SDK is not installed.
+    """
+    try:
+        from opentelemetry import trace
+    except ImportError:
+        return None, None
+    span = trace.get_current_span()
+    ctx = span.get_span_context() if span is not None else None
+    if ctx is None or not getattr(ctx, "is_valid", False):
+        return None, None
+    return format(ctx.trace_id, "032x"), format(ctx.span_id, "016x")
+
+
 class _RequestIdFilter(logging.Filter):
-    """Injects request_id, user_id, and execution_id from contextvars into every log record."""
+    """Injects request_id, user_id, execution_id, and optional OTEL IDs into every log record."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.request_id = request_id_var.get("-")
         record.user_id = user_id_var.get("")
         record.execution_id = execution_id_var.get("")
+        trace_id, span_id = _current_trace_ids()
+        record.trace_id = trace_id or ""
+        record.span_id = span_id or ""
         return True
 
 
@@ -72,6 +92,8 @@ _LOG_RECORD_BUILTIN = frozenset(
         "request_id",
         "user_id",
         "execution_id",
+        "trace_id",
+        "span_id",
     }
 )
 
@@ -173,7 +195,9 @@ def anonymize_ip(ip: str | None) -> str:
 
     IPv4: masks the last octet (``192.168.1.42`` → ``192.168.1.x``).
     IPv6: masks the last 80 bits (``2001:db8::1`` → ``2001:db8:x:x:x:x:x:x``).
-    Raw IP is stored only in the audit_logs table where retention is controlled.
+    Applied everywhere client IPs are logged or persisted (including
+    audit_logs); retention of those rows is governed by
+    AUDIT_LOG_RETENTION_DAYS.
     """
     if not ip:
         return "unknown"
@@ -266,6 +290,8 @@ class _JsonFormatter(logging.Formatter):
             "request_id": getattr(record, "request_id", "-"),
             "user_id": getattr(record, "user_id", "") or None,
             "execution_id": getattr(record, "execution_id", "") or None,
+            "trace_id": getattr(record, "trace_id", "") or None,
+            "span_id": getattr(record, "span_id", "") or None,
             "thread": record.threadName,
             "pid": record.process,
         }

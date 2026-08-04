@@ -257,6 +257,9 @@ def test_execute_sandboxed_forwards_image():
     with patch(
         "blackbeard.engine.sandbox.runner.ensure_sandbox_available"
     ), patch(
+        "blackbeard.engine.sandbox.runner._execute_async",
+        return_value=None,
+    ) as mock_execute, patch(
         "blackbeard.engine.sandbox.runner._run_coro",
         return_value=(0, "out", ""),
     ) as mock_run:
@@ -269,6 +272,8 @@ def test_execute_sandboxed_forwards_image():
             network=False,
         )
     assert mock_run.called
+    assert mock_execute.call_args.kwargs["image"] == "alpine:3.20"
+    assert mock_execute.call_args.kwargs["network"] is False
 
 
 @pytest.mark.skipif(

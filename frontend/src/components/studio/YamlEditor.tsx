@@ -117,7 +117,7 @@ export function YamlEditor() {
         <textarea
           value={yamlText}
           onChange={handleYamlChange}
-          className="h-full w-full resize-none bg-[#0d1117] p-4 font-mono text-xs leading-relaxed text-slate-300 focus-visible:outline-none"
+          className="h-full w-full resize-none bg-[#0d1117] p-4 font-mono text-xs leading-relaxed text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           spellCheck={false}
           autoComplete="off"
           autoCapitalize="off"

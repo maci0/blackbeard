@@ -67,7 +67,10 @@ export function ExecutionStatus({ executionId }: ExecutionStatusProps) {
         }
       } catch (err) {
         if (!active) return
+        // Surface the error but keep polling: a single transient failure should
+        // not freeze the widget mid-run (matches CrewRunner retry behavior).
         setError(err instanceof Error ? err.message : 'Failed to fetch execution')
+        timerRef.current = setTimeout(() => void poll(), POLL_INTERVAL_MS)
       }
     }
 

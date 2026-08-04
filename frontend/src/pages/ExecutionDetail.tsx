@@ -759,7 +759,7 @@ function HITLPanel({
           <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">{prompt}</p>
         </div>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <textarea
           value={response}
           onChange={(e) => setResponse(e.target.value)}
@@ -771,18 +771,24 @@ function HITLPanel({
           }}
           placeholder="Type your response…"
           aria-label="Your response to the crew"
+          aria-describedby="hitl-response-hint"
           rows={2}
           className="flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           disabled={submitting}
+          autoFocus
         />
+        <span id="hitl-response-hint" className="sr-only">
+          Press Control or Command and Enter to submit
+        </span>
         <button
           type="button"
           onClick={() => void handleSubmit()}
           disabled={!response.trim() || submitting}
+          aria-busy={submitting}
           aria-label="Submit response"
-          className="flex shrink-0 items-center gap-1.5 self-end rounded-md bg-yellow-600 px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 self-stretch rounded-md bg-yellow-600 px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:self-end"
         >
-          {submitting ? <Spinner size="sm" /> : <Send className="h-3.5 w-3.5" />}
+          {submitting ? <Spinner size="sm" /> : <Send className="h-3.5 w-3.5" aria-hidden="true" />}
           Respond
         </button>
       </div>

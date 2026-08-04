@@ -54,6 +54,56 @@ TERMINAL_STATUSES: frozenset[ExecutionStatus] = frozenset(
     }
 )
 
+# Canonical lifecycle edges. Terminal states have no exits (immutable).
+_ALLOWED_STATUS_TRANSITIONS: dict[ExecutionStatus, frozenset[ExecutionStatus]] = {
+    ExecutionStatus.QUEUED: frozenset(
+        {
+            ExecutionStatus.RUNNING,
+            ExecutionStatus.FAILED,
+            ExecutionStatus.CANCELLED,
+        }
+    ),
+    ExecutionStatus.RUNNING: frozenset(
+        {
+            ExecutionStatus.COMPLETED,
+            ExecutionStatus.FAILED,
+            ExecutionStatus.CANCELLED,
+        }
+    ),
+    ExecutionStatus.COMPLETED: frozenset(),
+    ExecutionStatus.FAILED: frozenset(),
+    ExecutionStatus.CANCELLED: frozenset(),
+}
+
+
+def can_transition_status(current: ExecutionStatus, new: ExecutionStatus) -> bool:
+    """Return True if *current* -> *new* is a valid execution lifecycle transition."""
+    return new in _ALLOWED_STATUS_TRANSITIONS.get(current, frozenset())
+
+
+class ExecutionEventType(enum.StrEnum):
+    """Canonical execution event types delivered via SSE/webhooks.
+
+    Stored as free-form strings on ``ExecutionEvent.event_type`` so older
+    rows and tests can use ad-hoc types, but producers and webhook filters
+    should prefer these values.
+    """
+
+    CREW_STARTED = "crew_started"
+    CREW_COMPLETED = "crew_completed"
+    TASK_STARTED = "task_started"
+    TASK_COMPLETED = "task_completed"
+    TOOL_STARTED = "tool_started"
+    TOOL_FINISHED = "tool_finished"
+    LLM_STARTED = "llm_started"
+    LLM_COMPLETED = "llm_completed"
+    COST_ALERT = "cost_alert"
+    HITL_REQUEST = "hitl_request"
+    HITL_RESPONSE = "hitl_response"
+
+
+KNOWN_EXECUTION_EVENT_TYPES: frozenset[str] = frozenset(e.value for e in ExecutionEventType)
+
 
 class TaskStatus(enum.StrEnum):
     """Individual task execution states."""
@@ -106,11 +156,19 @@ class Execution(Base):
     completion_tokens: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default=text("0")
     )
+    # Precision: 14 digits total, 6 after decimal → up to ~$99,999,999.999999
+    # (was Numeric(10,6)/$9999 which overflows multi-agent high-token runs).
     cost_usd: Mapped[Decimal] = mapped_column(
-        Numeric(10, 6), nullable=False, default=Decimal("0"), server_default=text("0")
+        Numeric(14, 6), nullable=False, default=Decimal("0"), server_default=text("0")
     )
 
     litellm_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Identity of the API instance whose background thread owns this run
+    # ("temporal" for durable Temporal workflows). Startup recovery only
+    # claims rows for its own worker id, so a restarting replica cannot
+    # fail executions still running on healthy replicas.
+    worker_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     initiated_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -157,8 +215,17 @@ class Execution(Base):
         Index("ix_execution_ns_status_created", "crew_project", "status", created_at.desc()),
         Index("ix_execution_status_created", "status", "created_at"),
         Index("ix_execution_type_created", "execution_type", created_at.desc()),
-        Index("ix_execution_created_at", "created_at"),
+        # Stable list ordering: ORDER BY created_at DESC, id DESC.
+        # Also covers plain created_at scans, so no single-column index needed.
+        Index("ix_execution_created_id", created_at.desc(), id.desc()),
         Index("ix_execution_initiated_by", "initiated_by"),
+        # Startup recovery / orphan-key cleanup only touches non-terminal rows.
+        Index(
+            "ix_execution_nonterminal",
+            "status",
+            "created_at",
+            postgresql_where=text("status IN ('queued', 'running')"),
+        ),
         CheckConstraint("total_tokens >= 0", name="ck_execution_total_tokens_nonneg"),
         CheckConstraint("prompt_tokens >= 0", name="ck_execution_prompt_tokens_nonneg"),
         CheckConstraint("completion_tokens >= 0", name="ck_execution_completion_tokens_nonneg"),
@@ -237,7 +304,7 @@ class ExecutionTask(Base):
         Integer, nullable=False, default=0, server_default=text("0")
     )
     cost_usd: Mapped[Decimal] = mapped_column(
-        Numeric(10, 6), nullable=False, default=Decimal("0"), server_default=text("0")
+        Numeric(14, 6), nullable=False, default=Decimal("0"), server_default=text("0")
     )
 
     created_at: Mapped[datetime] = mapped_column(

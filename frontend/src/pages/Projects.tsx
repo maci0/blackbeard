@@ -9,7 +9,7 @@ import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { SmartTime } from '@/components/ui/SmartTime'
-import { cn, getErrorMessage } from '@/lib/utils'
+import { caseFold, cn, getErrorMessage } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
 import type { Resource } from '@/lib/types'
@@ -55,7 +55,7 @@ export default function Projects() {
   }
 
   const filtered = filter
-    ? projects.filter((p) => p.metadata.name.toLowerCase().includes(filter.toLowerCase()))
+    ? projects.filter((p) => caseFold(p.metadata.name).includes(caseFold(filter)))
     : projects
 
   return (
@@ -126,20 +126,35 @@ export default function Projects() {
               action={{ label: 'Create Project', onClick: () => setCreateOpen(true) }}
             />
           ) : filtered.length === 0 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              No projects match &quot;{filter}&quot;
-            </p>
+            <EmptyState
+              icon={<Search className="h-10 w-10" />}
+              title="No projects match your filter"
+              description={`Nothing matched "${filter}". Try a different name or clear the filter.`}
+              action={{ label: 'Clear filter', onClick: () => setFilter('') }}
+            />
           ) : (
             <div className="overflow-hidden rounded-lg border">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm" aria-label="Projects">
                 <thead>
                   <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3">Guardrails</th>
-                    <th className="px-4 py-3">Quota</th>
-                    <th className="px-4 py-3">Updated</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th scope="col" className="px-4 py-3">
+                      Name
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      Description
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      Guardrails
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      Quota
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      Updated
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-right">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">

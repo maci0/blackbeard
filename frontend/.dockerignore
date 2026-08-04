@@ -10,7 +10,8 @@ coverage/
 *.test.tsx
 *.spec.ts
 *.spec.tsx
-__tests__/
+**/__tests__/
+src/test-setup.ts
 e2e/
 playwright.config.ts
 playwright-report/
@@ -24,6 +25,8 @@ eslint.config.js
 vitest.config.ts
 tsconfig.tsbuildinfo
 tsconfig.*.tsbuildinfo
+# OpenAPI snapshot is only for generate:api; schema.d.ts is committed.
+openapi.json
 Dockerfile*
 .claude/
 .sisyphus/

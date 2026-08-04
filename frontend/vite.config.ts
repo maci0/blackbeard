@@ -11,6 +11,8 @@ export default defineConfig({
     },
   },
   build: {
+    // Explicit: never ship source maps in the production image.
+    sourcemap: false,
     rollupOptions: {
       output: {
         manualChunks: {

@@ -67,6 +67,8 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
         """
         if not base_url:
             base_url = os.environ.get("BLACKBEARD_BASE_URL", "http://localhost:8000")
+        # Match TypeScript SDK: strip trailing slashes so path joins stay clean.
+        base_url = base_url.rstrip("/")
         if api_key is None:
             api_key = os.environ.get("BLACKBEARD_API_KEY")
         if token is None:
@@ -158,9 +160,7 @@ class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):
             params["resource_type"] = resource_type
         if resource_id:
             params["resource_id"] = resource_id
-        return self._send(
-            "GET", "/api/v1/audit-logs", params=params
-        ).json()["items"]
+        return self._send("GET", "/api/v1/audit-logs", params=params).json()["items"]
 
     def close(self) -> None:
         """Close the underlying HTTP client."""

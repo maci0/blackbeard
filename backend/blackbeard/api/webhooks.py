@@ -21,13 +21,15 @@ from blackbeard.auth import require_permission
 from blackbeard.config import settings
 from blackbeard.engine.execution_listener import invalidate_webhook_cache
 from blackbeard.logging_config import safe_log_url
-from blackbeard.models import User, Webhook, get_session
+from blackbeard.models import KNOWN_EXECUTION_EVENT_TYPES, User, Webhook, get_session
 from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
 from blackbeard.resources import check_url_ssrf
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+
+_KNOWN_EVENTS_HELP = ", ".join(sorted(KNOWN_EXECUTION_EVENT_TYPES))
 
 
 class WebhookCreateRequest(BaseModel):
@@ -45,6 +47,7 @@ class WebhookCreateRequest(BaseModel):
         max_length=50,
         description=(
             "Event types to deliver (e.g. 'crew_started', 'task_completed'). "
+            f"Must be known types: {_KNOWN_EVENTS_HELP}. "
             "Empty list means all events."
         ),
     )
@@ -57,8 +60,17 @@ class WebhookCreateRequest(BaseModel):
             event = event.strip()
             if not event or len(event) > 100:
                 raise ValueError("Each event type must be 1-100 non-whitespace characters")
+            if event not in KNOWN_EXECUTION_EVENT_TYPES:
+                raise ValueError(f"Unknown event type '{event}'. Known types: {_KNOWN_EVENTS_HELP}")
             cleaned.append(event)
-        return cleaned
+        # Deduplicate while preserving order (filter list is a set at delivery time).
+        seen: set[str] = set()
+        unique: list[str] = []
+        for event in cleaned:
+            if event not in seen:
+                seen.add(event)
+                unique.append(event)
+        return unique
 
     secret: str | None = Field(
         default=None,
@@ -216,6 +228,32 @@ async def list_webhooks(
         limit=limit,
         offset=offset,
         has_more=(offset + limit) < total,
+    )
+
+
+@router.get(
+    "/{webhook_id}",
+    response_model=WebhookResponse,
+    responses={404: {"description": "Webhook not found"}},
+)
+async def get_webhook(
+    webhook_id: UUID = Path(..., description="Webhook UUID"),
+    session: AsyncSession = Depends(get_session),
+    _user: User | None = Depends(require_permission("get", "Webhook")),
+) -> WebhookResponse:
+    """Get a registered webhook by ID (secret is not returned)."""
+    result = await session.execute(
+        select(Webhook).where(Webhook.id == webhook_id).options(defer(Webhook.secret))
+    )
+    webhook = result.scalar_one_or_none()
+    if webhook is None:
+        raise HTTPException(status_code=404, detail=f"Webhook '{webhook_id}' not found")
+    return WebhookResponse(
+        id=str(webhook.id),
+        url=webhook.url,
+        events=webhook.events,
+        active=webhook.active,
+        created_at=webhook.created_at,
     )
 
 

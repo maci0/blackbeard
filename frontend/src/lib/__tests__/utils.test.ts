@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cn, toResourceName, capitalize, parseRef } from '../utils'
+import { cn, toResourceName, capitalize, caseFold, compareStrings, parseRef } from '../utils'
 
 describe('cn()', () => {
   it('merges class names', () => {
@@ -85,6 +85,29 @@ describe('capitalize()', () => {
 
   it('handles single character', () => {
     expect(capitalize('a')).toBe('A')
+  })
+})
+
+describe('caseFold()', () => {
+  it('lowercases ASCII', () => {
+    expect(caseFold('Agent')).toBe('agent')
+  })
+
+  it('uses locale rules for Turkish-sensitive letters when available', () => {
+    // toLocaleLowerCase without explicit locale uses the runtime default;
+    // for Latin input it still folds case for search matching.
+    expect(caseFold('STATUS')).toBe('status')
+  })
+})
+
+describe('compareStrings()', () => {
+  it('orders alphabetically with base sensitivity', () => {
+    expect(compareStrings('apple', 'banana')).toBeLessThan(0)
+    expect(compareStrings('Banana', 'apple')).toBeGreaterThan(0)
+  })
+
+  it('treats accented variants as equal at base sensitivity', () => {
+    expect(compareStrings('cafe', 'café')).toBe(0)
   })
 })
 

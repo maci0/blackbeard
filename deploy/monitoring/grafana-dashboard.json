@@ -143,7 +143,7 @@
       {
         "title": "Active Executions",
         "type": "stat",
-        "gridPos": { "x": 16, "y": 12, "w": 8, "h": 6 },
+        "gridPos": { "x": 16, "y": 12, "w": 4, "h": 6 },
         "targets": [
           {
             "expr": "blackbeard_active_executions",
@@ -151,6 +151,47 @@
           }
         ]
       },
+      {
+        "title": "Executor Queue",
+        "type": "stat",
+        "gridPos": { "x": 20, "y": 12, "w": 4, "h": 6 },
+        "targets": [
+          {
+            "expr": "blackbeard_executor_queued_tasks",
+            "legendFormat": "Queued"
+          }
+        ]
+      },
+      {
+        "title": "Execution Outcomes",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 24, "w": 12, "h": 6 },
+        "targets": [
+          {
+            "expr": "sum by (status) (rate(blackbeard_executions_total[5m]))",
+            "legendFormat": "{{ status }}"
+          }
+        ]
+      },
+      {
+        "title": "Executor Saturated",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 24, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "blackbeard_executor_saturated",
+            "legendFormat": "Saturated"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              { "type": "value", "options": { "1": { "text": "YES", "color": "red" }, "0": { "text": "NO", "color": "green" } } }
+            ]
+          }
+        }
+      },
+
       {
         "title": "Database Connections",
         "type": "timeseries",

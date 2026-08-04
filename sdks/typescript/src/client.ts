@@ -1,5 +1,6 @@
 import {
   BlackbeardApiError,
+  formatErrorDetail,
   TERMINAL_STATUSES,
   type AuditLogEntry,
   type BlackbeardConfig,
@@ -64,6 +65,25 @@ export class BlackbeardClient {
     this.timeout = config.timeout ?? 30_000;
   }
 
+  /** Parse X-Request-Id / Retry-After from a failed response for error context. */
+  private static errorMeta(resp: Response): {
+    requestId?: string;
+    retryAfter?: number;
+  } {
+    const requestId =
+      resp.headers.get("x-request-id") ??
+      resp.headers.get("X-Request-Id") ??
+      undefined;
+    const retryRaw =
+      resp.headers.get("retry-after") ?? resp.headers.get("Retry-After");
+    let retryAfter: number | undefined;
+    if (retryRaw != null) {
+      const n = Number.parseInt(retryRaw, 10);
+      if (!Number.isNaN(n)) retryAfter = n;
+    }
+    return { requestId: requestId || undefined, retryAfter };
+  }
+
   private headers(hasBody: boolean): Record<string, string> {
     const h: Record<string, string> = {};
     if (hasBody) h["Content-Type"] = "application/json";
@@ -108,9 +128,9 @@ export class BlackbeardClient {
       const errorBody = (await resp
         .json()
         .catch(() => ({}))) as Record<string, unknown>;
-      const detail =
-        (typeof errorBody.detail === "string" && errorBody.detail) ? errorBody.detail : fallback;
-      throw new BlackbeardApiError(resp.status, detail, errorBody);
+      const detail = formatErrorDetail(errorBody.detail, fallback);
+      const meta = BlackbeardClient.errorMeta(resp);
+      throw new BlackbeardApiError(resp.status, detail, errorBody, meta);
     }
 
     return resp;
@@ -341,7 +361,11 @@ export class BlackbeardClient {
             err.status,
             `[${i}] ${res.kind}/${name}: ${err.detail}`,
             err.body,
-            { cause: err },
+            {
+              cause: err,
+              requestId: err.requestId,
+              retryAfter: err.retryAfter,
+            },
           );
         }
         throw err;

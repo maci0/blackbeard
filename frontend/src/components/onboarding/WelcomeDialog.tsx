@@ -80,12 +80,12 @@ export default function WelcomeDialog({ open, onStartTour, onSkip }: WelcomeDial
               <p className="mt-0.5 text-sm font-medium uppercase tracking-wide text-white/60">
                 Agent Management Platform
               </p>
-              <p
+              <Dialog.Description
                 id="welcome-description"
                 className="mt-3 max-w-sm text-[15px] leading-relaxed text-white/75"
               >
                 Build, run, and manage AI agent crews — visually.
-              </p>
+              </Dialog.Description>
             </div>
           </div>
 
@@ -116,6 +116,7 @@ export default function WelcomeDialog({ open, onStartTour, onSkip }: WelcomeDial
             {/* CTA buttons */}
             <div className="flex items-center gap-3">
               <button
+                type="button"
                 autoFocus
                 onClick={handleStartTour}
                 className="btn-press flex-1 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -123,6 +124,7 @@ export default function WelcomeDialog({ open, onStartTour, onSkip }: WelcomeDial
                 Take the Tour →
               </button>
               <button
+                type="button"
                 onClick={handleSkip}
                 className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >

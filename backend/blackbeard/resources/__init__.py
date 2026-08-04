@@ -1,4 +1,13 @@
-"""Resource system: validation, CRUD service, and reference management."""
+"""Resource system: validation, CRUD service, and reference management.
+
+- ``service`` — create/read/update/delete with optimistic locking
+- ``validator`` — JSON Schema + structural/SSRF/callable path checks
+- ``spec_schemas`` — per-kind JSON schemas (single source for ``spec``)
+- ``refs`` — ``ref:kind/name`` parse, extract, cycle detection
+- ``exceptions`` — validation and conflict errors for API mapping
+
+Kind registry lives in ``blackbeard.kinds`` (not here) so CLI and API share it.
+"""
 
 from __future__ import annotations
 

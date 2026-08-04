@@ -11,9 +11,9 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import logging
-import os
 import re
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -38,17 +38,22 @@ _TYPE_MAP: dict[str, PluginType] = {
 # Only allow safe module names to prevent directory traversal or injection
 _SAFE_MODULE_NAME = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
-# Track loaded modules by name for reload support
+# Track loaded modules by name for reload support (protected by lock for concurrent reloads)
 _loaded_modules: dict[str, str] = {}  # plugin_name -> module_name
+# RLock: reload_plugin holds the lock while calling load_plugin_module,
+# which also updates _loaded_modules under the same lock.
+_loaded_modules_lock = threading.RLock()
 
 
 def _default_plugin_dir() -> str:
-    """Return the default plugin directory path.
+    """Return the default plugin directory path from application settings.
 
-    Uses PLUGIN_DIR env var if set, otherwise ``plugins/`` relative to
-    the current working directory.
+    Backed by the PLUGIN_DIR env var via ``Settings``; defaults to
+    ``plugins/`` relative to the current working directory.
     """
-    return os.environ.get("PLUGIN_DIR", "plugins")
+    from blackbeard.config import settings
+
+    return settings.plugin_dir
 
 
 def _validate_plugin_dict(plugin_dict: dict[str, Any], module_name: str) -> str | None:
@@ -170,7 +175,8 @@ def load_plugin_module(
     )
 
     reg.register(meta, handler_instance)
-    _loaded_modules[meta.name] = module_name
+    with _loaded_modules_lock:
+        _loaded_modules[meta.name] = module_name
     return meta
 
 
@@ -184,8 +190,8 @@ def load_plugins(
     module-level attribute. Files starting with ``_`` are skipped.
 
     Args:
-        plugin_dir: Directory to scan. Defaults to PLUGIN_DIR env var
-            or ``plugins/`` in the working directory.
+        plugin_dir: Directory to scan. Defaults to ``settings.plugin_dir``
+            (PLUGIN_DIR env var, or ``plugins/`` in the working directory).
         target_registry: Registry to use. Defaults to the global singleton.
 
     Returns:
@@ -237,7 +243,8 @@ def reload_plugin(
     the handler. Returns updated PluginMeta on success, None on failure.
     """
     reg = target_registry or registry
-    module_name = _loaded_modules.get(name)
+    with _loaded_modules_lock:
+        module_name = _loaded_modules.get(name)
     if module_name is None:
         logger.warning(
             "Cannot reload unknown plugin: %s",
@@ -246,43 +253,50 @@ def reload_plugin(
         )
         return None
 
-    module = sys.modules.get(module_name)
-    if module is None:
-        logger.warning(
-            "Plugin module not in sys.modules: %s",
-            module_name,
-            extra={"event": "plugin_reload_missing_module", "module_name": module_name},
-        )
-        return None
+    # Serialize reloads of the same module path: concurrent reloads race on
+    # sys.modules pop/exec and can leave a half-imported module registered.
+    with _loaded_modules_lock:
+        # Re-read under lock in case a concurrent reload already replaced it.
+        module_name = _loaded_modules.get(name)
+        if module_name is None:
+            return None
+        module = sys.modules.get(module_name)
+        if module is None:
+            logger.warning(
+                "Plugin module not in sys.modules: %s",
+                module_name,
+                extra={"event": "plugin_reload_missing_module", "module_name": module_name},
+            )
+            return None
 
-    file_path = getattr(module, "__file__", None)
-    if file_path is None:
-        logger.warning(
-            "Plugin module has no __file__: %s",
-            module_name,
-            extra={"event": "plugin_reload_no_file", "module_name": module_name},
-        )
-        return None
+        file_path = getattr(module, "__file__", None)
+        if file_path is None:
+            logger.warning(
+                "Plugin module has no __file__: %s",
+                module_name,
+                extra={"event": "plugin_reload_no_file", "module_name": module_name},
+            )
+            return None
 
-    # Remove old module so load_plugin_module gets a clean import
-    sys.modules.pop(module_name, None)
+        # Remove old module so load_plugin_module gets a clean import
+        sys.modules.pop(module_name, None)
 
-    meta = load_plugin_module(file_path, reg)
-    if meta is None:
-        logger.warning(
-            "Plugin reload failed for: %s",
-            name,
-            extra={"event": "plugin_reload_failed", "plugin_name": name},
-        )
-    else:
-        logger.info(
-            "Plugin reloaded: %s v%s",
-            meta.name,
-            meta.version,
-            extra={
-                "event": "plugin_reloaded",
-                "plugin_name": meta.name,
-                "plugin_version": meta.version,
-            },
-        )
-    return meta
+        meta = load_plugin_module(file_path, reg)
+        if meta is None:
+            logger.warning(
+                "Plugin reload failed for: %s",
+                name,
+                extra={"event": "plugin_reload_failed", "plugin_name": name},
+            )
+        else:
+            logger.info(
+                "Plugin reloaded: %s v%s",
+                meta.name,
+                meta.version,
+                extra={
+                    "event": "plugin_reloaded",
+                    "plugin_name": meta.name,
+                    "plugin_version": meta.version,
+                },
+            )
+        return meta

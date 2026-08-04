@@ -1,5 +1,17 @@
-import { BlackbeardApiError } from './types'
+import { BlackbeardApiError, formatErrorDetail } from './types'
 import type { BlackbeardConfig } from './types'
+
+function errorMeta(resp: Response): { requestId?: string; retryAfter?: number } {
+  const requestId =
+    resp.headers.get('x-request-id') ?? resp.headers.get('X-Request-Id') ?? undefined
+  const retryRaw = resp.headers.get('retry-after') ?? resp.headers.get('Retry-After')
+  let retryAfter: number | undefined
+  if (retryRaw != null) {
+    const n = Number.parseInt(retryRaw, 10)
+    if (!Number.isNaN(n)) retryAfter = n
+  }
+  return { requestId: requestId || undefined, retryAfter }
+}
 
 /** Minimal typed fetch wrapper for the Blackbeard API. */
 export async function apiFetch<T>(
@@ -47,8 +59,8 @@ export async function apiFetch<T>(
   if (!response.ok) {
     const fallback = response.statusText || `HTTP ${response.status}`
     const errorBody = (await response.json().catch(() => ({}))) as Record<string, unknown>
-    const detail = (typeof errorBody.detail === 'string' && errorBody.detail) ? errorBody.detail : fallback
-    throw new BlackbeardApiError(response.status, detail, errorBody)
+    const detail = formatErrorDetail(errorBody.detail, fallback)
+    throw new BlackbeardApiError(response.status, detail, errorBody, errorMeta(response))
   }
 
   if (response.status === 204) {

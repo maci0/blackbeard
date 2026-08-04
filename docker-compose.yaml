@@ -94,7 +94,7 @@ services:
 
   # ── PostgreSQL 18 ──────────────────────────────────────────────────────────
   postgres:
-    image: postgres:18-alpine
+    image: postgres:18.4-alpine
     ports:
       - "127.0.0.1:5432:5432"
     environment:
@@ -176,7 +176,7 @@ services:
 
   # ── Valkey (Redis-compatible cache) ────────────────────────────────────────
   valkey:
-    image: valkey/valkey:9-alpine
+    image: valkey/valkey:9.1.1-alpine
     ports:
       - "127.0.0.1:6379:6379"
     command: ["valkey-server", "--requirepass", "${VALKEY_PASSWORD:-valkey-dev-secret}", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--save", "60 1000", "--save", "300 100"]

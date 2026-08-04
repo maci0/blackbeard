@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import shutil
 from dataclasses import dataclass
 from typing import Any
@@ -127,6 +128,20 @@ class MicroVMSandbox:
                 extra={"event": "microvm_krun_not_found"},
             )
 
+    # Env var keys: only allow alphanumerics and underscores, starting
+    # with a letter or underscore.  Prevents injection of flags via
+    # crafted key names (e.g. a key starting with ``-``).
+    _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+    # Image name allowlist: standard Docker image references
+    # (registry/repo:tag@digest).  Rejects anything that could be
+    # misinterpreted as a flag (starts with ``-``) or contains shell
+    # metacharacters.
+    _IMAGE_RE = re.compile(
+        r"^[a-zA-Z0-9]"  # must start with alphanumeric
+        r"[a-zA-Z0-9._/:@\-]*$"  # rest: alphanumeric, dots, slashes, colons, @, hyphens
+    )
+
     def _build_command(
         self,
         image: str,
@@ -142,7 +157,16 @@ class MicroVMSandbox:
         This method is intentionally separated from ``execute`` for
         testability -- tests can verify the command line without
         spawning a real process.
+
+        Raises:
+            MicroVMRuntimeError: If the image name contains invalid characters.
         """
+        # SECURITY: Validate the image name to prevent argument injection.
+        # A malicious image like ``--privileged`` would be interpreted as
+        # a Docker flag rather than an image reference.
+        if not self._IMAGE_RE.fullmatch(image):
+            raise MicroVMRuntimeError(f"Invalid container image name: {image!r}")
+
         cmd: list[str] = [
             self._runtime,
             "run",
@@ -160,8 +184,19 @@ class MicroVMSandbox:
             "ALL",
         ]
 
+        # SECURITY: Validate env var keys (same rationale as ContainerSandbox).
         if env:
             for k, v in sorted(env.items()):
+                if not self._ENV_KEY_RE.fullmatch(k):
+                    logger.warning(
+                        "MicroVM: skipping env var with invalid key: %s",
+                        k[:50],
+                        extra={
+                            "event": "microvm_invalid_env_key",
+                            "key": k[:50],
+                        },
+                    )
+                    continue
                 cmd.extend(["-e", f"{k}={v}"])
 
         if input_data is not None:

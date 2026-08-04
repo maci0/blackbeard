@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import platform
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 __all__ = [
@@ -33,7 +35,7 @@ __all__ = [
 ]
 
 from crewai.crews.crew_output import CrewOutput
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import defer, load_only, selectinload
 
@@ -51,16 +53,19 @@ from blackbeard.logging_config import (
     request_id_var,
     scrub_pii,
 )
+from blackbeard.metrics import record_execution_outcome
 from blackbeard.models import (
     TERMINAL_STATUSES,
     Execution,
     ExecutionEvent,
+    ExecutionEventType,
     ExecutionStatus,
     ExecutionTask,
     ExecutionType,
     Resource,
     TaskStatus,
     async_session,
+    can_transition_status,
 )
 from blackbeard.models.database import CONNECT_ARGS, instrument_engine
 from blackbeard.models.execution_schemas import redact_sensitive_values
@@ -93,6 +98,8 @@ _SAFE_ERROR_PREFIXES = (
     *(f"{k.value} '" for k in ResourceKind),
     "Resource '",
     "Kind '",
+    "Budget enforcement failed",
+    "Flow '",
 )
 
 _CREW_RELEVANT_KINDS = (
@@ -105,10 +112,46 @@ _CREW_RELEVANT_KINDS = (
     ResourceKind.AGENT_POLICY,
     ResourceKind.GUARDRAIL,
     ResourceKind.FLOW,
+    ResourceKind.PROJECT,  # project-level guardrails (spec.guardrails)
 )
 
 _PROJECT_RESOURCE_LIMIT = 500
 _MAX_ERROR_LENGTH = 500
+
+# Stable identity of this API instance for execution ownership. Containers
+# keep their hostname across in-place restarts, so a restarting replica can
+# reclaim its own interrupted rows. Override with BLACKBEARD_WORKER_ID when
+# the platform does not provide a stable hostname (e.g. k8s Deployments).
+WORKER_ID: str = (
+    settings.blackbeard_worker_id
+    or os.environ.get("HOSTNAME")
+    or platform.node()
+    or "unknown-worker"
+)
+_TEMPORAL_WORKER_ID = "temporal"
+
+# Executions whose owner has not touched them for this long are treated as
+# orphaned by a replaced instance (new hostname) and may be claimed by any
+# replica's startup recovery. Must exceed the longest expected crew run.
+_ORPHAN_RECOVERY_CUTOFF = timedelta(hours=2)
+
+
+def _stale_execution_filter() -> Any:
+    """Filter for non-terminal executions this instance may recover.
+
+    Claims rows owned by this worker, unstamped legacy rows, and rows
+    orphaned longer than the cutoff. Temporal workflows are durable across
+    restarts and are never claimed.
+    """
+    cutoff = datetime.now(UTC) - _ORPHAN_RECOVERY_CUTOFF
+    return and_(
+        Execution.status.in_([ExecutionStatus.QUEUED, ExecutionStatus.RUNNING]),
+        or_(
+            Execution.worker_id == WORKER_ID,
+            Execution.worker_id.is_(None),
+            and_(Execution.worker_id != _TEMPORAL_WORKER_ID, Execution.updated_at < cutoff),
+        ),
+    )
 
 
 def _sanitize_error(error_msg: str) -> str:
@@ -128,6 +171,11 @@ _executor_lock = threading.Lock()
 _bg_engine: AsyncEngine | None = None
 _bg_session_factory: async_sessionmaker[AsyncSession] | None = None
 _bg_engine_lock = threading.Lock()
+
+# Queued/running thread-pool futures keyed by execution id — allows cancel of
+# still-queued work so cancelled jobs do not consume worker slots.
+_execution_futures: dict[UUID, asyncio.Future[None]] = {}
+_execution_futures_lock = threading.Lock()
 
 
 def _get_executor() -> ThreadPoolExecutor:
@@ -223,9 +271,43 @@ def _get_bg_engine() -> AsyncEngine:
         return _bg_engine
 
 
+def _register_execution_future(execution_id: UUID, future: asyncio.Future[None]) -> None:
+    """Track a thread-pool future so cancel can drop still-queued work."""
+    with _execution_futures_lock:
+        _execution_futures[execution_id] = future
+
+
+def _unregister_execution_future(execution_id: UUID) -> None:
+    """Drop a finished/cancelled execution future from the registry."""
+    with _execution_futures_lock:
+        _execution_futures.pop(execution_id, None)
+
+
+def _cancel_execution_future(execution_id: UUID) -> bool:
+    """Best-effort cancel of a queued executor future. Returns True if cancelled."""
+    with _execution_futures_lock:
+        future = _execution_futures.get(execution_id)
+    if future is None or future.done():
+        return False
+    cancelled = future.cancel()
+    if cancelled:
+        _unregister_execution_future(execution_id)
+        logger.info(
+            "Cancelled queued execution future: execution_id=%s",
+            execution_id,
+            extra={
+                "event": "execution_future_cancelled",
+                "execution_id": str(execution_id),
+            },
+        )
+    return cancelled
+
+
 def shutdown_executor(wait: bool = False) -> None:
     """Shut down the thread pool executor and dispose all background DB engines."""
     global _executor, _bg_engine, _bg_session_factory
+    with _execution_futures_lock:
+        _execution_futures.clear()
     with _executor_lock:
         executor = _executor
         if executor is not None:
@@ -400,6 +482,7 @@ async def _submit_execution(
     crew_key = f"{target_kind}/{crew_name}"
     crew_resource = resources[crew_key]
     principal_chain = _build_principal_chain(user, crew_name, resources)
+    use_temporal = bool(settings.temporal_host and TEMPORAL_AVAILABLE)
 
     execution = Execution(
         crew_name=crew_name,
@@ -411,6 +494,7 @@ async def _submit_execution(
         training_file=training_file,
         initiated_by=user.id if user is not None else None,
         principal_chain=principal_chain,
+        worker_id=_TEMPORAL_WORKER_ID if use_temporal else WORKER_ID,
     )
     session.add(execution)
     await session.flush()
@@ -461,7 +545,7 @@ async def _submit_execution(
 
     execution_id = execution.id
 
-    if settings.temporal_host and TEMPORAL_AVAILABLE:
+    if use_temporal:
         # Dispatch via Temporal workflow engine
         try:
             workflow_id = await submit_temporal_execution(
@@ -513,8 +597,10 @@ async def _submit_execution(
             n_iterations or 1,
             training_file or "training_data.pkl",
         )
+        _register_execution_future(execution_id, future)
 
-        def _on_thread_error(fut: asyncio.Future[None]) -> None:
+        def _on_thread_done(fut: asyncio.Future[None]) -> None:
+            _unregister_execution_future(execution_id)
             if fut.cancelled():
                 return
             try:
@@ -548,7 +634,7 @@ async def _submit_execution(
                 task = loop.create_task(_mark_failed_async(execution_id, error_msg))
                 task.add_done_callback(log_task_exception)
 
-        future.add_done_callback(_on_thread_error)
+        future.add_done_callback(_on_thread_done)
 
     loaded = await get_execution(session, execution_id)
     if loaded is None:
@@ -643,11 +729,12 @@ async def _mark_failed_async(execution_id: UUID, error: str) -> None:
                 extra={"event": "execution_mark_failed_missing", "execution_id": str(execution_id)},
             )
             return
-        if execution.status in (ExecutionStatus.QUEUED, ExecutionStatus.RUNNING):
+        if can_transition_status(execution.status, ExecutionStatus.FAILED):
             now = datetime.now(UTC)
             execution.status = ExecutionStatus.FAILED
             execution.error = error
             execution.completed_at = now
+            record_execution_outcome(execution.execution_type.value, ExecutionStatus.FAILED.value)
             await _fail_pending_tasks(
                 session, execution_id, "Execution failed before task started", now
             )
@@ -748,6 +835,11 @@ def _snapshot_crew_resources(
                     _collect(f"{ref.kind.value}/{ref.name}", depth + 1)
 
     _collect(f"{target_kind}/{crew_name}")
+
+    # Include Project resource so project-level guardrails resolve at run time.
+    root = resources.get(f"{target_kind}/{crew_name}")
+    if root is not None:
+        _collect(f"Project/{root.project}")
 
     return needed
 
@@ -922,14 +1014,16 @@ async def _run_crew_async(
             )
             return
 
-        if execution.status == ExecutionStatus.CANCELLED:
+        if not can_transition_status(execution.status, ExecutionStatus.RUNNING):
             logger.info(
-                "Execution %s was cancelled before starting",
+                "Execution %s cannot start from status %s",
                 execution_id,
+                execution.status.value,
                 extra={
                     "event": "execution_cancelled_before_start",
                     "execution_id": str(execution_id),
                     "crew_name": crew_name,
+                    "status": execution.status.value,
                 },
             )
             return
@@ -999,13 +1093,30 @@ async def _run_crew_async(
                     virtual_key = virtual_api_key
 
                     execution = await _get_execution_for_update(session, execution_id)
-                    if execution:
-                        execution.litellm_key = virtual_api_key
-                        await session.commit()
-                except VirtualKeyError:
+                    # Cancel may have won while we were creating the key — do not
+                    # persist the key or continue spending against a cancelled run.
+                    if execution is None or execution.status != ExecutionStatus.RUNNING:
+                        logger.info(
+                            "Execution %s no longer running after virtual key create "
+                            "(status=%s) — aborting before crew work",
+                            execution_id,
+                            execution.status.value if execution is not None else "missing",
+                            extra={
+                                "event": "execution_aborted_after_key_create",
+                                "execution_id": str(execution_id),
+                                "crew_name": crew_name,
+                                "status": (
+                                    execution.status.value if execution is not None else None
+                                ),
+                            },
+                        )
+                        return
+                    execution.litellm_key = virtual_api_key
+                    await session.commit()
+                except VirtualKeyError as vk_err:
                     logger.error(
                         "Failed to create virtual key for execution %s — "
-                        "proceeding without budget enforcement",
+                        "failing closed (budget limits are required)",
                         execution_id,
                         exc_info=True,
                         extra={
@@ -1016,7 +1127,28 @@ async def _run_crew_async(
                             "max_tokens": max_tokens,
                         },
                     )
-                    virtual_api_key = None
+                    raise ExecutionError(
+                        "Budget enforcement failed: could not create LiteLLM virtual key. "
+                        "Execution aborted because agent policy budget limits are set."
+                    ) from vk_err
+
+            # Re-check after budget/key setup: cancel may have landed while we
+            # waited on LiteLLM. Avoid building the crew and burning tokens.
+            execution = await _get_execution_for_update(session, execution_id)
+            if execution is None or execution.status != ExecutionStatus.RUNNING:
+                logger.info(
+                    "Execution %s no longer running before crew start (status=%s)",
+                    execution_id,
+                    execution.status.value if execution is not None else "missing",
+                    extra={
+                        "event": "execution_aborted_before_crew",
+                        "execution_id": str(execution_id),
+                        "crew_name": crew_name,
+                        "status": execution.status.value if execution is not None else None,
+                    },
+                )
+                return
+            await session.commit()
 
             loader = ResourceLoader(mock_resources, api_key=virtual_api_key, policies=policy_specs)
 
@@ -1027,7 +1159,11 @@ async def _run_crew_async(
             )
 
             if execution_type == ExecutionType.FLOW:
-                result = _run_flow_steps(loader, resource_snapshot, crew_name, inputs, listener)
+                # Flow steps call crew.kickoff() synchronously — run off the
+                # event loop, same as the crew branch below.
+                result = await asyncio.to_thread(
+                    _run_flow_steps, loader, resource_snapshot, crew_name, inputs, listener
+                )
             else:
                 crew = loader.build_crew(crew_name)
                 crew_snap = resource_snapshot.get(f"Crew/{crew_name}", {})
@@ -1074,20 +1210,23 @@ async def _run_crew_async(
                 )
                 return
 
-            if execution.status == ExecutionStatus.CANCELLED:
+            if not can_transition_status(execution.status, ExecutionStatus.COMPLETED):
                 logger.info(
-                    "Execution %s cancelled during run",
+                    "Execution %s cannot complete from status %s",
                     execution_id,
+                    execution.status.value,
                     extra={
                         "event": "execution_cancelled_during_run",
                         "execution_id": str(execution_id),
                         "crew_name": crew_name,
+                        "status": execution.status.value,
                     },
                 )
                 return
 
             execution.status = ExecutionStatus.COMPLETED
             execution.completed_at = datetime.now(UTC)
+            record_execution_outcome(execution_type.value, ExecutionStatus.COMPLETED.value)
 
             if isinstance(result, CrewOutput):
                 execution.outputs = {"raw": result.raw}
@@ -1183,7 +1322,7 @@ async def _run_crew_async(
                             "warn_at_tokens": warn_tokens,
                         },
                     )
-                    listener._write_event("cost_alert", alert_data)
+                    listener._write_event(ExecutionEventType.COST_ALERT.value, alert_data)
 
             await session.commit()
             duration_s = (
@@ -1256,11 +1395,12 @@ async def _run_crew_async(
 
             try:
                 execution = await _get_execution_for_update(session, execution_id)
-                if execution and execution.status != ExecutionStatus.CANCELLED:
+                if execution and can_transition_status(execution.status, ExecutionStatus.FAILED):
                     now = datetime.now(UTC)
                     execution.status = ExecutionStatus.FAILED
                     execution.error = _sanitize_error(str(e))
                     execution.completed_at = now
+                    record_execution_outcome(execution_type.value, ExecutionStatus.FAILED.value)
                     await _fail_pending_tasks(session, execution_id, "Execution failed", now)
                     await session.commit()
                     logger.info(
@@ -1352,6 +1492,8 @@ async def _fail_pending_tasks(
             status=TaskStatus.FAILED,
             error=task_error,
             completed_at=now,
+            # Bulk UPDATE bypasses ORM onupdate — set explicitly.
+            updated_at=now,
         )
     )
 
@@ -1480,7 +1622,7 @@ async def record_hitl_response(
         event = ExecutionEvent(
             execution_id=execution_id,
             sequence=next_seq,
-            event_type="hitl_response",
+            event_type=ExecutionEventType.HITL_RESPONSE.value,
             timestamp=datetime.now(UTC),
             data=event_data,
         )
@@ -1536,17 +1678,21 @@ async def cancel_execution(session: AsyncSession, execution_id: UUID) -> Executi
     if not execution:
         return None
 
-    if execution.status in (ExecutionStatus.QUEUED, ExecutionStatus.RUNNING):
+    if can_transition_status(execution.status, ExecutionStatus.CANCELLED):
         prev_status = execution.status.value
         now = datetime.now(UTC)
         execution.status = ExecutionStatus.CANCELLED
         execution.completed_at = now
+        record_execution_outcome(execution.execution_type.value, ExecutionStatus.CANCELLED.value)
         for task in execution.tasks:
             if task.status in (TaskStatus.PENDING, TaskStatus.RUNNING):
                 task.status = TaskStatus.FAILED
                 task.error = "Execution cancelled"
                 task.completed_at = now
         await session.flush()
+        # Drop still-queued thread-pool work so cancelled jobs free a slot
+        # immediately instead of starting only to no-op on status check.
+        _cancel_execution_future(execution_id)
         logger.info(
             "Execution %s cancelled: crew=%s previous_status=%s",
             execution_id,
@@ -1589,7 +1735,7 @@ async def cleanup_orphaned_keys() -> int:
             select(Execution)
             .options(load_only(Execution.id, Execution.litellm_key))
             .where(
-                Execution.status.in_([ExecutionStatus.QUEUED, ExecutionStatus.RUNNING]),
+                _stale_execution_filter(),
                 Execution.litellm_key.isnot(None),
             )
             .order_by(Execution.created_at)
@@ -1654,13 +1800,15 @@ async def cleanup_orphaned_keys() -> int:
 
 
 async def recover_stale_executions() -> int:
-    """Mark any QUEUED or RUNNING executions as FAILED on startup.
+    """Mark this instance's QUEUED or RUNNING executions as FAILED on startup.
 
     After a crash or restart, in-flight executions cannot resume because the
     background threads and their event loops are gone.  This function should
     be called once during application startup (before accepting traffic) to
     clean up stale rows so users see a clear failure rather than an execution
-    that is stuck forever.
+    that is stuck forever.  Only rows matching ``_stale_execution_filter``
+    are claimed, so a restarting replica does not fail executions still
+    running on other replicas or in Temporal.
 
     Also cleans up orphaned LiteLLM virtual keys from crashed executions
     before marking them as failed (so the key reference is still available
@@ -1682,12 +1830,14 @@ async def recover_stale_executions() -> int:
     async with async_session() as session:
         result = await session.execute(
             update(Execution)
-            .where(Execution.status.in_([ExecutionStatus.QUEUED, ExecutionStatus.RUNNING]))
+            .where(_stale_execution_filter())
             .values(
                 status=ExecutionStatus.FAILED,
                 error="Execution interrupted by server restart",
                 completed_at=now,
                 litellm_key=None,
+                # Bulk UPDATE bypasses ORM onupdate — set explicitly.
+                updated_at=now,
             )
             .returning(Execution.id)
         )
@@ -1704,6 +1854,8 @@ async def recover_stale_executions() -> int:
                     status=TaskStatus.FAILED,
                     error="Interrupted by server restart",
                     completed_at=now,
+                    # Bulk UPDATE bypasses ORM onupdate — set explicitly.
+                    updated_at=now,
                 )
             )
 

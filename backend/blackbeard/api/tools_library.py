@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from blackbeard.api.resources import save_version_snapshot
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth import require_permission
 from blackbeard.kinds import API_VERSION
@@ -191,7 +192,8 @@ async def install_library_tools(
                 ),
                 spec=spec,
             )
-            await service.create(data)
+            resource, _created = await service.create(data)
+            await save_version_snapshot(session, resource, _current_user)
             installed += 1
         except Exception as exc:
             if "already exists" in str(exc).lower() or "conflict" in str(exc).lower():

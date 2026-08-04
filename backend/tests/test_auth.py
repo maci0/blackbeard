@@ -198,9 +198,11 @@ async def test_refresh_success(client: AsyncClient):
     assert "access_token" in refresh_data
     assert isinstance(refresh_data["access_token"], str), "access_token must be a string"
     assert refresh_data["access_token"].count(".") == 2, "access_token must be a valid JWT (header.payload.signature)"
-    assert refresh_data["access_token"] != data["refresh_token"], (
-        "Refreshed access token should differ from the refresh token used"
-    )
+    from blackbeard.auth.jwt import decode_token
+
+    payload = decode_token(refresh_data["access_token"])
+    assert payload["type"] == "access", "Refresh must mint an access token, not another refresh token"
+    assert payload["sub"] == data["user"]["id"]
     assert refresh_data["token_type"] == "bearer"
 
 

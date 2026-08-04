@@ -59,7 +59,7 @@ postgres:
   enabled: true
   image:
     repository: postgres
-    tag: "18-alpine"
+    tag: "18.4-alpine"  # pin patch; keep in sync with docker-compose.yaml
     pullPolicy: IfNotPresent
   storage:
     size: 10Gi
@@ -94,7 +94,7 @@ valkey:
   enabled: true
   image:
     repository: valkey/valkey
-    tag: "9-alpine"
+    tag: "9.1.1-alpine"  # pin patch; keep in sync with docker-compose.yaml
     pullPolicy: IfNotPresent
   storage:
     size: 1Gi
@@ -184,19 +184,24 @@ ingress:
   #       - blackbeard.local
 
 # -- Auth / Secrets --
+# Prefer existingSecret in production so credentials are not stored in Helm values
+# or release history. Required keys when using an external secret:
+#   api-key, jwt-secret, litellm-master-key, database-password, valkey-password
+existingSecret: ""
+
 auth:
-  apiKey: ""           # BLACKBEARD_API_KEY — required
-  jwtSecret: ""        # JWT_SECRET — required
-  litellmMasterKey: "" # LITELLM_MASTER_KEY — required
+  apiKey: ""           # BLACKBEARD_API_KEY — required unless existingSecret is set
+  jwtSecret: ""        # JWT_SECRET — required unless existingSecret is set
+  litellmMasterKey: "" # LITELLM_MASTER_KEY — required unless existingSecret is set
 
 # -- Database credentials --
 database:
   user: blackbeard
-  password: ""  # required — set in secrets
+  password: ""  # required unless existingSecret is set
   name: blackbeard
 
 # -- Valkey credentials --
-valkeyPassword: ""  # required — set in secrets
+valkeyPassword: ""  # required unless existingSecret is set
 
 # -- Image pull secrets --
 imagePullSecrets: []

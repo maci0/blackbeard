@@ -28,7 +28,6 @@ __all__ = [
 ]
 
 
-
 class PlaceholderTool(BaseTool):
     """Stand-in for command-only tools before sandbox wrapping."""
 
@@ -51,10 +50,10 @@ class WasmCrewTool(BaseTool):
         self._wasm_path = wasm_path
 
     def _run(self, **kwargs: Any) -> str:
-        from blackbeard.engine.sandbox.wasm_runtime import WasmSandbox
+        from blackbeard.engine.sandbox.wasm_runtime import get_shared_sandbox
 
         try:
-            result = WasmSandbox().invoke(self._wasm_path, kwargs if kwargs else {})
+            result = get_shared_sandbox().invoke(self._wasm_path, kwargs if kwargs else {})
         except Exception as exc:
             logger.exception(
                 "WASM tool failed: name=%s path=%s",

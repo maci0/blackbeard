@@ -46,6 +46,33 @@ async def test_health_is_public(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
+# GET /metrics (Prometheus)
+# ---------------------------------------------------------------------------
+
+
+async def test_metrics_is_public(client: AsyncClient):
+    """GET /metrics does not require authentication (scrape path)."""
+    resp = await client.get("/api/v1/metrics")
+    assert resp.status_code == 200
+
+
+async def test_metrics_exposes_red_series(client: AsyncClient):
+    """GET /metrics returns Prometheus text with HTTP RED + executor gauges."""
+    # Generate at least one request sample first.
+    await client.get("/api/v1/health")
+    resp = await client.get("/api/v1/metrics")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "http_requests_total" in body
+    assert "http_request_duration_seconds" in body
+    assert "blackbeard_active_executions" in body
+    assert "blackbeard_executor_queued_tasks" in body
+    assert "blackbeard_executor_max_workers" in body
+    assert "blackbeard_executor_saturated" in body
+    assert "blackbeard_executions_total" in body
+
+
+# ---------------------------------------------------------------------------
 # GET /health/ready (readiness)
 # ---------------------------------------------------------------------------
 

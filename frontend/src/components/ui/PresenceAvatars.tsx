@@ -25,7 +25,7 @@ function hashColor(id: string): string {
 }
 
 function getInitial(name: string): string {
-  return (name.charAt(0) || '?').toUpperCase()
+  return (name.charAt(0) || '?').toLocaleUpperCase()
 }
 
 const MAX_VISIBLE = 5

@@ -1,9 +1,20 @@
+/** Resource reference parsing and extraction utilities. */
+
 import { PLURAL_TO_KIND } from '@/lib/kinds'
 
 export interface ResourceRef {
   kindPlural: string
   kind: string
   name: string
+}
+
+/**
+ * Extract the resource name from a ref string or path.
+ * `ref:agents/researcher` → `researcher`; bare names pass through.
+ */
+export function parseRef(ref: string): string {
+  const idx = ref.lastIndexOf('/')
+  return idx >= 0 ? ref.slice(idx + 1) : ref
 }
 
 const REF_PATTERN = /^ref:([a-z][a-z0-9-]*)\/([a-z0-9][a-z0-9-]*)$/

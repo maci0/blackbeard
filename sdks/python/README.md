@@ -151,6 +151,41 @@ with BlackbeardClient(base_url="http://localhost:8000", api_key="key") as client
     # client.close() is called automatically
 ```
 
+### Environment Variables
+
+When constructor arguments are omitted, the client falls back to:
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `BLACKBEARD_BASE_URL` | API server URL | `http://localhost:8000` |
+| `BLACKBEARD_API_KEY` | X-API-Key authentication | (none) |
+| `BLACKBEARD_TOKEN` | JWT Bearer authentication | (none) |
+
+```python
+# Fully configured via environment
+client = BlackbeardClient()
+```
+
+### Error Handling
+
+All API and network failures raise `BlackbeardApiError`:
+
+```python
+from blackbeard_sdk import BlackbeardClient, BlackbeardApiError
+
+try:
+    client.get("Agent", "missing")
+except BlackbeardApiError as e:
+    if e.is_not_found:
+        print("resource missing")
+    elif e.is_rate_limited:
+        print(f"rate limited; retry after {e.retry_after}s")
+    elif e.is_network_error or e.is_timeout:
+        print("transport failure:", e.detail)
+    else:
+        print(e.status_code, e.detail, e.request_id)
+```
+
 ## API Coverage
 
 | Area | Methods |

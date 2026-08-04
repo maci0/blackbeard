@@ -10,6 +10,7 @@ from rich.table import Table
 from blackbeard_cli.helpers import (
     HelpCommand,
     confirm_destructive,
+    console,
     extract_items,
     extract_total,
     format_timestamp,
@@ -146,6 +147,11 @@ def user_invite(
     display_name: str,
 ) -> None:
     """Create a new user account (admin invite)."""
+    if ctx.get_parameter_source("password") == click.core.ParameterSource.COMMANDLINE:
+        console.print(
+            "[yellow]Warning:[/] Password passed on command line is visible in process listings.\n"
+            "  [dim]Prefer interactive prompt (omit -p) for interactive use.[/]"
+        )
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 
@@ -319,6 +325,14 @@ Examples:
 @click.pass_context
 def group_delete(ctx: click.Context, group_id: str, yes: bool) -> None:
     """Delete a group by its numeric ID (shown in 'group list')."""
+    if not group_id.isdigit():
+        console.print(
+            f"[red bold]Error:[/] Invalid group ID {escape(repr(group_id))}.\n"
+            "  Expected a numeric ID from [bold]blackbeard group list[/].\n"
+            "  [dim]Example: blackbeard group delete 1[/]"
+        )
+        raise SystemExit(2)
+
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 

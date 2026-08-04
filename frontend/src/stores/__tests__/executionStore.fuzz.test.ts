@@ -16,7 +16,14 @@ vi.mock('@/api/client', () => ({
 }))
 
 import { useExecutionStore } from '../executionStore'
+import { api } from '@/api/client'
 import type { ExecutionEvent, Execution } from '@/lib/types'
+
+const mockApi = api as unknown as {
+  get: ReturnType<typeof vi.fn>
+  post: ReturnType<typeof vi.fn>
+  patch: ReturnType<typeof vi.fn>
+}
 
 const NUM_RUNS = 100
 
@@ -141,9 +148,10 @@ describe('fuzz: executionStore', () => {
   })
 
   describe('fetchExecution identity logic', () => {
-    it('clears currentExecution when id differs, preserves when same', () => {
-      fc.assert(
-        fc.property(fc.string({ minLength: 1, maxLength: 30 }), (id) => {
+    it('clears currentExecution when id differs, preserves when same', async () => {
+      await fc.assert(
+        fc.asyncProperty(fc.string({ minLength: 1, maxLength: 30 }), async (id) => {
+          resetStore()
           const existing: Execution = {
             id: 'fixed-id',
             crew_name: 'crew',
@@ -169,16 +177,25 @@ describe('fuzz: executionStore', () => {
           useExecutionStore.setState({ currentExecution: existing })
           const shouldClear = id !== 'fixed-id'
 
-          useExecutionStore.setState((state) => ({
-            currentExecution: state.currentExecution?.id === id ? state.currentExecution : null,
-          }))
+          let resolveGet!: (value: unknown) => void
+          mockApi.get.mockReturnValueOnce(
+            new Promise((resolve) => {
+              resolveGet = resolve
+            }),
+          )
+          const fetchPromise = useExecutionStore.getState().fetchExecution(id)
 
+          // While the request is in flight, the store must have cleared
+          // currentExecution only when a *different* execution is loading.
           const result = useExecutionStore.getState().currentExecution
           if (shouldClear) {
             expect(result).toBeNull()
           } else {
             expect(result).toEqual(existing)
           }
+
+          resolveGet({ ...existing, id })
+          await fetchPromise
         }),
         { numRuns: NUM_RUNS },
       )

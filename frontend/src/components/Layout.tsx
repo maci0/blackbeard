@@ -141,6 +141,7 @@ function NavSection({
           className="flex w-full items-center gap-1 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 transition-colors hover:text-muted-foreground"
         >
           <ChevronDown
+            aria-hidden="true"
             className={cn(
               'h-3 w-3 shrink-0 transition-transform duration-200',
               sectionCollapsed && '-rotate-90',
@@ -202,7 +203,7 @@ function BlackbeardLogo({ size = 28 }: { size?: number }) {
 }
 
 function UserInitials({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
-  const initial = name.length > 0 ? name.charAt(0).toUpperCase() : '?'
+  const initial = name.length > 0 ? name.charAt(0).toLocaleUpperCase() : '?'
   const sizeClass = size === 'sm' ? 'h-7 w-7 text-xs' : 'h-8 w-8 text-sm'
   return (
     <span
@@ -233,6 +234,7 @@ function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
   const [newName, setNewName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     void fetchProjects()
@@ -252,6 +254,7 @@ function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
         setOpen(false)
         setCreating(false)
         setNewName('')
+        triggerRef.current?.focus()
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -286,6 +289,7 @@ function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
   return (
     <div ref={dropdownRef} className={`relative mx-2 mb-1 ${collapsed ? 'md:mx-1' : ''}`}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         title={collapsed ? `Project: ${current}` : undefined}
@@ -296,9 +300,10 @@ function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
           collapsed ? 'md:justify-center md:px-2' : ''
         }`}
       >
-        <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className={`flex-1 truncate ${collapsed ? 'md:sr-only' : ''}`}>{current}</span>
         <ChevronDown
+          aria-hidden="true"
           className={`h-3 w-3 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''} ${collapsed ? 'md:hidden' : ''}`}
         />
       </button>
@@ -369,10 +374,15 @@ function ProjectSwitcher({ collapsed }: { collapsed: boolean }) {
                   type="button"
                   onClick={() => void handleCreate()}
                   disabled={submitting || !newName.trim()}
+                  aria-busy={submitting}
+                  aria-label={submitting ? 'Creating project' : 'Add project'}
                   className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                   {submitting ? (
-                    <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" />
+                    <Loader2
+                      className="h-3 w-3 animate-spin motion-reduce:animate-none"
+                      aria-hidden="true"
+                    />
                   ) : (
                     'Add'
                   )}
@@ -819,16 +829,16 @@ export default function Layout() {
             <button
               type="button"
               onClick={cycle}
-              aria-label={`Theme: ${preference}. Click to cycle theme.`}
+              aria-label={`Theme: ${preference}. Activate to cycle theme.`}
               title={`Theme: ${preference}`}
               className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {preference === 'dark' ? (
-                <Moon className="h-4 w-4" />
+                <Moon className="h-4 w-4" aria-hidden="true" />
               ) : preference === 'light' ? (
-                <Sun className="h-4 w-4" />
+                <Sun className="h-4 w-4" aria-hidden="true" />
               ) : (
-                <Monitor className="h-4 w-4" />
+                <Monitor className="h-4 w-4" aria-hidden="true" />
               )}
             </button>
             <button
@@ -838,7 +848,7 @@ export default function Layout() {
               title="Keyboard shortcuts (?)"
               className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Keyboard className="h-4 w-4" />
+              <Keyboard className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -847,9 +857,9 @@ export default function Layout() {
               className="hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
             >
               {collapsed ? (
-                <PanelLeftOpen className="h-4 w-4" />
+                <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
               ) : (
-                <PanelLeftClose className="h-4 w-4" />
+                <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
               )}
             </button>
           </div>

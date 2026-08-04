@@ -258,6 +258,9 @@ def events(
                         out.print(f"[dim]{ts}[/]  [{color}]{etype}[/]  {summary}")
 
                 if not follow:
+                    # Keep paging until the server reports no more events.
+                    if data.get("has_more", False):
+                        continue
                     break
 
                 has_more = data.get("has_more", False)

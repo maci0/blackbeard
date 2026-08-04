@@ -54,6 +54,7 @@ from blackbeard.models.execution_schemas import (
     KickoffRequest,
     TestRequest,
     TrainRequest,
+    contains_redacted_values,
     redact_sensitive_values,
 )
 from blackbeard.rate_limiter import check_rate_limit, execution_limiter
@@ -713,6 +714,17 @@ async def retry_execution(
                 f"Can only retry terminal executions, current status is '{original.status.value}'"
             ),
         )
+    # Stored inputs are redacted at submit time; re-running with placeholder
+    # values would silently produce a different execution.
+    if original.inputs and contains_redacted_values(original.inputs):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Cannot retry: the original inputs contained sensitive values that "
+                "were redacted before storage. Start a new execution with the "
+                "original inputs instead."
+            ),
+        )
 
     exec_type = original.execution_type or ExecutionType.KICKOFF
     if exec_type == ExecutionType.FLOW:
@@ -943,8 +955,17 @@ async def ws_execution(
         return
 
     try:
-        async for item in _poll_execution(execution_id):
-            await websocket.send_json({"event": item.event_name, "data": item.data})
+        # Share the SSE stream cap: each poller holds DB connections, and
+        # unbounded WS viewers would exhaust the pool for the whole API.
+        async with sse_state.acquire_stream() as acquired:
+            if not acquired:
+                await websocket.send_json(
+                    {"event": "error", "data": {"detail": "Too many concurrent streams"}}
+                )
+                await websocket.close(code=4429, reason="Too many concurrent streams")
+                return
+            async for item in _poll_execution(execution_id):
+                await websocket.send_json({"event": item.event_name, "data": item.data})
     except WebSocketDisconnect:
         logger.debug(
             "WS client disconnected: execution_id=%s",

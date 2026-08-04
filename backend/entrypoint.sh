@@ -54,7 +54,8 @@ if [ "${DEBUG:-false}" = "true" ] && [ "${WEB_CONCURRENCY:-1}" = "1" ]; then
   reload_flag="--reload"
 fi
 if [ -n "${LOG_LEVEL:-}" ]; then
-  uvi_log_level="${LOG_LEVEL}"
+  # uvicorn's --log-level choices are lowercase and case-sensitive
+  uvi_log_level="${LOG_LEVEL,,}"
 elif [ "${DEBUG:-false}" = "true" ]; then
   uvi_log_level="debug"
 else

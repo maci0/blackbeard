@@ -492,6 +492,7 @@ export default function Credentials() {
               icon={<Search className="h-10 w-10" />}
               title="No matching credentials"
               description={`No credentials match "${filter}". Try a different search term.`}
+              action={{ label: 'Clear search', onClick: () => setFilter('') }}
             />
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

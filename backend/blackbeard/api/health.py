@@ -12,11 +12,13 @@ from pydantic import BaseModel
 from redis.asyncio import from_url as _redis_from_url
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import Response as StarletteResponse
 
 from blackbeard import __version__
 from blackbeard.config import settings
 from blackbeard.engine import get_pool_status
 from blackbeard.http_client import get_client
+from blackbeard.metrics import CONTENT_TYPE_LATEST, render_metrics
 from blackbeard.models import get_session
 from blackbeard.sse import get_status as get_sse_status
 
@@ -77,6 +79,26 @@ async def health(response: Response) -> HealthResponse:
         service="blackbeard",
         version=__version__,
         uptime_s=round(time.monotonic() - _start_time, 1),
+    )
+
+
+@router.get(
+    "/metrics",
+    responses={200: {"content": {"text/plain": {}}, "description": "Prometheus text format"}},
+    include_in_schema=False,
+)
+async def metrics() -> StarletteResponse:
+    """Prometheus scrape endpoint (RED metrics + executor saturation gauges).
+
+    Public (no auth) so in-cluster scrapers can pull without credentials.
+    Do not expose this port publicly without network policy.
+    """
+    # Pool status is sourced here (API layer) so metrics never imports engine.
+    payload = render_metrics(pool_status=get_pool_status())
+    return StarletteResponse(
+        content=payload,
+        media_type=CONTENT_TYPE_LATEST,
+        headers={"Cache-Control": _NO_CACHE},
     )
 
 

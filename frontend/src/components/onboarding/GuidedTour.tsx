@@ -60,11 +60,14 @@ export default function GuidedTour({ active, onComplete }: GuidedTourProps) {
   const [step, setStep] = useState(0)
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null)
   const prevActiveRef = useRef(false)
+  const returnFocusRef = useRef<HTMLElement | null>(null)
 
   // Reset to step 0 each time the tour becomes active
   useEffect(() => {
     if (active && !prevActiveRef.current) {
       setStep(0)
+      returnFocusRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null
     }
     prevActiveRef.current = active
   }, [active])
@@ -106,6 +109,7 @@ export default function GuidedTour({ active, onComplete }: GuidedTourProps) {
   const handleComplete = () => {
     localStorage.setItem(STORAGE_KEYS.TOUR_COMPLETED, 'true')
     onComplete()
+    returnFocusRef.current?.focus()
   }
 
   const handleNext = () => {
@@ -126,7 +130,7 @@ export default function GuidedTour({ active, onComplete }: GuidedTourProps) {
 
   return createPortal(
     <>
-      <TourOverlay targetRect={targetRect} />
+      <TourOverlay targetRect={targetRect} onBackdropClick={handleNext} />
       <TourTooltip
         title={currentStep.title}
         description={currentStep.description}

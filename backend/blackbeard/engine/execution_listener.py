@@ -43,7 +43,7 @@ from urllib.parse import urlparse
 
 from blackbeard.http_client import get_sync_client
 from blackbeard.logging_config import request_id_var, safe_log_url
-from blackbeard.models import ExecutionEvent, ExecutionTask, TaskStatus
+from blackbeard.models import ExecutionEvent, ExecutionEventType, ExecutionTask, TaskStatus
 from blackbeard.models.execution_schemas import redact_sensitive_values
 from blackbeard.pii import redact_dict as _redact_dict
 from blackbeard.pii import redact_text as _redact_text_fn
@@ -358,6 +358,11 @@ def _get_webhook_hostname(webhook_url: str) -> str | None:
     hostname = urlparse(webhook_url).hostname or ""
     is_blocked = is_internal_host(hostname) if hostname else True
     with _webhook_host_cache_lock:
+        # Another thread may have filled the entry while we parsed; reuse it.
+        cached = _webhook_host_cache.get(webhook_url)
+        if cached is not None:
+            _webhook_host_cache.move_to_end(webhook_url)
+            return cached if cached != "" else None
         while len(_webhook_host_cache) >= _MAX_WEBHOOK_HOST_CACHE:
             _webhook_host_cache.popitem(last=False)
         _webhook_host_cache[webhook_url] = "" if is_blocked else hostname
@@ -492,6 +497,7 @@ class BlackbeardExecutionListener(BaseEventListener):
 
     _FLUSH_INTERVAL = 0.5
     _MAX_BUFFER = 20
+    _PII_CACHE_MAX = 1024
 
     def __init__(
         self,
@@ -506,12 +512,14 @@ class BlackbeardExecutionListener(BaseEventListener):
         self._pii_redact_events = bool(pii_config and pii_config.get("redact_events", True))
         self._pii_entities: list[str] | None = pii_config.get("entities") if pii_config else None
         self._pii_cache: dict[str, str] = {}
+        self._pii_cache_lock = threading.Lock()  # guards concurrent shared_cache mutations
         self._seq = 0
         self._task_order = 0  # tracks which task (by order) is currently running
         self._lock = threading.Lock()  # guards _seq, _task_order, and _buffer
         self._session_factory = _get_sync_session_factory(db_url)
         self._buffer: list[ExecutionEvent] = []
         self._flush_timer: threading.Timer | None = None
+        self._flushing = False  # True while a flush DB write is in flight
         self._otel_tracer = _get_otel_tracer()
         self._otel_root_span: Any = None
         self._otel_active_spans: dict[str, Any] = {}
@@ -539,8 +547,10 @@ class BlackbeardExecutionListener(BaseEventListener):
             request_id_var.set(self._execution_id_str)
 
     def _schedule_flush(self) -> None:
-        """Schedule a deferred flush if one isn't already pending."""
+        """Schedule a deferred flush if one isn't already pending or in flight."""
         with self._lock:
+            if self._flushing:
+                return
             if self._flush_timer is None or not self._flush_timer.is_alive():
                 self._flush_timer = threading.Timer(self._FLUSH_INTERVAL, self._flush_buffer)
                 self._flush_timer.daemon = True
@@ -551,51 +561,62 @@ class BlackbeardExecutionListener(BaseEventListener):
         with self._lock:
             to_flush = self._buffer
             self._buffer = []
-        if not to_flush:
-            return
+            # Clear timer so writers can schedule again while we do I/O.
+            self._flush_timer = None
+            if not to_flush:
+                return
+            self._flushing = True
+        failed = False
         try:
-            with self._session_factory() as session:
-                session.add_all(to_flush)
-                session.commit()
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(
-                    "Events flushed: execution=%s count=%d",
-                    self._execution_id,
+            try:
+                with self._session_factory() as session:
+                    session.add_all(to_flush)
+                    session.commit()
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(
+                        "Events flushed: execution=%s count=%d",
+                        self._execution_id,
+                        len(to_flush),
+                        extra={
+                            "event": "events_flushed",
+                            "execution_id": self._execution_id_str,
+                            "count": len(to_flush),
+                        },
+                    )
+            except Exception as exc:
+                failed = True
+                if isinstance(exc, IntegrityError):
+                    self._renumber_events(to_flush)
+                with self._lock:
+                    if isinstance(exc, IntegrityError) and self._buffer:
+                        next_seq = self._seq
+                        for evt in self._buffer:
+                            evt.sequence = next_seq
+                            next_seq += 1
+                        self._seq = next_seq
+                    self._buffer = to_flush + self._buffer
+                logger.error(
+                    "Re-queued %d events for %s (flush failed, will retry on next flush): %s",
                     len(to_flush),
+                    self._execution_id,
+                    exc,
+                    exc_info=True,
                     extra={
-                        "event": "events_flushed",
+                        "event": "event_flush_failed",
                         "execution_id": self._execution_id_str,
-                        "count": len(to_flush),
+                        "requeued_count": len(to_flush),
+                        "requeued_sequences": [e.sequence for e in to_flush],
+                        "requeued_event_types": [e.event_type for e in to_flush],
+                        "error_type": type(exc).__name__,
+                        "error_message": str(exc)[:500],
                     },
                 )
-        except Exception as exc:
-            if isinstance(exc, IntegrityError):
-                self._renumber_events(to_flush)
+        finally:
             with self._lock:
-                if isinstance(exc, IntegrityError) and self._buffer:
-                    next_seq = self._seq
-                    for evt in self._buffer:
-                        evt.sequence = next_seq
-                        next_seq += 1
-                    self._seq = next_seq
-                self._buffer = to_flush + self._buffer
-            self._schedule_flush()
-            logger.error(
-                "Re-queued %d events for %s (flush failed, will retry on next flush): %s",
-                len(to_flush),
-                self._execution_id,
-                exc,
-                exc_info=True,
-                extra={
-                    "event": "event_flush_failed",
-                    "execution_id": self._execution_id_str,
-                    "requeued_count": len(to_flush),
-                    "requeued_sequences": [e.sequence for e in to_flush],
-                    "requeued_event_types": [e.event_type for e in to_flush],
-                    "error_type": type(exc).__name__,
-                    "error_message": str(exc)[:500],
-                },
-            )
+                self._flushing = False
+                need_schedule = failed or len(self._buffer) > 0
+            if need_schedule:
+                self._schedule_flush()
 
     def _renumber_events(self, events: list[ExecutionEvent]) -> None:
         """Re-assign sequence numbers from current DB max after a collision.
@@ -664,6 +685,15 @@ class BlackbeardExecutionListener(BaseEventListener):
         if timer is not None:
             timer.cancel()
             timer.join(timeout=5.0)
+        # Wait for any in-flight timer flush so its re-queue is visible.
+        deadline = _time.monotonic() + 5.0
+        while True:
+            with self._lock:
+                if not self._flushing:
+                    break
+            if _time.monotonic() >= deadline:
+                break
+            _time.sleep(0.01)
         self._flush_buffer()
         for attempt in range(self._FLUSH_RETRIES):
             with self._lock:
@@ -807,15 +837,31 @@ class BlackbeardExecutionListener(BaseEventListener):
                 },
             )
 
+    def _redact_event_payload(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Redact PII in *data*, sharing results across events via a bounded cache.
+
+        The lock only guards the cache dict — each call redacts against a
+        snapshot and merges back, so the (slow) NLP analysis never serializes
+        concurrent event-bus handlers.
+        """
+        with self._pii_cache_lock:
+            cache = dict(self._pii_cache)
+        data = _redact_dict(
+            data,
+            entities=self._pii_entities,
+            config=self._pii_config,
+            shared_cache=cache,
+        )
+        with self._pii_cache_lock:
+            if len(cache) > self._PII_CACHE_MAX:
+                cache.clear()
+            self._pii_cache = cache
+        return data
+
     def _write_event(self, event_type: str, data: dict[str, Any]) -> None:
         self._ensure_request_id()
         if self._pii_redact_events:
-            data = _redact_dict(
-                data,
-                entities=self._pii_entities,
-                config=self._pii_config,
-                shared_cache=self._pii_cache,
-            )
+            data = self._redact_event_payload(data)
         now = datetime.now(UTC)
         flush_now = False
         with self._lock:
@@ -872,12 +918,7 @@ class BlackbeardExecutionListener(BaseEventListener):
         """
         self._ensure_request_id()
         if self._pii_redact_events:
-            data = _redact_dict(
-                data,
-                entities=self._pii_entities,
-                config=self._pii_config,
-                shared_cache=self._pii_cache,
-            )
+            data = self._redact_event_payload(data)
             if task_output is not None:
                 task_output = _redact_text_fn(
                     task_output,
@@ -895,6 +936,16 @@ class BlackbeardExecutionListener(BaseEventListener):
         if timer is not None:
             timer.cancel()
             timer.join(timeout=5.0)
+        # Wait for an in-flight flush (started before we cancelled the timer)
+        # so re-queued events are visible when we drain the buffer below.
+        deadline = _time.monotonic() + 5.0
+        while True:
+            with self._lock:
+                if not self._flushing:
+                    break
+            if _time.monotonic() >= deadline:
+                break
+            _time.sleep(0.01)
 
         now = datetime.now(UTC)
         with self._lock:
@@ -920,6 +971,8 @@ class BlackbeardExecutionListener(BaseEventListener):
                     values["started_at"] = task_started_at
                 if task_completed_at is not None:
                     values["completed_at"] = task_completed_at
+                # Bulk UPDATE bypasses ORM onupdate — set updated_at explicitly.
+                values["updated_at"] = now
                 session.execute(
                     update(ExecutionTask)
                     .where(
@@ -970,7 +1023,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 "crew_name": crew_name,
                 "inputs": redact_sensitive_values(raw_inputs) if raw_inputs else {},
             }
-            self._write_event("crew_started", data)
+            self._write_event(ExecutionEventType.CREW_STARTED.value, data)
             # OTEL: start root span for crew execution
             span = self._otel_start_span(
                 f"crew.kickoff/{crew_name}",
@@ -986,7 +1039,7 @@ class BlackbeardExecutionListener(BaseEventListener):
         @crewai_event_bus.on(CrewKickoffCompletedEvent)  # type: ignore[untyped-decorator]
         def on_crew_completed(source: Any, event: CrewKickoffCompletedEvent) -> None:
             data = {"total_tokens": event.total_tokens}
-            self._write_event("crew_completed", data)
+            self._write_event(ExecutionEventType.CREW_COMPLETED.value, data)
             # OTEL: end root span
             with self._lock:
                 root_span = self._otel_root_span
@@ -1006,7 +1059,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 order = self._task_order
             now = datetime.now(UTC)
             self._write_event_with_task_update(
-                "task_started",
+                ExecutionEventType.TASK_STARTED.value,
                 data,
                 task_order=order,
                 task_status=TaskStatus.RUNNING,
@@ -1038,7 +1091,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 self._task_order += 1
             now = datetime.now(UTC)
             self._write_event_with_task_update(
-                "task_completed",
+                ExecutionEventType.TASK_COMPLETED.value,
                 data,
                 task_order=order,
                 task_status=TaskStatus.COMPLETED,
@@ -1058,7 +1111,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 "tool_args": str(raw_args)[:200] if raw_args else None,
                 "agent_role": event.agent_role,
             }
-            self._write_event("tool_started", data)
+            self._write_event(ExecutionEventType.TOOL_STARTED.value, data)
             # OTEL: start tool span
             span = self._otel_start_span(
                 f"tool/{event.tool_name}",
@@ -1084,7 +1137,7 @@ class BlackbeardExecutionListener(BaseEventListener):
             }
             if duration_ms is not None:
                 data["duration_ms"] = duration_ms
-            self._write_event("tool_finished", data)
+            self._write_event(ExecutionEventType.TOOL_FINISHED.value, data)
             # OTEL: end tool span
             otel_attrs: dict[str, Any] = {
                 "blackbeard.from_cache": event.from_cache or False,
@@ -1102,7 +1155,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 "model": event.model,
                 "agent_role": event.agent_role,
             }
-            self._write_event("llm_started", data)
+            self._write_event(ExecutionEventType.LLM_STARTED.value, data)
             # OTEL: start LLM span
             span = self._otel_start_span(
                 f"llm/{event.model or 'unknown'}",
@@ -1131,7 +1184,7 @@ class BlackbeardExecutionListener(BaseEventListener):
             }
             if duration_ms is not None:
                 data["duration_ms"] = duration_ms
-            self._write_event("llm_completed", data)
+            self._write_event(ExecutionEventType.LLM_COMPLETED.value, data)
             # OTEL: end LLM span
             otel_attrs: dict[str, Any] = {
                 "blackbeard.tokens": usage.get("total_tokens", 0) if isinstance(usage, dict) else 0,

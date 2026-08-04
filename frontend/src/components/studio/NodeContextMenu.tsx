@@ -4,6 +4,8 @@ import { useStudioStore } from '@/stores/studioStore'
 import { useToastStore } from '@/stores/toastStore'
 import { getDefaultNodeData } from './defaults'
 
+const MENU_ITEM_SELECTOR = '[role="menuitem"]'
+
 export interface NodeContextMenuState {
   x: number
   y: number
@@ -41,7 +43,7 @@ function nodeTypeLabel(nodeType: string): string {
 }
 
 const menuItemClass =
-  'mx-1 flex w-[calc(100%-8px)] cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-left text-xs font-medium text-foreground transition-colors hover:bg-muted focus:bg-muted focus:outline-none'
+  'mx-1 flex w-[calc(100%-8px)] cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-left text-xs font-medium text-foreground transition-colors hover:bg-muted focus:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
 
 export function NodeContextMenu({ menu, onClose }: NodeContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
@@ -60,7 +62,24 @@ export function NodeContextMenu({ menu, onClose }: NodeContextMenuProps) {
       }
     }
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') {
+        return
+      }
+      const items = menuRef.current?.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR)
+      if (!items || items.length === 0) return
+      e.preventDefault()
+      const list = Array.from(items)
+      const current = list.indexOf(document.activeElement as HTMLElement)
+      let next = 0
+      if (e.key === 'ArrowDown') next = current < 0 ? 0 : (current + 1) % list.length
+      else if (e.key === 'ArrowUp')
+        next = current < 0 ? list.length - 1 : (current - 1 + list.length) % list.length
+      else if (e.key === 'End') next = list.length - 1
+      list[next]?.focus()
     }
     document.addEventListener('mousedown', handleClick)
     document.addEventListener('keydown', handleKey)
@@ -80,6 +99,9 @@ export function NodeContextMenu({ menu, onClose }: NodeContextMenuProps) {
     if (rect.bottom > window.innerHeight) {
       el.style.top = `${menu.y - rect.height}px`
     }
+    // Move keyboard focus into the menu so arrow keys and Enter work immediately.
+    const first = el.querySelector<HTMLElement>(MENU_ITEM_SELECTOR)
+    first?.focus()
   }, [menu.x, menu.y])
 
   const handleEdit = () => {
@@ -126,20 +148,21 @@ export function NodeContextMenu({ menu, onClose }: NodeContextMenuProps) {
       ref={menuRef}
       role="menu"
       aria-label={`${nodeTypeLabel(menu.nodeType)} actions`}
-      className="fixed z-50 min-w-[180px] rounded-lg border border-border bg-card py-1 shadow-lg animate-in fade-in-0 zoom-in-95"
+      className="fixed z-50 min-w-[180px] rounded-lg border border-border bg-card py-1 shadow-lg animate-in fade-in-0 zoom-in-95 motion-reduce:animate-none"
       style={{ left: menu.x, top: menu.y }}
     >
-      <button role="menuitem" className={menuItemClass} onClick={handleEdit}>
+      <button type="button" role="menuitem" className={menuItemClass} onClick={handleEdit}>
         <Pencil className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
         Edit
       </button>
-      <button role="menuitem" className={menuItemClass} onClick={handleDuplicate}>
+      <button type="button" role="menuitem" className={menuItemClass} onClick={handleDuplicate}>
         <Copy className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
         Duplicate
       </button>
       <button
+        type="button"
         role="menuitem"
-        className="mx-1 flex w-[calc(100%-8px)] cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-left text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 focus:bg-destructive/10 focus:outline-none"
+        className="mx-1 flex w-[calc(100%-8px)] cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-left text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 focus:bg-destructive/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         onClick={handleDelete}
       >
         <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -149,6 +172,7 @@ export function NodeContextMenu({ menu, onClose }: NodeContextMenuProps) {
       <div className="mx-2 my-1 h-px bg-border" role="separator" />
 
       <button
+        type="button"
         role="menuitem"
         className={menuItemClass}
         onClick={() => void handleCopyId()}

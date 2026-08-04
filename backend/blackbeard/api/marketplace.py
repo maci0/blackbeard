@@ -15,6 +15,7 @@ import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from blackbeard.api.resources import _post_mutation_hooks, save_version_snapshot
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth import require_permission
 from blackbeard.models.resource_schemas import ResourceCreate
@@ -102,6 +103,16 @@ def _find_yaml_files(directory: Path) -> list[Path]:
 
 
 _MAX_DOCS_PER_FILE = 100
+
+
+def _collect_resources(directory: Path) -> tuple[list[dict[str, Any]], list[str]]:
+    """Find and parse YAML resources in a directory (blocking; run via to_thread)."""
+    return _parse_yaml_resources(_find_yaml_files(directory))
+
+
+def _tree_size(root: Path) -> int:
+    """Total size of regular files under *root* (blocking; run via to_thread)."""
+    return sum(f.stat().st_size for f in root.rglob("*") if f.is_file() and not f.is_symlink())
 
 
 def _parse_yaml_resources(yaml_files: list[Path]) -> tuple[list[dict[str, Any]], list[str]]:
@@ -257,8 +268,7 @@ async def import_from_url(
         for example_dir in sorted(_EXAMPLES_DIR.iterdir()):
             if not example_dir.is_dir() or example_dir.name.startswith("."):
                 continue
-            yaml_files = _find_yaml_files(example_dir)
-            resources, parse_errors = _parse_yaml_resources(yaml_files)
+            resources, parse_errors = await asyncio.to_thread(_collect_resources, example_dir)
             raw_resources.extend(resources)
             error_details.extend(parse_errors)
     else:
@@ -290,9 +300,7 @@ async def import_from_url(
             # SECURITY: Check total clone size to prevent abuse via
             # large repositories.  This runs after clone because git
             # doesn't support pre-clone size limits.
-            total_size = sum(
-                f.stat().st_size for f in tmpdir.rglob("*") if f.is_file() and not f.is_symlink()
-            )
+            total_size = await asyncio.to_thread(_tree_size, tmpdir)
             if total_size > _MAX_CLONE_SIZE_BYTES:
                 raise HTTPException(
                     status_code=422,
@@ -312,11 +320,10 @@ async def import_from_url(
                     status_code=422,
                     detail=f"Path '{body.path}' not found in repository",
                 )
-            yaml_files = _find_yaml_files(search_dir)
-            raw_resources, parse_errors = _parse_yaml_resources(yaml_files)
+            raw_resources, parse_errors = await asyncio.to_thread(_collect_resources, search_dir)
             error_details.extend(parse_errors)
         finally:
-            shutil.rmtree(tmpdir, ignore_errors=True)
+            await asyncio.to_thread(shutil.rmtree, tmpdir, ignore_errors=True)
 
     if len(raw_resources) > _MAX_IMPORT_RESOURCES:
         raise HTTPException(
@@ -329,6 +336,7 @@ async def import_from_url(
 
     # Import each resource via the ResourceService
     service = ResourceService(session)
+    imported_specs: list[tuple[str, str, dict[str, Any]]] = []
     for raw in raw_resources:
         try:
             data = ResourceCreate.model_validate(raw)
@@ -353,10 +361,12 @@ async def import_from_url(
             )
             continue
         try:
-            _resource, created = await service.create(data)
+            resource, created = await service.create(data)
+            await save_version_snapshot(session, resource, user)
             action = "resource_created" if created else "resource_updated"
             label = f"{data.kind}/{data.metadata.name}"
             imported_names.append(label)
+            imported_specs.append((data.kind, data.metadata.name, data.spec))
             await log_audit(
                 session,
                 action=action,
@@ -386,6 +396,10 @@ async def import_from_url(
 
     if imported_names:
         await session.commit()
+        # Same side-effects as the CRUD routes: LiteLLM sync, scheduler
+        # reload, authz cache clear.
+        for kind, name, spec in imported_specs:
+            _post_mutation_hooks(request, kind, name, spec)
 
     logger.info(
         "Marketplace import: url=%s imported=%d errors=%d",

@@ -53,6 +53,11 @@ class Webhook(Base):
         Index("ix_webhook_active", "active", postgresql_where=text("active IS TRUE")),
         Index("ix_webhook_created_at", created_at.desc()),
         CheckConstraint("length(url) >= 1", name="ck_webhook_url_nonempty"),
+        # Enforce scheme at DB level (app also rejects non-HTTPS in production).
+        CheckConstraint(
+            "url LIKE 'http://%' OR url LIKE 'https://%'",
+            name="ck_webhook_url_scheme",
+        ),
         CheckConstraint("length(secret) >= 1", name="ck_webhook_secret_nonempty"),
         CheckConstraint("jsonb_typeof(events) = 'array'", name="ck_webhook_events_is_array"),
     )

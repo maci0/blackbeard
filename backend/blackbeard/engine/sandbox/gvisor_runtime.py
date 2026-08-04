@@ -141,7 +141,7 @@ class GVisorSandbox:
                 contain invalid characters.
         """
         # SECURITY: Validate the image name to prevent argument injection.
-        if not self._IMAGE_RE.match(image):
+        if not self._IMAGE_RE.fullmatch(image):
             raise GVisorRuntimeError(f"Invalid container image name: {image!r}")
 
         cmd: list[str] = [
@@ -164,7 +164,7 @@ class GVisorSandbox:
         # SECURITY: Validate env var keys (same rationale as ContainerSandbox).
         if env:
             for k, v in sorted(env.items()):
-                if not self._ENV_KEY_RE.match(k):
+                if not self._ENV_KEY_RE.fullmatch(k):
                     logger.warning(
                         "gVisor: skipping env var with invalid key: %s",
                         k[:50],

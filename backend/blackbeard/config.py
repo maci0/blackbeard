@@ -90,12 +90,19 @@ class Settings(BaseSettings):
 
     max_concurrent_executions: int = Field(default=4, ge=1)
     max_concurrent_sse: int = Field(default=20, ge=1)
+    # Stable instance identity for execution-ownership scoping in startup
+    # recovery. Defaults to the container hostname when unset.
+    blackbeard_worker_id: str | None = None
 
     # Temporal workflow engine (optional, replaces ThreadPoolExecutor when set)
     temporal_host: str | None = None  # e.g. "localhost:7233"
     temporal_namespace: str = "blackbeard"
     temporal_task_queue: str = "crew-execution"
     temporal_workflow_timeout_s: int = Field(default=3600, ge=60)
+
+    # Data retention (GDPR storage limitation). None keeps rows forever.
+    audit_log_retention_days: int | None = Field(default=None, ge=1)
+    execution_retention_days: int | None = Field(default=None, ge=1)
 
     auth_fail_window_seconds: int = Field(default=300, ge=1)
     auth_fail_max_per_ip: int = Field(default=20, ge=1)
@@ -184,6 +191,26 @@ class Settings(BaseSettings):
                     "(browsers strip it during CORS checks)"
                 )
         return v
+
+    @field_validator("temporal_host")
+    @classmethod
+    def _validate_temporal_host(cls, v: str | None) -> str | None:
+        if v is not None and "://" in v:
+            raise ValueError(
+                f"TEMPORAL_HOST must be 'host:port' without a scheme (got {v!r}). "
+                "Example: localhost:7233"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def _check_firecracker_paths(self) -> Settings:
+        """Firecracker needs both kernel and rootfs; one without the other fails at VM boot."""
+        if bool(self.firecracker_kernel) != bool(self.firecracker_rootfs):
+            raise ValueError(
+                "FIRECRACKER_KERNEL and FIRECRACKER_ROOTFS must be set together "
+                f"(kernel={self.firecracker_kernel!r}, rootfs={self.firecracker_rootfs!r})"
+            )
+        return self
 
     @model_validator(mode="after")
     def _check_production_secrets(self) -> Settings:

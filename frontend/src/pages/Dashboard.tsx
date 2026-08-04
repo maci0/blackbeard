@@ -21,7 +21,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { KindBadge } from '@/components/ui/KindBadge'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { getDuration, formatCost, parseCost } from '@/lib/formatters'
+import { getDuration, formatCost, formatCostZero, parseCost } from '@/lib/formatters'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { PLURAL_TO_KIND } from '@/lib/kinds'
 import { cn } from '@/lib/utils'
@@ -122,6 +122,13 @@ const RecentExecutions = memo(function RecentExecutions({
           <div className="py-12 text-center">
             <Play className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" aria-hidden="true" />
             <p className="text-sm text-muted-foreground">No executions yet</p>
+            <Link
+              to="/studio"
+              className="mt-3 inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Run a crew in Studio
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
           </div>
         ) : (
           <table className="w-full text-sm" aria-label="Recent executions">
@@ -242,6 +249,13 @@ const ResourcesByKind = memo(function ResourcesByKind({
               aria-hidden="true"
             />
             <p className="text-sm text-muted-foreground">No resources created yet</p>
+            <Link
+              to="/marketplace"
+              className="mt-3 inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Import a template
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
           </div>
         ) : (
           <div className="space-y-3">
@@ -599,7 +613,7 @@ export default function Dashboard() {
           />
           <StatCard
             label="LLM Spend"
-            value={totalSpend > 0 ? formatCost(totalSpend) : '$0.00'}
+            value={totalSpend > 0 ? formatCost(totalSpend) : formatCostZero()}
             icon={DollarSign}
             loading={executionsLoading && executions.length === 0}
             href="/executions"

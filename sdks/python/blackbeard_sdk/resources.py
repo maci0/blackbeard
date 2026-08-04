@@ -117,9 +117,7 @@ class ResourceMixin:
         """
         kind = resource.get("kind")
         if not kind:
-            raise BlackbeardApiError(
-                0, "Resource dict must contain a 'kind' key"
-            )
+            raise BlackbeardApiError(0, "Resource dict must contain a 'kind' key")
         plural = _kind_plural(kind)
         return self._send("POST", f"/api/v1/{plural}", json=resource).json()
 
@@ -189,6 +187,8 @@ class ResourceMixin:
                     exc.status_code,
                     f"[{i}] {kind}/{name}: {exc.detail}",
                     exc.body,
+                    request_id=exc.request_id,
+                    retry_after=exc.retry_after,
                 ) from exc
         return results
 

@@ -323,7 +323,9 @@ class TestPluginLoader:
         assert names == {"tool-0", "tool-1", "tool-2"}
 
     def test_default_plugin_dir_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("PLUGIN_DIR", str(tmp_path))
+        from blackbeard.config import settings
+
+        monkeypatch.setattr(settings, "plugin_dir", str(tmp_path))
         (tmp_path / "env_plugin.py").write_text(
             textwrap.dedent("""\
                 from blackbeard.plugins.base import ToolPlugin

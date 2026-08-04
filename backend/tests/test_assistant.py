@@ -404,14 +404,14 @@ async def test_generate_resources_auto_selects_llm(db_session, llm_connection_re
         )
 
     assert len(resources) == 3
-    # Verify the model used was from the LLMConnection
+    # LiteLLM registers models under the LLMConnection resource name
     call_args = mock_client.post.call_args
     payload = call_args.kwargs.get("json") or call_args[1].get("json")
-    assert payload["model"] == "ollama/gpt-4"
+    assert payload["model"] == "my-llm"
 
 
 async def test_generate_resources_openai_provider(db_session):
-    """OpenAI provider should not add prefix."""
+    """Model resolves to the resource name regardless of provider."""
     r = make_resource(
         ResourceKind.LLM_CONNECTION,
         "openai-llm",
@@ -433,7 +433,7 @@ async def test_generate_resources_openai_provider(db_session):
 
     call_args = mock_client.post.call_args
     payload = call_args.kwargs.get("json") or call_args[1].get("json")
-    assert payload["model"] == "gpt-4o"
+    assert payload["model"] == "openai-llm"
 
 
 # ---------------------------------------------------------------------------
@@ -543,7 +543,7 @@ async def test_assistant_endpoint_specific_llm(client, db_session):
     # Verify the correct model was used
     call_args = mock_client.post.call_args
     payload = call_args.kwargs.get("json") or call_args[1].get("json")
-    assert payload["model"] == "ollama/mistral"
+    assert payload["model"] == "my-special-llm"
 
 
 async def test_assistant_endpoint_nonexistent_llm(client):

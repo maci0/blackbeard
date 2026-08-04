@@ -453,17 +453,12 @@ def test_policy_delegation_false_on_non_delegating_agent(mock_agent_cls, mock_ll
 @patch("blackbeard.engine.loader.importlib")
 @patch("blackbeard.engine.loader.LLM")
 @patch("blackbeard.engine.loader.Agent")
-def test_crew_default_policy_applies_tool_filter(mock_agent_cls, mock_llm_cls, mock_importlib):
-    """Agent without own policy but crew has default_agent_policy should be filtered."""
-    # The ResourceLoader's build_agent resolves policy via resolve_policy(),
-    # which checks agent.spec.policy first, then crew.spec.default_agent_policy.
-    # But build_agent only passes agent_spec (no crew_spec) currently.
-    # This test verifies that agent-level policy ref still works with crew-default
-    # when the agent doesn't have its own policy.
-    #
-    # Since build_agent doesn't have access to crew_spec, the crew-default
-    # policy must be set via agent.spec.policy or inherited through a different
-    # mechanism. This test documents the current behavior.
+@patch("blackbeard.engine.loader.Task")
+@patch("blackbeard.engine.loader.Crew")
+def test_crew_default_policy_applies_tool_filter(
+    mock_crew_cls, mock_task_cls, mock_agent_cls, mock_llm_cls, mock_importlib
+):
+    """Agent without own policy inherits crew default_agent_policy tool filter."""
     search_cls = MagicMock(name="SearchToolCls")
     search_instance = _make_tool_with_name("SearchTool")
     search_cls.return_value = search_instance
@@ -480,26 +475,34 @@ def test_crew_default_policy_applies_tool_filter(mock_agent_cls, mock_llm_cls, m
         "search",
         {"type": "python", "class_path": "crewai_tools.search.SearchTool"},
     )
-    # Agent has no policy ref — will fall back to DEFAULT_POLICY (mode=all)
+    # Agent has no policy ref — should inherit crew default_agent_policy
     agent_res = make_resource(
         ResourceKind.AGENT,
         "researcher",
         _basic_agent_spec(tools=["ref:tools/search"]),
     )
+    crew_res = make_resource(
+        ResourceKind.CREW,
+        "research-crew",
+        {
+            "agents": ["ref:agents/researcher"],
+            "tasks": [],
+            "default_agent_policy": "ref:agent-policies/strict-policy",
+        },
+    )
 
-    # Even if policies exist, agent without policy ref gets DEFAULT_POLICY
     policies = {
         "strict-policy": {
             "tools": {"mode": "allowlist", "allow": []},
         },
     }
 
-    loader = ResourceLoader(_resource_map(search_res, agent_res), policies=policies)
-    loader.build_agent("ref:agents/researcher")
+    loader = ResourceLoader(_resource_map(search_res, agent_res, crew_res), policies=policies)
+    loader.build_crew("research-crew")
 
     _, kwargs = mock_agent_cls.call_args
-    assert "tools" in kwargs
-    assert len(kwargs["tools"]) == 1
+    # Allowlist is empty → tools stripped
+    assert "tools" not in kwargs
 
 
 # ---------------------------------------------------------------------------

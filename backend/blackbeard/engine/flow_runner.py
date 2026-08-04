@@ -141,11 +141,28 @@ def run_flow_steps(
     step_outputs: dict[str, Any] = {}
     last_result: Any = None
     total_steps = len(steps)
+    step_index_by_name: dict[str, int] = {
+        s.get("name"): i for i, s in enumerate(steps) if s.get("name")
+    }
+    # Cap visits so cyclic routes cannot loop forever.
+    max_visits = max(total_steps * 2, 1)
+    visits: dict[str, int] = {}
 
-    for step_index, step in enumerate(steps):
+    step_index = 0
+    while step_index < total_steps:
+        step = steps[step_index]
         step_name = step.get("name", "unnamed")
         step_type = step.get("type", "crew")
         step_hooks = step.get("hooks", {})
+        jump_to: str | None = None
+
+        visit_count = visits.get(step_name, 0) + 1
+        visits[step_name] = visit_count
+        if visit_count > max_visits:
+            raise LoaderError(
+                f"Flow '{flow_name}' exceeded max step visits at '{step_name}' "
+                f"(possible cycle in routes)"
+            )
 
         if step_type == "crew":
             crew_ref = step.get("crew")
@@ -160,6 +177,7 @@ def run_flow_steps(
                         "reason": "no_crew_ref",
                     },
                 )
+                step_index += 1
                 continue
 
             crew = loader.build_crew(crew_ref.split("/")[-1] if "/" in crew_ref else crew_ref)
@@ -232,6 +250,7 @@ def run_flow_steps(
                         fn = _load_callable(fn_path)
                         step_result = fn({**inputs, **step_outputs})
                         step_outputs[step_name] = step_result
+                        last_result = step_result
                     except Exception as exc:
                         logger.error(
                             "Flow function step '%s' failed: %s",
@@ -262,6 +281,7 @@ def run_flow_steps(
                         step_outputs[step_name] = route_key
                         next_step = routes.get(route_key)
                         if next_step:
+                            jump_to = str(next_step)
                             logger.info(
                                 "Router '%s' chose route '%s' → '%s'",
                                 step_name,
@@ -288,6 +308,7 @@ def run_flow_steps(
                                     "available_routes": sorted(routes.keys()),
                                 },
                             )
+                            step_outputs[step_name] = f"error: unknown route '{route_key}'"
                     except Exception as exc:
                         logger.warning(
                             "Router step '%s' failed: %s",
@@ -311,6 +332,8 @@ def run_flow_steps(
                 route_key = "true" if result else "false"
                 step_outputs[step_name] = result
                 next_step = routes.get(route_key)
+                if next_step:
+                    jump_to = str(next_step)
                 logger.info(
                     "Condition '%s' evaluated to %s → '%s'",
                     step_name,
@@ -331,11 +354,10 @@ def run_flow_steps(
                 try:
                     import json as _json
 
-                    from blackbeard.engine.sandbox.wasm_runtime import WasmSandbox
+                    from blackbeard.engine.sandbox.wasm_runtime import get_shared_sandbox
 
-                    sandbox = WasmSandbox()
                     transform_input = _json.dumps({**inputs, **step_outputs})
-                    wasm_result = sandbox.invoke(wasm_ref, transform_input)
+                    wasm_result = get_shared_sandbox().invoke(wasm_ref, transform_input)
                     step_outputs[step_name] = (
                         _json.loads(wasm_result.output) if wasm_result.output else {}
                     )
@@ -381,6 +403,16 @@ def run_flow_steps(
             )
             step_outputs[step_name] = f"error: unknown step type '{step_type}'"
 
+        if jump_to is not None:
+            target_idx = step_index_by_name.get(jump_to)
+            if target_idx is None:
+                raise LoaderError(
+                    f"Flow '{flow_name}' step '{step_name}' routed to unknown step '{jump_to}'"
+                )
+            step_index = target_idx
+        else:
+            step_index += 1
+
     completed_steps = [
         s.get("name", "unnamed") for s in steps if s.get("name", "unnamed") in step_outputs
     ]
@@ -404,19 +436,20 @@ def run_flow_steps(
                 "failed_steps": failed_steps,
             },
         )
-    else:
-        logger.info(
-            "Flow '%s' completed: %d/%d steps produced output",
-            flow_name,
-            len(completed_steps),
-            total_steps,
-            extra={
-                "event": "flow_completed",
-                "flow_name": flow_name,
-                "total_steps": total_steps,
-                "completed_steps": len(completed_steps),
-            },
-        )
+        raise LoaderError(f"Flow '{flow_name}' failed at steps: {', '.join(failed_steps)}")
+
+    logger.info(
+        "Flow '%s' completed: %d/%d steps produced output",
+        flow_name,
+        len(completed_steps),
+        total_steps,
+        extra={
+            "event": "flow_completed",
+            "flow_name": flow_name,
+            "total_steps": total_steps,
+            "completed_steps": len(completed_steps),
+        },
+    )
     return last_result
 
 

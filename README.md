@@ -30,7 +30,7 @@ Blackbeard gives you a self-hosted platform to build, deploy, and manage AI agen
 - **Budget enforcement** -- per-execution spending limits via AgentPolicy and LiteLLM virtual keys
 - **Multi-tier sandbox isolation** -- run untrusted tool code in WASM, Docker/Podman, gVisor, or Firecracker MicroVM sandboxes
 - **Plugin SDK** -- extend the platform with custom tools, guardrails, auth providers, and execution hooks
-- **Git-backed versioning** -- auto-commit on every resource mutation, with log/diff/blame/show API
+- **Resource versioning** -- database snapshots on every create/update, with list/view/rollback API
 - **Temporal integration** -- optional Temporal workflow engine for durable execution (falls back to ThreadPoolExecutor)
 - **CLI parity** -- everything you can do in the UI, you can do from the command line, including an interactive TUI shell
 
@@ -240,7 +240,7 @@ uv run ruff check blackbeard_cli/          # lint
 | WASM Runtime | wasmtime-py                                   |
 | Orchestration| CrewAI                                        |
 | Workflows    | Temporal (optional, falls back to ThreadPoolExecutor) |
-| Version Control | Git-backed resource store                  |
+| Versioning   | Database resource snapshots (list/rollback)  |
 | Monitoring   | Prometheus, Grafana                           |
 
 ### Project Structure
@@ -251,12 +251,11 @@ blackbeard/
 │   ├── blackbeard/
 │   │   ├── api/               # REST endpoints
 │   │   ├── auth/              # JWT auth, RBAC
-│   │   ├── engine/            # Execution engine + sandbox runtimes
+│   │   ├── engine/            # Execution engine, sandboxes, Temporal
 │   │   ├── litellm/           # LiteLLM config + key management
 │   │   ├── models/            # SQLAlchemy + Pydantic models
 │   │   ├── plugins/           # Plugin SDK (tool, guardrail, auth, hooks)
-│   │   ├── resources/         # Resource CRUD + validation
-│   │   └── temporal/          # Temporal workflow integration
+│   │   └── resources/         # Resource CRUD + validation
 │   └── tests/
 ├── cli/                       # Standalone CLI package (blackbeard-cli)
 │   └── blackbeard_cli/
@@ -333,6 +332,10 @@ curl -X POST -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
 ```
 
 Interactive API documentation is available at `/docs` (Swagger) and `/redoc` when `DEBUG=true`.
+
+## Versioning
+
+Blackbeard follows [SemVer](https://semver.org). While the version is 0.x, minor releases (0.2 → 0.3) may contain breaking changes; these are listed with migration notes under a **Breaking** heading in [CHANGELOG.md](CHANGELOG.md). Patch releases are backward compatible. All components (backend, CLI, SDKs, Helm chart) share one version number and are released together; only the latest release receives fixes.
 
 ## Contributing
 

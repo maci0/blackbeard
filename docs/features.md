@@ -353,13 +353,13 @@ Blackbeard supports [Temporal](https://temporal.io/) as an optional durable work
 
 ### Configuration
 
-Set the `TEMPORAL_ADDRESS` environment variable to enable Temporal:
+Set the `TEMPORAL_HOST` environment variable to enable Temporal:
 
 ```bash
-TEMPORAL_ADDRESS=localhost:7233
+TEMPORAL_HOST=localhost:7233
 ```
 
-When `TEMPORAL_ADDRESS` is not set, Blackbeard falls back to ThreadPoolExecutor (the default behavior). No code changes are needed to switch between the two.
+When `TEMPORAL_HOST` is not set, Blackbeard falls back to ThreadPoolExecutor (the default behavior). No code changes are needed to switch between the two.
 
 ### What changes with Temporal
 
@@ -380,7 +380,7 @@ Tools can run under isolation tiers (`none`, `wasm`, `docker`/`podman`, `gvisor`
 
 ## Resource Versioning
 
-Every resource mutation (create, update, delete) is snapshotted in the database. List versions, inspect a snapshot, and roll back via the REST API:
+Every resource create or update is snapshotted in the database. List versions, inspect a snapshot, and roll back via the REST API:
 
 ```bash
 # List versions for a resource

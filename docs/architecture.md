@@ -667,9 +667,9 @@ Plugins are discovered via Python entry points (`blackbeard.plugins` group) or r
 
 ## Temporal Workflow Engine
 
-The Temporal integration (`backend/blackbeard/temporal/`) provides an alternative execution backend using [Temporal](https://temporal.io/) for durable workflow orchestration.
+The Temporal integration (`backend/blackbeard/engine/temporal.py`) provides an alternative execution backend using [Temporal](https://temporal.io/) for durable workflow orchestration.
 
-**Configuration:** Set `TEMPORAL_ADDRESS` (e.g., `localhost:7233`) to enable Temporal. When not set, the system uses `ThreadPoolExecutor` (the default).
+**Configuration:** Set `TEMPORAL_HOST` (e.g., `localhost:7233`) to enable Temporal. When not set, the system uses `ThreadPoolExecutor` (the default).
 
 **How it works:**
 

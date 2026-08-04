@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from croniter import croniter  # type: ignore[import-untyped]
+from sqlalchemy import delete
+from sqlalchemy.exc import IntegrityError
 
 from blackbeard.kinds import ResourceKind
-from blackbeard.models import Resource, async_session
+from blackbeard.models import AutomationRun, Resource, async_session
 
 logger = logging.getLogger(__name__)
 
@@ -78,16 +80,19 @@ class AutomationScheduler:
             raise
 
     async def stop(self) -> None:
-        """Cancel all scheduled tasks."""
+        """Cancel all scheduled tasks and wait for them to finish."""
         self._running = False
-        for name, task in self._tasks.items():
+        tasks = list(self._tasks.items())
+        self._tasks.clear()
+        for name, task in tasks:
             task.cancel()
             logger.debug(
                 "Cancelled cron task: %s",
                 name,
                 extra={"event": "cron_task_cancelled", "automation_name": name},
             )
-        self._tasks.clear()
+        if tasks:
+            await asyncio.gather(*(task for _, task in tasks), return_exceptions=True)
         logger.info(
             "Automation scheduler stopped",
             extra={"event": "scheduler_stopped"},
@@ -258,7 +263,57 @@ class AutomationScheduler:
             if not self._running:
                 break
 
-            await self._trigger_target(automation_name, target, inputs, project)
+            if await self._claim_firing(automation_name, next_dt):
+                await self._trigger_target(automation_name, target, inputs, project)
+
+    # How long dedup rows are kept before being pruned on later firings.
+    _RUN_RETENTION = timedelta(days=7)
+
+    async def _claim_firing(self, automation_name: str, scheduled_at: datetime) -> bool:
+        """Claim a cron firing via unique insert; False if another replica won.
+
+        Every replica runs its own scheduler and computes the same absolute
+        firing times, so without this each cron would trigger once per API
+        replica. Fails open on non-conflict DB errors: triggering needs the
+        DB anyway, and skipping would silently drop single-replica firings.
+        """
+        try:
+            async with async_session() as session:
+                session.add(
+                    AutomationRun(automation_name=automation_name, scheduled_at=scheduled_at)
+                )
+                await session.flush()
+                await session.execute(
+                    delete(AutomationRun).where(
+                        AutomationRun.automation_name == automation_name,
+                        AutomationRun.scheduled_at < datetime.now(UTC) - self._RUN_RETENTION,
+                    )
+                )
+                await session.commit()
+            return True
+        except IntegrityError:
+            logger.debug(
+                "Cron firing for '%s' at %s already claimed by another replica",
+                automation_name,
+                scheduled_at,
+                extra={
+                    "event": "cron_firing_deduped",
+                    "automation_name": automation_name,
+                    "scheduled_at": scheduled_at.isoformat(),
+                },
+            )
+            return False
+        except Exception:
+            logger.warning(
+                "Cron firing claim failed for '%s' — firing anyway",
+                automation_name,
+                exc_info=True,
+                extra={
+                    "event": "cron_firing_claim_error",
+                    "automation_name": automation_name,
+                },
+            )
+            return True
 
     async def _trigger_target(
         self,

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.31.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -25,21 +25,35 @@ dependencies = [
     "jsonschema>=4.23,<5",
     "croniter>=2.0,<3",
     "crewai-tools>=1.14.5,<2",
-    "pyjwt>=2.10,<3",
+    "pyjwt>=2.13.0,<3",  # GHSA-jq35-7prp-9v3f / PYSEC-2026-175..179
     "bcrypt>=4.3,<5",
     "email-validator>=2.2,<3",
     "presidio-analyzer>=2.2,<3",
     "presidio-anonymizer>=2.2,<3",
     "authlib>=1.7.2,<2",
     "itsdangerous>=2.2,<3",
+    "prometheus-client>=0.21,<1",
 ]
 
 [tool.uv]
 constraint-dependencies = [
-    "pillow>=12.2.0",  # CVE-2026-40192, CVE-2026-42308..42311 (transitive via crewai)
-    "starlette>=1.0.1",  # PYSEC-2026-161 host header injection (transitive via fastapi)
-    # chromadb: CVE-2026-45829 (GHSA-f4j7-r4q5-qw2c) critical pre-auth RCE — NO FIX available as of 2026-05-30
-    # transitive via crewai; monitor https://github.com/chroma-core/chroma for patch release
+    "pillow>=12.3.0",  # PYSEC-2026-2253..2257, 3451..3454, 3493..3496 (transitive via crewai)
+    "starlette>=1.3.1",  # PYSEC-2026-248, PYSEC-2026-249 (transitive via fastapi)
+    "aiohttp>=3.14.3",  # GHSA-cq5v-8q36-5273 / mq44-7p77 / mfx4-hv73 (transitive)
+    "cryptography>=50.0.0",  # GHSA-g6cj-pr64-35w5 and related (transitive via joserfc/authlib)
+    "msgpack>=1.2.1",  # GHSA-6v7p-g79w-8964 (transitive)
+    "json-repair>=0.60.1",  # GHSA-xf7x-x43h-rpqh (transitive via crewai)
+    "joserfc>=1.6.8",  # PYSEC-2026-2528, PYSEC-2026-2530 (transitive)
+    "mcp>=1.28.1",  # PYSEC-2026-3481..3483 (transitive via crewai)
+    "python-multipart>=0.0.31",  # PYSEC-2026-3036, 3037, 3040 (transitive via fastapi)
+    "soupsieve>=2.8.4",  # PYSEC-2026-3071, PYSEC-2026-3072 (transitive)
+    "click>=8.3.3",  # PYSEC-2026-2132 (transitive via crewai/typer)
+    "setuptools>=83.0.0",  # PYSEC-2026-3447 (transitive via spacy/thinc)
+    "uv>=0.11.15",  # GHSA-4gg8-gxpx-9rph (transitive via crewai-cli)
+    "pip>=26.1.2",  # PYSEC-2026-196 (dev transitive via pip-audit)
+    # chromadb: CVE-2026-45829 (GHSA-f4j7-r4q5-qw2c) critical pre-auth RCE and PYSEC-2026-311,
+    # NO FIX available as of 2026-08-04; transitive via crewai,
+    # monitor https://github.com/chroma-core/chroma for patch release
 ]
 
 [project.optional-dependencies]

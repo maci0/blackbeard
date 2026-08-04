@@ -1,3 +1,5 @@
+/** Shared domain types for API resources and executions (UI-facing). */
+
 export interface Resource {
   id: string
   apiVersion: string

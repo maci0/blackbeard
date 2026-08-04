@@ -11,12 +11,23 @@ spec:
   activeDeadlineSeconds: 60
   automountServiceAccountToken: false
   securityContext:
-    {{- toYaml .Values.podSecurityContext | nindent 4 }}
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
   containers:
     - name: api-health
-      image: busybox:1.37
+      image: busybox:1.37.0
       securityContext:
-        {{- toYaml .Values.containerSecurityContext | nindent 8 }}
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        capabilities:
+          drop:
+            - ALL
       resources:
         requests:
           memory: "16Mi"

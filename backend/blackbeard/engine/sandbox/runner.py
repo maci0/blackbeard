@@ -6,6 +6,7 @@ import asyncio
 import concurrent.futures
 import logging
 import shlex
+import threading
 from typing import Any
 
 from blackbeard.config import settings
@@ -17,7 +18,13 @@ __all__ = [
     "ensure_sandbox_available",
     "execute_sandboxed",
     "runtime_tier_for_tool",
+    "shutdown_sandbox_nest_pool",
 ]
+
+# Shared pool for nested asyncio.run() when already inside an event loop.
+# Avoids creating/destroying a ThreadPoolExecutor per sandboxed tool call.
+_nest_pool: concurrent.futures.ThreadPoolExecutor | None = None
+_nest_pool_lock = threading.Lock()
 
 
 class SandboxExecutionError(Exception):
@@ -46,9 +53,7 @@ def ensure_sandbox_available(tier: str) -> None:
         try:
             import wasmtime  # noqa: F401
         except ImportError as exc:
-            raise SandboxExecutionError(
-                "wasm sandbox requires the wasmtime package"
-            ) from exc
+            raise SandboxExecutionError("wasm sandbox requires the wasmtime package") from exc
         return
     if tier in ("docker", "podman"):
         from blackbeard.engine.sandbox.container_runtime import ContainerSandbox
@@ -76,14 +81,38 @@ def ensure_sandbox_available(tier: str) -> None:
     raise SandboxExecutionError(f"unknown sandbox tier: {tier}")
 
 
+def _get_nest_pool() -> concurrent.futures.ThreadPoolExecutor:
+    """Return a shared pool for nested event-loop sandbox runs."""
+    global _nest_pool
+    with _nest_pool_lock:
+        if _nest_pool is None:
+            # Bound workers to concurrent executions so tool fan-out cannot
+            # spawn unbounded threads under load.
+            workers = max(4, settings.max_concurrent_executions * 2)
+            _nest_pool = concurrent.futures.ThreadPoolExecutor(
+                max_workers=workers,
+                thread_name_prefix="sandbox-nest",
+            )
+        return _nest_pool
+
+
+def shutdown_sandbox_nest_pool() -> None:
+    """Shut down the nested-loop sandbox pool (app shutdown)."""
+    global _nest_pool
+    with _nest_pool_lock:
+        pool = _nest_pool
+        _nest_pool = None
+    if pool is not None:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+
 def _run_coro(coro: Any) -> Any:
     """Run an async coroutine from sync tool code (possibly inside an event loop)."""
     try:
         asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(coro)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result()
+    return _get_nest_pool().submit(asyncio.run, coro).result()
 
 
 async def _execute_async(

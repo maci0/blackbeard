@@ -882,31 +882,25 @@ class TestSSEState:
 
     @pytest.mark.asyncio
     async def test_acquire_and_release_stream(self) -> None:
-        """Test that acquire_stream increments/decrements active count.
-
-        asyncio.wait_for(timeout=0) in Python 3.13 always cancels even
-        if the semaphore has free slots, so we patch wait_for directly
-        to simulate a successful acquire.
-        """
+        """Test that acquire_stream increments/decrements active count."""
         import blackbeard.sse as sse_mod
 
+        original_semaphore = sse_mod.semaphore
         original_active = sse_mod._active_streams
         try:
+            # Fresh semaphore so the release() in acquire_stream's finally
+            # cannot inflate the shared module-level semaphore's counter.
+            sse_mod.semaphore = asyncio.Semaphore(1)
             with sse_mod._active_lock:
                 sse_mod._active_streams = 0
 
-            async def _mock_wait_for(coro: Any, *, timeout: Any = None) -> bool:
-                # Simulate successful semaphore acquisition without
-                # actually using asyncio.wait_for (which cancels at timeout=0).
-                return True
-
-            with patch("asyncio.wait_for", side_effect=_mock_wait_for):
-                async with sse_mod.acquire_stream() as acquired:
-                    assert acquired is True
-                    assert sse_mod.get_active_count() == 1
+            async with sse_mod.acquire_stream() as acquired:
+                assert acquired is True
+                assert sse_mod.get_active_count() == 1
 
             assert sse_mod.get_active_count() == 0
         finally:
+            sse_mod.semaphore = original_semaphore
             with sse_mod._active_lock:
                 sse_mod._active_streams = original_active
 

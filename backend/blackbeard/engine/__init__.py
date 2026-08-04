@@ -1,4 +1,21 @@
-"""Execution engine: crew lifecycle management."""
+"""Execution engine: crew lifecycle management.
+
+Module map:
+
+- ``executor`` — ThreadPoolExecutor path, kickoff/train/test entrypoints
+- ``loader`` — Build CrewAI objects from resource snapshots
+- ``flow_runner`` — Sequential/flow step execution
+- ``execution_listener`` — Event persistence, webhooks, OTEL hooks
+- ``policy`` / ``budget`` — AgentPolicy limits and cost alerts
+- ``scheduler`` — Cron automations
+- ``temporal`` — Optional Temporal workflow adapter (lazy; no hard dep)
+- ``sandbox/`` — Tool isolation tiers (container, gVisor, Firecracker, WASM)
+- ``memory/`` — External memory backends (e.g. MuninnDB)
+- ``assistant`` / ``agency_import`` / ``discovery_tools`` — supporting features
+
+Public re-exports below are the executor lifecycle surface; import other
+engine modules by path (e.g. ``blackbeard.engine.loader``).
+"""
 
 from __future__ import annotations
 

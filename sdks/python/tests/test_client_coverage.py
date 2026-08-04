@@ -420,9 +420,7 @@ class TestExportAll:
         """export_all uses the server's bulk export endpoint."""
         import yaml
 
-        yaml_body = (
-            b"---\nkind: Agent\nmetadata:\n  name: a1\nspec:\n  role: R\n"
-        )
+        yaml_body = b"---\nkind: Agent\nmetadata:\n  name: a1\nspec:\n  role: R\n"
         transport.queue(
             httpx.Response(
                 200,
@@ -461,9 +459,7 @@ class TestAuthEdgeCases:
     def test_generate_api_key(
         self, client: BlackbeardClient, transport: MockTransport
     ) -> None:
-        transport.queue(
-            _mock_response(200, {"api_key": "bb-test-key-123"})
-        )
+        transport.queue(_mock_response(200, {"api_key": "bb-test-key-123"}))
         result = client.generate_api_key()
         assert result["api_key"] == "bb-test-key-123"
         req = transport.requests[0]
@@ -537,9 +533,7 @@ class TestVersioning:
         req = transport.requests[0]
         assert req.url.path == "/api/v1/agents/researcher/versions/1"
 
-    def test_rollback(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_rollback(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(
             _mock_response(
                 200,
@@ -675,6 +669,65 @@ class TestKindPluralEdge:
         """Kind lookup is case-sensitive."""
         with pytest.raises(BlackbeardApiError):
             _kind_plural("agent")  # lowercase should fail
+
+
+# -- Error detail normalization and structured fields -------------------------
+
+
+class TestErrorDetailAndHeaders:
+    """FastAPI list details and response headers must surface cleanly on errors."""
+
+    def test_validation_list_detail_is_string(
+        self, client: BlackbeardClient, transport: MockTransport
+    ) -> None:
+        transport.queue(
+            _mock_response(
+                422,
+                {
+                    "detail": [
+                        {
+                            "loc": ["body", "spec", "role"],
+                            "msg": "field required",
+                            "type": "value_error.missing",
+                        }
+                    ]
+                },
+            )
+        )
+        with pytest.raises(BlackbeardApiError) as exc_info:
+            client.create({"kind": "Agent", "metadata": {"name": "x"}})
+        err = exc_info.value
+        assert isinstance(err.detail, str)
+        assert "spec.role" in err.detail
+        assert "field required" in err.detail
+        # is_timeout must not crash when detail was formerly a list
+        assert err.is_timeout is False
+
+    def test_request_id_and_retry_after_from_headers(
+        self, client: BlackbeardClient, transport: MockTransport
+    ) -> None:
+        transport.queue(
+            httpx.Response(
+                429,
+                content=b'{"detail":"Rate limited"}',
+                headers={
+                    "content-type": "application/json",
+                    "X-Request-Id": "req-abc",
+                    "Retry-After": "30",
+                },
+            )
+        )
+        with pytest.raises(BlackbeardApiError) as exc_info:
+            client.list("Agent")
+        err = exc_info.value
+        assert err.is_rate_limited
+        assert err.request_id == "req-abc"
+        assert err.retry_after == 30
+
+    def test_version_matches_package(self) -> None:
+        from blackbeard_sdk import __version__
+
+        assert __version__ == "0.2.0"
 
 
 # -- Transport error wrapping -------------------------------------------------

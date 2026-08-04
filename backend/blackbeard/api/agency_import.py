@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from blackbeard.api.resources import save_version_snapshot
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth import require_permission
 from blackbeard.engine.agency_import import parse_agency_agent_markdown
@@ -74,6 +75,7 @@ class AgencyAgentImportResponse(BaseModel):
 
 
 _file_cache: dict[str, tuple[float, str | None]] = {}
+_file_cache_lock = asyncio.Lock()
 _FILE_CACHE_TTL = 300.0  # 5 minutes
 _FILE_CACHE_MAX = 500
 
@@ -81,9 +83,10 @@ _FILE_CACHE_MAX = 500
 async def _fetch_github_file(path: str) -> str | None:
     """Fetch a raw file from the Agency Agents GitHub repo (cached 5min)."""
     now = time.monotonic()
-    cached = _file_cache.get(path)
-    if cached is not None and (now - cached[0]) < _FILE_CACHE_TTL:
-        return cached[1]
+    async with _file_cache_lock:
+        cached = _file_cache.get(path)
+        if cached is not None and (now - cached[0]) < _FILE_CACHE_TTL:
+            return cached[1]
 
     url = f"https://raw.githubusercontent.com/{_REPO_OWNER}/{_REPO_NAME}/main/{path}"
     client = get_client("agency-import", timeout=15.0)
@@ -92,9 +95,15 @@ async def _fetch_github_file(path: str) -> str | None:
         resp = await client.get(url)
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
         content = resp.text if resp.status_code == 200 else None
-        if len(_file_cache) >= _FILE_CACHE_MAX:
-            _file_cache.clear()
-        _file_cache[path] = (now, content)
+        async with _file_cache_lock:
+            # Re-check: another coroutine may have populated the cache.
+            cached = _file_cache.get(path)
+            if cached is not None and (time.monotonic() - cached[0]) < _FILE_CACHE_TTL:
+                return cached[1]
+            if len(_file_cache) >= _FILE_CACHE_MAX:
+                # Evict oldest entry instead of dropping the whole warm cache.
+                _file_cache.pop(next(iter(_file_cache)))
+            _file_cache[path] = (time.monotonic(), content)
         if resp.status_code != 200:
             logger.warning(
                 "GitHub raw file returned %d: path=%s (%.0fms)",
@@ -127,6 +136,7 @@ async def _fetch_github_file(path: str) -> str | None:
 
 
 _division_cache: dict[str, tuple[float, list[str]]] = {}
+_division_cache_lock = asyncio.Lock()
 _DIVISION_CACHE_TTL = 300.0  # 5 minutes
 _DIVISION_CACHE_MAX = 100
 
@@ -134,9 +144,10 @@ _DIVISION_CACHE_MAX = 100
 async def _list_division_files(division: str) -> list[str]:
     """List markdown files in a division directory via GitHub API (cached 5min)."""
     now = time.monotonic()
-    cached = _division_cache.get(division)
-    if cached is not None and (now - cached[0]) < _DIVISION_CACHE_TTL:
-        return cached[1]
+    async with _division_cache_lock:
+        cached = _division_cache.get(division)
+        if cached is not None and (now - cached[0]) < _DIVISION_CACHE_TTL:
+            return cached[1]
 
     url = f"{_GITHUB_API}/repos/{_REPO_OWNER}/{_REPO_NAME}/contents/{division}"
     client = get_client("agency-import", timeout=15.0)
@@ -166,9 +177,13 @@ async def _list_division_files(division: str) -> list[str]:
             and item.get("name", "").endswith(".md")
             and item.get("name") != "README.md"
         ]
-        if len(_division_cache) >= _DIVISION_CACHE_MAX:
-            _division_cache.clear()
-        _division_cache[division] = (now, files)
+        async with _division_cache_lock:
+            cached = _division_cache.get(division)
+            if cached is not None and (time.monotonic() - cached[0]) < _DIVISION_CACHE_TTL:
+                return cached[1]
+            if len(_division_cache) >= _DIVISION_CACHE_MAX:
+                _division_cache.pop(next(iter(_division_cache)))
+            _division_cache[division] = (time.monotonic(), files)
         return files
     except Exception:
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
@@ -209,17 +224,21 @@ async def list_agency_agents(
     divisions = [division] if division else _DIVISIONS
     agents: list[AgencyAgentPreview] = []
 
-    division_files = await asyncio.gather(
-        *[_list_division_files(div) for div in divisions]
-    )
+    division_files = await asyncio.gather(*[_list_division_files(div) for div in divisions])
     all_files: list[tuple[str, str]] = []
     for div, files in zip(divisions, division_files, strict=True):
         for file_path in files:
             all_files.append((div, file_path))
 
-    contents = await asyncio.gather(
-        *[_fetch_github_file(fp) for _, fp in all_files]
-    )
+    # Bound concurrency: on a cold cache this spans hundreds of files, and an
+    # unbounded gather opens that many simultaneous connections to GitHub.
+    sem = asyncio.Semaphore(16)
+
+    async def _fetch_limited(path: str) -> str | None:
+        async with sem:
+            return await _fetch_github_file(path)
+
+    contents = await asyncio.gather(*[_fetch_limited(fp) for _, fp in all_files])
 
     for (div, file_path), content in zip(all_files, contents, strict=True):
         if content is None:
@@ -268,9 +287,7 @@ async def import_agency_agents(
 
     service = ResourceService(session)
 
-    division_files = await asyncio.gather(
-        *[_list_division_files(div) for div in _DIVISIONS]
-    )
+    division_files = await asyncio.gather(*[_list_division_files(div) for div in _DIVISIONS])
     slug_index: dict[str, str] = {}
     for div, files in zip(_DIVISIONS, division_files, strict=True):
         for file_path in files:
@@ -317,7 +334,8 @@ async def import_agency_agents(
                     "backstory": parsed["backstory"],
                 },
             )
-            await service.create(data)
+            resource, _created = await service.create(data)
+            await save_version_snapshot(session, resource, _current_user)
             imported += 1
         except Exception as exc:
             if "already exists" in str(exc).lower():

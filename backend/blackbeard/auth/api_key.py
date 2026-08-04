@@ -1,4 +1,4 @@
-"""API key state management — shared by HTTP and gRPC auth layers.
+"""API key state management for HTTP auth middleware.
 
 The expected API key is loaded from settings at import time and may be
 replaced at runtime by ``set_api_key()`` (used during startup to inject

@@ -48,11 +48,8 @@ function ToastItem({ toast }: { toast: Toast }) {
       role={toast.type === 'error' ? 'alert' : 'status'}
       onMouseEnter={() => pause(toast.id)}
       onMouseLeave={() => resume(toast.id)}
-      onFocus={() => pause(toast.id)}
-      onBlur={() => resume(toast.id)}
-      tabIndex={0}
       className={cn(
-        'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border p-4 shadow-lg transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
+        'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border p-4 shadow-lg transition-all duration-300 ease-out motion-reduce:transition-none',
         'translate-y-2 opacity-0 sm:translate-x-full sm:translate-y-0',
         STYLE_MAP[toast.type],
       )}
@@ -62,11 +59,13 @@ function ToastItem({ toast }: { toast: Toast }) {
       <button
         type="button"
         onClick={() => dismiss(toast.id)}
+        onFocus={() => pause(toast.id)}
+        onBlur={() => resume(toast.id)}
         className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md transition-colors hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-white/10"
         aria-label="Dismiss notification"
         title="Dismiss"
       >
-        <X className="h-3.5 w-3.5" />
+        <X className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
     </div>
   )

@@ -453,3 +453,43 @@ def test_fuzz_is_internal_host_known_external(hostname):
     from blackbeard.resources.validator import is_internal_host
 
     assert is_internal_host(hostname) is False
+
+
+# ---------------------------------------------------------------------------
+# Path and filename allowlist anchoring
+# ---------------------------------------------------------------------------
+
+
+@given(path=st.text(max_size=100))
+@settings(max_examples=200)
+def test_fuzz_is_path_traversal_strict_allowlist(path):
+    """Any path accepted by _is_path_traversal matches the allowlist exactly.
+
+    Regression: ``$``-anchored ``.match()`` accepted a trailing newline.
+    """
+    import re
+
+    from blackbeard.resources.validator import _is_path_traversal
+
+    if not _is_path_traversal(path):
+        assert re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._/ -]*", path), (
+            f"unsafe path accepted: {path!r}"
+        )
+
+
+def test_path_traversal_trailing_newline_rejected():
+    from blackbeard.resources.validator import _is_path_traversal
+
+    assert _is_path_traversal("data/file.txt\n") is True
+    assert _is_path_traversal("data/file.txt") is False
+
+
+@given(name=st.text(max_size=100))
+@settings(max_examples=200)
+def test_fuzz_safe_filename_strict(name):
+    """SAFE_FILENAME.fullmatch never accepts newlines, slashes, or traversal."""
+    from blackbeard.kinds import SAFE_FILENAME
+
+    if SAFE_FILENAME.fullmatch(name):
+        assert "\n" not in name and "/" not in name and "\\" not in name
+        assert not name.startswith((".", "-"))

@@ -26,23 +26,29 @@ export function CopyButton({
       })
   }, [text])
 
+  const statusLabel =
+    state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy failed' : label
+
   return (
     <button
       type="button"
       onClick={handleCopy}
-      aria-label={state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy failed' : label}
+      aria-label={statusLabel}
       className={cn(
         'inline-flex h-[44px] w-[44px] items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         className,
       )}
     >
       {state === 'copied' ? (
-        <Check className="h-3.5 w-3.5 text-emerald-500" />
+        <Check className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
       ) : state === 'failed' ? (
-        <X className="h-3.5 w-3.5 text-red-500" />
+        <X className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />
       ) : (
-        <Copy className="h-3.5 w-3.5" />
+        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
       )}
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {state === 'idle' ? '' : statusLabel}
+      </span>
     </button>
   )
 }

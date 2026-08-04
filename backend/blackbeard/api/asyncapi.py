@@ -11,6 +11,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from blackbeard import __version__
+from blackbeard.models.execution import ExecutionEventType
 
 router = APIRouter(tags=["webhooks"])
 
@@ -260,48 +261,49 @@ _DATA_SCHEMAS: dict[str, dict[str, object]] = {
 # Event type to schema mapping
 # ---------------------------------------------------------------------------
 
+# Keys must stay aligned with ExecutionEventType (single source of truth).
 _EVENT_TYPES: dict[str, dict[str, str]] = {
-    "crew_started": {
+    ExecutionEventType.CREW_STARTED.value: {
         "ref": "#/components/schemas/CrewStartedData",
         "summary": "Crew execution started",
         "description": "Fired when a crew begins its kickoff, train, or test run.",
     },
-    "crew_completed": {
+    ExecutionEventType.CREW_COMPLETED.value: {
         "ref": "#/components/schemas/CrewCompletedData",
         "summary": "Crew execution completed successfully",
         "description": "Fired when a crew finishes all tasks without error.",
     },
-    "task_started": {
+    ExecutionEventType.TASK_STARTED.value: {
         "ref": "#/components/schemas/TaskStartedData",
         "summary": "Task execution started",
         "description": "Fired when an individual task begins running.",
     },
-    "task_completed": {
+    ExecutionEventType.TASK_COMPLETED.value: {
         "ref": "#/components/schemas/TaskCompletedData",
         "summary": "Task execution completed",
         "description": "Fired when a task finishes successfully.",
     },
-    "tool_started": {
+    ExecutionEventType.TOOL_STARTED.value: {
         "ref": "#/components/schemas/ToolStartedData",
         "summary": "Tool invocation started",
         "description": "Fired when an agent begins using a tool.",
     },
-    "tool_finished": {
+    ExecutionEventType.TOOL_FINISHED.value: {
         "ref": "#/components/schemas/ToolFinishedData",
         "summary": "Tool invocation finished",
         "description": "Fired when a tool call returns a result.",
     },
-    "llm_started": {
+    ExecutionEventType.LLM_STARTED.value: {
         "ref": "#/components/schemas/LLMStartedData",
         "summary": "LLM call started",
         "description": "Fired when an agent sends a request to an LLM.",
     },
-    "llm_completed": {
+    ExecutionEventType.LLM_COMPLETED.value: {
         "ref": "#/components/schemas/LLMCompletedData",
         "summary": "LLM call completed",
         "description": "Fired when an LLM response is received.",
     },
-    "cost_alert": {
+    ExecutionEventType.COST_ALERT.value: {
         "ref": "#/components/schemas/CostAlertData",
         "summary": "Cost or token usage alert triggered",
         "description": (
@@ -309,7 +311,7 @@ _EVENT_TYPES: dict[str, dict[str, str]] = {
             "defined in the AgentPolicy. Delivered before the hard budget limit."
         ),
     },
-    "hitl_request": {
+    ExecutionEventType.HITL_REQUEST.value: {
         "ref": "#/components/schemas/HITLRequestData",
         "summary": "Human-in-the-loop input requested",
         "description": (
@@ -317,12 +319,16 @@ _EVENT_TYPES: dict[str, dict[str, str]] = {
             "and waits for a human response."
         ),
     },
-    "hitl_response": {
+    ExecutionEventType.HITL_RESPONSE.value: {
         "ref": "#/components/schemas/HITLResponseData",
         "summary": "Human-in-the-loop response recorded",
         "description": "Fired when a human operator submits a response to a HITL prompt.",
     },
 }
+
+assert set(_EVENT_TYPES.keys()) == {e.value for e in ExecutionEventType}, (
+    "AsyncAPI _EVENT_TYPES must cover every ExecutionEventType value"
+)
 
 
 def _build_spec() -> dict[str, object]:

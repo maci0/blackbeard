@@ -187,6 +187,38 @@ async def list_credentials(
     )
 
 
+@router.get(
+    "/{credential_id}",
+    response_model=CredentialResponse,
+    responses={404: {"description": "Credential not found"}},
+)
+async def get_credential(
+    response: Response,
+    credential_id: str = Path(
+        ...,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    ),
+    _current_user: User = Depends(require_permission("get", "Credential", require_identity=True)),
+) -> CredentialResponse:
+    """Get a credential by ID (value masked)."""
+    response.headers["Cache-Control"] = "no-store"
+    with _credentials_lock:
+        cred = next((c for c in _credentials.values() if c["id"] == credential_id), None)
+        if cred is None:
+            raise HTTPException(status_code=404, detail=f"Credential '{credential_id}' not found")
+        cred = dict(cred)
+    return CredentialResponse(
+        id=cred["id"],
+        name=cred["name"],
+        type=cred["type"],
+        description=cred["description"],
+        created_at=cast("datetime", cred["created_at"]),
+        updated_at=cast("datetime", cred["updated_at"]),
+        last_used_at=cast("datetime | None", cred["last_used_at"]),
+        masked_value=cred["masked_value"],
+    )
+
+
 @router.delete(
     "/{credential_id}",
     status_code=204,

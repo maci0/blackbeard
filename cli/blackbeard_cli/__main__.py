@@ -7,8 +7,6 @@ import os
 import re
 import time
 from graphlib import TopologicalSorter
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as pkg_version
 from pathlib import Path
 from typing import Any, cast
 
@@ -21,6 +19,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.syntax import Syntax
 from rich.table import Table
 
+from blackbeard_cli import __version__ as _cli_version
 from blackbeard_cli.helpers import (
     STATUS_COLORS,
     TERMINAL_STATUSES,
@@ -47,11 +46,6 @@ from blackbeard_cli.resources import (
     detect_cycles,
     validate_resource,
 )
-
-try:
-    _cli_version = pkg_version("blackbeard-cli")
-except PackageNotFoundError:
-    _cli_version = "0.1.0-dev"
 
 
 def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
@@ -164,6 +158,7 @@ Common workflows:
   blackbeard executions --status running      # list running executions
   blackbeard events <execution-id> -f         # follow execution events
   blackbeard delete Agent my-agent            # remove a resource
+  eval "$(blackbeard completion bash)"        # install shell completion
 """,
 )
 @click.version_option(version=_cli_version)
@@ -218,7 +213,17 @@ def cli(
 ) -> None:
     """Blackbeard — Agent Management Platform CLI."""
     ctx.ensure_object(dict)
-    ctx.obj["server"] = server.rstrip("/")
+
+    server = server.rstrip("/")
+    if not server.startswith(("http://", "https://")):
+        console.print(
+            f"[red bold]Error:[/] Invalid --server URL: {escape(repr(server))}\n"
+            "  Must start with http:// or https://\n"
+            "  [dim]Example: --server http://localhost:8000[/]"
+        )
+        raise SystemExit(2)
+
+    ctx.obj["server"] = server
     ctx.obj["api_key"] = api_key
     ctx.obj["project"] = project
     ctx.obj["timeout"] = float(timeout)
@@ -404,7 +409,7 @@ Examples:
   blackbeard apply -f crew.yaml
   blackbeard apply -f crew.yaml -y
   blackbeard apply -f examples/research-crew/ --dry-run
-  blackbeard apply -f examples/research-crew/ --json
+  blackbeard apply -f examples/research-crew/ -y --json
 """
 )
 @click.option(
@@ -481,14 +486,12 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
                 out.print(f"  [cyan]→[/] {kind}/{name}: would apply")
         return
 
-    if not yes and not ctx.obj["json"]:
-        console.print(
-            f"\n[bold]{len(resources)}[/] resource(s) will be applied to"
-            f" [bold]{escape(server)}[/] (project: [bold]{escape(ctx.obj['project'])}[/])."
-        )
-        if not click.confirm("Proceed?", default=True):
-            console.print("[yellow]Aborted.[/]")
-            return
+    if not confirm_destructive(
+        ctx,
+        f"Apply {len(resources)} resource(s) to {server} (project: {ctx.obj['project']})?",
+        yes=yes,
+    ):
+        return
 
     # Topologically sort resources by dependency order
     adjacency = build_adjacency(resources)
@@ -1498,6 +1501,31 @@ def shell_cmd(ctx: click.Context) -> None:
         project=ctx.obj["project"],
         timeout=ctx.obj["timeout"],
     )
+
+
+@cli.command(
+    epilog="""\b
+Examples:
+  eval "$(blackbeard completion bash)"
+  eval "$(blackbeard completion zsh)"
+  blackbeard completion fish > ~/.config/fish/completions/blackbeard.fish
+""",
+)
+@click.argument("shell", type=click.Choice(["bash", "zsh", "fish"], case_sensitive=False))
+@click.pass_context
+def completion(ctx: click.Context, shell: str) -> None:
+    """Generate shell completion script for bash, zsh, or fish."""
+    from click.shell_completion import get_completion_class
+
+    prog = ctx.find_root().info_name or "blackbeard"
+    complete_var = f"_{prog.upper().replace('-', '_')}_COMPLETE"
+    comp_cls = get_completion_class(shell.lower())
+    if comp_cls is None:
+        console.print(f"[red bold]Error:[/] Unsupported shell: {escape(shell)}")
+        raise SystemExit(2)
+    instruction = comp_cls(cli, {}, prog, complete_var)
+    # Plain stdout so the script can be eval'd without Rich markup.
+    click.echo(instruction.source())
 
 
 cli.add_command(login)

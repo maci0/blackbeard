@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import platform
@@ -202,7 +203,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Application lifespan.
 
     Startup: config validation, plugins, scheduler, LiteLLM sync,
-    git store, gRPC server, Temporal worker. Shutdown: reverse order.
+    Temporal worker (when configured). Shutdown: reverse order.
     """
     t0_startup = time.monotonic()
     _validate_startup_config()
@@ -257,6 +258,41 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         )
     # Store on app.state so resource CRUD can trigger reload on Automation changes.
     app.state.scheduler = scheduler
+
+    # That reload only runs on the replica that served the mutation; other
+    # replicas keep stale cron schedules until restart. Periodic resync
+    # bounds the drift; the automation_runs dedup table prevents a freshly
+    # resynced replica from double-firing.
+    async def _scheduler_resync() -> None:
+        while True:
+            await asyncio.sleep(300)
+            try:
+                await scheduler.reload()
+            except Exception:
+                logger.warning(
+                    "Scheduler resync failed — retrying in 300s",
+                    exc_info=True,
+                    extra={"event": "scheduler_resync_failed"},
+                )
+
+    scheduler_resync_task = asyncio.create_task(_scheduler_resync(), name="scheduler-resync")
+
+    # Data retention purge (opt-in via *_RETENTION_DAYS settings)
+    from blackbeard.retention import retention_enabled, retention_loop
+
+    retention_task: asyncio.Task[None] | None = None
+    if retention_enabled():
+        retention_task = asyncio.create_task(retention_loop(), name="data-retention")
+        logger.info(
+            "Data retention purge enabled: audit_log_days=%s execution_days=%s",
+            settings.audit_log_retention_days,
+            settings.execution_retention_days,
+            extra={
+                "event": "retention_enabled",
+                "audit_log_retention_days": settings.audit_log_retention_days,
+                "execution_retention_days": settings.execution_retention_days,
+            },
+        )
 
     # Sync LLMConnection resources to LiteLLM proxy
     try:
@@ -356,6 +392,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     t0 = time.monotonic()
     logger.info("Shutdown starting", extra={"event": "app_shutdown_start"})
     try:
+        if retention_task is not None:
+            retention_task.cancel()
+        scheduler_resync_task.cancel()
         await scheduler.stop()
         if temporal_running:
             try:
@@ -379,9 +418,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         logger.info("Executor shut down", extra={"event": "executor_shutdown"})
         shutdown_webhook_executor()
         shutdown_otel()
+        from blackbeard.engine.sandbox.runner import shutdown_sandbox_nest_pool
         from blackbeard.resources import shutdown_dns_executor
 
         shutdown_dns_executor()
+        shutdown_sandbox_nest_pool()
     finally:
         try:
             await shutdown_health_clients()

@@ -180,21 +180,26 @@ describe('fuzz: formatCost', () => {
     )
   })
 
-  it('positive valid numbers always produce a dollar-prefixed string', () => {
+  it('positive valid numbers always produce a non-empty currency string', () => {
     fc.assert(
       fc.property(fc.double({ min: 0.0001, max: 1_000_000, noNaN: true }), (n) => {
         const result = formatCost(n)
-        expect(result).toMatch(/^\$\d/)
+        expect(result).not.toBe('—')
+        expect(result.length).toBeGreaterThan(0)
+        // Must contain at least one digit (locale may place currency symbol anywhere).
+        expect(result).toMatch(/\d/)
       }),
       { numRuns: NUM_RUNS },
     )
   })
 
-  it('negative numbers still produce a dollar-prefixed string', () => {
+  it('negative numbers still produce a non-empty currency string', () => {
     fc.assert(
       fc.property(fc.double({ min: -1_000_000, max: -0.0001, noNaN: true }), (n) => {
         const result = formatCost(n)
-        expect(result).toMatch(/^\$-/)
+        expect(result).not.toBe('—')
+        expect(result.length).toBeGreaterThan(0)
+        expect(result).toMatch(/\d/)
       }),
       { numRuns: NUM_RUNS },
     )

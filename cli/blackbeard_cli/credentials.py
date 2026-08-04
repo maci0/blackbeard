@@ -102,7 +102,9 @@ def _refresh_token(server: str, refresh_token: str, timeout: float) -> StoredCre
         return StoredCredentials(
             server=server,
             access_token=data["access_token"],
-            refresh_token=refresh_token,
+            # The server rotates the refresh token on every refresh; keep the
+            # new one or the session hard-dies 7 days after initial login.
+            refresh_token=data.get("refresh_token") or refresh_token,
             email="",
             expires_at=time.time() + ACCESS_TOKEN_LIFETIME_S,
         )
@@ -133,7 +135,7 @@ def get_valid_token(server: str, timeout: float) -> str | None:
     save_credentials(
         server=server,
         access_token=refreshed.access_token,
-        refresh_token=creds.refresh_token,
+        refresh_token=refreshed.refresh_token,
         email=creds.email,
         expires_at=refreshed.expires_at,
     )

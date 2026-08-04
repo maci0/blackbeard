@@ -28,6 +28,7 @@ from blackbeard.logging_config import (
     scrub_pii,
     user_id_var,
 )
+from blackbeard.metrics import record_http_request
 from blackbeard.rate_limiter import is_rate_limited_with_count, record_auth_failure
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 _HEALTH_PATHS = {
     "/api/v1/health",
     "/api/v1/health/ready",
+    "/api/v1/metrics",
     "/.well-known/agent-card.json",
     "/api/v1/asyncapi.json",
 }
@@ -114,6 +116,9 @@ def _check_rate_limit(request: Request, request_id: str, client_ip: str) -> JSON
             "request_id": request_id,
         },
     )
+    # Duration unknown at this helper boundary; attribute a zero-duration sample
+    # so rate-limit responses still appear in error-rate dashboards.
+    record_http_request(request.method, 429, 0.0)
     return response
 
 
@@ -218,6 +223,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
                 headers={"WWW-Authenticate": "Bearer"},
             )
             response.headers["X-Request-Id"] = request_id
+            record_http_request(request.method, 401, duration_ms / 1000.0)
             return response
         response = await call_next(request)
         response.headers["X-Request-Id"] = request_id
@@ -229,39 +235,79 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     # Fall back to ?api_key= query parameter ONLY for SSE/stream endpoints where
     # EventSource cannot set custom headers.  Query-string credentials leak via
     # proxy logs, browser history, and Referer headers (CWE-598).
+    # Accept either the global system key or a per-user personal API key (bb-...).
     api_key = request.headers.get("X-API-Key", "")
     if not api_key and SSE_STREAM_RE.match(path):
         api_key = request.query_params.get("api_key", "")
-    if not hmac.compare_digest(api_key.encode(), get_api_key().encode()):
-        record_auth_failure(client_ip)
 
-        response = JSONResponse(
-            status_code=401,
-            content={
-                "detail": "Invalid or missing API key. Set X-API-Key header.",
-                "request_id": request_id,
-            },
-            headers={"WWW-Authenticate": "ApiKey"},
-        )
-        response.headers["X-Request-Id"] = request_id
-        duration_ms = (time.monotonic() - start) * 1000
-        logger.warning(
-            "Auth failed: %s %s from %s (%.0fms)",
-            request.method,
-            path,
-            anonymize_ip(client_ip),
-            duration_ms,
-            extra={
-                "event": "auth_failure",
-                "http_method": request.method,
-                "http_path": path,
-                "http_status": 401,
-                "client_ip": anonymize_ip(client_ip),
-                "duration_ms": round(duration_ms, 1),
-                "request_id": request_id,
-            },
-        )
-        return response
+    expected = get_api_key().encode()
+    provided = api_key.encode()
+    # compare_digest requires equal lengths; pad comparison path for empty/mismatched.
+    system_ok = len(provided) == len(expected) and hmac.compare_digest(provided, expected)
+
+    if not system_ok:
+        user_ok = False
+        # Personal keys are always issued with a "bb-" prefix (see generate_api_key).
+        # Skip DB lookup for other shapes to avoid connection noise on random wrong keys.
+        if api_key.startswith("bb-") and len(api_key) >= 16:
+            import hashlib
+
+            from sqlalchemy import select
+
+            from blackbeard.models import User, async_session
+
+            api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+            try:
+                async with async_session() as session:
+                    result = await session.execute(
+                        select(User.id).where(
+                            User.api_key == api_key_hash,
+                            User.is_active.is_(True),
+                        )
+                    )
+                    user_id = result.scalar_one_or_none()
+                if user_id is not None:
+                    user_ok = True
+                    user_id_var.set(str(user_id))
+            except Exception:
+                logger.warning(
+                    "User API key lookup failed",
+                    exc_info=True,
+                    extra={"event": "user_api_key_lookup_error", "request_id": request_id},
+                )
+                user_ok = False
+
+        if not user_ok:
+            record_auth_failure(client_ip)
+
+            response = JSONResponse(
+                status_code=401,
+                content={
+                    "detail": "Invalid or missing API key. Set X-API-Key header.",
+                    "request_id": request_id,
+                },
+                headers={"WWW-Authenticate": "ApiKey"},
+            )
+            response.headers["X-Request-Id"] = request_id
+            duration_ms = (time.monotonic() - start) * 1000
+            logger.warning(
+                "Auth failed: %s %s from %s (%.0fms)",
+                request.method,
+                path,
+                anonymize_ip(client_ip),
+                duration_ms,
+                extra={
+                    "event": "auth_failure",
+                    "http_method": request.method,
+                    "http_path": path,
+                    "http_status": 401,
+                    "client_ip": anonymize_ip(client_ip),
+                    "duration_ms": round(duration_ms, 1),
+                    "request_id": request_id,
+                },
+            )
+            record_http_request(request.method, 401, duration_ms / 1000.0)
+            return response
 
     response = await call_next(request)
     response.headers["X-Request-Id"] = request_id
@@ -274,6 +320,7 @@ def _log_request(request: Request, response: Response, start: float, client_ip: 
     duration_ms = (time.monotonic() - start) * 1000
     status = response.status_code
     path = request.url.path
+    record_http_request(request.method, status, duration_ms / 1000.0)
 
     if status >= 500:
         level = logging.ERROR

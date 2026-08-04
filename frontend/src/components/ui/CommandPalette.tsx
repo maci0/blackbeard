@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { useResourceStore } from '@/stores/resourceStore'
 import { PLURAL_TO_KIND } from '@/lib/kinds'
-import { cn } from '@/lib/utils'
+import { caseFold, cn } from '@/lib/utils'
 import { KindBadge } from './KindBadge'
 
 interface CommandItem {
@@ -188,10 +188,10 @@ export function CommandPalette({
   }, [resources])
 
   const filtered = useMemo(() => {
-    const q = query.toLowerCase().trim()
+    const q = caseFold(query).trim()
     const all = [...PAGE_ITEMS, ...resourceItems, ...ACTION_ITEMS]
     if (!q) return all.slice(0, MAX_RESULTS)
-    return all.filter((item) => item.label.toLowerCase().includes(q)).slice(0, MAX_RESULTS)
+    return all.filter((item) => caseFold(item.label).includes(q)).slice(0, MAX_RESULTS)
   }, [query, resourceItems])
 
   const grouped = useMemo(() => {

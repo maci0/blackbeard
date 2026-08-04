@@ -18,12 +18,12 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
         disabled={page <= 1}
         aria-label="Previous page"
         className={cn(
-          'inline-flex items-center gap-1 rounded-md border bg-background px-3 py-1.5 text-sm transition-colors',
+          'inline-flex min-h-[44px] items-center gap-1 rounded-md border bg-background px-3 py-2 text-sm transition-colors',
           'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           'disabled:cursor-not-allowed disabled:opacity-50',
         )}
       >
-        <ChevronLeft className="h-3.5 w-3.5" />
+        <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
         Prev
       </button>
       <span aria-current="page" className="text-sm text-muted-foreground">
@@ -35,13 +35,13 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
         disabled={page >= totalPages}
         aria-label="Next page"
         className={cn(
-          'inline-flex items-center gap-1 rounded-md border bg-background px-3 py-1.5 text-sm transition-colors',
+          'inline-flex min-h-[44px] items-center gap-1 rounded-md border bg-background px-3 py-2 text-sm transition-colors',
           'hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           'disabled:cursor-not-allowed disabled:opacity-50',
         )}
       >
         Next
-        <ChevronRight className="h-3.5 w-3.5" />
+        <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
     </nav>
   )

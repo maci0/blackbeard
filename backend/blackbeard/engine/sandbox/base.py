@@ -9,12 +9,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Env var keys: only allow alphanumerics and underscores, starting with a
+# letter or underscore. Prevents injection of flags via crafted key names.
+_ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# Image name allowlist: standard Docker image references.
+_IMAGE_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/:@\-]*$")
 
 
 class SandboxRuntimeError(Exception):
@@ -113,7 +121,15 @@ class BaseSandbox(ABC):
         read_only: bool = True,
         env: dict[str, str] | None = None,
     ) -> list[str]:
-        """Build the container run command with security defaults."""
+        """Build the container run command with security defaults.
+
+        Raises:
+            SandboxRuntimeError: If the image name contains invalid characters.
+        """
+        # SECURITY: Validate the image name to prevent argument injection.
+        if not _IMAGE_RE.fullmatch(image):
+            raise SandboxRuntimeError(f"Invalid container image name: {image!r}")
+
         mem = memory_limit or self._default_memory
         cmd: list[str] = [
             self._runtime,
@@ -135,8 +151,20 @@ class BaseSandbox(ABC):
         if read_only:
             cmd.append("--read-only")
 
+        # SECURITY: Validate env var keys (same rationale as ContainerSandbox).
         if env:
             for k, v in sorted(env.items()):
+                if not _ENV_KEY_RE.fullmatch(k):
+                    logger.warning(
+                        "%s: skipping env var with invalid key: %s",
+                        self._error_prefix,
+                        k[:50],
+                        extra={
+                            "event": f"{self._error_prefix.lower()}_invalid_env_key",
+                            "key": k[:50],
+                        },
+                    )
+                    continue
                 cmd.extend(["-e", f"{k}={v}"])
 
         if input_data is not None:

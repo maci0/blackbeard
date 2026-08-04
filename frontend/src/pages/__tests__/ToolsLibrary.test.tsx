@@ -102,7 +102,8 @@ describe('ToolsLibrary', () => {
 
       renderToolsLibrary()
 
-      expect(await screen.findByText('No tools match your search.')).toBeInTheDocument()
+      expect(await screen.findByText('No tools match your search')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument()
     })
   })
 })

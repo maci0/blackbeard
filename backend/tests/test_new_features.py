@@ -719,7 +719,10 @@ class TestWebhookDelivery:
         listener_mod.invalidate_webhook_cache()
 
         try:
-            with patch("blackbeard.http_client.get_sync_client", return_value=mock_client):
+            # Patch the name bound in the listener module, not the source module,
+            # otherwise a broken filter would hit the real HTTP client and this
+            # assertion would still pass.
+            with patch.object(listener_mod, "get_sync_client", return_value=mock_client):
                 listener_mod._deliver_webhooks_sync(
                     "crew_started",
                     {"crew_name": "test"},

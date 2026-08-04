@@ -66,10 +66,14 @@ UI image reference
 {{- end }}
 
 {{/*
-Secrets name
+Secrets name — chart-managed Secret, or an external one via existingSecret.
 */}}
 {{- define "blackbeard.secretsName" -}}
-{{ include "blackbeard.fullname" . }}-secrets
+{{- if .Values.existingSecret -}}
+{{- .Values.existingSecret -}}
+{{- else -}}
+{{- include "blackbeard.fullname" . }}-secrets
+{{- end -}}
 {{- end }}
 
 {{/*

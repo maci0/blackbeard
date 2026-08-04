@@ -95,7 +95,10 @@ export default memo(function DataFlowEdge({
       <EdgeLabelRenderer>
         <div
           style={labelStyle}
-          className="cursor-pointer"
+          className={cn(
+            hasExecData && 'cursor-pointer',
+            'rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          )}
           onClick={() => hasExecData && setShowTooltip((v) => !v)}
           onKeyDown={(e) => {
             if ((e.key === 'Enter' || e.key === ' ') && hasExecData) setShowTooltip((v) => !v)
@@ -118,7 +121,7 @@ export default memo(function DataFlowEdge({
                 'h-2 w-2 rounded-full',
                 execStatus === 'success' && 'bg-emerald-500',
                 execStatus === 'error' && 'bg-red-500',
-                execStatus === 'running' && 'animate-pulse bg-blue-500',
+                execStatus === 'running' && 'animate-pulse bg-blue-500 motion-reduce:animate-none',
               )}
               title={`Status: ${execStatus}`}
             />

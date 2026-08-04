@@ -67,26 +67,37 @@ def _fetch_resources(
         console.print(f"[red bold]Error:[/] Unknown kind: {kind}")
         raise SystemExit(2)
 
-    params: dict[str, Any] = {"limit": 1000}
-    if project:
-        params["project"] = project
+    limit = 1000
+    offset = 0
+    all_items: list[dict[str, Any]] = []
+    # Page through results: the server caps limit at 1000 per request.
+    while True:
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if project:
+            params["project"] = project
 
-    try:
-        resp = client.get(f"{server}/api/v1/{plural}", headers=headers, params=params)
-    except httpx.RequestError as exc:
-        if lenient:
-            console.print(f"[yellow]Warning:[/] Failed to fetch {kind}: {exc}")
-            return []
-        handle_request_error(server, exc)
+        try:
+            resp = client.get(f"{server}/api/v1/{plural}", headers=headers, params=params)
+        except httpx.RequestError as exc:
+            if lenient:
+                console.print(f"[yellow]Warning:[/] Failed to fetch {kind}: {exc}")
+                return []
+            handle_request_error(server, exc)
 
-    if resp.status_code != 200:
-        if lenient:
-            console.print(f"[yellow]Warning:[/] Failed to fetch {kind}: HTTP {resp.status_code}")
-            return []
-        handle_http_error(resp)
+        if resp.status_code != 200:
+            if lenient:
+                console.print(
+                    f"[yellow]Warning:[/] Failed to fetch {kind}: HTTP {resp.status_code}"
+                )
+                return []
+            handle_http_error(resp)
 
-    data = resp.json()
-    return [_strip_server_fields(item) for item in extract_items(data)]
+        data = resp.json()
+        items = extract_items(data)
+        all_items.extend(_strip_server_fields(item) for item in items)
+        if len(items) < limit:
+            return all_items
+        offset += limit
 
 
 def _resources_to_yaml(resources: list[dict[str, Any]]) -> str:

@@ -1043,6 +1043,7 @@ function SwitchForm({
                 }
               }}
               placeholder="Add case…"
+              aria-label="New case value"
               className="flex-1 rounded border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             <button
@@ -1082,6 +1083,7 @@ function MergeForm({
       </FieldGroup>
       <FieldGroup label="Input Count">
         <input
+          id="panel-input-count"
           type="number"
           min={2}
           max={10}
@@ -1199,6 +1201,7 @@ function LoopForm({
       </FieldGroup>
       <FieldGroup label="Max Iterations">
         <input
+          id="panel-max-iterations"
           type="number"
           min={1}
           max={1000}
