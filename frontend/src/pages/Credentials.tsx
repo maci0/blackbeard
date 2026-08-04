@@ -22,7 +22,7 @@ import { CardSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { SmartTime } from '@/components/ui/SmartTime'
-import { cn, getErrorMessage } from '@/lib/utils'
+import { caseFold, cn, getErrorMessage } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
 
@@ -409,8 +409,8 @@ export default function Credentials() {
   const filtered = filter
     ? credentials.filter(
         (c) =>
-          c.name.toLowerCase().includes(filter.toLowerCase()) ||
-          c.type.toLowerCase().includes(filter.toLowerCase()),
+          caseFold(c.name).includes(caseFold(filter)) ||
+          caseFold(c.type).includes(caseFold(filter)),
       )
     : credentials
 

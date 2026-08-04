@@ -177,6 +177,7 @@ def _is_internal_ip(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool
         or check.is_loopback
         or check.is_link_local
         or check.is_unspecified
+        or check.is_multicast
         or (isinstance(check, ipaddress.IPv4Address) and check in _SHARED_ADDRESS_SPACE)
     )
 

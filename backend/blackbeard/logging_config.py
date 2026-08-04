@@ -181,13 +181,41 @@ _PHONE_RE = re.compile(
     r"(?!\d)"
 )
 _SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+# Grouped 4-digit card forms (e.g. 4111 1111 1111 1111 / 4111-1111-1111-1111).
+_CREDIT_CARD_RE = re.compile(r"\b(?:\d{4}[ -]?){3}\d{1,4}\b")
 
 
 def scrub_pii(text: str) -> str:
-    """Replace PII patterns (email, phone, SSN) in exception messages."""
+    """Replace PII patterns (email, phone, SSN, card numbers) in log text."""
     text = _EMAIL_RE.sub("[EMAIL]", text)
     text = _SSN_RE.sub("[SSN]", text)
+    text = _CREDIT_CARD_RE.sub("[CARD]", text)
     return _PHONE_RE.sub("[PHONE]", text)
+
+
+def _redact_log_value(key: str, val: object, *, depth: int = 0) -> object:
+    """Redact sensitive keys and scrub PII patterns in structured log extras.
+
+    Recurses into nested dict/list values so a secret buried under a non-
+    sensitive parent key is still redacted.
+    """
+    if depth >= 8:
+        return "[MAX_DEPTH]"
+    key_lower = key.lower()
+    if key_lower in SENSITIVE_KEYS or key_lower.endswith(_SENSITIVE_SUFFIXES):
+        return "[REDACTED]"
+    if isinstance(val, dict):
+        return {k: _redact_log_value(str(k), v, depth=depth + 1) for k, v in val.items()}
+    if isinstance(val, list):
+        return [
+            _redact_log_value(key, item, depth=depth + 1)
+            if isinstance(item, (dict, list))
+            else (scrub_pii(item) if isinstance(item, str) else item)
+            for item in val
+        ]
+    if isinstance(val, str):
+        return scrub_pii(val)
+    return val
 
 
 def anonymize_ip(ip: str | None) -> str:
@@ -234,13 +262,13 @@ def log_task_exception(task: asyncio.Task[None]) -> None:
         _logger.error(
             "Background task '%s' failed: %s",
             task.get_name(),
-            exc,
+            scrub_pii(str(exc)[:500]),
             exc_info=exc,
             extra={
                 "event": "background_task_failed",
                 "task_name": task.get_name(),
                 "error_type": type(exc).__name__,
-                "error_message": str(exc)[:500],
+                "error_message": scrub_pii(str(exc)[:500]),
             },
         )
 
@@ -303,13 +331,7 @@ class _JsonFormatter(logging.Formatter):
             log_entry["error.message"] = scrub_pii(str(record.exc_info[1])[:500])
         for key, val in record.__dict__.items():
             if key not in _LOG_RECORD_BUILTIN and key not in log_entry:
-                key_lower = key.lower()
-                if key_lower in SENSITIVE_KEYS or key_lower.endswith(_SENSITIVE_SUFFIXES):
-                    log_entry[key] = "[REDACTED]"
-                elif key_lower.endswith("error_message") and isinstance(val, str):
-                    log_entry[key] = scrub_pii(val)
-                else:
-                    log_entry[key] = val
+                log_entry[key] = _redact_log_value(key, val)
         try:
             return json.dumps(log_entry, default=str)
         except (TypeError, ValueError, OverflowError):

@@ -94,6 +94,13 @@ fi
 export GOOGLE_APPLICATION_CREDENTIALS
 GOOGLE_APPLICATION_CREDENTIALS="$(cd "$(dirname "$creds")" && pwd)/$(basename "$creds")"
 
+# Reproducible image metadata: pin to the commit timestamp when available.
+if [ -z "${SOURCE_DATE_EPOCH:-}" ] && command -v git &>/dev/null \
+  && git rev-parse --is-inside-work-tree &>/dev/null; then
+  SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct 2>/dev/null || true)"
+fi
+export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-0}"
+
 echo "Stopping old containers..."
 $COMPOSE down --remove-orphans 2>/dev/null || true
 

@@ -49,6 +49,7 @@ export interface ExecutionTask {
   error: string | null
   tokens_used: number
   cost_usd: string
+  updated_at: string | null
   started_at: string | null
   completed_at: string | null
 }
@@ -72,6 +73,7 @@ export interface Execution {
   initiated_by: string | null
   principal_chain: Record<string, unknown> | null
   created_at: string
+  updated_at: string | null
   started_at: string | null
   completed_at: string | null
   tasks?: ExecutionTask[]

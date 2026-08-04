@@ -12,6 +12,7 @@ import yaml
 from rich.markup import escape
 
 from blackbeard_cli.helpers import (
+    KIND,
     HelpCommand,
     console,
     extract_items,
@@ -123,7 +124,7 @@ Examples:
 @click.argument(
     "kind",
     required=False,
-    type=click.Choice(sorted(ALL_KINDS), case_sensitive=False),
+    type=KIND,
 )
 @click.argument("name", required=False)
 @click.option("--all", "-a", "export_all", is_flag=True, help="Export all resource kinds")
@@ -180,7 +181,16 @@ def export_cmd(
             resources = []
 
     if not resources:
-        console.print("[dim]No resources to export.[/]")
+        if ctx.obj["json"]:
+            if output_path:
+                p = Path(output_path)
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text("[]\n", encoding="utf-8")
+                console.print(f"[green]Wrote[/] {escape(str(p))} (0 resource(s), JSON)")
+            else:
+                print_json([])
+        else:
+            console.print("[dim]No resources to export.[/]")
         return
 
     if ctx.obj["json"]:

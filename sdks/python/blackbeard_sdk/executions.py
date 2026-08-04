@@ -277,7 +277,7 @@ class ExecutionMixin:
         Args:
             execution_id: Execution UUID string.
             poll_interval: Seconds between polls.
-            timeout: Maximum seconds to wait before raising TimeoutError.
+            timeout: Maximum seconds to wait before raising BlackbeardApiError.
 
         Returns:
             Final execution dict.

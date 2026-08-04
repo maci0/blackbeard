@@ -11,6 +11,7 @@ from blackbeard_cli.helpers import (
     HelpCommand,
     confirm_destructive,
     console,
+    ensure_interactive_value,
     extract_items,
     extract_total,
     format_timestamp,
@@ -125,26 +126,24 @@ Examples:
 @click.option(
     "--password",
     "-p",
-    prompt=True,
-    hide_input=True,
-    confirmation_prompt=True,
+    default=None,
     metavar="PASS",
-    help="Initial password (prompted securely if omitted)",
+    help="Initial password (prompted securely if omitted and interactive)",
 )
 @click.option(
     "--display-name",
     "display_name",
-    prompt="Display name",
+    default=None,
     metavar="NAME",
-    help="Display name shown in the UI",
+    help="Display name shown in the UI (prompted if omitted and interactive)",
 )
 @json_opt
 @click.pass_context
 def user_invite(
     ctx: click.Context,
     email: str,
-    password: str,
-    display_name: str,
+    password: str | None,
+    display_name: str | None,
 ) -> None:
     """Create a new user account (admin invite)."""
     if ctx.get_parameter_source("password") == click.core.ParameterSource.COMMANDLINE:
@@ -152,6 +151,17 @@ def user_invite(
             "[yellow]Warning:[/] Password passed on command line is visible in process listings.\n"
             "  [dim]Prefer interactive prompt (omit -p) for interactive use.[/]"
         )
+    password = ensure_interactive_value(
+        ctx,
+        password,
+        "password",
+        prompt="Password",
+        hide_input=True,
+        confirmation_prompt=True,
+    )
+    display_name = ensure_interactive_value(
+        ctx, display_name, "display-name", prompt="Display name"
+    )
     server = ctx.obj["server"]
     headers = require_auth(ctx)
 

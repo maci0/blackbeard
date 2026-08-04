@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = Field(default=7, ge=1)
 
     enforce_rbac: bool = False
+    # When False, POST /auth/register returns 403. Production deploys that keep
+    # ENFORCE_RBAC=false must also set ALLOW_REGISTRATION=false (startup refuses
+    # the open-registration + no-RBAC combination when DEBUG=false).
+    allow_registration: bool = True
     allow_internal_urls: bool = False
 
     otel_endpoint: str | None = None
@@ -103,6 +107,8 @@ class Settings(BaseSettings):
     # Data retention (GDPR storage limitation). None keeps rows forever.
     audit_log_retention_days: int | None = Field(default=None, ge=1)
     execution_retention_days: int | None = Field(default=None, ge=1)
+    # Soft-deleted (deactivated) users are hard-deleted after this many days.
+    user_retention_days: int | None = Field(default=None, ge=1)
 
     auth_fail_window_seconds: int = Field(default=300, ge=1)
     auth_fail_max_per_ip: int = Field(default=20, ge=1)

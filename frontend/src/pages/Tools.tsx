@@ -9,7 +9,7 @@ import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
-import { cn } from '@/lib/utils'
+import { caseFold, cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
 /* Type badge                                                          */
@@ -222,12 +222,12 @@ export default function Tools() {
 
   const filtered = useMemo(() => {
     if (!search.trim()) return tools
-    const q = search.toLowerCase()
+    const q = caseFold(search)
     return tools.filter(
       (t) =>
-        t.metadata.name.toLowerCase().includes(q) ||
-        ((t.spec as { description?: string }).description ?? '').toLowerCase().includes(q) ||
-        ((t.spec as { type?: string }).type ?? '').toLowerCase().includes(q),
+        caseFold(t.metadata.name).includes(q) ||
+        caseFold((t.spec as { description?: string }).description ?? '').includes(q) ||
+        caseFold((t.spec as { type?: string }).type ?? '').includes(q),
     )
   }, [tools, search])
 

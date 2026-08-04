@@ -9,6 +9,7 @@ used by Dropbox and Django.
 from __future__ import annotations
 
 import hashlib
+import hmac
 
 import bcrypt
 
@@ -30,5 +31,32 @@ def verify_password(plain: str, hashed: str) -> bool:
     """Verify a plaintext password against a bcrypt hash.
 
     Returns True if the password matches, False otherwise.
+    Invalid or corrupted hashes return False (never raise) so login timing
+    stays uniform and callers cannot distinguish corrupt hashes from wrong
+    passwords via exception paths.
     """
-    return bcrypt.checkpw(_prehash(plain), hashed.encode("utf-8"))
+    if not hashed:
+        return False
+    try:
+        return bcrypt.checkpw(_prehash(plain), hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
+
+
+def secrets_equal(provided: str, expected: str) -> bool:
+    """Compare two secret strings without leaking length via short-circuit.
+
+    Hashes both sides to fixed-size digests, then uses ``hmac.compare_digest``.
+    Safe for API keys, webhook secrets, and similar high-entropy tokens.
+    Empty strings never match (including empty == empty).
+    """
+    if not provided or not expected:
+        # Still exercise a full-length digest compare so empty vs non-empty
+        # callers do not take a dramatically shorter path.
+        dummy = hashlib.sha256(b"").digest()
+        hmac.compare_digest(dummy, dummy)
+        return False
+    return hmac.compare_digest(
+        hashlib.sha256(provided.encode("utf-8")).digest(),
+        hashlib.sha256(expected.encode("utf-8")).digest(),
+    )

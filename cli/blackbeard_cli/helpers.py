@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from typing import TYPE_CHECKING, Any, NoReturn
 
 import click
 from rich.console import Console
 from rich.markup import escape
 
-from blackbeard_cli.kinds import NAME_PATTERN
+from blackbeard_cli.kinds import ALL_KINDS, NAME_PATTERN
 
 if TYPE_CHECKING:
     import httpx
@@ -28,6 +29,93 @@ STATUS_COLORS: dict[str, str] = {
 }
 
 TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
+
+_KIND_LOOKUP: dict[str, str] = {k.lower(): k for k in ALL_KINDS}
+
+
+class ResourceKindType(click.ParamType):
+    """Accept resource kinds case-insensitively; keep TitleCase values and metavar."""
+
+    name = "kind"
+
+    def convert(
+        self,
+        value: Any,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> str:
+        if value is None:
+            return value  # type: ignore[return-value]
+        text = str(value)
+        matched = _KIND_LOOKUP.get(text.lower())
+        if matched is not None:
+            return matched
+        choices = ", ".join(sorted(ALL_KINDS))
+        self.fail(f"{text!r} is not a valid kind. Choose from: {choices}", param, ctx)
+
+    def get_metavar(self, param: click.Parameter, ctx: click.Context) -> str:
+        return "KIND"
+
+    def shell_complete(
+        self,
+        ctx: click.Context,
+        param: click.Parameter,
+        incomplete: str,
+    ) -> list[click.shell_completion.CompletionItem]:
+        from click.shell_completion import CompletionItem
+
+        prefix = incomplete.lower()
+        return [
+            CompletionItem(kind) for kind in sorted(ALL_KINDS) if kind.lower().startswith(prefix)
+        ]
+
+
+KIND = ResourceKindType()
+
+
+def configure_output(*, no_color: bool = False, quiet: bool = False) -> None:
+    """Apply global output preferences to module-level Rich consoles."""
+    if no_color:
+        console.no_color = True
+        out.no_color = True
+
+
+def is_interactive(ctx: click.Context) -> bool:
+    """True when stdin is a TTY and JSON mode is not active."""
+    if ctx.obj.get("json"):
+        return False
+    return sys.stdin.isatty()
+
+
+def ensure_interactive_value(
+    ctx: click.Context,
+    value: str | None,
+    flag: str,
+    *,
+    prompt: str,
+    hide_input: bool = False,
+    confirmation_prompt: bool = False,
+) -> str:
+    """Return *value*, or prompt when interactive; exit 2 when not.
+
+    Used so login/register/invite fail clearly under ``--json`` or redirected stdin
+    instead of Click's generic ``Aborted!``.
+    """
+    if value:
+        return value
+    if not is_interactive(ctx):
+        console.print(
+            f"[red bold]Error:[/] --{flag} is required in non-interactive mode.\n"
+            f"  [dim]Pass --{flag} explicitly, or run without --json on a TTY.[/]"
+        )
+        raise SystemExit(2)
+    return str(
+        click.prompt(
+            prompt,
+            hide_input=hide_input,
+            confirmation_prompt=confirmation_prompt,
+        )
+    )
 
 
 def _merge_json_flag(ctx: click.Context, _param: click.Parameter, value: bool) -> bool:
@@ -200,6 +288,8 @@ def warn_unused_interval(
     watch_short: str = "-w",
 ) -> None:
     """Warn when --interval is passed without the streaming/watch flag."""
+    if ctx.obj.get("quiet"):
+        return
     from_cli = ctx.get_parameter_source("interval") == click.core.ParameterSource.COMMANDLINE
     if not watch and from_cli:
         console.print(

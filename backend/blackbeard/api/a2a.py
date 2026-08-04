@@ -119,7 +119,7 @@ async def agent_card(
         result = await session.execute(
             select(Resource)
             .where(Resource.kind == ResourceKind.CREW)
-            .options(load_only(Resource.name, Resource.spec, Resource.version))
+            .options(load_only(Resource.name, Resource.project, Resource.spec, Resource.version))
             .order_by(Resource.name)
             .limit(500)
         )
@@ -163,7 +163,7 @@ async def agent_card(
             card: dict[str, Any] = {
                 "name": crew.name,
                 "description": crew.spec.get("description", ""),
-                "url": f"{base_url}/api/v1/crews/{crew.name}/kickoff",
+                "url": f"{base_url}/api/v1/crews/{crew.name}/kickoff?project={crew.project}",
                 "provider": {
                     "organization": "Blackbeard",
                     "url": base_url,

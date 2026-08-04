@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { ModelSelectorSkeleton } from '@/components/ui/Skeleton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { cn, getErrorMessage } from '@/lib/utils'
+import { formatNumber } from '@/lib/formatters'
 
 interface TokenUsage {
   prompt: number
@@ -45,7 +46,10 @@ interface Message {
 
 function tokPerSec(tokenCount: number, timeMs: number): string {
   if (timeMs <= 0 || tokenCount <= 0) return '—'
-  return (tokenCount / (timeMs / 1000)).toFixed(1)
+  return formatNumber(tokenCount / (timeMs / 1000), {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })
 }
 
 function TokenBadge({ tokens, latency_ms }: { tokens: TokenUsage; latency_ms: number }) {

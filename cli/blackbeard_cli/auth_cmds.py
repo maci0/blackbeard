@@ -19,6 +19,7 @@ from blackbeard_cli.credentials import (
 from blackbeard_cli.helpers import (
     HelpCommand,
     console,
+    ensure_interactive_value,
     extract_detail,
     handle_http_error,
     handle_request_error,
@@ -49,33 +50,36 @@ Examples:
   blackbeard login
   blackbeard login -e user@example.com
   blackbeard -s https://prod:8000 login
-  blackbeard login --json
+  blackbeard login -e user@example.com -p 'secret' --json
 """,
 )
 @click.option(
     "--email",
     "-e",
-    prompt=True,
+    default=None,
     metavar="EMAIL",
-    help="Account email address",
+    help="Account email address (prompted if omitted and interactive)",
 )
 @click.option(
     "--password",
     "-p",
-    prompt=True,
-    hide_input=True,
+    default=None,
     metavar="PASS",
-    help="Account password",
+    help="Account password (prompted securely if omitted and interactive)",
 )
 @json_opt
 @click.pass_context
-def login(ctx: click.Context, email: str, password: str) -> None:
+def login(ctx: click.Context, email: str | None, password: str | None) -> None:
     """Log in and store credentials locally."""
     if ctx.get_parameter_source("password") == click.core.ParameterSource.COMMANDLINE:
         console.print(
             "[yellow]Warning:[/] Password passed on command line is visible in process listings.\n"
             "  [dim]Prefer interactive prompt (omit -p) for interactive use.[/]"
         )
+    email = ensure_interactive_value(ctx, email, "email", prompt="Email")
+    password = ensure_interactive_value(
+        ctx, password, "password", prompt="Password", hide_input=True
+    )
     server = ctx.obj["server"]
     _warn_insecure_http(server)
 
@@ -194,39 +198,37 @@ def whoami(ctx: click.Context) -> None:
 Examples:
   blackbeard register
   blackbeard register -e user@example.com --display-name "Jane Doe"
-  blackbeard register --json
+  blackbeard register -e user@example.com -p 'secret' --display-name "Jane" --json
 """,
 )
 @click.option(
     "--email",
     "-e",
-    prompt=True,
+    default=None,
     metavar="EMAIL",
-    help="Account email address",
+    help="Account email address (prompted if omitted and interactive)",
 )
 @click.option(
     "--password",
     "-p",
-    prompt=True,
-    hide_input=True,
-    confirmation_prompt=True,
+    default=None,
     metavar="PASS",
-    help="Password",
+    help="Password (prompted securely if omitted and interactive)",
 )
 @click.option(
     "--display-name",
     "display_name",
-    prompt="Display name",
+    default=None,
     metavar="NAME",
-    help="Display name shown in the UI",
+    help="Display name shown in the UI (prompted if omitted and interactive)",
 )
 @json_opt
 @click.pass_context
 def register(
     ctx: click.Context,
-    email: str,
-    password: str,
-    display_name: str,
+    email: str | None,
+    password: str | None,
+    display_name: str | None,
 ) -> None:
     """Register a new user account."""
     if ctx.get_parameter_source("password") == click.core.ParameterSource.COMMANDLINE:
@@ -234,6 +236,18 @@ def register(
             "[yellow]Warning:[/] Password passed on command line is visible in process listings.\n"
             "  [dim]Prefer interactive prompt (omit -p) for interactive use.[/]"
         )
+    email = ensure_interactive_value(ctx, email, "email", prompt="Email")
+    password = ensure_interactive_value(
+        ctx,
+        password,
+        "password",
+        prompt="Password",
+        hide_input=True,
+        confirmation_prompt=True,
+    )
+    display_name = ensure_interactive_value(
+        ctx, display_name, "display-name", prompt="Display name"
+    )
     server = ctx.obj["server"]
     _warn_insecure_http(server)
 

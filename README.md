@@ -174,8 +174,8 @@ uv run blackbeard login                                     # store JWT credenti
 uv run blackbeard whoami                                    # check current identity
 
 # Resources
-uv run blackbeard validate -f examples/research-crew/       # offline validation
-uv run blackbeard apply -f examples/research-crew/          # create/update resources
+uv run blackbeard validate -f ../examples/research-crew/    # offline validation
+uv run blackbeard apply -f ../examples/research-crew/       # create/update resources
 uv run blackbeard list Agent                                # list all agents
 uv run blackbeard get Crew research-crew                    # inspect a resource
 uv run blackbeard delete Agent my-agent                     # remove a resource
@@ -222,7 +222,7 @@ bun run check                              # typecheck + lint + format check
 bun run test -- --run                      # vitest
 
 # CLI
-cd cli && uv sync
+cd cli && uv sync --extra dev
 uv run blackbeard --help                   # verify CLI loads
 uv run ruff check blackbeard_cli/          # lint
 ```
@@ -336,6 +336,12 @@ Interactive API documentation is available at `/docs` (Swagger) and `/redoc` whe
 ## Versioning
 
 Blackbeard follows [SemVer](https://semver.org). While the version is 0.x, minor releases (0.2 → 0.3) may contain breaking changes; these are listed with migration notes under a **Breaking** heading in [CHANGELOG.md](CHANGELOG.md). Patch releases are backward compatible. All components (backend, CLI, SDKs, Helm chart) share one version number and are released together; only the latest release receives fixes.
+
+Cutting a release:
+
+1. Bump the version in all six manifests: `backend/pyproject.toml`, `cli/pyproject.toml`, `sdks/python/pyproject.toml`, `frontend/package.json`, `sdks/typescript/package.json`, `sdks/react/package.json` (CI's `version-lockstep` job fails if they drift).
+2. Rename the **Unreleased** section in `CHANGELOG.md` to the new version and start a fresh empty **Unreleased** section. Breaking changes must carry a migration note.
+3. Commit, then tag: `git tag vX.Y.Z && git push --tags`.
 
 ## Contributing
 

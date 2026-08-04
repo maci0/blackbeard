@@ -29,7 +29,13 @@ import { statusLabel } from '@/lib/formatters'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { CodeBlock } from '@/components/ui/CodeBlock'
-import { getDuration, formatDate, formatCost, formatDurationMs } from '@/lib/formatters'
+import {
+  getDuration,
+  formatDate,
+  formatCost,
+  formatDurationMs,
+  formatNumber,
+} from '@/lib/formatters'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { api } from '@/api/client'
 import { CopyButton } from '@/components/ui/CopyButton'
@@ -663,7 +669,10 @@ function SpendSection({ data }: { data: Record<string, unknown> }) {
                     if (start && end) {
                       const ms = new Date(end).getTime() - new Date(start).getTime()
                       if (ms > 0 && call.completion_tokens > 0) {
-                        return `${(call.completion_tokens / (ms / 1000)).toFixed(1)}`
+                        return formatNumber(call.completion_tokens / (ms / 1000), {
+                          minimumFractionDigits: 1,
+                          maximumFractionDigits: 1,
+                        })
                       }
                     }
                     return '—'

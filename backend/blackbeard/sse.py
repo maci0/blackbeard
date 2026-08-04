@@ -17,6 +17,7 @@ __all__ = [
 ]
 
 from blackbeard.config import settings
+from blackbeard.metrics import set_sse_usage
 
 _max_sse = settings.max_concurrent_sse
 semaphore = asyncio.Semaphore(_max_sse)
@@ -26,6 +27,14 @@ _active_lock = threading.Lock()
 # past a free-slot check and then block forever on a depleted semaphore
 # (the previous check-then-await-acquire path was a TOCTOU).
 _slot_lock = asyncio.Lock()
+
+# Export configured max immediately so scrapes before any connect are correct.
+set_sse_usage(0, _max_sse)
+
+
+def _publish_sse_gauge() -> None:
+    """Push current SSE usage into Prometheus gauges (under lock)."""
+    set_sse_usage(_active_streams, _max_sse)
 
 
 @asynccontextmanager
@@ -42,6 +51,7 @@ async def acquire_stream() -> AsyncIterator[bool]:
             acquired = True
             with _active_lock:
                 _active_streams += 1
+                _publish_sse_gauge()
     if not acquired:
         yield False
         return
@@ -50,6 +60,7 @@ async def acquire_stream() -> AsyncIterator[bool]:
     finally:
         with _active_lock:
             _active_streams -= 1
+            _publish_sse_gauge()
         semaphore.release()
 
 

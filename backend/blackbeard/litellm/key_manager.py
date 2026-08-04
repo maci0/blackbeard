@@ -13,6 +13,7 @@ from typing import Any, cast
 import httpx
 
 from blackbeard.http_client import get_client
+from blackbeard.logging_config import scrub_pii
 
 logger = logging.getLogger(__name__)
 
@@ -106,10 +107,11 @@ class VirtualKeyManager:
             resp.raise_for_status()
             data = cast("dict[str, Any]", resp.json())
         except httpx.HTTPStatusError as exc:
+            safe_body = scrub_pii(exc.response.text[:200]) if exc.response.text else ""
             logger.warning(
                 "Virtual key creation failed: status=%d body=%s",
                 exc.response.status_code,
-                exc.response.text[:200],
+                safe_body,
                 extra={
                     "event": "virtual_key_create_http_error",
                     "key_name": name,
@@ -119,8 +121,7 @@ class VirtualKeyManager:
                 },
             )
             raise VirtualKeyError(
-                f"LiteLLM /key/generate failed: {exc.response.status_code} "
-                f"{exc.response.text[:200]}"
+                f"LiteLLM /key/generate failed: {exc.response.status_code} {safe_body}"
             ) from exc
         except httpx.HTTPError as exc:
             logger.warning(

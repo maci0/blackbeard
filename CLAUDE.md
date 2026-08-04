@@ -35,12 +35,12 @@ bun run test -- --run            # vitest (single run)
 ### CLI (from `cli/` — standalone package, no server deps)
 
 ```bash
-uv sync                          # install deps (click, httpx, rich, pyyaml, jsonschema only)
+uv sync --extra dev              # install deps (runtime: click, httpx, rich, pyyaml, jsonschema, prompt-toolkit)
 uv run blackbeard --help         # all commands
 uv run blackbeard validate -f ../examples/research-crew/  # offline validation
 uv run blackbeard login          # store JWT credentials
 uv run blackbeard shell          # interactive TUI REPL
-uv run ruff check blackbeard_cli/  # lint
+uv run ruff check blackbeard_cli/  # lint (needs --extra dev)
 ```
 
 ### Full Stack
@@ -65,9 +65,9 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **Auth & RBAC**: Built-in email/password with JWT (access 15min + refresh 7d). User/Group models in `models/user.py`. Role and RoleBinding as resource kinds. Predefined roles seeded by `deploy/seed.sh`. Auth middleware accepts both `X-API-Key` and `Authorization: Bearer <jwt>`. Agent execution tracks principal chain: User → Crew → Agent (ServiceAccount via `spec.serviceAccount`, defaults to `sa-<name>`).
 
-**Middleware stack** (outermost → innermost): CORS (`CORSMiddleware` via `add_middleware`) → security headers → API key auth (hmac.compare_digest or JWT Bearer) + request ID → body size limiter (10MB). The three `app.middleware("http")` middlewares are registered LIFO in `main.py`. Auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), health checks, and automation webhook paths (`/automations/{name}/webhook`) are public (no auth required — automation webhooks use their own HMAC validation inside the route handler).
+**Middleware stack** (outermost → innermost): security headers → API key auth (hmac.compare_digest or JWT Bearer) + request ID → body size limiter (10MB) → CORS (`CORSMiddleware` via `add_middleware`, registered first in `main.py` so it ends up innermost). The three `app.middleware("http")` middlewares are registered LIFO in `main.py`. Note: responses short-circuited by auth or the body limiter never reach `CORSMiddleware`, so they carry no CORS headers. When `OIDC_ISSUER` is set, `SessionMiddleware` is added last and becomes the true outermost layer. Auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), health checks, `/api/v1/metrics`, `/api/v1/asyncapi.json`, `/.well-known/agent-card.json`, docs paths (`/docs`, `/redoc`, `/openapi.json` — DEBUG only), and automation webhook paths (`/automations/{name}/webhook`) are public (no auth required — automation webhooks use their own HMAC validation inside the route handler).
 
-**CLI** (`cli/` -- separate package `blackbeard-cli`): Standalone package with no server deps (click, httpx, rich, pyyaml, jsonschema only). 30 commands (including 4 groups with subcommands) across 6 modules. Includes `blackbeard shell` for an interactive TUI REPL. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
+**CLI** (`cli/` -- separate package `blackbeard-cli`): Standalone package with no server deps (click, httpx, rich, pyyaml, jsonschema, prompt-toolkit only). 31 commands (21 top-level plus 4 groups with 10 subcommands) across 6 modules. Includes `blackbeard shell` for an interactive TUI REPL. Copies `kinds.py` and `resources/` (schemas, validation, ref parsing) from backend to avoid coupling. Auth resolution: `--api-key` > `BLACKBEARD_API_KEY` env > stored JWT in `~/.config/blackbeard/`.
 
 **Dynamic LiteLLM sync**: When `LLMConnection` resources are created/updated/deleted, the API pushes changes to LiteLLM via `POST /model/new`, `/model/update`, and `/model/delete` — no container restart needed.
 
@@ -155,7 +155,7 @@ bash deploy/seed.sh              # seed DB with RBAC roles, example crew, and to
 
 **docker-compose.yaml**: 5 services — api, ui, postgres (18), valkey (9), litellm. All containers use `no-new-privileges`, `cap_drop: ALL`. Postgres adds back CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID; Valkey adds back SETGID, SETUID.
 
-DB schema is managed in `backend/entrypoint.sh`: first creates PostgreSQL enum types and runs `Base.metadata.create_all()` (for initial table creation), then runs `alembic upgrade head` if configured. `create_all` only creates new tables — it cannot alter existing ones — so Alembic handles schema evolution. If `alembic.ini` or `alembic/versions` doesn't exist, migrations are skipped.
+DB schema is managed by `backend/blackbeard/db_setup.py` (invoked from `backend/entrypoint.sh` under `MIGRATION_TIMEOUT`, default 120s): first creates PostgreSQL enum types, runs `Base.metadata.create_all()` (for initial table creation), and applies CHECK constraints, then runs `alembic upgrade head` if configured. `create_all` only creates new tables — it cannot alter existing ones — so Alembic handles schema evolution. If `alembic.ini` or `alembic/versions` doesn't exist, migrations are skipped.
 
 **Helm chart**: `deploy/helm/blackbeard/` -- full Kubernetes deployment. PG StatefulSet, Valkey, LiteLLM, API, UI, Ingress, Secrets, HPA autoscaling. Install: `helm install blackbeard deploy/helm/blackbeard/ --set auth.apiKey=... --set auth.jwtSecret=...`
 

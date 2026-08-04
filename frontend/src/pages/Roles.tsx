@@ -18,7 +18,7 @@ import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { RuleBuilder, type Rule } from '@/components/rbac/RuleBuilder'
-import { cn, getErrorMessage } from '@/lib/utils'
+import { caseFold, cn, getErrorMessage } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
 
@@ -430,10 +430,8 @@ export default function Roles() {
 
   const filtered = useMemo(() => {
     if (!search.trim()) return roles
-    const q = search.toLowerCase()
-    return roles.filter(
-      (r) => r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q),
-    )
+    const q = caseFold(search)
+    return roles.filter((r) => caseFold(r.name).includes(q) || caseFold(r.description).includes(q))
   }, [roles, search])
 
   return (

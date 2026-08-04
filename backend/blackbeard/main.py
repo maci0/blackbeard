@@ -184,6 +184,13 @@ def _validate_startup_config() -> None:
             "Unset ALLOW_INTERNAL_URLS unless you have a specific reason to allow internal URLs.",
             extra={"event": "allow_internal_urls_in_production"},
         )
+    if not settings.debug and settings.allow_registration and not settings.enforce_rbac:
+        raise _fatal(
+            "Refusing to start: ALLOW_REGISTRATION is enabled while ENFORCE_RBAC is false. "
+            "Anyone who can reach the API can self-register with full access. "
+            "Set ENFORCE_RBAC=true (and seed Role/RoleBinding), or ALLOW_REGISTRATION=false, "
+            "or DEBUG=true for local development."
+        )
     if not settings.enforce_rbac and not settings.debug:
         logger.warning(
             "SECURITY: ENFORCE_RBAC is False, all authenticated users have full access. "
@@ -236,6 +243,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             "db_pool_max_overflow": pool.overflow(),
             "db_pool_timeout": pool.timeout(),
             "enforce_rbac": settings.enforce_rbac,
+            "allow_registration": settings.allow_registration,
             "allow_internal_urls": settings.allow_internal_urls,
             "cors_origins": settings.cors_origins,
             "oidc_enabled": bool(settings.oidc_issuer),

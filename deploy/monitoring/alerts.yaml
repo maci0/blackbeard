@@ -68,6 +68,36 @@ groups:
           description: "More than a quarter of executions failed over the last 15 minutes."
           runbook: "Check LiteLLM/provider health, AgentPolicy budgets, and recent execution error events."
 
+      - alert: ExecutionHighLatency
+        # p95 wall-clock of terminal executions (crew/flow), minutes-scale buckets.
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(blackbeard_execution_duration_seconds_bucket{job="blackbeard-api"}[15m]))
+          ) > 1800
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Crew execution p95 duration above 30 minutes"
+          description: "95th percentile execution wall-clock has been above 30 minutes for 15 minutes."
+          runbook: "Inspect long-running crews, HITL pauses, LiteLLM latency, and executor queue depth."
+
+      - alert: WebhookHighFailureRate
+        expr: |
+          (
+            sum(rate(blackbeard_webhook_deliveries_total{job="blackbeard-api", status=~"failure|error"}[15m]))
+            /
+            clamp_min(sum(rate(blackbeard_webhook_deliveries_total{job="blackbeard-api"}[15m])), 1e-9)
+          ) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Webhook delivery failure rate above 50%"
+          description: "More than half of outbound webhook deliveries failed over the last 15 minutes."
+          runbook: "Check subscriber endpoints, DNS/SSRF blocks (event=webhook_delivery_*), and network egress."
+
       # LiteLLM
       - alert: LiteLLMDown
         expr: up{job="litellm"} == 0

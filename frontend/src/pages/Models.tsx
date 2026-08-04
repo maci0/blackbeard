@@ -28,7 +28,7 @@ import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
-import { formatCompact } from '@/lib/formatters'
+import { formatCompact, formatNumber } from '@/lib/formatters'
 import { ViewToggle } from '@/components/ui/ViewToggle'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { useToastStore } from '@/stores/toastStore'
@@ -620,7 +620,10 @@ export default function Models() {
         let msg = `Connected to ${name} (${resp.latency_ms ?? 0} ms)`
         const t = resp.tokens
         if (t?.completion && resp.latency_ms && resp.latency_ms > 0) {
-          const tps = (t.completion / (resp.latency_ms / 1000)).toFixed(1)
+          const tps = formatNumber(t.completion / (resp.latency_ms / 1000), {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          })
           msg += ` · ${tps} tok/s`
         }
         useToastStore.getState().success(msg)

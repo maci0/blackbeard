@@ -70,6 +70,10 @@ async def test_metrics_exposes_red_series(client: AsyncClient):
     assert "blackbeard_executor_max_workers" in body
     assert "blackbeard_executor_saturated" in body
     assert "blackbeard_executions_total" in body
+    assert "blackbeard_execution_duration_seconds" in body
+    assert "blackbeard_webhook_deliveries_total" in body
+    assert "blackbeard_sse_active" in body
+    assert "blackbeard_sse_max" in body
 
 
 # ---------------------------------------------------------------------------

@@ -307,12 +307,17 @@ async def deactivate_user(
         )
         .values(changed_by=None)
     )
+    # Erasure: do not re-persist email/IP on the deactivation audit row.
+    # audit_from_request would re-attach current_user.email (still in memory).
+    audit_ctx = audit_from_request(request, current_user)
+    audit_ctx["actor_email"] = None
+    audit_ctx["ip_address"] = None
     await log_audit(
         session,
         action="user_deactivated",
         resource_type="User",
         resource_id=str(user.id),
-        **audit_from_request(request, current_user),
+        **audit_ctx,
     )
     await session.commit()
 

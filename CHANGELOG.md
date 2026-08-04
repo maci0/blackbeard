@@ -5,6 +5,7 @@ All notable changes to Blackbeard are documented here. Grouped by release, newes
 ## Unreleased
 
 ### Breaking
+- **Production startup now refuses open registration without RBAC**: when `DEBUG=false`, the API exits at startup if `ALLOW_REGISTRATION` is enabled (the default) while `ENFORCE_RBAC=false`, because anyone reaching the API could self-register with full access. Existing production deploys running with defaults will fail to start after upgrading. Migrate by setting `ENFORCE_RBAC=true` (and seeding Role/RoleBinding via `deploy/seed.sh`) or `ALLOW_REGISTRATION=false`. `POST /auth/register` returns 403 when registration is disabled.
 - **gRPC API removed** (port 50051 and the proto package). Migrate to the REST API (`/api/v1`) or the Python/TypeScript SDKs, which cover the same surface.
 - **Git-backed resource store removed** (auto-commit, log/diff/blame/show, remotes). Use database resource versioning instead: `GET /{kind}/{name}/versions` and `POST /{kind}/{name}/rollback`. Existing git history is not migrated; keep the old repo if you need it.
 - **Sandboxed tools lose network access by default**: containers now run with `--network none` unless the Tool spec declares `capabilities: [network]`. Add that field to any existing sandboxed tool that calls external APIs.
@@ -15,6 +16,10 @@ All notable changes to Blackbeard are documented here. Grouped by release, newes
 - **Multi-replica startup recovery**: executions now record the owning instance (`executions.worker_id`, override via `BLACKBEARD_WORKER_ID`); a restarting replica only fails its own interrupted executions (plus rows orphaned for over 2 hours), instead of failing work still running on healthy replicas or in Temporal, and no longer deletes their in-use LiteLLM virtual keys.
 
 ### Features
+- **`ALLOW_REGISTRATION` env var** to disable self-registration (`POST /auth/register` returns 403 when off).
+- **`USER_RETENTION_DAYS` env var**: deactivated (soft-deleted) users are hard-deleted after N days by the retention loop (opt-in, like the existing audit-log and execution retention).
+- **New Prometheus metrics**: `blackbeard_execution_duration_seconds` histogram, `blackbeard_webhook_deliveries_total` counter, `blackbeard_sse_active`/`blackbeard_sse_max` gauges.
+- **SDK types**: `Execution` and `ExecutionTask` now expose `updated_at` (TypeScript and React SDKs).
 - **MCP tools**: `mcp-stdio` and `mcp-http` Tool resources attach as CrewAI `mcps` on agents (stdio/HTTP/SSE), with SSRF checks and policy allow/deny by name.
 - **Sandbox enforcement** at tool call time: select tier from tool spec + policy floor, run `command` tools and python tools in docker/podman/gvisor/microvm, load `type: wasm` via WasmSandbox.
 - **Sandbox hardening**: per-tool `image` override, network deny-by-default unless `capabilities: [network]`, command-only tools, docs (`docs/tool-sandboxes.md`), example `examples/tools/echo-sandboxed.yaml`, optional docker smoke test.

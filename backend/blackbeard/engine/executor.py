@@ -734,7 +734,14 @@ async def _mark_failed_async(execution_id: UUID, error: str) -> None:
             execution.status = ExecutionStatus.FAILED
             execution.error = error
             execution.completed_at = now
-            record_execution_outcome(execution.execution_type.value, ExecutionStatus.FAILED.value)
+            mark_failed_duration_s = (
+                (now - execution.started_at).total_seconds() if execution.started_at else None
+            )
+            record_execution_outcome(
+                execution.execution_type.value,
+                ExecutionStatus.FAILED.value,
+                duration_seconds=mark_failed_duration_s,
+            )
             await _fail_pending_tasks(
                 session, execution_id, "Execution failed before task started", now
             )
@@ -1226,7 +1233,16 @@ async def _run_crew_async(
 
             execution.status = ExecutionStatus.COMPLETED
             execution.completed_at = datetime.now(UTC)
-            record_execution_outcome(execution_type.value, ExecutionStatus.COMPLETED.value)
+            completed_duration_s = (
+                (execution.completed_at - execution.started_at).total_seconds()
+                if execution.started_at
+                else None
+            )
+            record_execution_outcome(
+                execution_type.value,
+                ExecutionStatus.COMPLETED.value,
+                duration_seconds=completed_duration_s,
+            )
 
             if isinstance(result, CrewOutput):
                 execution.outputs = {"raw": result.raw}
@@ -1400,7 +1416,16 @@ async def _run_crew_async(
                     execution.status = ExecutionStatus.FAILED
                     execution.error = _sanitize_error(str(e))
                     execution.completed_at = now
-                    record_execution_outcome(execution_type.value, ExecutionStatus.FAILED.value)
+                    failed_duration_s = (
+                        (now - execution.started_at).total_seconds()
+                        if execution.started_at
+                        else None
+                    )
+                    record_execution_outcome(
+                        execution_type.value,
+                        ExecutionStatus.FAILED.value,
+                        duration_seconds=failed_duration_s,
+                    )
                     await _fail_pending_tasks(session, execution_id, "Execution failed", now)
                     await session.commit()
                     logger.info(
@@ -1683,7 +1708,14 @@ async def cancel_execution(session: AsyncSession, execution_id: UUID) -> Executi
         now = datetime.now(UTC)
         execution.status = ExecutionStatus.CANCELLED
         execution.completed_at = now
-        record_execution_outcome(execution.execution_type.value, ExecutionStatus.CANCELLED.value)
+        cancel_duration_s = (
+            (now - execution.started_at).total_seconds() if execution.started_at else None
+        )
+        record_execution_outcome(
+            execution.execution_type.value,
+            ExecutionStatus.CANCELLED.value,
+            duration_seconds=cancel_duration_s,
+        )
         for task in execution.tasks:
             if task.status in (TaskStatus.PENDING, TaskStatus.RUNNING):
                 task.status = TaskStatus.FAILED

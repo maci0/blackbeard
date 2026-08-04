@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import threading
 
+from blackbeard.auth.passwords import secrets_equal
 from blackbeard.config import settings
 
 _EXPECTED_API_KEY = settings.blackbeard_api_key.get_secret_value()
@@ -35,3 +36,8 @@ def get_api_key() -> str:
     """
     with _api_key_lock:
         return _EXPECTED_API_KEY
+
+
+def verify_system_api_key(provided: str) -> bool:
+    """Return True if *provided* matches the system API key (constant-time)."""
+    return secrets_equal(provided, get_api_key())

@@ -42,7 +42,8 @@ if TYPE_CHECKING:
 from urllib.parse import urlparse
 
 from blackbeard.http_client import get_sync_client
-from blackbeard.logging_config import request_id_var, safe_log_url
+from blackbeard.logging_config import execution_id_var, request_id_var, safe_log_url
+from blackbeard.metrics import record_webhook_delivery
 from blackbeard.models import ExecutionEvent, ExecutionEventType, ExecutionTask, TaskStatus
 from blackbeard.models.execution_schemas import redact_sensitive_values
 from blackbeard.pii import redact_dict as _redact_dict
@@ -291,7 +292,9 @@ def _deliver_single_webhook(
             },
         )
         latency_ms = round((_time.monotonic() - t0) * 1000, 1)
+        latency_s = latency_ms / 1000.0
         if resp.status_code >= 400:
+            record_webhook_delivery("failure", duration_seconds=latency_s)
             logger.warning(
                 "Webhook delivery failed: id=%s url=%s status=%d (%.0fms)",
                 webhook.id,
@@ -309,6 +312,7 @@ def _deliver_single_webhook(
                 },
             )
         else:
+            record_webhook_delivery("success", duration_seconds=latency_s)
             logger.debug(
                 "Webhook delivered: id=%s event=%s status=%d (%.0fms)",
                 webhook.id,
@@ -326,6 +330,7 @@ def _deliver_single_webhook(
             )
     except Exception:
         latency_ms = round((_time.monotonic() - t0) * 1000, 1)
+        record_webhook_delivery("error", duration_seconds=latency_ms / 1000.0)
         logger.exception(
             "Webhook delivery error: id=%s url=%s event=%s (%.0fms)",
             webhook.id,
@@ -386,6 +391,7 @@ def _prepare_webhook_targets(
             continue
         hostname = _get_webhook_hostname(webhook.url)
         if hostname is None:
+            record_webhook_delivery("ssrf_blocked")
             logger.warning(
                 "Webhook delivery blocked (SSRF): id=%s url=%s",
                 webhook.id,
@@ -538,13 +544,15 @@ class BlackbeardExecutionListener(BaseEventListener):
         )
 
     def _ensure_request_id(self) -> None:
-        """Set request_id ContextVar on the current thread for log correlation.
+        """Set request/execution ContextVars on the current thread for log correlation.
 
         CrewAI callbacks may run on the event bus thread which does not inherit
-        the executor thread's ContextVar, so we re-set it here.
+        the executor thread's ContextVar, so we re-set them here.
         """
         if request_id_var.get("-") == "-":
             request_id_var.set(self._execution_id_str)
+        if not execution_id_var.get(""):
+            execution_id_var.set(self._execution_id_str)
 
     def _schedule_flush(self) -> None:
         """Schedule a deferred flush if one isn't already pending or in flight."""

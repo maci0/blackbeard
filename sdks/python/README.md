@@ -5,9 +5,9 @@ Python SDK for the Blackbeard Agent Management Platform.
 ## Install
 
 ```bash
-pip install -e .
-# or with uv
 cd sdks/python && uv sync
+# or add to an existing project
+uv add blackbeard-sdk
 ```
 
 **Requirements:** Python 3.10+, httpx
@@ -100,11 +100,12 @@ execs = client.list_executions(crew_name="my-crew", status="completed")
 # Human-in-the-loop: respond to a paused execution
 client.respond(execution["id"], "Approved — proceed with the analysis.")
 
-# Retry a failed/cancelled execution (creates a new execution)
+# Retry a finished execution — completed, failed, or cancelled (creates a new execution)
 new_exec = client.retry(execution["id"])
 
-# Get execution events (for streaming/replay)
-events = client.get_execution_events(execution["id"])
+# Get execution events (for streaming/replay); returns a page dict
+page = client.get_execution_events(execution["id"], after=-1, limit=100)
+events = page["events"]  # plus page["next_sequence"], page["has_more"]
 
 # Get LiteLLM spend data
 spend = client.get_execution_spend(execution["id"])

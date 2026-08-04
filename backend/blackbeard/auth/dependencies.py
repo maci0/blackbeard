@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 import logging
 import re
 import uuid
@@ -16,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
-from blackbeard.auth.api_key import get_api_key
+from blackbeard.auth.api_key import verify_system_api_key
 from blackbeard.auth.authorizer import Authorizer
 from blackbeard.auth.jwt import decode_access_token
 from blackbeard.config import settings
@@ -294,4 +293,4 @@ def validate_ws_auth(token: str, api_key: str) -> bool:
                 },
             )
 
-    return bool(api_key and hmac.compare_digest(api_key.encode(), get_api_key().encode()))
+    return bool(api_key) and verify_system_api_key(api_key)

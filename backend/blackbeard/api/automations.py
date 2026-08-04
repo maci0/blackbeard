@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hmac
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -14,7 +13,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from blackbeard.audit import audit_from_request, get_client_ip, log_audit
-from blackbeard.auth import require_permission
+from blackbeard.auth import require_permission, secrets_equal
 from blackbeard.engine import ExecutionError, ExecutionNotFoundError
 from blackbeard.engine import executor as _executor_mod
 from blackbeard.kinds import NAME_PATTERN
@@ -216,11 +215,12 @@ async def webhook_trigger(
         )
 
     expected_secret = trigger.get("webhook_secret", "")
+    # Always run secrets_equal when a configured secret exists so length
+    # mismatches cannot short-circuit the constant-time path (CWE-208).
     secret_valid = (
-        bool(expected_secret)
+        isinstance(expected_secret, str)
         and len(expected_secret) >= 16
-        and len(body.secret) >= 16
-        and hmac.compare_digest(body.secret.encode(), expected_secret.encode())
+        and secrets_equal(body.secret, expected_secret)
     )
     if not secret_valid:
         record_auth_failure(client_ip)

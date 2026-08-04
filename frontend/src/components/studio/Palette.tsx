@@ -20,6 +20,7 @@ import {
 import { useStudioStore } from '@/stores/studioStore'
 import { useResourceStore } from '@/stores/resourceStore'
 import type { Resource } from '@/lib/types'
+import { caseFold } from '@/lib/utils'
 import { getDefaultNodeData } from './defaults'
 import { CLIP_PATHS } from './nodes/shapes'
 
@@ -342,11 +343,11 @@ export default function Palette() {
   }, [hasCrew, fetchResources])
 
   const filtered = filter
-    ? ITEMS.filter((item) => item.label.toLowerCase().includes(filter.toLowerCase()))
+    ? ITEMS.filter((item) => caseFold(item.label).includes(caseFold(filter)))
     : ITEMS
 
   const filteredCrews = filter
-    ? crews.filter((c) => c.metadata.name.toLowerCase().includes(filter.toLowerCase()))
+    ? crews.filter((c) => caseFold(c.metadata.name).includes(caseFold(filter)))
     : crews
 
   return (

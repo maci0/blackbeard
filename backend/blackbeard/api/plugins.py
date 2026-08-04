@@ -46,6 +46,7 @@ class PluginReloadResponse(BaseModel):
     "",
     response_model=PluginListResponse,
     summary="List registered plugins",
+    responses={400: {"description": "Invalid plugin_type"}},
 )
 async def list_plugins(
     plugin_type: str | None = Query(default=None, max_length=50),
@@ -81,6 +82,7 @@ async def list_plugins(
     "/{name}/reload",
     response_model=PluginReloadResponse,
     summary="Reload a plugin",
+    responses={404: {"description": "Plugin not found or reload failed"}},
 )
 async def reload_plugin_endpoint(
     name: str = Path(..., min_length=1, max_length=255, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._\-]*$"),

@@ -405,6 +405,9 @@ async def test_deactivate_user_creates_audit_entry(client: AsyncClient, db_sessi
     entry = result.scalar_one()
     assert entry.resource_type == "User"
     assert entry.resource_id == user_id
+    # Right to erasure: deactivation must not re-persist email/IP on the audit row
+    assert entry.actor_email is None
+    assert entry.ip_address is None
 
 
 # ---------------------------------------------------------------------------

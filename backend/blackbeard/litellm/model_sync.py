@@ -21,6 +21,7 @@ import httpx
 from blackbeard.config import settings
 from blackbeard.http_client import get_client
 from blackbeard.litellm.helpers import build_litellm_params
+from blackbeard.logging_config import scrub_pii
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ async def add_model(name: str, spec: dict[str, Any]) -> bool:
                 "LiteLLM add_model failed: %s status=%d body=%s",
                 name,
                 resp.status_code,
-                resp.text[:300],
+                scrub_pii(resp.text[:300]) if resp.text else "",
                 extra={
                     "event": "litellm_add_model_failed",
                     "model_name": name,

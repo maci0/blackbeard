@@ -1,10 +1,14 @@
 # Stage 1: Build
-FROM oven/bun:1.2.17-alpine AS build
+# Pin tag + multi-arch index digest for reproducible base layers.
+FROM oven/bun:1.2.17-alpine@sha256:6cb88d90f8a96249e272ba877885d5251a77e1d7a44b4d89565ded015fe5be2d AS build
 WORKDIR /app
 # Optional: pass --build-arg SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct) for
 # bit-for-bit stable asset hashes when tooling honors it.
-ARG SOURCE_DATE_EPOCH
+ARG SOURCE_DATE_EPOCH=0
 ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH} \
+    TZ=UTC \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
     NODE_ENV=production
 COPY package.json bun.lock ./
 RUN --mount=type=cache,target=/root/.bun/install/cache \
@@ -15,16 +19,13 @@ COPY . .
 # For local dev, set VITE_API_KEY in frontend/.env.local.
 RUN bun run build
 
-# Stage 2: Serve with nginx (patch-pinned for reproducible base layers)
-FROM nginxinc/nginx-unprivileged:1.29.8-alpine
+# Stage 2: Serve with nginx (patch + digest pinned for reproducible base layers).
+# Do not apk upgrade here: mutable Alpine indexes break hermetic builds; bump the
+# base image (and digest) when security fixes land instead.
+FROM nginxinc/nginx-unprivileged:1.29.8-alpine@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6
 LABEL org.opencontainers.image.source="https://github.com/blackbeard" \
       org.opencontainers.image.title="blackbeard-ui" \
       org.opencontainers.image.description="Blackbeard Agent Management Platform — UI"
-# Pull fixed Alpine packages (curl/openssl/expat/c-ares/libxml2, etc.) so
-# Trivy CRITICAL/HIGH scans pass between nginx base image rebuilds.
-USER root
-RUN apk upgrade --no-cache
-USER 101
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY security-headers.conf /etc/nginx/security-headers.conf

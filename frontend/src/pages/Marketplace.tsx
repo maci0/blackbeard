@@ -6,7 +6,7 @@ import { api } from '@/api/client'
 import { useToastStore } from '@/stores/toastStore'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
-import { cn, getErrorMessage } from '@/lib/utils'
+import { caseFold, cn, getErrorMessage } from '@/lib/utils'
 
 interface ImportResponse {
   imported: number
@@ -387,12 +387,12 @@ export default function Marketplace() {
     }
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
+      const q = caseFold(searchQuery)
       repos = repos.filter(
         (r) =>
-          r.name.toLowerCase().includes(q) ||
-          r.description.toLowerCase().includes(q) ||
-          r.tags.some((t) => t.toLowerCase().includes(q)),
+          caseFold(r.name).includes(q) ||
+          caseFold(r.description).includes(q) ||
+          r.tags.some((t) => caseFold(t).includes(q)),
       )
     }
 

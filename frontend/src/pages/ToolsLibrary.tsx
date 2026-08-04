@@ -17,7 +17,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { CardSkeleton } from '@/components/ui/Skeleton'
-import { cn, getErrorMessage } from '@/lib/utils'
+import { caseFold, cn, getErrorMessage } from '@/lib/utils'
 import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
 
@@ -128,12 +128,12 @@ export default function ToolsLibrary() {
 
   const filtered = useMemo(() => {
     if (!filter) return tools
-    const q = filter.toLowerCase()
+    const q = caseFold(filter)
     return tools.filter(
       (t) =>
-        t.name.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q) ||
-        t.tags.some((tag) => tag.includes(q)),
+        caseFold(t.name).includes(q) ||
+        caseFold(t.description).includes(q) ||
+        t.tags.some((tag) => caseFold(tag).includes(q)),
     )
   }, [tools, filter])
 

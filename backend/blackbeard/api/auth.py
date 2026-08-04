@@ -28,6 +28,7 @@ from blackbeard.auth import (
     require_user,
     verify_password,
 )
+from blackbeard.config import settings
 from blackbeard.logging_config import anonymize_ip
 from blackbeard.models import User, get_session
 from blackbeard.models.user_schemas import UserResponse, user_response
@@ -127,7 +128,11 @@ def _auth_response(user: User) -> AuthResponse:
     "/register",
     response_model=AuthResponse,
     status_code=201,
-    responses={409: {"description": "Email already registered"}},
+    responses={
+        403: {"description": "Registration is disabled on this server"},
+        409: {"description": "Email already registered"},
+        429: {"description": "Too many registration attempts"},
+    },
 )
 async def register(
     data: RegisterRequest,
@@ -136,6 +141,11 @@ async def register(
     session: AsyncSession = Depends(get_session),
 ) -> AuthResponse:
     """Register a new user account."""
+    if not settings.allow_registration:
+        raise HTTPException(
+            status_code=403,
+            detail="User registration is disabled on this server",
+        )
     ip = get_client_ip(request) or "unknown"
     check_rate_limit_by_ip(
         registration_limiter, ip, "Too many registration attempts. Try again later."
@@ -198,6 +208,7 @@ async def register(
     response_model=AuthResponse,
     responses={
         401: {"description": "Invalid email or password"},
+        429: {"description": "Too many authentication failures"},
     },
 )
 async def login(
@@ -305,7 +316,10 @@ async def login(
 @router.post(
     "/refresh",
     response_model=TokenResponse,
-    responses={401: {"description": "Refresh token expired, invalid, or user inactive"}},
+    responses={
+        401: {"description": "Refresh token expired, invalid, or user inactive"},
+        429: {"description": "Too many authentication failures"},
+    },
 )
 async def refresh(
     data: RefreshRequest,

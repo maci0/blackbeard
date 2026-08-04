@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hmac
 import logging
 import re
 import time
@@ -18,7 +17,7 @@ if TYPE_CHECKING:
     from starlette.middleware.base import RequestResponseEndpoint
 
 from blackbeard.audit import get_client_ip
-from blackbeard.auth import decode_access_token, get_api_key
+from blackbeard.auth import decode_access_token, verify_system_api_key
 from blackbeard.auth.dependencies import SSE_STREAM_RE
 from blackbeard.config import settings
 from blackbeard.logging_config import (
@@ -230,8 +229,8 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         _log_request(request, response, start, client_ip)
         return response
 
-    # Check API key — always run hmac.compare_digest to prevent timing attacks
-    # (even for missing/empty keys, so presence vs absence isn't distinguishable).
+    # Check API key — constant-time compare (SHA-256 digests) so length and
+    # content are not distinguishable via short-circuit timing (CWE-208).
     # Fall back to ?api_key= query parameter ONLY for SSE/stream endpoints where
     # EventSource cannot set custom headers.  Query-string credentials leak via
     # proxy logs, browser history, and Referer headers (CWE-598).
@@ -240,10 +239,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
     if not api_key and SSE_STREAM_RE.match(path):
         api_key = request.query_params.get("api_key", "")
 
-    expected = get_api_key().encode()
-    provided = api_key.encode()
-    # compare_digest requires equal lengths; pad comparison path for empty/mismatched.
-    system_ok = len(provided) == len(expected) and hmac.compare_digest(provided, expected)
+    system_ok = verify_system_api_key(api_key)
 
     if not system_ok:
         user_ok = False

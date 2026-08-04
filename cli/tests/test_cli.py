@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import click
 import pytest
 from click.testing import CliRunner
 
@@ -452,6 +453,48 @@ spec:
 # ---------------------------------------------------------------------------
 # CLI helpers unit tests
 # ---------------------------------------------------------------------------
+
+
+def test_login_json_requires_credentials():
+    """login --json without -e/-p exits 2 with a clear error (not Aborted!)."""
+    result = runner.invoke(cli, ["login", "--json"])
+    assert result.exit_code == 2
+    assert "non-interactive" in result.output.lower() or "required" in result.output.lower()
+    assert "Aborted!" not in result.output
+
+
+def test_resource_kind_type_normalizes_case():
+    """ResourceKindType accepts case-insensitive kinds and returns TitleCase."""
+    from blackbeard_cli.helpers import KIND
+
+    assert KIND.convert("agent", None, None) == "Agent"
+    assert KIND.convert("LLMConnection", None, None) == "LLMConnection"
+    with pytest.raises(click.BadParameter):
+        KIND.convert("NotAKind", None, None)
+
+
+def test_validate_stdin():
+    """validate -f - reads multi-doc YAML from stdin."""
+    yaml_content = """\
+apiVersion: blackbeard/v1
+kind: Agent
+metadata:
+  name: stdin-agent
+spec:
+  role: Researcher
+  goal: Find facts
+  backstory: Expert
+"""
+    result = runner.invoke(cli, ["validate", "-f", "-"], input=yaml_content)
+    assert result.exit_code == 0, f"stdin validate failed: {result.output}"
+
+
+def test_get_help_uses_kind_metavar():
+    """get --help should show KIND metavar, not a lowercased enum dump."""
+    result = runner.invoke(cli, ["get", "--help"])
+    assert result.exit_code == 0
+    assert "KIND" in result.output
+    assert "{agent|agentpolicy" not in result.output.lower()
 
 
 def test_parse_key_value_inputs():

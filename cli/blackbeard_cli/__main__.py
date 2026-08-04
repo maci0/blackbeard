@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import time
 from graphlib import TopologicalSorter
 from pathlib import Path
@@ -21,9 +22,11 @@ from rich.table import Table
 
 from blackbeard_cli import __version__ as _cli_version
 from blackbeard_cli.helpers import (
+    KIND,
     STATUS_COLORS,
     TERMINAL_STATUSES,
     HelpCommand,
+    configure_output,
     confirm_destructive,
     console,
     extract_detail,
@@ -39,7 +42,7 @@ from blackbeard_cli.helpers import (
     validate_name,
     warn_unused_interval,
 )
-from blackbeard_cli.kinds import ALL_KINDS, KIND_TO_PLURAL, NAME_PATTERN
+from blackbeard_cli.kinds import KIND_TO_PLURAL, NAME_PATTERN
 from blackbeard_cli.resources import (
     ValidationError,
     build_adjacency,
@@ -48,8 +51,35 @@ from blackbeard_cli.resources import (
 )
 
 
+def _ingest_yaml_stream(stream: Any, source_label: str) -> list[dict[str, Any]]:
+    """Parse multi-document YAML from an open text stream."""
+    resources: list[dict[str, Any]] = []
+    try:
+        for doc in yaml.safe_load_all(stream):
+            if not doc or not isinstance(doc, dict):
+                continue
+            if "kind" in doc:
+                doc["_source_file"] = source_label
+                resources.append(doc)
+            elif "metadata" in doc or "spec" in doc:
+                console.print(
+                    f"[yellow]Warning:[/] {escape(source_label)}: document has"
+                    " 'metadata'/'spec' but no 'kind' — skipped"
+                )
+    except yaml.YAMLError as exc:
+        console.print(
+            f"[red bold]Error:[/] Invalid YAML in [bold]{escape(source_label)}[/]:"
+            f" {escape(str(exc))}"
+        )
+        raise SystemExit(2) from exc
+    return resources
+
+
 def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
-    """Load all YAML resource files from a file or directory."""
+    """Load all YAML resource files from a file, directory, or stdin (path '-')."""
+    if str(path) == "-":
+        return _ingest_yaml_stream(sys.stdin, "<stdin>")
+
     files: list[Path] = []
     if path.is_file():
         files = [path]
@@ -63,22 +93,7 @@ def load_yaml_resources(path: Path) -> list[dict[str, Any]]:
     for f in files:
         try:
             with f.open(encoding="utf-8") as fh:
-                for doc in yaml.safe_load_all(fh):
-                    if not doc or not isinstance(doc, dict):
-                        continue
-                    if "kind" in doc:
-                        doc["_source_file"] = str(f)
-                        resources.append(doc)
-                    elif "metadata" in doc or "spec" in doc:
-                        console.print(
-                            f"[yellow]Warning:[/] {escape(str(f))}: document has"
-                            " 'metadata'/'spec' but no 'kind' — skipped"
-                        )
-        except yaml.YAMLError as exc:
-            console.print(
-                f"[red bold]Error:[/] Invalid YAML in [bold]{escape(str(f))}[/]: {escape(str(exc))}"
-            )
-            raise SystemExit(2) from exc
+                resources.extend(_ingest_yaml_stream(fh, str(f)))
         except UnicodeDecodeError as exc:
             console.print(
                 f"[red bold]Error:[/] Cannot read [bold]{escape(str(f))}[/]:"
@@ -179,7 +194,7 @@ Common workflows:
     required=False,
     show_envvar=True,
     metavar="KEY",
-    help="API key",
+    help="API key (prefer BLACKBEARD_API_KEY; visible in process listings as a flag)",
 )
 @click.option(
     "--project",
@@ -202,6 +217,19 @@ Common workflows:
     metavar="SECONDS",
     help="HTTP request timeout in seconds",
 )
+@click.option(
+    "--no-color",
+    is_flag=True,
+    default=False,
+    help="Disable colored output (also respects NO_COLOR)",
+)
+@click.option(
+    "--quiet",
+    "-q",
+    is_flag=True,
+    default=False,
+    help="Suppress non-essential status output (errors still print)",
+)
 @json_opt
 @click.pass_context
 def cli(
@@ -210,9 +238,13 @@ def cli(
     api_key: str | None,
     project: str,
     timeout: int,
+    no_color: bool,
+    quiet: bool,
 ) -> None:
     """Blackbeard — Agent Management Platform CLI."""
     ctx.ensure_object(dict)
+
+    configure_output(no_color=no_color, quiet=quiet)
 
     server = server.rstrip("/")
     if not server.startswith(("http://", "https://")):
@@ -227,8 +259,9 @@ def cli(
     ctx.obj["api_key"] = api_key
     ctx.obj["project"] = project
     ctx.obj["timeout"] = float(timeout)
+    ctx.obj["quiet"] = quiet
 
-    if api_key and not os.environ.get("BLACKBEARD_API_KEY"):
+    if api_key and not os.environ.get("BLACKBEARD_API_KEY") and not quiet:
         console.print(
             "[yellow]Warning:[/] API key passed on command line is visible in process listings.\n"
             "  [dim]Prefer BLACKBEARD_API_KEY env var for non-interactive use.[/]"
@@ -317,6 +350,7 @@ Examples:
   blackbeard validate -f crew.yaml
   blackbeard validate -f examples/research-crew/
   blackbeard validate -f crew.yaml --json
+  cat crew.yaml | blackbeard validate -f -
 """
 )
 @click.option(
@@ -324,8 +358,8 @@ Examples:
     "--file",
     "path",
     required=True,
-    type=click.Path(exists=True),
-    help="File or directory of YAML resources",
+    type=click.Path(exists=True, allow_dash=True),
+    help="File or directory of YAML resources (use - for stdin)",
 )
 @json_opt
 @click.pass_context
@@ -410,6 +444,7 @@ Examples:
   blackbeard apply -f crew.yaml -y
   blackbeard apply -f examples/research-crew/ --dry-run
   blackbeard apply -f examples/research-crew/ -y --json
+  cat crew.yaml | blackbeard apply -f - -y
 """
 )
 @click.option(
@@ -417,8 +452,8 @@ Examples:
     "--file",
     "path",
     required=True,
-    type=click.Path(exists=True),
-    help="File or directory of YAML resources",
+    type=click.Path(exists=True, allow_dash=True),
+    help="File or directory of YAML resources (use - for stdin)",
 )
 @click.option(
     "--dry-run",
@@ -520,12 +555,14 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
     headers = require_auth(ctx)
     results: list[dict[str, Any]] = []
 
+    quiet = bool(ctx.obj.get("quiet"))
     try:
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
             transient=True,
+            disable=quiet,
         ) as progress:
             task = progress.add_task("Applying resources...", total=len(resources))
 
@@ -535,7 +572,8 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
                     kind = res.get("kind", "")
                     name = res.get("metadata", {}).get("name", "?")
                     label = f"{kind}/{name}"
-                    progress.update(task, description=f"Applying {label} [{idx}/{total}]...")
+                    if not quiet:
+                        progress.update(task, description=f"Applying {label} [{idx}/{total}]...")
 
                     plural = KIND_TO_PLURAL.get(kind)
                     if not plural:
@@ -644,7 +682,7 @@ Examples:
   blackbeard get LLMConnection openai --json
 """
 )
-@click.argument("kind", type=click.Choice(sorted(ALL_KINDS), case_sensitive=False))
+@click.argument("kind", type=KIND)
 @click.argument("name")
 @json_opt
 @click.pass_context
@@ -708,7 +746,7 @@ Examples:
   blackbeard list Agent --json
 """,
 )
-@click.argument("kind", type=click.Choice(sorted(ALL_KINDS), case_sensitive=False))
+@click.argument("kind", type=KIND)
 @click.option(
     "--label",
     "-l",
@@ -816,7 +854,7 @@ Examples:
   blackbeard delete Agent my-agent --json
 """
 )
-@click.argument("kind", type=click.Choice(sorted(ALL_KINDS), case_sensitive=False))
+@click.argument("kind", type=KIND)
 @click.argument("name")
 @click.option("-y", "--yes", is_flag=True, default=False, help="Skip confirmation prompt")
 @json_opt
@@ -1423,7 +1461,7 @@ def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) ->
     epilog="""\b
 Examples:
   blackbeard pull https://github.com/org/crew-repo.git
-  blackbeard pull ./local-crew-dir
+  blackbeard pull built-in
   blackbeard pull https://github.com/org/crew-repo.git -n prod
   blackbeard pull https://github.com/org/crew-repo.git -y
   blackbeard pull https://github.com/org/crew-repo.git --json
@@ -1434,9 +1472,11 @@ Examples:
 @json_opt
 @click.pass_context
 def pull(ctx: click.Context, source: str, yes: bool) -> None:
-    """Import resources from a git URL or local directory.
+    """Import resources from a git repository via the server marketplace.
 
-    SOURCE is a git HTTPS URL or local directory path containing YAML resource files.
+    SOURCE is a git HTTPS URL containing YAML resource files, or the literal
+    "built-in" for the bundled example crews. Local paths are not supported;
+    use "apply -f" for local files.
     """
     server = ctx.obj["server"]
 
@@ -1461,14 +1501,15 @@ def pull(ctx: click.Context, source: str, yes: bool) -> None:
         handle_http_error(resp)
 
     data = resp.json()
-
-    if ctx.obj["json"]:
-        print_json(data)
-        return
-
     imported = data.get("imported", 0)
     errors = data.get("errors", 0)
     resources = data.get("resources", [])
+
+    if ctx.obj["json"]:
+        print_json(data)
+        if errors:
+            raise SystemExit(1)
+        return
 
     if imported:
         out.print(f"[green]Imported {imported} resource(s)[/]")
@@ -1478,6 +1519,10 @@ def pull(ctx: click.Context, source: str, yes: bool) -> None:
         out.print(f"[red]{errors} error(s)[/]")
     if not imported and not errors:
         out.print("[dim]No resources found.[/]")
+
+    # Fail the process when the server reported import errors.
+    if errors:
+        raise SystemExit(1)
 
 
 # ── Register subcommands from CLI modules ────────────────────────────────────

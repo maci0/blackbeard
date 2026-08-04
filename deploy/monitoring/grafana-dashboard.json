@@ -191,6 +191,46 @@
           }
         }
       },
+      {
+        "title": "Execution Duration p95",
+        "type": "timeseries",
+        "gridPos": { "x": 18, "y": 24, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum by (le) (rate(blackbeard_execution_duration_seconds_bucket[15m])))",
+            "legendFormat": "p95"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "s" }
+        }
+      },
+      {
+        "title": "Webhook Deliveries",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 30, "w": 12, "h": 6 },
+        "targets": [
+          {
+            "expr": "sum by (status) (rate(blackbeard_webhook_deliveries_total[5m]))",
+            "legendFormat": "{{ status }}"
+          }
+        ]
+      },
+      {
+        "title": "SSE Streams",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 30, "w": 6, "h": 6 },
+        "targets": [
+          {
+            "expr": "blackbeard_sse_active",
+            "legendFormat": "Active"
+          },
+          {
+            "expr": "blackbeard_sse_max",
+            "legendFormat": "Max"
+          }
+        ]
+      },
 
       {
         "title": "Database Connections",

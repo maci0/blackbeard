@@ -17,7 +17,7 @@ import yaml
 from blackbeard.config import settings
 from blackbeard.http_client import get_litellm_client
 from blackbeard.kinds import API_VERSION, NAME_PATTERN, ResourceKind
-from blackbeard.logging_config import request_id_var
+from blackbeard.logging_config import request_id_var, scrub_pii
 from blackbeard.resources import validate_resource
 
 logger = logging.getLogger(__name__)
@@ -339,7 +339,7 @@ async def generate_resources(
     latency_ms = int((time.monotonic() - t0) * 1000)
 
     if resp.status_code != 200:
-        error_body = resp.text[:500] if resp.text else ""
+        error_body = scrub_pii(resp.text[:500]) if resp.text else ""
         logger.warning(
             "Assistant LiteLLM error: model=%s status=%d latency_ms=%d body=%s",
             model_name,

@@ -7,7 +7,8 @@ on:
     branches: [main]
 
 env:
-  PYTHON_VERSION: "3.13"
+  # Patch-pin to match deploy/docker/Dockerfile.api (python:3.13.14-slim).
+  PYTHON_VERSION: "3.13.14"
   UV_VERSION: "0.11.15"
   BUN_VERSION: "1.2.17"
 
@@ -198,6 +199,37 @@ jobs:
       - name: Test
         run: bun run test
 
+  # README promises backend, CLI, SDKs, and frontend share one version and
+  # release together; fail fast if any manifest drifts.
+  version-lockstep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: All manifests declare the same version
+        run: |
+          toml() { sed -n 's/^version = "\(.*\)"$/\1/p' "$1"; }
+          # Trailing comma optional so JSON package.json stays flexible.
+          json() { sed -n 's/^  "version": "\([^"]*\)",\?$/\1/p' "$1"; }
+          chart() { sed -n 's/^version: \(.*\)$/\1/p' "$1" | head -1; }
+          chart_app() { sed -n 's/^appVersion: "\(.*\)"$/\1/p' "$1"; }
+          versions=$(
+            toml backend/pyproject.toml
+            toml cli/pyproject.toml
+            toml sdks/python/pyproject.toml
+            json frontend/package.json
+            json sdks/typescript/package.json
+            json sdks/react/package.json
+            chart deploy/helm/blackbeard/Chart.yaml
+            chart_app deploy/helm/blackbeard/Chart.yaml
+          )
+          echo "$versions"
+          [ "$(echo "$versions" | wc -l)" -eq 8 ] || { echo "expected 8 versions"; exit 1; }
+          [ "$(echo "$versions" | sort -u | wc -l)" -eq 1 ] || { echo "version drift between manifests"; exit 1; }
+
   helm-lint:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -373,7 +405,7 @@ jobs:
 
   ci-gate:
     if: always()
-    needs: [backend, cli, sdk-python, sdk-typescript, sdk-react, helm-lint, frontend, docker-api, docker-ui]
+    needs: [backend, cli, sdk-python, sdk-typescript, sdk-react, version-lockstep, helm-lint, frontend, docker-api, docker-ui]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:

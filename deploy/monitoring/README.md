@@ -21,10 +21,20 @@ Optional monitoring stack for Blackbeard using Prometheus and Grafana.
 | `blackbeard_executor_max_workers` | Gauge | Configured max concurrent executions |
 | `blackbeard_executor_saturated` | Gauge | `1` when pool is full and queue is non-empty |
 | `blackbeard_executions_total` | Counter | Terminal outcomes by `type`, `status` |
+| `blackbeard_execution_duration_seconds` | Histogram | Wall-clock duration of terminal executions by `type`, `status` |
+| `blackbeard_webhook_deliveries_total` | Counter | Outbound webhook attempts by `status` (`success`/`failure`/`error`/`ssrf_blocked`) |
+| `blackbeard_sse_active` | Gauge | Active SSE event streams |
+| `blackbeard_sse_max` | Gauge | Configured max concurrent SSE streams |
 
 ## Quick Start
 
 Add Prometheus and Grafana to your docker-compose.yaml:
+
+The `networks: [backend]` entries are required: the main compose file defines
+named networks, so services without one land on the default network and cannot
+reach the API or LiteLLM. The two exporters back the `postgres` and `valkey`
+scrape jobs in `prometheus.yaml`; without them the `PostgresDown` and
+`ValkeyDown` alerts fire permanently.
 
 ```yaml
 services:
@@ -34,16 +44,31 @@ services:
       - ./deploy/monitoring/prometheus.yaml:/etc/prometheus/prometheus.yml
       - ./deploy/monitoring/alerts.yaml:/etc/prometheus/alerts.yaml
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
+    networks: [backend]
 
   grafana:
     image: grafana/grafana:12.0.1
     volumes:
       - grafana-data:/var/lib/grafana
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
+    networks: [backend]
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-blackbeard}:${POSTGRES_PASSWORD:-blackbeard}@postgres:5432/${POSTGRES_DB:-blackbeard}?sslmode=disable"
+    networks: [backend]
+
+  valkey-exporter:
+    image: oliver006/redis_exporter:v1.66.0
+    environment:
+      REDIS_ADDR: "valkey:6379"
+      REDIS_PASSWORD: "${VALKEY_PASSWORD:-valkey-dev-secret}"
+    networks: [backend]
 
 volumes:
   grafana-data:
@@ -64,6 +89,8 @@ volumes:
 | APIHighErrorRate | Warning | 5xx rate > 5% for 5 minutes |
 | ExecutorSaturated | Warning | Executor full + queue for 5 minutes |
 | ExecutionHighFailureRate | Warning | >25% executions failed over 15 minutes |
+| ExecutionHighLatency | Warning | execution duration p95 > 30m for 15 minutes |
+| WebhookHighFailureRate | Warning | >50% webhook deliveries failed/error for 15 minutes |
 | LiteLLMDown | Critical | LiteLLM unreachable for 1 minute |
 | LiteLLMHighSpend | Warning | Total spend > $100 |
 | PostgresDown | Critical | DB unreachable for 1 minute |

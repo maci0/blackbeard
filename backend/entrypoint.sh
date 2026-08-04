@@ -1,47 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 echo "Running database setup..."
-timeout "${MIGRATION_TIMEOUT:-120}" python <<'PYEOF'
-import asyncio
-from sqlalchemy import text
-from blackbeard.models.database import engine, Base
-from blackbeard.kinds import ResourceKind
-from blackbeard.models.execution import ExecutionStatus, ExecutionType, TaskStatus
-import blackbeard.models.resource
-import blackbeard.models.execution
-import blackbeard.models.user
-
-def _create_enum_sql(type_name, enum_cls):
-    values = ",".join(f"'{v.value}'" for v in enum_cls)
-    return f"DO $$ BEGIN CREATE TYPE {type_name} AS ENUM ({values}); EXCEPTION WHEN duplicate_object THEN NULL; END $$"
-
-_NAME_RE = r"^[a-z0-9][a-z0-9\-]*$"
-
-_PG_CHECKS = [
-    f"DO $$ BEGIN ALTER TABLE resources ADD CONSTRAINT ck_resource_name_pattern CHECK (name ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
-    f"DO $$ BEGIN ALTER TABLE resources ADD CONSTRAINT ck_resource_project_pattern CHECK (project ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
-    f"DO $$ BEGIN ALTER TABLE executions ADD CONSTRAINT ck_execution_crew_name_pattern CHECK (crew_name ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
-    f"DO $$ BEGIN ALTER TABLE executions ADD CONSTRAINT ck_execution_crew_project_pattern CHECK (crew_project ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
-    f"DO $$ BEGIN ALTER TABLE resource_refs ADD CONSTRAINT ck_ref_target_name_pattern CHECK (target_name ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
-    f"DO $$ BEGIN ALTER TABLE resource_refs ADD CONSTRAINT ck_ref_target_project_pattern CHECK (target_project ~ '{_NAME_RE}'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
-]
-
-async def migrate():
-    async with engine.begin() as conn:
-        for stmt in [
-            _create_enum_sql("resourcekind", ResourceKind),
-            _create_enum_sql("executiontype", ExecutionType),
-            _create_enum_sql("executionstatus", ExecutionStatus),
-            _create_enum_sql("taskstatus", TaskStatus),
-        ]:
-            await conn.execute(text(stmt))
-        await conn.run_sync(Base.metadata.create_all)
-        for stmt in _PG_CHECKS:
-            await conn.execute(text(stmt))
-    await engine.dispose()
-
-asyncio.run(migrate())
-PYEOF
+timeout "${MIGRATION_TIMEOUT:-120}" python -m blackbeard.db_setup
 if [ -f alembic.ini ] && [ -d alembic/versions ]; then
   echo "Running alembic migrations..."
   timeout "${MIGRATION_TIMEOUT:-120}" alembic upgrade head

@@ -18,6 +18,8 @@ services:
     build:
       context: ./backend
       dockerfile: ../deploy/docker/Dockerfile.api
+      args:
+        SOURCE_DATE_EPOCH: ${SOURCE_DATE_EPOCH:-0}
     env_file: .env
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -69,7 +71,9 @@ services:
     networks: [frontend, backend]
 
   api-lb:
-    image: nginx:1.29.8-alpine
+    # Unprivileged variant: runs as uid 101, needs no added capabilities
+    # (port 8000 is non-privileged; pid/cache paths live in /tmp).
+    image: nginxinc/nginx-unprivileged:1.29.8-alpine
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -99,11 +103,6 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - SETGID
-      - SETUID
     networks: [frontend, backend]
 
   ui:
