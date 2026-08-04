@@ -21,8 +21,8 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    # Coverage + full suite regularly exceeds 10m on GHA runners.
-    timeout-minutes: 25
+    # Coverage + full suite (incl. hypothesis) needs headroom on GHA runners.
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: backend
@@ -308,7 +308,9 @@ jobs:
         uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
         with:
           path: ${{ runner.temp }}/trivy
-          key: trivy-db-${{ runner.os }}-v1
+          # Per-run key so the updated DB is saved after each run; restore-keys
+          # pulls the most recent one (a static key would freeze the first DB forever).
+          key: trivy-db-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             trivy-db-${{ runner.os }}-
 
@@ -353,7 +355,9 @@ jobs:
         uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
         with:
           path: ${{ runner.temp }}/trivy
-          key: trivy-db-${{ runner.os }}-v1
+          # Per-run key so the updated DB is saved after each run; restore-keys
+          # pulls the most recent one (a static key would freeze the first DB forever).
+          key: trivy-db-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             trivy-db-${{ runner.os }}-
 

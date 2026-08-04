@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import collections
+import contextlib
 import json
 import logging
 import re
@@ -89,9 +90,15 @@ class ValkeyCollabBackend:
 
         from blackbeard.config import settings
 
+        # redis-py accepts redis:// / rediss://; map valkey:// to redis://.
+        raw_url = settings.valkey_url.get_secret_value()
+        if raw_url.startswith("valkey://"):
+            raw_url = "redis://" + raw_url.removeprefix("valkey://")
         self._redis: aioredis.Redis = aioredis.from_url(  # type: ignore[no-untyped-call]
-            settings.valkey_url.get_secret_value(),
+            raw_url,
             decode_responses=True,
+            socket_connect_timeout=2.0,
+            socket_timeout=5.0,
         )
         self._subscriptions: dict[str, asyncio.Task[None]] = {}
         self._subscriber_lock = asyncio.Lock()
@@ -134,12 +141,21 @@ class ValkeyCollabBackend:
             self._subscriptions[room] = task
 
     async def unsubscribe(self, room: str) -> None:
-        """Stop listening to a room channel and wait for the listener to exit."""
+        """Stop listening to a room channel and wait briefly for the listener to exit."""
         async with self._subscriber_lock:
             task = self._subscriptions.pop(room, None)
         if task is not None:
             task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+            # Cap wait so a stuck redis client cannot block room teardown forever
+            # (e.g. TestClient disconnect / multi-replica empty-room cleanup).
+            try:
+                await asyncio.wait_for(asyncio.gather(task, return_exceptions=True), timeout=2.0)
+            except TimeoutError:
+                logger.warning(
+                    "Valkey listener for room %s did not exit within 2s after cancel",
+                    room,
+                    extra={"event": "valkey_unsubscribe_timeout", "room": room},
+                )
 
     _MAX_LISTEN_RETRIES = 3
 
@@ -257,7 +273,16 @@ async def _init_valkey_backend() -> ValkeyCollabBackend | None:
             if not valkey_url:
                 _valkey_init_done = True
                 return None
-            _valkey_backend = ValkeyCollabBackend()
+            backend = ValkeyCollabBackend()
+            # Fail closed: only enable cross-replica fan-out if Valkey is reachable.
+            # Otherwise subscribe/publish hang on a dead localhost and stall WS teardown.
+            try:
+                await asyncio.wait_for(backend._redis.ping(), timeout=2.0)
+            except Exception:
+                with contextlib.suppress(Exception):
+                    await backend._redis.aclose()
+                raise
+            _valkey_backend = backend
             _valkey_init_done = True
             return _valkey_backend
         except ImportError:
@@ -305,7 +330,13 @@ async def _broadcast_local(
     text = pre_serialized if pre_serialized is not None else json.dumps(message)
     dead: set[WebSocket] = set()
 
-    async def _send(ws: WebSocket) -> None:
+    # Sequential fan-out: Starlette TestClient (and some ASGI servers) can
+    # deadlock when concurrent send_text races a peer blocked on receive.
+    # Room size is capped at _MAX_CONNECTIONS_PER_ROOM so sum-of-sends latency
+    # stays bounded.
+    for ws in participants:
+        if ws is sender:
+            continue
         try:
             await ws.send_text(text)
         except Exception as send_err:
@@ -320,10 +351,6 @@ async def _broadcast_local(
                 },
             )
             dead.add(ws)
-
-    # Concurrent fan-out: sequential sends make broadcast latency the sum of
-    # all sends, and one backpressured socket stalls every peer after it.
-    await asyncio.gather(*(_send(ws) for ws in participants if ws is not sender))
 
     if dead:
         async with _rooms_lock:

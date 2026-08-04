@@ -128,4 +128,13 @@ disallow_untyped_decorators = false
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Fail fast on stuck tests (e.g. WebSocket teardown / network waits) so CI
+# jobs do not sit until the full job timeout.
+timeout = 120
+timeout_method = "thread"
+
+[dependency-groups]
+dev = [
+    "pytest-timeout>=2.3,<3",
+]
 
