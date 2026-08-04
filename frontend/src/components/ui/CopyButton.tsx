@@ -26,8 +26,7 @@ export function CopyButton({
       })
   }, [text])
 
-  const statusLabel =
-    state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy failed' : label
+  const statusLabel = state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy failed' : label
 
   return (
     <button

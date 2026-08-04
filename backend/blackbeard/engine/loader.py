@@ -313,13 +313,13 @@ class ResourceLoader:
                 if spec.get("command"):
                     from blackbeard.engine.sandbox.tool_wrapper import PlaceholderTool
 
-                    tool_instance = PlaceholderTool(
+                    placeholder = PlaceholderTool(
                         name=resource.name,
                         description=str(spec.get("description") or resource.name),
                     )
-                    self._tool_cache[ref_or_name] = tool_instance
+                    self._tool_cache[ref_or_name] = placeholder
                     self._tools_loaded += 1
-                    return tool_instance
+                    return placeholder
                 raise LoaderError(
                     f"Tool '{resource.name}' has type=python but no class_path or command"
                 )
@@ -365,16 +365,16 @@ class ResourceLoader:
             if not wasm_path:
                 raise LoaderError(f"Tool '{resource.name}' has type=wasm but no wasm_module")
             try:
-                tool_instance = build_wasm_tool(
+                wasm_tool = build_wasm_tool(
                     name=resource.name,
                     description=str(spec.get("description") or f"WASM tool {resource.name}"),
                     wasm_path=str(wasm_path),
                 )
             except SandboxExecutionError as exc:
                 raise LoaderError(f"Tool '{resource.name}': {exc}") from exc
-            self._tool_cache[ref_or_name] = tool_instance
+            self._tool_cache[ref_or_name] = wasm_tool
             self._tools_loaded += 1
-            return tool_instance
+            return wasm_tool
 
         else:
             if tool_type in ("mcp-stdio", "mcp-http"):

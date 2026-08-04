@@ -7,9 +7,12 @@ import concurrent.futures
 import logging
 import shlex
 import threading
-from typing import Any
+from typing import TYPE_CHECKING
 
 from blackbeard.config import settings
+
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +109,7 @@ def shutdown_sandbox_nest_pool() -> None:
         pool.shutdown(wait=False, cancel_futures=True)
 
 
-def _run_coro(coro: Any) -> Any:
+def _run_coro[T](coro: Coroutine[None, None, T]) -> T:
     """Run an async coroutine from sync tool code (possibly inside an event loop)."""
     try:
         asyncio.get_running_loop()
@@ -132,8 +135,8 @@ async def _execute_async(
         from blackbeard.engine.sandbox.container_runtime import ContainerSandbox
 
         runtime = tier if tier == "podman" else settings.container_runtime
-        sandbox = ContainerSandbox(runtime=runtime)
-        result = await sandbox.execute(
+        container = ContainerSandbox(runtime=runtime)
+        container_result = await container.execute(
             image,
             command,
             input_data=input_data,
@@ -142,13 +145,13 @@ async def _execute_async(
             network=network,
             env=env,
         )
-        return result.exit_code, result.stdout, result.stderr
+        return container_result.exit_code, container_result.stdout, container_result.stderr
 
     if tier == "gvisor":
         from blackbeard.engine.sandbox.gvisor_runtime import GVisorSandbox
 
-        sandbox = GVisorSandbox(container_runtime=settings.container_runtime)
-        result = await sandbox.execute(
+        gvisor = GVisorSandbox(container_runtime=settings.container_runtime)
+        gvisor_result = await gvisor.execute(
             image,
             command,
             input_data=input_data,
@@ -156,7 +159,7 @@ async def _execute_async(
             memory_limit=memory,
             env=env,
         )
-        return result.exit_code, result.stdout, result.stderr
+        return gvisor_result.exit_code, gvisor_result.stdout, gvisor_result.stderr
 
     if tier == "microvm":
         from blackbeard.engine.sandbox.selector import select_microvm_backend
@@ -165,20 +168,20 @@ async def _execute_async(
         if backend == "firecracker":
             from blackbeard.engine.sandbox.firecracker import FirecrackerSandbox
 
-            sandbox = FirecrackerSandbox()
+            firecracker = FirecrackerSandbox()
             cmd_str = shlex.join(command)
-            result = await sandbox.execute(
+            fc_result = await firecracker.execute(
                 cmd_str,
                 input_data=input_data,
                 timeout=max(timeout, 60),
                 env=env,
             )
-            return result.exit_code, result.stdout, result.stderr
+            return fc_result.exit_code, fc_result.stdout, fc_result.stderr
 
         from blackbeard.engine.sandbox.microvm_runtime import MicroVMSandbox
 
-        sandbox = MicroVMSandbox(container_runtime=settings.container_runtime)
-        result = await sandbox.execute(
+        microvm = MicroVMSandbox(container_runtime=settings.container_runtime)
+        microvm_result = await microvm.execute(
             image,
             command,
             input_data=input_data,
@@ -186,7 +189,7 @@ async def _execute_async(
             memory_limit=memory,
             env=env,
         )
-        return result.exit_code, result.stdout, result.stderr
+        return microvm_result.exit_code, microvm_result.stdout, microvm_result.stderr
 
     raise SandboxExecutionError(f"tier {tier!r} has no command executor")
 
