@@ -93,10 +93,11 @@ async def _execute_async(
     input_data: str | None,
     env: dict[str, str] | None,
     network: bool,
+    image: str | None,
 ) -> tuple[int, str, str]:
     timeout = settings.container_timeout
     memory = settings.container_memory_limit
-    image = settings.container_default_image
+    image = image or settings.container_default_image
 
     if tier in ("docker", "podman"):
         from blackbeard.engine.sandbox.container_runtime import ContainerSandbox
@@ -168,17 +169,36 @@ def execute_sandboxed(
     input_data: str | None = None,
     env: dict[str, str] | None = None,
     network: bool = False,
+    image: str | None = None,
 ) -> tuple[int, str, str]:
-    """Run ``command`` under ``tier``. Returns ``(exit_code, stdout, stderr)``."""
+    """Run ``command`` under ``tier``. Returns ``(exit_code, stdout, stderr)``.
+
+    ``image`` overrides ``settings.container_default_image`` for container tiers.
+    """
     if tier in ("none", "wasm"):
         raise SandboxExecutionError(f"execute_sandboxed does not support tier={tier!r}")
     ensure_sandbox_available(tier)
     logger.info(
-        "Sandbox execute: tier=%s command=%s",
+        "Sandbox execute: tier=%s command=%s image=%s network=%s",
         tier,
         command[:3],
-        extra={"event": "sandbox_execute", "tier": tier, "command0": command[0] if command else ""},
+        image or settings.container_default_image,
+        network,
+        extra={
+            "event": "sandbox_execute",
+            "tier": tier,
+            "command0": command[0] if command else "",
+            "image": image or settings.container_default_image,
+            "network": network,
+        },
     )
     return _run_coro(
-        _execute_async(tier, command, input_data=input_data, env=env, network=network)
+        _execute_async(
+            tier,
+            command,
+            input_data=input_data,
+            env=env,
+            network=network,
+            image=image,
+        )
     )

@@ -213,3 +213,77 @@ def test_loader_raises_when_sandbox_unavailable(mock_agent_cls, mock_llm_cls, mo
     ):
         with pytest.raises(LoaderError, match="cannot enforce sandbox"):
             loader.build_agent("ref:agents/a")
+
+
+def test_enforce_passes_image_and_network_capability():
+    tool = MagicMock()
+    tool.name = "cmd"
+    tool.description = "c"
+    with patch("blackbeard.engine.sandbox.tool_wrapper.ensure_sandbox_available"):
+        wrapped = enforce_tool_sandbox(
+            tool,
+            tier="docker",
+            tool_type="python",
+            tool_name="cmd",
+            spec={
+                "command": "curl",
+                "image": "curlimages/curl:8.5.0",
+                "capabilities": ["network"],
+            },
+        )
+    assert isinstance(wrapped, SandboxedCommandTool)
+    assert wrapped._image == "curlimages/curl:8.5.0"
+    assert wrapped._network is True
+
+
+def test_python_sandbox_defaults_network_off():
+    tool = MagicMock()
+    tool.name = "search"
+    tool.description = "s"
+    tool.args_schema = None
+    with patch("blackbeard.engine.sandbox.tool_wrapper.ensure_sandbox_available"):
+        wrapped = enforce_tool_sandbox(
+            tool,
+            tier="docker",
+            tool_type="python",
+            tool_name="search",
+            spec={"class_path": "crewai_tools.search.SearchTool"},
+        )
+    assert isinstance(wrapped, SandboxedPythonTool)
+    assert wrapped._network is False
+
+
+def test_execute_sandboxed_forwards_image():
+    with patch(
+        "blackbeard.engine.sandbox.runner.ensure_sandbox_available"
+    ), patch(
+        "blackbeard.engine.sandbox.runner._run_coro",
+        return_value=(0, "out", ""),
+    ) as mock_run:
+        from blackbeard.engine.sandbox.runner import execute_sandboxed
+
+        execute_sandboxed(
+            "docker",
+            ["echo", "hi"],
+            image="alpine:3.20",
+            network=False,
+        )
+    assert mock_run.called
+
+
+@pytest.mark.skipif(
+    __import__("shutil").which("docker") is None and __import__("shutil").which("podman") is None,
+    reason="no container runtime on PATH",
+)
+def test_smoke_docker_echo():
+    """Real container smoke: run echo in docker/podman when available."""
+    from blackbeard.engine.sandbox.runner import execute_sandboxed
+
+    code, out, err = execute_sandboxed(
+        "docker",
+        ["/bin/echo", "blackbeard-sandbox-ok"],
+        image=None,
+        network=False,
+    )
+    assert code == 0, err
+    assert "blackbeard-sandbox-ok" in out

@@ -452,6 +452,8 @@ Tools run in one of five sandbox tiers, ordered by isolation strength:
 
 AgentPolicy `sandbox.minimum_tier` promotes tools to a higher tier. The `env` WASI capability exposes only safe variables (`LANG`, `LC_ALL`, `TZ`, `TERM`).
 
+Tool specs may set `image` (container image override) and `capabilities: [network]` (opt-in outbound network; default is `--network none`). Command-only tools use `command`/`args`; python tools with a non-`none` tier re-run inside the container. See [tool-sandboxes.md](tool-sandboxes.md).
+
 ---
 
 ## Webhook Delivery

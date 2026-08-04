@@ -116,6 +116,10 @@ spec:
 
 ---
 
+## Tool sandbox tiers
+
+Tools can run under isolation tiers (`none`, `wasm`, `docker`/`podman`, `gvisor`, `microvm`). See [tool-sandboxes.md](tool-sandboxes.md) for declaration patterns, `image` overrides, and network capabilities.
+
 ## Resource Versioning
 
 Every resource create or update creates a version snapshot. You can list versions, view past snapshots, and roll back to any previous version.
@@ -361,6 +365,10 @@ When `TEMPORAL_ADDRESS` is not set, Blackbeard falls back to ThreadPoolExecutor 
 - Workflow history is retained for auditing
 
 ---
+
+## Tool sandbox tiers
+
+Tools can run under isolation tiers (`none`, `wasm`, `docker`/`podman`, `gvisor`, `microvm`). See [tool-sandboxes.md](tool-sandboxes.md) for declaration patterns, `image` overrides, and network capabilities.
 
 ## Resource Versioning
 

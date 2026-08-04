@@ -6,6 +6,7 @@ All notable changes to Blackbeard are documented here. Grouped by release, newes
 
 ### Features
 - **Sandbox enforcement** at tool call time: select tier from tool spec + policy floor, run `command` tools and python tools in docker/podman/gvisor/microvm, load `type: wasm` via WasmSandbox.
+- **Sandbox hardening**: per-tool `image` override, network deny-by-default unless `capabilities: [network]`, command-only tools, docs (`docs/tool-sandboxes.md`), example `examples/tools/echo-sandboxed.yaml`, optional docker smoke test.
 
 ### Removed
 - **Git-backed resource store** (auto-commit, log/diff/blame/show, remotes). Database resource versioning (list/rollback) remains.

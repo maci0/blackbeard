@@ -1,6 +1,6 @@
-"""Resource kind registry — synced from backend/blackbeard/kinds.py.
+"""Canonical resource kind registry — single source of truth.
 
-Run ``cli/scripts/sync_schemas.sh`` after backend kind changes.
+All kind-to-plural mappings should import from here.
 """
 
 from __future__ import annotations

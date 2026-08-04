@@ -28,6 +28,17 @@ __all__ = [
 ]
 
 
+
+class PlaceholderTool(BaseTool):
+    """Stand-in for command-only tools before sandbox wrapping."""
+
+    name: str = "placeholder"
+    description: str = "placeholder"
+
+    def _run(self, **kwargs: Any) -> str:
+        return "Tool is not configured for in-process execution"
+
+
 class WasmCrewTool(BaseTool):
     """Invoke a WASM module via WasmSandbox."""
 
@@ -67,6 +78,7 @@ class SandboxedCommandTool(BaseTool):
     _tier: str = PrivateAttr(default="docker")
     _env: dict[str, str] = PrivateAttr(default_factory=dict)
     _network: bool = PrivateAttr(default=False)
+    _image: str | None = PrivateAttr(default=None)
 
     def __init__(
         self,
@@ -78,6 +90,7 @@ class SandboxedCommandTool(BaseTool):
         tier: str = "docker",
         env: dict[str, str] | None = None,
         network: bool = False,
+        image: str | None = None,
         **data: Any,
     ) -> None:
         super().__init__(name=name, description=description, **data)
@@ -86,6 +99,7 @@ class SandboxedCommandTool(BaseTool):
         self._tier = tier
         self._env = dict(env or {})
         self._network = network
+        self._image = image
 
     def _run(self, **kwargs: Any) -> str:
         cmd = [self._command, *self._args]
@@ -97,6 +111,7 @@ class SandboxedCommandTool(BaseTool):
                 input_data=payload,
                 env=self._env or None,
                 network=self._network,
+                image=self._image,
             )
         except SandboxExecutionError as exc:
             return f"Sandbox unavailable: {exc}"
@@ -115,6 +130,8 @@ class SandboxedPythonTool(BaseTool):
     _config: dict[str, Any] = PrivateAttr(default_factory=dict)
     _tier: str = PrivateAttr(default="docker")
     _env: dict[str, str] = PrivateAttr(default_factory=dict)
+    _network: bool = PrivateAttr(default=False)
+    _image: str | None = PrivateAttr(default=None)
 
     def __init__(
         self,
@@ -125,6 +142,8 @@ class SandboxedPythonTool(BaseTool):
         config: dict[str, Any] | None = None,
         tier: str = "docker",
         env: dict[str, str] | None = None,
+        network: bool = False,
+        image: str | None = None,
         args_schema: Any = None,
         **data: Any,
     ) -> None:
@@ -135,6 +154,8 @@ class SandboxedPythonTool(BaseTool):
         self._config = dict(config or {})
         self._tier = tier
         self._env = dict(env or {})
+        self._network = network
+        self._image = image
 
     def _run(self, **kwargs: Any) -> str:
         module_path, class_name = self._class_path.rsplit(".", 1)
@@ -160,7 +181,8 @@ class SandboxedPythonTool(BaseTool):
                 ["python", "-c", script],
                 input_data=payload,
                 env=self._env or None,
-                network=True,  # many tools need network (HTTP APIs)
+                network=self._network,
+                image=self._image,
             )
         except SandboxExecutionError as exc:
             return f"Sandbox unavailable: {exc}"
@@ -204,7 +226,10 @@ def enforce_tool_sandbox(
     description = str(getattr(tool, "description", None) or spec.get("description") or tool_name)
     name = str(getattr(tool, "name", None) or tool_name)
     env = {str(k): str(v) for k, v in (spec.get("env") or {}).items()}
-    network = "network" in (spec.get("capabilities") or [])
+    caps = [str(c) for c in (spec.get("capabilities") or [])]
+    network = "network" in caps
+    image = spec.get("image")
+    image_s = str(image) if image else None
 
     command = spec.get("command")
     if command:
@@ -216,6 +241,7 @@ def enforce_tool_sandbox(
             tier=effective,
             env=env,
             network=network,
+            image=image_s,
         )
 
     class_path = spec.get("class_path")
@@ -232,6 +258,8 @@ def enforce_tool_sandbox(
             config=dict(spec.get("config") or {}),
             tier=effective,
             env=env,
+            network=network,
+            image=image_s,
             args_schema=args_schema,
         )
 

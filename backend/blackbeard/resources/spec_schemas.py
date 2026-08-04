@@ -251,6 +251,12 @@ TOOL_SCHEMA = {
             "enum": ["none", "wasm", "docker", "podman", "gvisor", "microvm"],
             "default": "none",
         },
+        "image": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/:@\\-]*$",
+            "maxLength": 500,
+            "description": "Container image for docker/podman/gvisor/microvm tool execution",
+        },
         "capabilities": {
             "type": "array",
             "items": {"type": "string", "maxLength": 100},

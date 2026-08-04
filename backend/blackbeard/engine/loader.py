@@ -309,7 +309,19 @@ class ResourceLoader:
         if tool_type == "python":
             class_path = spec.get("class_path")
             if not class_path:
-                raise LoaderError(f"Tool '{resource.name}' has type=python but no class_path")
+                if spec.get("command"):
+                    from blackbeard.engine.sandbox.tool_wrapper import PlaceholderTool
+
+                    tool_instance = PlaceholderTool(
+                        name=resource.name,
+                        description=str(spec.get("description") or resource.name),
+                    )
+                    self._tool_cache[ref_or_name] = tool_instance
+                    self._tools_loaded += 1
+                    return tool_instance
+                raise LoaderError(
+                    f"Tool '{resource.name}' has type=python but no class_path or command"
+                )
             path_error = check_tool_class_path(class_path)
             if path_error:
                 raise LoaderError(f"Tool '{resource.name}': {path_error}")
