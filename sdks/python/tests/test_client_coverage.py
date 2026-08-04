@@ -727,7 +727,7 @@ class TestErrorDetailAndHeaders:
     def test_version_matches_package(self) -> None:
         from blackbeard_sdk import __version__
 
-        assert __version__ == "0.2.0"
+        assert __version__ == "0.3.0"
 
 
 # -- Transport error wrapping -------------------------------------------------

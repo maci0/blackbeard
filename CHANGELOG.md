@@ -4,6 +4,8 @@ All notable changes to Blackbeard are documented here. Grouped by release, newes
 
 ## Unreleased
 
+## 0.3.0
+
 ### Breaking
 - **Production startup now refuses open registration without RBAC**: when `DEBUG=false`, the API exits at startup if `ALLOW_REGISTRATION` is enabled (the default) while `ENFORCE_RBAC=false`, because anyone reaching the API could self-register with full access. Existing production deploys running with defaults will fail to start after upgrading. Migrate by setting `ENFORCE_RBAC=true` (and seeding Role/RoleBinding via `deploy/seed.sh`) or `ALLOW_REGISTRATION=false`. `POST /auth/register` returns 403 when registration is disabled.
 - **gRPC API removed** (port 50051 and the proto package). Migrate to the REST API (`/api/v1`) or the Python/TypeScript SDKs, which cover the same surface.

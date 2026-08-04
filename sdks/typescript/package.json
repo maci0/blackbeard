@@ -1,6 +1,6 @@
 {
   "name": "blackbeard-sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TypeScript SDK for Blackbeard Agent Management Platform",
   "type": "module",
   "packageManager": "bun@1.2.17",
