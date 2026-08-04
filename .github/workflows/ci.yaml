@@ -21,7 +21,8 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Coverage + full suite regularly exceeds 10m on GHA runners.
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: backend

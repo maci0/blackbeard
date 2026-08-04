@@ -20,6 +20,11 @@ FROM nginxinc/nginx-unprivileged:1.29.8-alpine
 LABEL org.opencontainers.image.source="https://github.com/blackbeard" \
       org.opencontainers.image.title="blackbeard-ui" \
       org.opencontainers.image.description="Blackbeard Agent Management Platform — UI"
+# Pull fixed Alpine packages (curl/openssl/expat/c-ares/libxml2, etc.) so
+# Trivy CRITICAL/HIGH scans pass between nginx base image rebuilds.
+USER root
+RUN apk upgrade --no-cache
+USER 101
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY security-headers.conf /etc/nginx/security-headers.conf
