@@ -170,9 +170,7 @@ def test_parse_ref_path_traversal(value):
         return  # Correctly rejected
     # If parse_ref didn't raise, it must have returned None or a safe ref
     if result is not None:
-        assert ".." not in result.name, (
-            f"Path traversal succeeded: {value!r} -> {result.name!r}"
-        )
+        assert ".." not in result.name, f"Path traversal succeeded: {value!r} -> {result.name!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +367,9 @@ def test_fuzz_parse_yaml_response(raw):
 # ---------------------------------------------------------------------------
 
 _nested_json = st.recursive(
-    st.one_of(st.none(), st.booleans(), st.integers(min_value=-1000, max_value=1000), st.text(max_size=20)),
+    st.one_of(
+        st.none(), st.booleans(), st.integers(min_value=-1000, max_value=1000), st.text(max_size=20)
+    ),
     lambda children: st.one_of(
         st.lists(children, max_size=5),
         st.dictionaries(st.text(max_size=10), children, max_size=5),

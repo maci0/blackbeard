@@ -30,7 +30,9 @@ def test_runtime_tier_promotes_wasm_for_python():
 
 def test_enforce_none_returns_same_tool():
     tool = MagicMock(name="inner")
-    assert enforce_tool_sandbox(tool, tier="none", tool_type="python", tool_name="t", spec={}) is tool
+    assert (
+        enforce_tool_sandbox(tool, tier="none", tool_type="python", tool_name="t", spec={}) is tool
+    )
 
 
 def test_enforce_command_tool_wraps():
@@ -254,15 +256,17 @@ def test_python_sandbox_defaults_network_off():
 
 
 def test_execute_sandboxed_forwards_image():
-    with patch(
-        "blackbeard.engine.sandbox.runner.ensure_sandbox_available"
-    ), patch(
-        "blackbeard.engine.sandbox.runner._execute_async",
-        return_value=None,
-    ) as mock_execute, patch(
-        "blackbeard.engine.sandbox.runner._run_coro",
-        return_value=(0, "out", ""),
-    ) as mock_run:
+    with (
+        patch("blackbeard.engine.sandbox.runner.ensure_sandbox_available"),
+        patch(
+            "blackbeard.engine.sandbox.runner._execute_async",
+            return_value=None,
+        ) as mock_execute,
+        patch(
+            "blackbeard.engine.sandbox.runner._run_coro",
+            return_value=(0, "out", ""),
+        ) as mock_run,
+    ):
         from blackbeard.engine.sandbox.runner import execute_sandboxed
 
         execute_sandboxed(

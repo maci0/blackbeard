@@ -268,9 +268,7 @@ class TestOidcCallbackSuccess:
 
         from blackbeard.models import User
 
-        result = await db_session.execute(
-            select(User).where(User.email == "oidc-user@example.com")
-        )
+        result = await db_session.execute(select(User).where(User.email == "oidc-user@example.com"))
         user = result.scalar_one_or_none()
         assert user is not None
         assert user.display_name == "Jane Doe"
@@ -284,18 +282,20 @@ class TestOidcCallbackSuccess:
         oauth = _build_mock_oauth(provider)
 
         # First login: create user
-        with patch("blackbeard.api.oidc._oauth", oauth), patch(
-            "blackbeard.api.oidc.settings"
-        ) as mock_settings:
+        with (
+            patch("blackbeard.api.oidc._oauth", oauth),
+            patch("blackbeard.api.oidc.settings") as mock_settings,
+        ):
             mock_settings.oidc_redirect_uri = "http://localhost:3000/api/v1/auth/oidc/callback"
             mock_settings.cors_origins = ["http://localhost:3000"]
             resp1 = await oidc_client.get("/api/v1/auth/oidc/callback?code=valid&state=abc")
         assert resp1.status_code == 303
 
         # Second login: same email
-        with patch("blackbeard.api.oidc._oauth", oauth), patch(
-            "blackbeard.api.oidc.settings"
-        ) as mock_settings:
+        with (
+            patch("blackbeard.api.oidc._oauth", oauth),
+            patch("blackbeard.api.oidc.settings") as mock_settings,
+        ):
             mock_settings.oidc_redirect_uri = "http://localhost:3000/api/v1/auth/oidc/callback"
             mock_settings.cors_origins = ["http://localhost:3000"]
             resp2 = await oidc_client.get("/api/v1/auth/oidc/callback?code=valid&state=def")
@@ -320,9 +320,10 @@ class TestOidcCallbackSuccess:
         oauth = _build_mock_oauth(provider)
 
         # First login
-        with patch("blackbeard.api.oidc._oauth", oauth), patch(
-            "blackbeard.api.oidc.settings"
-        ) as mock_settings:
+        with (
+            patch("blackbeard.api.oidc._oauth", oauth),
+            patch("blackbeard.api.oidc.settings") as mock_settings,
+        ):
             mock_settings.oidc_redirect_uri = "http://localhost:3000/api/v1/auth/oidc/callback"
             mock_settings.cors_origins = ["http://localhost:3000"]
             await oidc_client.get("/api/v1/auth/oidc/callback?code=valid&state=abc")
@@ -331,16 +332,15 @@ class TestOidcCallbackSuccess:
 
         from blackbeard.models import User
 
-        result = await db_session.execute(
-            select(User).where(User.email == "oidc-user@example.com")
-        )
+        result = await db_session.execute(select(User).where(User.email == "oidc-user@example.com"))
         user = result.scalar_one()
         first_login_at = user.last_login_at
 
         # Second login
-        with patch("blackbeard.api.oidc._oauth", oauth), patch(
-            "blackbeard.api.oidc.settings"
-        ) as mock_settings:
+        with (
+            patch("blackbeard.api.oidc._oauth", oauth),
+            patch("blackbeard.api.oidc.settings") as mock_settings,
+        ):
             mock_settings.oidc_redirect_uri = "http://localhost:3000/api/v1/auth/oidc/callback"
             mock_settings.cors_origins = ["http://localhost:3000"]
             await oidc_client.get("/api/v1/auth/oidc/callback?code=valid2&state=def")
@@ -351,16 +351,15 @@ class TestOidcCallbackSuccess:
         if first_login_at is not None:
             assert user.last_login_at >= first_login_at
 
-    async def test_tokens_are_valid_jwt(
-        self, oidc_client: AsyncClient, db_session: AsyncSession
-    ):
+    async def test_tokens_are_valid_jwt(self, oidc_client: AsyncClient, db_session: AsyncSession):
         """Callback should return valid JWT access and refresh tokens in the redirect."""
         provider = _mock_oauth_provider()
         oauth = _build_mock_oauth(provider)
 
-        with patch("blackbeard.api.oidc._oauth", oauth), patch(
-            "blackbeard.api.oidc.settings"
-        ) as mock_settings:
+        with (
+            patch("blackbeard.api.oidc._oauth", oauth),
+            patch("blackbeard.api.oidc.settings") as mock_settings,
+        ):
             mock_settings.oidc_redirect_uri = "http://localhost:3000/api/v1/auth/oidc/callback"
             mock_settings.cors_origins = ["http://localhost:3000"]
             resp = await oidc_client.get("/api/v1/auth/oidc/callback?code=valid&state=abc")
@@ -409,9 +408,10 @@ class TestOidcCallbackUserinfo:
         )
         oauth = _build_mock_oauth(provider)
 
-        with patch("blackbeard.api.oidc._oauth", oauth), patch(
-            "blackbeard.api.oidc.settings"
-        ) as mock_settings:
+        with (
+            patch("blackbeard.api.oidc._oauth", oauth),
+            patch("blackbeard.api.oidc.settings") as mock_settings,
+        ):
             mock_settings.oidc_redirect_uri = "http://localhost:3000/api/v1/auth/oidc/callback"
             mock_settings.cors_origins = ["http://localhost:3000"]
             resp = await oidc_client.get("/api/v1/auth/oidc/callback?code=valid&state=abc")
@@ -434,9 +434,10 @@ class TestOidcCallbackUserinfo:
         )
         oauth = _build_mock_oauth(provider)
 
-        with patch("blackbeard.api.oidc._oauth", oauth), patch(
-            "blackbeard.api.oidc.settings"
-        ) as mock_settings:
+        with (
+            patch("blackbeard.api.oidc._oauth", oauth),
+            patch("blackbeard.api.oidc.settings") as mock_settings,
+        ):
             mock_settings.oidc_redirect_uri = "http://localhost:3000/api/v1/auth/oidc/callback"
             mock_settings.cors_origins = ["http://localhost:3000"]
             resp = await oidc_client.get("/api/v1/auth/oidc/callback?code=valid&state=abc")
@@ -447,9 +448,7 @@ class TestOidcCallbackUserinfo:
 
         from blackbeard.models import User
 
-        result = await db_session.execute(
-            select(User).where(User.email == "noname@example.com")
-        )
+        result = await db_session.execute(select(User).where(User.email == "noname@example.com"))
         user = result.scalar_one()
         assert user.display_name == "preferred_user"
 
@@ -467,9 +466,10 @@ class TestOidcCallbackUserinfo:
         )
         oauth = _build_mock_oauth(provider)
 
-        with patch("blackbeard.api.oidc._oauth", oauth), patch(
-            "blackbeard.api.oidc.settings"
-        ) as mock_settings:
+        with (
+            patch("blackbeard.api.oidc._oauth", oauth),
+            patch("blackbeard.api.oidc.settings") as mock_settings,
+        ):
             mock_settings.oidc_redirect_uri = "http://localhost:3000/api/v1/auth/oidc/callback"
             mock_settings.cors_origins = ["http://localhost:3000"]
             resp = await oidc_client.get("/api/v1/auth/oidc/callback?code=valid&state=abc")
@@ -480,9 +480,7 @@ class TestOidcCallbackUserinfo:
 
         from blackbeard.models import User
 
-        result = await db_session.execute(
-            select(User).where(User.email == "fallback@example.com")
-        )
+        result = await db_session.execute(select(User).where(User.email == "fallback@example.com"))
         user = result.scalar_one()
         assert user.display_name == "fallback"
 
@@ -497,15 +495,11 @@ class TestOidcCallbackErrors:
 
     async def test_token_exchange_failure_returns_401(self, oidc_client: AsyncClient):
         """If the provider rejects the auth code, return 401."""
-        provider = _mock_oauth_provider(
-            token_side_effect=Exception("invalid_grant: code expired")
-        )
+        provider = _mock_oauth_provider(token_side_effect=Exception("invalid_grant: code expired"))
         oauth = _build_mock_oauth(provider)
 
         with patch("blackbeard.api.oidc._oauth", oauth):
-            resp = await oidc_client.get(
-                "/api/v1/auth/oidc/callback?code=invalid&state=abc"
-            )
+            resp = await oidc_client.get("/api/v1/auth/oidc/callback?code=invalid&state=abc")
 
         assert resp.status_code == 401
         assert "failed" in resp.json()["detail"].lower()
@@ -570,9 +564,10 @@ class TestOidcCallbackErrors:
         provider = _mock_oauth_provider()
         oauth = _build_mock_oauth(provider)
 
-        with patch("blackbeard.api.oidc._oauth", oauth), patch(
-            "blackbeard.api.oidc.settings"
-        ) as mock_settings:
+        with (
+            patch("blackbeard.api.oidc._oauth", oauth),
+            patch("blackbeard.api.oidc.settings") as mock_settings,
+        ):
             mock_settings.oidc_redirect_uri = "http://localhost:3000/api/v1/auth/oidc/callback"
             mock_settings.cors_origins = ["http://localhost:3000"]
             resp = await oidc_client.get("/api/v1/auth/oidc/callback?code=valid&state=abc")
@@ -583,17 +578,16 @@ class TestOidcCallbackErrors:
 
         from blackbeard.models import User
 
-        result = await db_session.execute(
-            select(User).where(User.email == "oidc-user@example.com")
-        )
+        result = await db_session.execute(select(User).where(User.email == "oidc-user@example.com"))
         user = result.scalar_one()
         user.is_active = False
         await db_session.commit()
 
         # Try logging in again
-        with patch("blackbeard.api.oidc._oauth", oauth), patch(
-            "blackbeard.api.oidc.settings"
-        ) as mock_settings:
+        with (
+            patch("blackbeard.api.oidc._oauth", oauth),
+            patch("blackbeard.api.oidc.settings") as mock_settings,
+        ):
             mock_settings.oidc_redirect_uri = "http://localhost:3000/api/v1/auth/oidc/callback"
             mock_settings.cors_origins = ["http://localhost:3000"]
             resp = await oidc_client.get("/api/v1/auth/oidc/callback?code=valid2&state=def")
@@ -608,9 +602,10 @@ class TestOidcCallbackErrors:
         provider = _mock_oauth_provider()
         oauth = _build_mock_oauth(provider)
 
-        with patch("blackbeard.api.oidc._oauth", oauth), patch(
-            "blackbeard.api.oidc.settings"
-        ) as mock_settings:
+        with (
+            patch("blackbeard.api.oidc._oauth", oauth),
+            patch("blackbeard.api.oidc.settings") as mock_settings,
+        ):
             mock_settings.oidc_redirect_uri = "https://evil.example.com/callback"
             mock_settings.cors_origins = ["http://localhost:3000"]
             resp = await oidc_client.get("/api/v1/auth/oidc/callback?code=valid&state=abc")
@@ -746,9 +741,7 @@ class TestFindOrCreateUser:
 class TestOidcUserinfoFallback:
     """When the userinfo endpoint fails, the callback should handle it gracefully."""
 
-    async def test_userinfo_failure_with_empty_email_returns_400(
-        self, oidc_client: AsyncClient
-    ):
+    async def test_userinfo_failure_with_empty_email_returns_400(self, oidc_client: AsyncClient):
         """If token has no userinfo and the userinfo call fails, should get 400 (no email)."""
         token_without_userinfo = {
             "access_token": "fake-access-token",

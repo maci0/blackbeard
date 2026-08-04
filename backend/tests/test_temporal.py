@@ -27,6 +27,7 @@ class TestTemporalAvailability:
         # so the flag should be False.
         try:
             import temporalio  # noqa: F401
+
             expected = True
         except ImportError:
             expected = False

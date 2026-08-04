@@ -177,9 +177,7 @@ class TestShutdownExecutor:
             mod._executor = ThreadPoolExecutor(max_workers=1)
             mod._bg_engine = None
             mod._bg_session_factory = None
-            with patch(
-                "blackbeard.engine.execution_listener.dispose_sync_engine"
-            ):
+            with patch("blackbeard.engine.execution_listener.dispose_sync_engine"):
                 mod.shutdown_executor(wait=True)
             assert mod._executor is None
         finally:
@@ -449,12 +447,13 @@ class TestDeliverSingleWebhook:
         webhook.secret = "test-secret"
         webhook.id = "wh-3"
 
-        with patch(
-            "blackbeard.engine.execution_listener.get_sync_client",
-            return_value=mock_client,
-        ), patch(
-            "blackbeard.engine.execution_listener.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "blackbeard.engine.execution_listener.get_sync_client",
+                return_value=mock_client,
+            ),
+            patch("blackbeard.engine.execution_listener.logger") as mock_logger,
+        ):
             _deliver_single_webhook(
                 webhook, '{"event":"test"}', "test_event", execution_id="exec-3"
             )
@@ -694,9 +693,7 @@ class TestBuildKnowledgeSource:
                 "crewai.knowledge.source.string_knowledge_source.StringKnowledgeSource": mock_cls,
             },
         ):
-            result = loader._build_knowledge_source(
-                "ref:knowledge-sources/ks-string"
-            )
+            result = loader._build_knowledge_source("ref:knowledge-sources/ks-string")
 
         mock_cls.assert_called_once_with(content="Hello world")
         assert result is mock_instance
@@ -718,12 +715,15 @@ class TestBuildDiscoveryTools:
         mock_search = MagicMock()
         mock_get = MagicMock()
 
-        with patch(
-            "blackbeard.engine.discovery_tools.SearchToolsTool",
-            return_value=mock_search,
-        ), patch(
-            "blackbeard.engine.discovery_tools.GetToolTool",
-            return_value=mock_get,
+        with (
+            patch(
+                "blackbeard.engine.discovery_tools.SearchToolsTool",
+                return_value=mock_search,
+            ),
+            patch(
+                "blackbeard.engine.discovery_tools.GetToolTool",
+                return_value=mock_get,
+            ),
         ):
             tools = loader._build_discovery_tools("default")
 
@@ -740,12 +740,15 @@ class TestBuildDiscoveryTools:
         mock_search = MagicMock()
         mock_get = MagicMock()
 
-        with patch(
-            "blackbeard.engine.discovery_tools.SearchToolsTool",
-            return_value=mock_search,
-        ), patch(
-            "blackbeard.engine.discovery_tools.GetToolTool",
-            return_value=mock_get,
+        with (
+            patch(
+                "blackbeard.engine.discovery_tools.SearchToolsTool",
+                return_value=mock_search,
+            ),
+            patch(
+                "blackbeard.engine.discovery_tools.GetToolTool",
+                return_value=mock_get,
+            ),
         ):
             first = loader._build_discovery_tools("default")
             second = loader._build_discovery_tools("default")

@@ -174,11 +174,13 @@ def test_litellm_build_params_with_api_key():
     """_build_litellm_params propagates api_key_env into result."""
     from blackbeard.litellm.helpers import build_litellm_params as _build_litellm_params
 
-    result = _build_litellm_params({
-        "provider": "anthropic",
-        "model": "claude-3-opus",
-        "api_key_env": "ANTHROPIC_API_KEY",
-    })
+    result = _build_litellm_params(
+        {
+            "provider": "anthropic",
+            "model": "claude-3-opus",
+            "api_key_env": "ANTHROPIC_API_KEY",
+        }
+    )
     assert result["model"] == "anthropic/claude-3-opus"
     assert result["api_key"] == "os.environ/ANTHROPIC_API_KEY"
 

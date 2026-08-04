@@ -76,9 +76,7 @@ def test_fuzz_redact_query_string_never_crashes(query):
 
 
 @given(
-    sensitive_key=st.sampled_from(
-        ["api_key", "token", "password", "secret", "email", "ssn"]
-    ),
+    sensitive_key=st.sampled_from(["api_key", "token", "password", "secret", "email", "ssn"]),
     sensitive_val=st.text(min_size=1, max_size=30),
 )
 @settings(max_examples=100)
@@ -367,9 +365,7 @@ def test_fuzz_anonymize_ip_with_none(ip):
 
 
 @given(
-    ip=st.from_regex(
-        r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}", fullmatch=True
-    ),
+    ip=st.from_regex(r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}", fullmatch=True),
 )
 @settings(max_examples=100)
 def test_fuzz_anonymize_ip_v4_format(ip):

@@ -124,11 +124,7 @@ def parse_agency_agent_markdown(
             raw_title = title_match.group(1)
             frontmatter["name"] = _STRIP_AGENT_RE.sub("", raw_title).strip()
         elif filename:
-            frontmatter["name"] = (
-                filename.replace(".md", "")
-                .replace("-", " ")
-                .title()
-            )
+            frontmatter["name"] = filename.replace(".md", "").replace("-", " ").title()
         else:
             return None
 

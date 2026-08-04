@@ -117,9 +117,7 @@ class TestParseAgencyAgent:
         assert " " not in result["name"]
 
     def test_division_from_path(self):
-        result = parse_agency_agent_markdown(
-            SAMPLE_AGENT, "marketing/marketing-seo-specialist.md"
-        )
+        result = parse_agency_agent_markdown(SAMPLE_AGENT, "marketing/marketing-seo-specialist.md")
         assert result is not None
         assert result["source_division"] == "marketing"
 
@@ -142,9 +140,11 @@ class TestParseAgencyAgent:
         assert len(result["goal"]) <= 500
 
     def test_backstory_max_length(self):
-        long_identity = "---\nname: Test\ndescription: Test\n---\n\n## Your Identity\n" + (
-            "- " + "y" * 1200 + "\n"
-        ) + "\n## Core Mission\n- Do stuff\n"
+        long_identity = (
+            "---\nname: Test\ndescription: Test\n---\n\n## Your Identity\n"
+            + ("- " + "y" * 1200 + "\n")
+            + "\n## Core Mission\n- Do stuff\n"
+        )
         result = parse_agency_agent_markdown(long_identity, "test.md")
         assert result is not None
         assert len(result["backstory"]) <= 1000

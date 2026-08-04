@@ -442,19 +442,21 @@ ALLOWED_TOOL_MODULE_PREFIXES = (
     "langchain.tools.",
 )
 
-BLOCKED_TOOL_SUBMODULES = frozenset({
-    "langchain_community.tools.shell",
-    "langchain_community.tools.python",
-    "langchain_community.tools.file_management",
-    "langchain_community.tools.requests_tool",
-    "langchain_community.tools.sql_database",
-    "langchain_community.tools.zapier",
-    "langchain_community.tools.playwright",
-    "langchain.tools.python_tool",
-    "langchain.tools.shell_tool",
-    "crewai_tools.code_interpreter_tool",
-    "crewai_tools.code_docs_search_tool",
-})
+BLOCKED_TOOL_SUBMODULES = frozenset(
+    {
+        "langchain_community.tools.shell",
+        "langchain_community.tools.python",
+        "langchain_community.tools.file_management",
+        "langchain_community.tools.requests_tool",
+        "langchain_community.tools.sql_database",
+        "langchain_community.tools.zapier",
+        "langchain_community.tools.playwright",
+        "langchain.tools.python_tool",
+        "langchain.tools.shell_tool",
+        "crewai_tools.code_interpreter_tool",
+        "crewai_tools.code_docs_search_tool",
+    }
+)
 _BLOCKED_TOOL_SUBMODULE_PREFIXES = tuple(b + "." for b in BLOCKED_TOOL_SUBMODULES)
 
 
@@ -628,9 +630,7 @@ def _validate_function_path(
         return
     error = check_callable_path(func_path)
     if error:
-        errors.append(
-            ValidationError(field_name, f"Function path '{func_path}' {error}")
-        )
+        errors.append(ValidationError(field_name, f"Function path '{func_path}' {error}"))
 
 
 def _validate_flow_extra(spec: dict[str, Any], errors: list[ValidationError]) -> None:

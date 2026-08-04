@@ -64,9 +64,13 @@ async def test_register_success(client: AsyncClient):
     assert "access_token" in data
     assert "refresh_token" in data
     assert isinstance(data["access_token"], str), "access_token must be a string"
-    assert data["access_token"].count(".") == 2, "access_token must be a valid JWT (header.payload.signature)"
+    assert data["access_token"].count(".") == 2, (
+        "access_token must be a valid JWT (header.payload.signature)"
+    )
     assert isinstance(data["refresh_token"], str), "refresh_token must be a string"
-    assert data["refresh_token"].count(".") == 2, "refresh_token must be a valid JWT (header.payload.signature)"
+    assert data["refresh_token"].count(".") == 2, (
+        "refresh_token must be a valid JWT (header.payload.signature)"
+    )
     assert data["access_token"] != data["refresh_token"], "Access and refresh tokens must differ"
     user = data["user"]
     assert user["email"] == "test@example.com"
@@ -197,11 +201,15 @@ async def test_refresh_success(client: AsyncClient):
     refresh_data = resp.json()
     assert "access_token" in refresh_data
     assert isinstance(refresh_data["access_token"], str), "access_token must be a string"
-    assert refresh_data["access_token"].count(".") == 2, "access_token must be a valid JWT (header.payload.signature)"
+    assert refresh_data["access_token"].count(".") == 2, (
+        "access_token must be a valid JWT (header.payload.signature)"
+    )
     from blackbeard.auth.jwt import decode_token
 
     payload = decode_token(refresh_data["access_token"])
-    assert payload["type"] == "access", "Refresh must mint an access token, not another refresh token"
+    assert payload["type"] == "access", (
+        "Refresh must mint an access token, not another refresh token"
+    )
     assert payload["sub"] == data["user"]["id"]
     assert refresh_data["token_type"] == "bearer"
 

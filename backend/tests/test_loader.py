@@ -1353,6 +1353,7 @@ def test_loader_caches_are_per_instance(mock_llm_cls):
     # Each loader builds its own instance
     assert mock_llm_cls.call_count == 2
 
+
 # ---------------------------------------------------------------------------
 # Sandbox tier selection at agent load
 # ---------------------------------------------------------------------------
@@ -1404,9 +1405,7 @@ def test_build_agent_selects_sandbox_tier(
     loader.build_agent("ref:agents/tooled")
 
     extras = [
-        c.kwargs.get("extra")
-        for c in mock_logger.info.call_args_list
-        if c.kwargs.get("extra")
+        c.kwargs.get("extra") for c in mock_logger.info.call_args_list if c.kwargs.get("extra")
     ]
     tier_events = [e for e in extras if e and e.get("event") == "sandbox_tier_selected"]
     assert tier_events, "expected sandbox_tier_selected log event"
@@ -1453,11 +1452,8 @@ def test_build_agent_sandbox_default_none(
     loader.build_agent("ref:agents/a")
 
     extras = [
-        c.kwargs.get("extra")
-        for c in mock_logger.info.call_args_list
-        if c.kwargs.get("extra")
+        c.kwargs.get("extra") for c in mock_logger.info.call_args_list if c.kwargs.get("extra")
     ]
     tier_events = [e for e in extras if e and e.get("event") == "sandbox_tier_selected"]
     assert tier_events
     assert tier_events[0]["effective_tier"] == "none"
-

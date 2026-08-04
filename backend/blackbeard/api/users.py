@@ -166,9 +166,7 @@ async def list_users(
         select(User).options(*_USER_SAFE_LOAD).order_by(User.created_at).limit(limit).offset(offset)
     )
     users = list(result.scalars().all())
-    total = await smart_total(
-        session, users, limit, offset, select(func.count()).select_from(User)
-    )
+    total = await smart_total(session, users, limit, offset, select(func.count()).select_from(User))
     return UserListResponse(
         items=[user_response(u) for u in users],
         total=total,

@@ -295,6 +295,7 @@ async def test_cancel_execution(client: AsyncClient):
     data = cancel_resp.json()
     assert data["status"] == "cancelled"
     from datetime import datetime
+
     completed = data["completed_at"]
     assert isinstance(completed, str), "completed_at should be a string"
     dt = datetime.fromisoformat(completed.replace("Z", "+00:00"))

@@ -422,8 +422,12 @@ GUARDRAIL_SCHEMA = {
         "type": {
             "type": "string",
             "enum": [
-                "function", "llm", "schema", "pii",
-                "hallucination", "composite",
+                "function",
+                "llm",
+                "schema",
+                "pii",
+                "hallucination",
+                "composite",
             ],
         },
         "description": {"type": "string", "maxLength": 5000},
