@@ -291,10 +291,10 @@ class ResourceLoader:
     def build_tool(self, ref_or_name: str) -> Any:
         """Build a tool from a Tool resource ref.
 
-        Supports ``type: python`` (dynamic import via ``class_path``) and
-        ``type: builtin`` (import from ``crewai_tools``).  Other types
-        (``wasm``, ``mcp-stdio``, ``mcp-http``) log a warning and return
-        ``None``.
+        Supports ``type: python`` (dynamic import via ``class_path``),
+        ``type: builtin`` (import from ``crewai_tools``), and ``type: wasm``.
+        MCP types (``mcp-stdio``, ``mcp-http``) are loaded via
+        :meth:`_build_mcp_server` when attaching tools to an agent (not here).
         """
         if ref_or_name in self._tool_cache:
             return self._tool_cache[ref_or_name]
@@ -376,6 +376,17 @@ class ResourceLoader:
             return tool_instance
 
         else:
+            if tool_type in ("mcp-stdio", "mcp-http"):
+                logger.debug(
+                    "MCP tool '%s' is attached via agent mcps, not build_tool",
+                    resource.name,
+                    extra={
+                        "event": "mcp_tool_deferred",
+                        "tool_name": resource.name,
+                        "tool_type": tool_type,
+                    },
+                )
+                return None
             self._tools_skipped += 1
             logger.warning(
                 "Tool type '%s' not yet supported for runtime loading (tool=%s)",
@@ -424,29 +435,124 @@ class ResourceLoader:
         return tool_instance
 
 
+    def _build_mcp_server(self, resource: Resource) -> Any:
+        """Build a CrewAI MCP server config from a Tool resource."""
+        from crewai.mcp import MCPServerHTTP, MCPServerSSE, MCPServerStdio
+
+        spec = resource.spec
+        tool_type = str(spec.get("type", ""))
+        if tool_type == "mcp-stdio":
+            command = spec.get("command")
+            if not command or not isinstance(command, str):
+                raise LoaderError(
+                    f"Tool '{resource.name}' type=mcp-stdio requires spec.command"
+                )
+            env_raw = spec.get("env") or {}
+            env = {str(k): str(v) for k, v in env_raw.items()} if env_raw else None
+            return MCPServerStdio(
+                command=command,
+                args=[str(a) for a in (spec.get("args") or [])],
+                env=env,
+            )
+        if tool_type == "mcp-http":
+            url = spec.get("url")
+            if not url or not isinstance(url, str):
+                raise LoaderError(
+                    f"Tool '{resource.name}' type=mcp-http requires spec.url"
+                )
+            url_err = check_url_ssrf(url)
+            if url_err:
+                raise LoaderError(f"Tool '{resource.name}': {url_err}")
+            config = spec.get("config") if isinstance(spec.get("config"), dict) else {}
+            headers_raw = config.get("headers") if config else None
+            headers = None
+            if isinstance(headers_raw, dict):
+                headers = {str(k): str(v) for k, v in headers_raw.items()}
+            transport = str(config.get("transport", "http")).lower() if config else "http"
+            if transport == "sse" or url.rstrip("/").endswith("/sse"):
+                return MCPServerSSE(url=url, headers=headers)
+            streamable = True
+            if config and "streamable" in config:
+                streamable = bool(config["streamable"])
+            return MCPServerHTTP(url=url, headers=headers, streamable=streamable)
+        raise LoaderError(
+            f"Tool '{resource.name}': not an MCP type ({tool_type!r})"
+        )
+
     def _build_agent_tools(
         self,
         tool_refs: list[str],
         policy: AgentPolicy,
         agent_name: str,
-    ) -> list[Any]:
-        """Load tools, select sandbox tiers, and enforce isolation wrappers."""
+    ) -> tuple[list[Any], list[Any]]:
+        """Load tools and MCP server configs; enforce sandbox on non-MCP tools.
+
+        Returns:
+            ``(tools, mcps)`` for the Agent constructor.
+        """
         policy_min = policy.minimum_sandbox_tier
         tools: list[Any] = []
+        mcps: list[Any] = []
         for ref in tool_refs:
-            tool = self.build_tool(ref)
-            if tool is None:
-                continue
             try:
                 tool_resource = self._resolve_ref(ref)
             except LoaderError:
-                tools.append(tool)
                 continue
             if tool_resource.kind != ResourceKind.TOOL:
-                tools.append(tool)
                 continue
             tool_spec = tool_resource.spec
             tool_type = str(tool_spec.get("type", "python"))
+
+            if tool_type in ("mcp-stdio", "mcp-http"):
+                mcp = self._build_mcp_server(tool_resource)
+                # Policy filter by resource name for allow/deny lists
+                if policy.tool_mode == "denylist" and tool_resource.name in policy.denied_tools:
+                    logger.warning(
+                        "Policy denied MCP tool '%s' for agent '%s'",
+                        tool_resource.name,
+                        agent_name,
+                        extra={
+                            "event": "policy_tool_denied",
+                            "tool_name": tool_resource.name,
+                            "agent_name": agent_name,
+                            "policy_mode": "denylist",
+                        },
+                    )
+                    continue
+                if (
+                    policy.tool_mode == "allowlist"
+                    and tool_resource.name not in policy.allowed_tools
+                ):
+                    logger.warning(
+                        "Policy allowlist excludes MCP tool '%s' for agent '%s'",
+                        tool_resource.name,
+                        agent_name,
+                        extra={
+                            "event": "policy_tool_excluded",
+                            "tool_name": tool_resource.name,
+                            "agent_name": agent_name,
+                            "allowed_tools": sorted(policy.allowed_tools),
+                        },
+                    )
+                    continue
+                mcps.append(mcp)
+                logger.info(
+                    "MCP server attached: agent=%s tool=%s type=%s",
+                    agent_name,
+                    tool_resource.name,
+                    tool_type,
+                    extra={
+                        "event": "mcp_server_attached",
+                        "agent_name": agent_name,
+                        "tool_name": tool_resource.name,
+                        "tool_type": tool_type,
+                    },
+                )
+                continue
+
+            tool = self.build_tool(ref)
+            if tool is None:
+                continue
             tool_tier = str(tool_spec.get("sandbox", "none") or "none")
             selected = select_sandbox(tool_tier=tool_tier, policy_minimum=policy_min)
             effective = runtime_tier_for_tool(selected, tool_type)
@@ -481,7 +587,7 @@ class ResourceLoader:
                     f"'{effective}' for tool '{tool_resource.name}': {exc}"
                 ) from exc
             tools.append(tool)
-        return tools
+        return tools, mcps
 
     def _filter_tools_by_policy(
         self,
@@ -557,9 +663,11 @@ class ResourceLoader:
         # selection and optional tool filtering share one resolution path.
         policy = resolve_policy(spec, policies=self._policies)
         if tool_refs:
-            tools = self._build_agent_tools(tool_refs, policy, resource.name)
+            tools, mcps = self._build_agent_tools(tool_refs, policy, resource.name)
             if tools:
                 agent_kwargs["tools"] = tools
+            if mcps:
+                agent_kwargs["mcps"] = mcps
 
         # --- Policy enforcement ---
         if self._policies:

@@ -116,6 +116,10 @@ spec:
 
 ---
 
+## MCP tools
+
+Tool resources with `type: mcp-stdio` or `type: mcp-http` attach to agents as CrewAI MCP server configs (`mcps`), not in-process Python tools. Stdio servers need `command`/`args`/`env`; HTTP servers need `url` (SSRF-checked). See `examples/tools/mcp-*.yaml`.
+
 ## Tool sandbox tiers
 
 Tools can run under isolation tiers (`none`, `wasm`, `docker`/`podman`, `gvisor`, `microvm`). See [tool-sandboxes.md](tool-sandboxes.md) for declaration patterns, `image` overrides, and network capabilities.
@@ -365,6 +369,10 @@ When `TEMPORAL_ADDRESS` is not set, Blackbeard falls back to ThreadPoolExecutor 
 - Workflow history is retained for auditing
 
 ---
+
+## MCP tools
+
+Tool resources with `type: mcp-stdio` or `type: mcp-http` attach to agents as CrewAI MCP server configs (`mcps`), not in-process Python tools. Stdio servers need `command`/`args`/`env`; HTTP servers need `url` (SSRF-checked). See `examples/tools/mcp-*.yaml`.
 
 ## Tool sandbox tiers
 

@@ -19,6 +19,9 @@ No example `.wasm` modules are included yet. The sandbox runtime (`blackbeard.en
 
 ## MCP Tools
 
+MCP tools are attached to agents as CrewAI `mcps` (not in-process BaseTools). At crew build, `mcp-stdio` becomes `MCPServerStdio` and `mcp-http` becomes `MCPServerHTTP` (or `MCPServerSSE` when the URL ends with `/sse` or `config.transport` is `sse`).
+
+
 ### stdio example
 
 ```yaml

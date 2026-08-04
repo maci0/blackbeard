@@ -1,0 +1,16 @@
+apiVersion: blackbeard.io/v1
+kind: Tool
+metadata:
+  name: mcp-filesystem
+  labels:
+    example: "true"
+spec:
+  type: mcp-stdio
+  description: MCP filesystem server (stdio). Requires Node/npx on the API host.
+  command: npx
+  args:
+    - "-y"
+    - "@modelcontextprotocol/server-filesystem"
+    - "/tmp"
+  env:
+    HOME: /tmp

@@ -1,0 +1,15 @@
+apiVersion: blackbeard.io/v1
+kind: Tool
+metadata:
+  name: mcp-http-remote
+  labels:
+    example: "true"
+spec:
+  type: mcp-http
+  description: Remote MCP server over streamable HTTP. URL is SSRF-checked.
+  url: "https://example.com/mcp"
+  # config:
+  #   headers:
+  #     Authorization: "Bearer ..."
+  #   streamable: true
+  #   transport: http   # or "sse"
