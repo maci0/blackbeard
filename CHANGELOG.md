@@ -4,6 +4,9 @@ All notable changes to Blackbeard are documented here. Grouped by release, newes
 
 ## Unreleased
 
+### Features
+- **Sandbox enforcement** at tool call time: select tier from tool spec + policy floor, run `command` tools and python tools in docker/podman/gvisor/microvm, load `type: wasm` via WasmSandbox.
+
 ### Removed
 - **Git-backed resource store** (auto-commit, log/diff/blame/show, remotes). Database resource versioning (list/rollback) remains.
 - **gRPC API** (proto, server on port 50051, grpcio dependency). REST + SSE remain the public API surface.

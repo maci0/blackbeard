@@ -589,17 +589,16 @@ def test_build_tool_builtin():
     assert result is fake_tool_cls.return_value
 
 
-def test_build_tool_unsupported_type():
-    """Tool with unsupported type (e.g. wasm) should return None."""
+def test_build_tool_wasm_requires_module():
+    """Tool with type=wasm but no wasm_module should raise LoaderError."""
     tool_res = make_resource(
         ResourceKind.TOOL,
         "wasm-tool",
         {"type": "wasm", "module": "something.wasm"},
     )
     loader = ResourceLoader(_resource_map(tool_res))
-    result = loader.build_tool("ref:tools/wasm-tool")
-
-    assert result is None
+    with pytest.raises(LoaderError, match="wasm_module"):
+        loader.build_tool("ref:tools/wasm-tool")
 
 
 def test_build_tool_mcp_stdio_unsupported():
@@ -686,21 +685,21 @@ def test_build_agent_with_unsupported_tool_skips(mock_agent_cls, mock_llm_cls):
     """Agent with unsupported tool type should skip the tool (no tools kwarg)."""
     tool_res = make_resource(
         ResourceKind.TOOL,
-        "wasm-tool",
-        {"type": "wasm", "module": "something.wasm"},
+        "mcp-tool",
+        {"type": "mcp-stdio", "command": "npx"},
     )
     agent_res = make_resource(
         ResourceKind.AGENT,
-        "wasm-agent",
+        "mcp-agent",
         {
             "role": "Runner",
             "goal": "Run",
             "backstory": "Fast",
-            "tools": ["ref:tools/wasm-tool"],
+            "tools": ["ref:tools/mcp-tool"],
         },
     )
     loader = ResourceLoader(_resource_map(tool_res, agent_res))
-    loader.build_agent("ref:agents/wasm-agent")
+    loader.build_agent("ref:agents/mcp-agent")
 
     _, kwargs = mock_agent_cls.call_args
     assert "tools" not in kwargs

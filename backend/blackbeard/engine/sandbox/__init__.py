@@ -35,6 +35,8 @@ __all__ = [
     "SandboxResult",
     "SandboxRuntimeError",
     "SandboxTimeoutError",
+    "enforce_tool_sandbox",
+    "execute_sandboxed",
     "is_firecracker_available",
     "is_gvisor_available",
     "is_krun_available",
@@ -73,6 +75,8 @@ _ATTR_TO_MODULE: dict[str, str] = {
     "TIER_ORDER": "blackbeard.engine.sandbox.selector",
     "select_microvm_backend": "blackbeard.engine.sandbox.selector",
     "select_sandbox": "blackbeard.engine.sandbox.selector",
+    "execute_sandboxed": "blackbeard.engine.sandbox.runner",
+    "enforce_tool_sandbox": "blackbeard.engine.sandbox.tool_wrapper",
     "tier_rank": "blackbeard.engine.sandbox.selector",
 }
 
