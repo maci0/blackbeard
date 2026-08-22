@@ -526,6 +526,7 @@ class BlackbeardExecutionListener(BaseEventListener):
         self._buffer: list[ExecutionEvent] = []
         self._flush_timer: threading.Timer | None = None
         self._flushing = False  # True while a flush DB write is in flight
+        self._registered_handlers: list[tuple[Any, Any, Any]] = []
         self._otel_tracer = _get_otel_tracer()
         self._otel_root_span: Any = None
         self._otel_active_spans: dict[str, Any] = {}
@@ -1200,3 +1201,43 @@ class BlackbeardExecutionListener(BaseEventListener):
             if duration_ms is not None:
                 otel_attrs["blackbeard.duration_ms"] = duration_ms
             self._otel_end_span(f"llm/{event.model or 'unknown'}", attributes=otel_attrs)
+
+        # Remember every registration so close() can remove it. The bus is a
+        # process-wide singleton and BaseEventListener.__init__ registers on
+        # it for every listener instance; without teardown, handlers from
+        # finished executions would accumulate forever (memory growth plus
+        # stale handlers re-firing on later executions' events).
+        self._registered_handlers = [
+            (crewai_event_bus, CrewKickoffStartedEvent, on_crew_started),
+            (crewai_event_bus, CrewKickoffCompletedEvent, on_crew_completed),
+            (crewai_event_bus, TaskStartedEvent, on_task_started),
+            (crewai_event_bus, TaskCompletedEvent, on_task_completed),
+            (crewai_event_bus, ToolUsageStartedEvent, on_tool_started),
+            (crewai_event_bus, ToolUsageFinishedEvent, on_tool_finished),
+            (crewai_event_bus, LLMCallStartedEvent, on_llm_started),
+            (crewai_event_bus, LLMCallCompletedEvent, on_llm_completed),
+        ]
+
+    def close(self) -> None:
+        """Unregister this listener's handlers from the CrewAI event bus.
+
+        Idempotent. Must be called when the execution finishes; otherwise
+        the global event bus keeps every per-execution handler alive.
+        """
+        while self._registered_handlers:
+            bus, event_type, handler = self._registered_handlers.pop()
+            try:
+                bus.off(event_type, handler)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to unregister CrewAI handler for execution %s (%s)",
+                    self._execution_id,
+                    event_type.__name__,
+                    exc_info=True,
+                    extra={
+                        "event": "listener_handler_unregister_failed",
+                        "execution_id": self._execution_id_str,
+                        "event_type": event_type.__name__,
+                        "error_type": type(exc).__name__,
+                    },
+                )

@@ -22,6 +22,8 @@ import shutil
 from dataclasses import dataclass
 from typing import Any
 
+from blackbeard.engine.sandbox.base import force_remove_container, new_sandbox_container_name
+
 logger = logging.getLogger(__name__)
 
 
@@ -151,6 +153,7 @@ class MicroVMSandbox:
         memory_limit: str = "512m",
         cpu_limit: float = 1.0,
         env: dict[str, str] | None = None,
+        container_name: str | None = None,
     ) -> list[str]:
         """Build the MicroVM container run command.
 
@@ -172,17 +175,25 @@ class MicroVMSandbox:
             "run",
             "--rm",
             "--runtime=krun",
-            "--memory",
-            memory_limit,
-            f"--cpus={cpu_limit}",
-            "--read-only",
-            "--network",
-            "none",
-            "--security-opt",
-            "no-new-privileges:true",
-            "--cap-drop",
-            "ALL",
         ]
+        # Named container so a timed-out run can be force-removed (the
+        # daemon-owned container outlives the killed CLI process).
+        if container_name:
+            cmd.extend(["--name", container_name])
+        cmd.extend(
+            [
+                "--memory",
+                memory_limit,
+                f"--cpus={cpu_limit}",
+                "--read-only",
+                "--network",
+                "none",
+                "--security-opt",
+                "no-new-privileges:true",
+                "--cap-drop",
+                "ALL",
+            ]
+        )
 
         # SECURITY: Validate env var keys (same rationale as ContainerSandbox).
         if env:
@@ -239,6 +250,7 @@ class MicroVMSandbox:
             MicroVMTimeoutError: If the container exceeds the timeout.
             MicroVMRuntimeError: If the container runtime fails to start.
         """
+        container_name = new_sandbox_container_name()
         cmd = self._build_command(
             image,
             command,
@@ -246,6 +258,7 @@ class MicroVMSandbox:
             memory_limit=memory_limit,
             cpu_limit=cpu_limit,
             env=env,
+            container_name=container_name,
         )
 
         logger.info(
@@ -284,6 +297,8 @@ class MicroVMSandbox:
         except TimeoutError as exc:
             proc.kill()
             await proc.wait()
+            # The daemon-owned container survives the killed CLI; remove it.
+            await force_remove_container(self._runtime, container_name)
             raise MicroVMTimeoutError(f"MicroVM timed out after {timeout}s") from exc
 
         result = MicroVMResult(

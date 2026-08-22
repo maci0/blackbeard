@@ -372,6 +372,19 @@ class TestContainerSandboxCommand:
         cmd = sandbox._build_command("img", ["cmd"])
         assert cmd[0] == "podman"
 
+    def test_container_name_flag(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"], container_name="bb-sbx-abc")
+        idx = cmd.index("--name")
+        assert cmd[idx + 1] == "bb-sbx-abc"
+        # Name must come after --rm and before the image.
+        assert cmd.index("--rm") < idx < cmd.index("img")
+
+    def test_no_container_name_by_default(self):
+        sandbox = self._make_sandbox()
+        cmd = sandbox._build_command("img", ["cmd"])
+        assert "--name" not in cmd
+
 
 # ---------------------------------------------------------------------------
 # ContainerSandbox -- async execution (mocked subprocess)
@@ -443,6 +456,45 @@ class TestContainerSandboxExecution:
         # Timed-out container must be killed and reaped, not leaked.
         mock_proc.kill.assert_called_once()
         mock_proc.wait.assert_awaited_once()
+
+    async def test_execute_timeout_force_removes_container(self):
+        """After a timeout the daemon-owned container is force-removed."""
+        sandbox = self._make_sandbox()
+
+        mock_run = AsyncMock()
+        mock_run.communicate = AsyncMock(side_effect=TimeoutError)
+        mock_run.kill = MagicMock()
+        mock_run.wait = AsyncMock()
+
+        mock_cleanup = AsyncMock()
+        mock_cleanup.wait = AsyncMock(return_value=0)
+
+        calls: list[tuple] = []
+
+        def fake_exec(*args, **kwargs):
+            calls.append(args)
+            return mock_cleanup if "rm" in args else mock_run
+
+        async def passthrough_wait_for(aw, timeout=None):
+            return await aw
+
+        with (
+            patch("asyncio.create_subprocess_exec", side_effect=fake_exec),
+            patch("asyncio.wait_for", side_effect=passthrough_wait_for),
+            pytest.raises(ContainerTimeoutError),
+        ):
+            await sandbox.execute("img", ["cmd"], timeout=5)
+
+        assert len(calls) == 2
+        # Run command carried a unique --name...
+        run_cmd = list(calls[0])
+        name_idx = run_cmd.index("--name")
+        container_name = run_cmd[name_idx + 1]
+        assert container_name.startswith("bb-sbx-")
+        # ...and cleanup invoked `<runtime> rm -f <same-name>`.
+        assert list(calls[1])[:3] == [sandbox.runtime, "rm", "-f"]
+        assert calls[1][3] == container_name
+        mock_cleanup.wait.assert_awaited_once()
 
     async def test_execute_runtime_not_found(self):
         sandbox = self._make_sandbox()

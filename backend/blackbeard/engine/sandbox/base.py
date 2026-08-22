@@ -11,6 +11,7 @@ import asyncio
 import logging
 import re
 import shutil
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
@@ -23,6 +24,42 @@ _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 # Image name allowlist: standard Docker image references.
 _IMAGE_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/:@\-]*$")
+
+
+def new_sandbox_container_name() -> str:
+    """Return a unique container name for one sandboxed execution."""
+    return f"bb-sbx-{uuid.uuid4().hex[:16]}"
+
+
+async def force_remove_container(runtime_bin: str, container_name: str) -> None:
+    """Best-effort ``<runtime> rm -f`` for a timed-out sandbox container.
+
+    Killing the runtime CLI process leaves the actual container running
+    under the daemon; without removal, repeated timeouts accumulate
+    running containers (external claims on CPU/memory) until they exit
+    on their own.
+    """
+    try:
+        cleanup = await asyncio.create_subprocess_exec(
+            runtime_bin,
+            "rm",
+            "-f",
+            container_name,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(cleanup.wait(), timeout=10)
+    except Exception as exc:
+        logger.warning(
+            "Failed to remove timed-out container %s",
+            container_name,
+            exc_info=True,
+            extra={
+                "event": "sandbox_container_remove_failed",
+                "container_name": container_name,
+                "error_type": type(exc).__name__,
+            },
+        )
 
 
 class SandboxRuntimeError(Exception):
@@ -120,6 +157,7 @@ class BaseSandbox(ABC):
         network: bool = False,
         read_only: bool = True,
         env: dict[str, str] | None = None,
+        container_name: str | None = None,
     ) -> list[str]:
         """Build the container run command with security defaults.
 
@@ -136,14 +174,22 @@ class BaseSandbox(ABC):
             "run",
             "--rm",
             *self._extra_flags(),
-            "--memory",
-            mem,
-            f"--cpus={cpu_limit}",
-            "--security-opt",
-            "no-new-privileges:true",
-            "--cap-drop",
-            "ALL",
         ]
+        # Named container so a timed-out run can be force-removed (the
+        # daemon-owned container outlives the killed CLI process).
+        if container_name:
+            cmd.extend(["--name", container_name])
+        cmd.extend(
+            [
+                "--memory",
+                mem,
+                f"--cpus={cpu_limit}",
+                "--security-opt",
+                "no-new-privileges:true",
+                "--cap-drop",
+                "ALL",
+            ]
+        )
 
         if not network:
             cmd.extend(["--network", "none"])
@@ -212,6 +258,7 @@ class BaseSandbox(ABC):
             SandboxRuntimeError: If the container runtime fails to start.
         """
         effective_timeout = timeout if timeout is not None else self._default_timeout
+        container_name = new_sandbox_container_name()
         cmd = self._build_command(
             image,
             command,
@@ -221,6 +268,7 @@ class BaseSandbox(ABC):
             network=network,
             read_only=read_only,
             env=env,
+            container_name=container_name,
         )
 
         logger.info(
@@ -264,6 +312,8 @@ class BaseSandbox(ABC):
         except TimeoutError as exc:
             proc.kill()
             await proc.wait()
+            # The daemon-owned container survives the killed CLI; remove it.
+            await force_remove_container(self._runtime, container_name)
             raise SandboxTimeoutError(
                 f"{self._error_prefix} timed out after {effective_timeout}s"
             ) from exc

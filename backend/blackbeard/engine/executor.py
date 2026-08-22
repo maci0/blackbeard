@@ -1453,6 +1453,11 @@ async def _run_crew_async(
                 )
                 raise db_err from e
         finally:
+            # Unregister this execution's CrewAI event-bus handlers. The bus
+            # is a process-wide singleton; without this, handlers accumulate
+            # one set per execution and stale handlers re-fire on later runs.
+            if listener is not None:
+                listener.close()
             # --- Virtual key cleanup ---
             # virtual_key is only set when key creation succeeded,
             # which guarantees key_mgr was also created in the same block.

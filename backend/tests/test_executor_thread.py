@@ -1064,6 +1064,91 @@ class TestSetupListeners:
         assert set(registered_events) == expected_events
 
 
+class TestListenerClose:
+    """Tests for BlackbeardExecutionListener.close() bus teardown."""
+
+    def _make_listener(self) -> Any:
+        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
+
+        eid = uuid.uuid4()
+        mock_factory = MagicMock()
+
+        with (
+            patch(
+                "blackbeard.engine.execution_listener._get_sync_session_factory",
+                return_value=mock_factory,
+            ),
+            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
+        ):
+            return BlackbeardExecutionListener(
+                execution_id=eid,
+                db_url="postgresql+asyncpg://localhost/test",
+            )
+
+    def test_close_unregisters_all_handlers(self) -> None:
+        listener = self._make_listener()
+        mock_bus = MagicMock()
+        handlers: dict[type, Any] = {}
+
+        def fake_on(event_type):
+            def decorator(fn: Any) -> Any:
+                handlers[event_type] = fn
+                return fn
+
+            return decorator
+
+        mock_bus.on = fake_on
+
+        listener.setup_listeners(mock_bus)
+        assert len(handlers) == 8
+
+        unregistered: list[tuple[type, Any]] = []
+        mock_bus.off = lambda event_type, handler: unregistered.append((event_type, handler))
+
+        listener.close()
+
+        assert sorted(unregistered, key=lambda p: id(p[1])) == sorted(
+            handlers.items(), key=lambda p: id(p[1])
+        )
+        assert {evt for evt, _ in unregistered} == set(handlers)
+
+    def test_close_is_idempotent(self) -> None:
+        listener = self._make_listener()
+        mock_bus = MagicMock()
+
+        def fake_on(event_type):
+            return lambda fn: fn
+
+        mock_bus.on = fake_on
+        mock_bus.off = MagicMock()
+        listener.setup_listeners(mock_bus)
+
+        listener.close()
+        assert mock_bus.off.call_count == 8
+
+        listener.close()
+        assert mock_bus.off.call_count == 8
+
+    def test_close_swallows_unregister_errors(self) -> None:
+        listener = self._make_listener()
+        mock_bus = MagicMock()
+
+        def fake_on(event_type):
+            return lambda fn: fn
+
+        mock_bus.on = fake_on
+
+        def failing_off(event_type: type, handler: Any) -> None:
+            raise RuntimeError("bus gone")
+
+        mock_bus.off = failing_off
+        listener.setup_listeners(mock_bus)
+
+        # Must not raise and must drain the registration list.
+        listener.close()
+        assert listener._registered_handlers == []
+
+
 # ===========================================================================
 # 10. _write_event (_record_event equivalent)
 # ===========================================================================
