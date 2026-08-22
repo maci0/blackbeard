@@ -172,4 +172,24 @@ describe('fuzz: serializeValue', () => {
       { numRuns: 50 },
     )
   })
+
+  it('single-line strings round-trip as strings through a key/value document', () => {
+    fc.assert(
+      fc.property(
+        fc.string({ maxLength: 40 }).filter((s) => !s.includes('\n')),
+        (value) => {
+          const doc = parseYaml(`k: ${serializeValue(value, 0)}`)
+          expect(doc.k).toBe(value)
+        },
+      ),
+      { numRuns: NUM_RUNS },
+    )
+  })
+
+  it('quotes numeric-looking strings so they stay strings', () => {
+    for (const value of ['4.1', '007', '1e5', 'true', 'false', 'null']) {
+      const doc = parseYaml(`k: ${serializeValue(value, 0)}`)
+      expect(doc.k).toBe(value)
+    }
+  })
 })

@@ -738,7 +738,7 @@ export default function Layout() {
           <div className={collapsed ? 'md:hidden' : ''}>
             <HelpMenu onRestartTour={handleRestartTour} />
           </div>
-          <div className={`flex items-center gap-2 ${collapsed ? '' : ''}`}>
+          <div className="flex items-center gap-2">
             <div
               title={
                 apiLastChecked

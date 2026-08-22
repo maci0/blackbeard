@@ -3,7 +3,19 @@
 import yaml from 'js-yaml'
 import type { Resource } from '@/lib/types'
 
-const YAML_SPECIAL_CHARS = /[:#{}[\],&*?|<>=!%@`]/
+/**
+ * True when a single-line string must be quoted so that a YAML round-trip
+ * reads it back as the same string. Covers special characters and values
+ * YAML would coerce to another type ("4.1" -> 4.1, "007" -> 7, "true" -> true).
+ */
+function needsQuoting(value: string): boolean {
+  try {
+    if (yaml.load(value, { schema: yaml.JSON_SCHEMA }) !== value) return true
+  } catch {
+    return true
+  }
+  return value.startsWith(' ') || value.endsWith(' ')
+}
 
 export function serializeValue(value: unknown, indent: number): string {
   const pad = '  '.repeat(indent)
@@ -21,13 +33,7 @@ export function serializeValue(value: unknown, indent: number): string {
         .join('\n')
       return `|\n${indented}`
     }
-    if (
-      YAML_SPECIAL_CHARS.test(value) ||
-      value.startsWith(' ') ||
-      value === 'true' ||
-      value === 'false' ||
-      value === 'null'
-    ) {
+    if (needsQuoting(value)) {
       return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
     }
     return value
@@ -93,4 +99,13 @@ export function parseYaml(yamlStr: string): Record<string, unknown> {
     return {}
   }
   return result as Record<string, unknown>
+}
+
+/** Parse a multi-document YAML stream into resource-shaped objects. */
+export function parseYamlDocs(yamlStr: string): Record<string, unknown>[] {
+  const docs = yaml.loadAll(yamlStr, undefined, { schema: yaml.JSON_SCHEMA })
+  return docs.filter(
+    (d): d is Record<string, unknown> =>
+      d !== null && d !== undefined && typeof d === 'object' && !Array.isArray(d),
+  )
 }

@@ -116,21 +116,6 @@ export default function Executions() {
 
   const { notify } = useNotifications()
   const addNotification = useNotificationStore((s) => s.add)
-  const notifiedIds = useRef(new Set<string>())
-
-  useEffect(() => {
-    if (executions.length === 0) return
-    if (notifiedIds.current.size === 0) {
-      for (const e of executions) {
-        notifiedIds.current.add(e.id)
-      }
-      return
-    }
-    for (const e of executions) {
-      if (notifiedIds.current.has(e.id)) continue
-      notifiedIds.current.add(e.id)
-    }
-  }, [executions])
 
   const prevStatuses = useRef(new Map<string, string>())
   useEffect(() => {

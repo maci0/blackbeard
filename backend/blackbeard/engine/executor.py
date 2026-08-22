@@ -135,6 +135,10 @@ _TEMPORAL_WORKER_ID = "temporal"
 # replica's startup recovery. Must exceed the longest expected crew run.
 _ORPHAN_RECOVERY_CUTOFF = timedelta(hours=2)
 
+# Hard cap on rows fetched per event-list query. The events endpoint pages up
+# to 1000 events plus one extra has-more probe row, hence 1001.
+_MAX_EVENT_QUERY_LIMIT = 1001
+
 
 def _stale_execution_filter() -> Any:
     """Filter for non-terminal executions this instance may recover.
@@ -770,7 +774,9 @@ def _snapshot_resource(resource: Resource) -> dict[str, Any]:
 
 
 _MAX_SNAPSHOT_DEPTH = 20
-_MAX_SNAPSHOT_RESOURCES = 200
+# Snapshot everything an execution could reach. Must not be lower than
+# _PROJECT_RESOURCE_LIMIT, or valid projects lose refs before kickoff.
+_MAX_SNAPSHOT_RESOURCES = _PROJECT_RESOURCE_LIMIT
 
 
 def _snapshot_crew_resources(
@@ -1055,7 +1061,6 @@ async def _run_crew_async(
         )
 
         listener: BlackbeardExecutionListener | None = None
-        virtual_key: str | None = None
         try:
             mock_resources = {
                 key: Resource(
@@ -1097,7 +1102,6 @@ async def _run_crew_async(
                         },
                     )
                     virtual_api_key = key_info["key"]
-                    virtual_key = virtual_api_key
 
                     execution = await _get_execution_for_update(session, execution_id)
                     # Cancel may have won while we were creating the key — do not
@@ -1459,11 +1463,11 @@ async def _run_crew_async(
             if listener is not None:
                 listener.close()
             # --- Virtual key cleanup ---
-            # virtual_key is only set when key creation succeeded,
+            # virtual_api_key is only set when key creation succeeded,
             # which guarantees key_mgr was also created in the same block.
-            if virtual_key is not None:
+            if virtual_api_key is not None:
                 try:
-                    deleted = await key_mgr.delete_key(virtual_key)
+                    deleted = await key_mgr.delete_key(virtual_api_key)
                 except Exception as key_exc:
                     deleted = False
                     logger.warning(
@@ -1611,7 +1615,9 @@ async def list_execution_events(
     limit: int = 200,
 ) -> list[ExecutionEvent]:
     """List execution events after a given sequence number."""
-    limit = max(1, min(limit, 1000))
+    # The events endpoint requests one extra row beyond its page size as a
+    # has-more probe, so the cap must admit 1000 + 1.
+    limit = max(1, min(limit, _MAX_EVENT_QUERY_LIMIT))
     result = await session.execute(
         select(ExecutionEvent)
         .where(ExecutionEvent.execution_id == execution_id, ExecutionEvent.sequence > after)

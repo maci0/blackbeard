@@ -165,7 +165,6 @@ def _register_temporal_definitions() -> None:
                         "KeyError",
                     ],
                 ),
-                heartbeat_timeout=timedelta(minutes=5),
             )
 
             workflow.logger.info(

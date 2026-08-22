@@ -106,19 +106,23 @@ export function Toolbar({
     return JSON.stringify({ crewName, nodes, edges }, null, 2)
   }, [crewName])
 
+  const downloadBlob = useCallback((dataUrl: string, filename: string) => {
+    const a = document.createElement('a')
+    a.href = dataUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }, [])
+
   const handleExportJSON = useCallback(() => {
     const json = getExportData()
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${toResourceName(crewName) || 'crew'}.json`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    downloadBlob(url, `${toResourceName(crewName) || 'crew'}.json`)
     URL.revokeObjectURL(url)
     toasts.success('Exported as JSON')
-  }, [crewName, getExportData, toasts])
+  }, [crewName, getExportData, toasts, downloadBlob])
 
   const handleCopyJSON = useCallback(async () => {
     const json = getExportData()
@@ -132,15 +136,6 @@ export function Toolbar({
 
   const getReactFlowElement = useCallback((): HTMLElement | null => {
     return document.querySelector<HTMLElement>('.react-flow')
-  }, [])
-
-  const downloadBlob = useCallback((dataUrl: string, filename: string) => {
-    const a = document.createElement('a')
-    a.href = dataUrl
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
   }, [])
 
   const handleExportPNG = useCallback(async () => {

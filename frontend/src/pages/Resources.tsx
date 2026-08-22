@@ -29,7 +29,7 @@ import { SmartTime } from '@/components/ui/SmartTime'
 import { KIND_TO_PLURAL, API_VERSION, NAME_RE } from '@/lib/kinds'
 import { useDocumentTitle } from '@/hooks'
 import { useToastStore } from '@/stores/toastStore'
-import { parseYaml } from '@/lib/yaml'
+import { parseYamlDocs } from '@/lib/yaml'
 import { Pagination } from '@/components/ui/Pagination'
 import { ViewToggle } from '@/components/ui/ViewToggle'
 import { useViewPrefsStore } from '@/stores/viewPrefsStore'
@@ -107,13 +107,9 @@ export default function Resources() {
   }, [])
 
   async function importYamlDocs(text: string): Promise<number> {
-    const docs = text
-      .split(/\n---(?:\n|$)/)
-      .map((d) => d.trim())
-      .filter(Boolean)
+    const docs = parseYamlDocs(text)
     let imported = 0
-    for (const doc of docs) {
-      const parsed = parseYaml(doc)
+    for (const parsed of docs) {
       const kind = typeof parsed.kind === 'string' ? parsed.kind : ''
       const metadata = parsed.metadata as
         | { name?: string; project?: string; labels?: Record<string, string> }

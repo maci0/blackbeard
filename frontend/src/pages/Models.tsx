@@ -611,12 +611,12 @@ export default function Models() {
     useToastStore.getState().info(`Checking connection to ${name}…`)
     try {
       const resp = await api.post<{
-        success: boolean
+        status: 'ok' | 'error'
         latency_ms?: number
         error?: string
         tokens?: { completion?: number; completion_time_ms?: number | null }
       }>(`/api/v1/models/test`, { model: spec.model })
-      if (resp.success) {
+      if (resp.status === 'ok') {
         let msg = `Connected to ${name} (${resp.latency_ms ?? 0} ms)`
         const t = resp.tokens
         if (t?.completion && resp.latency_ms && resp.latency_ms > 0) {

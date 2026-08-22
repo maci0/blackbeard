@@ -1268,14 +1268,15 @@ class ResourceLoader:
                             agent, agent_resource, tool_loading, resource.project
                         )
 
-            # Set crew-level guardrails so build_task() can prepend them
+            # Set crew-level guardrails so build_task() can prepend them,
+            # clearing them even if a build fails so they cannot leak into
+            # later builds made through this same loader.
             self._crew_guardrail_refs = list(spec.get("guardrails", []))
-
-            task_refs = spec.get("tasks", [])
-            tasks = [self.build_task(ref) for ref in task_refs]
-
-            # Clear crew guardrails after tasks are built
-            self._crew_guardrail_refs = []
+            try:
+                task_refs = spec.get("tasks", [])
+                tasks = [self.build_task(ref) for ref in task_refs]
+            finally:
+                self._crew_guardrail_refs = []
 
             process_str = spec.get("process", "sequential")
             process = _PROCESS_MAP.get(process_str, Process.sequential)

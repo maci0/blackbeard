@@ -13,11 +13,14 @@ interface UsePresenceReturn {
 
 const MAX_RECONNECT_DELAY_MS = 30_000
 const INITIAL_RECONNECT_DELAY_MS = 1_000
+/** Maximum reconnect attempts before giving up, matching useCollaboration. */
+const MAX_RECONNECT_ATTEMPTS = 5
 
 export function usePresence(roomId: string | null): UsePresenceReturn {
   const [users, setUsers] = useState<PresenceUser[]>([])
   const [connected, setConnected] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
+  const reconnectAttemptsRef = useRef(0)
   const reconnectDelayRef = useRef(INITIAL_RECONNECT_DELAY_MS)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
@@ -33,6 +36,7 @@ export function usePresence(roomId: string | null): UsePresenceReturn {
     }
     setConnected(false)
     setUsers([])
+    reconnectAttemptsRef.current = 0
     reconnectDelayRef.current = INITIAL_RECONNECT_DELAY_MS
   }, [])
 
@@ -57,6 +61,7 @@ export function usePresence(roomId: string | null): UsePresenceReturn {
       ws.onopen = () => {
         if (!mountedRef.current) return
         setConnected(true)
+        reconnectAttemptsRef.current = 0
         reconnectDelayRef.current = INITIAL_RECONNECT_DELAY_MS
 
         let id = 'anonymous'
@@ -97,6 +102,11 @@ export function usePresence(roomId: string | null): UsePresenceReturn {
         setConnected(false)
         wsRef.current = null
 
+        if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+          console.warn('[presence] giving up after max reconnect attempts')
+          return
+        }
+        reconnectAttemptsRef.current += 1
         const delay = reconnectDelayRef.current
         reconnectDelayRef.current = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS)
         reconnectTimeoutRef.current = setTimeout(connect, delay)
