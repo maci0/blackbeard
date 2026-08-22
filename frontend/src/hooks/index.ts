@@ -1,4 +1,6 @@
-export { useCollaboration } from './useCollaboration'
+// useCollaboration is intentionally NOT re-exported here: it imports
+// studioStore (and with it @xyflow/react) into the entry chunk for every
+// route. Import it directly from '@/hooks/useCollaboration' instead.
 export { useCopyToClipboard } from './useCopyToClipboard'
 export { useDarkMode } from './useDarkMode'
 export type { ThemePreference } from './useDarkMode'

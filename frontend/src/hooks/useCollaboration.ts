@@ -82,7 +82,14 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
       return
     }
 
+    // Guards against zombie reconnects: the closing socket's onclose fires
+    // asynchronously after cleanup ran (unmount / crew switch / disable),
+    // and without this flag it would schedule a reconnect for an effect
+    // that no longer exists — leaking a ghost connection to the old room.
+    let disposed = false
+
     function connect() {
+      if (disposed) return
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       const token = localStorage.getItem(TOKEN_KEY) ?? ''
       const authParam = token ? `?token=${encodeURIComponent(token)}` : ''
@@ -103,7 +110,7 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
         setRemoteCursors(new Map())
         wsRef.current = null
 
-        if (enabled && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+        if (!disposed && enabled && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
           reconnectAttemptsRef.current += 1
           const delay = reconnectDelayRef.current
           reconnectDelayRef.current = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS)
@@ -128,6 +135,7 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
     connect()
 
     return () => {
+      disposed = true
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
         reconnectTimeoutRef.current = null

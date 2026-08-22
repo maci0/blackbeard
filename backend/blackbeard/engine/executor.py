@@ -1813,8 +1813,16 @@ async def cleanup_orphaned_keys() -> int:
         return False
 
     if stale_list:
+        # Cap concurrency: after a crash stale_list can hold up to 1000 rows,
+        # and an unbounded gather would fire them all at the proxy at once.
+        delete_sem = asyncio.Semaphore(10)
+
+        async def _delete_bounded(execution: Execution) -> bool:
+            async with delete_sem:
+                return await _delete_one(execution)
+
         results = await asyncio.gather(
-            *(_delete_one(e) for e in stale_list), return_exceptions=True
+            *(_delete_bounded(e) for e in stale_list), return_exceptions=True
         )
         keys_deleted = sum(1 for r in results if r is True)
 

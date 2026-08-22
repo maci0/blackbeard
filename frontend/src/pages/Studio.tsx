@@ -6,7 +6,8 @@ import { useShallow } from 'zustand/react/shallow'
 import { useStudioStore } from '@/stores/studioStore'
 import { api } from '@/api/client'
 import { capitalize, toResourceName, parseRef, getErrorMessage } from '@/lib/utils'
-import { useCollaboration, useDocumentTitle, useMediaQuery, usePresence } from '@/hooks'
+import { useDocumentTitle, useMediaQuery, usePresence } from '@/hooks'
+import { useCollaboration } from '@/hooks/useCollaboration'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { API_VERSION, KIND_TO_PLURAL } from '@/lib/kinds'
@@ -706,8 +707,12 @@ function StudioInner() {
         const exec = await api.get<Execution>(`/api/v1/executions/${executionId}`)
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mutated by cleanup after await
         if (pollCancelledRef.current) return
-        if (TERMINAL_STATUSES.has(exec.status) && exec.tasks && exec.tasks.length > 0) {
-          applyExecResults(exec.tasks, exec.status)
+        if (TERMINAL_STATUSES.has(exec.status)) {
+          // Stop polling on any terminal status — a run that failed before
+          // any task started has tasks: [] and would otherwise poll forever.
+          if (exec.tasks && exec.tasks.length > 0) {
+            applyExecResults(exec.tasks, exec.status)
+          }
           return
         }
       } catch (err) {

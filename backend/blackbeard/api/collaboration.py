@@ -392,7 +392,9 @@ async def _broadcast(
     # the loopback delivery to our own subscription is dropped in _listen.
     backend = _get_valkey_backend()
     if backend is not None:
-        await backend.publish_raw(room, json.dumps({"origin": _REPLICA_ID, "msg": message}))
+        # Reuse the already-serialized message body — _REPLICA_ID is a
+        # uuid4 hex string, so splicing it into the envelope needs no escaping.
+        await backend.publish_raw(room, f'{{"origin": "{_REPLICA_ID}", "msg": {text}}}')
 
 
 @router.websocket("/ws/collab/{crew_name}")

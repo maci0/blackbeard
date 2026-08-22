@@ -16,6 +16,12 @@ export function usePolling(
     let timeoutId: ReturnType<typeof setTimeout>
     const tick = () => {
       if (!active) return
+      // Skip API calls while the tab is hidden; keep the loop alive so
+      // polling resumes on its own (plus immediately via visibilitychange).
+      if (document.hidden) {
+        timeoutId = setTimeout(tick, intervalMs)
+        return
+      }
       void savedCallback
         .current()
         .catch((err: unknown) => {
@@ -25,10 +31,17 @@ export function usePolling(
           if (active) timeoutId = setTimeout(tick, intervalMs)
         })
     }
+    const onVisible = () => {
+      if (!active || document.hidden) return
+      clearTimeout(timeoutId)
+      tick()
+    }
+    document.addEventListener('visibilitychange', onVisible)
     timeoutId = setTimeout(tick, intervalMs)
     return () => {
       active = false
       clearTimeout(timeoutId)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [intervalMs, enabled])
 }

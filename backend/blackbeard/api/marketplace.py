@@ -15,9 +15,17 @@ import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from blackbeard.api.resources import _post_mutation_hooks, save_version_snapshot
+from blackbeard.api.resources import (
+    _AUTHZ_CACHE_KINDS,
+    _AUTOMATION_KIND,
+    _fire_and_forget,
+    _maybe_reload_scheduler,
+    _sync_llm_to_litellm,
+    save_version_snapshot,
+)
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth import require_permission
+from blackbeard.auth.authorizer import clear_cache as _clear_authz_cache
 from blackbeard.models.resource_schemas import ResourceCreate
 from blackbeard.rate_limiter import check_rate_limit, marketplace_limiter
 from blackbeard.resources import (
@@ -285,7 +293,8 @@ async def import_from_url(
                 detail="Git URL must not contain embedded credentials",
             )
 
-        ssrf_error = check_url_ssrf(url)
+        # Off the event loop: uncached DNS resolution can block up to 2s.
+        ssrf_error = await asyncio.to_thread(check_url_ssrf, url)
         if ssrf_error:
             raise HTTPException(status_code=422, detail=ssrf_error)
 
@@ -396,10 +405,17 @@ async def import_from_url(
 
     if imported_names:
         await session.commit()
-        # Same side-effects as the CRUD routes: LiteLLM sync, scheduler
-        # reload, authz cache clear.
+        # Same side-effects as the CRUD routes: LiteLLM sync per resource,
+        # but scheduler reload and authz cache clear once per batch — firing
+        # them per resource makes a 500-resource import do 500 full scheduler
+        # rebuilds and cache wipes.
         for kind, name, spec in imported_specs:
-            _post_mutation_hooks(request, kind, name, spec)
+            _fire_and_forget(_sync_llm_to_litellm(kind, name, spec))
+        imported_kinds = {kind for kind, _, _ in imported_specs}
+        if _AUTOMATION_KIND in imported_kinds:
+            _fire_and_forget(_maybe_reload_scheduler(request, _AUTOMATION_KIND))
+        if imported_kinds & _AUTHZ_CACHE_KINDS:
+            _clear_authz_cache()
 
     logger.info(
         "Marketplace import: url=%s imported=%d errors=%d",

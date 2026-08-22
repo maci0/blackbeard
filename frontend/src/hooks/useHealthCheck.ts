@@ -22,16 +22,23 @@ export function useHealthCheck(): HealthCheckResult {
   const activeRef = useRef(true)
 
   const check = useCallback(async () => {
+    // Only commit state on an actual status transition — an unconditional
+    // setLastChecked(new Date()) re-rendered Layout (and the whole routed
+    // page under <Outlet />) every 30s even when nothing changed.
+    const commit = (next: HealthStatus) => {
+      setStatus((prev) => {
+        if (prev !== next) setLastChecked(new Date())
+        return next
+      })
+    }
     try {
       const data = await api.get<HealthResponse>('/api/v1/health')
       if (!activeRef.current) return
-      setStatus(data.status === 'ok' ? 'connected' : 'degraded')
-      setLastChecked(new Date())
+      commit(data.status === 'ok' ? 'connected' : 'degraded')
     } catch (err) {
       if (!activeRef.current) return
       console.warn('[health] check failed:', err)
-      setStatus('disconnected')
-      setLastChecked(new Date())
+      commit('disconnected')
     }
   }, [])
 

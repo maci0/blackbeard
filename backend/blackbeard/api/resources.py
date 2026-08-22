@@ -798,7 +798,8 @@ async def rollback_resource(
         )
 
     # A snapshot may predate schema changes; never restore an invalid spec.
-    errors, _refs = validate_resource(kind, snapshot.spec)
+    # Off the event loop: DNS/schema checks can take hundreds of ms.
+    errors, _refs = await asyncio.to_thread(validate_resource, kind, snapshot.spec)
     if errors:
         msgs = "; ".join(f"{e.field}: {e.message}" for e in errors)
         raise HTTPException(

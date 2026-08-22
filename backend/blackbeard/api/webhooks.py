@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 from datetime import datetime
@@ -139,7 +140,8 @@ async def create_webhook(
             detail="Webhook URL must not contain embedded credentials.",
         )
 
-    ssrf_error = check_url_ssrf(body.url)
+    # Off the event loop: uncached DNS resolution can block up to 2s.
+    ssrf_error = await asyncio.to_thread(check_url_ssrf, body.url)
     if ssrf_error:
         raise HTTPException(status_code=422, detail=ssrf_error)
 
