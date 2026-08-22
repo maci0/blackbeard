@@ -386,7 +386,9 @@ async def chat_stream(
                         # clients can render "thinking" apart from the answer.
                         if reasoning:
                             yield (
-                                f'data: {{"reasoning_content":{json.dumps(reasoning)},"done":false}}\n\n'
+                                f'data: {{"reasoning_content":'
+                                f"{json.dumps(reasoning)}"
+                                ',"done":false}\n\n'
                             )
                         if content:
                             yield f'data: {{"content":{json.dumps(content)},"done":false}}\n\n'

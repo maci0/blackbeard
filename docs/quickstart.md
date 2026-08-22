@@ -30,6 +30,8 @@ cd blackbeard
 ./run.sh
 ```
 
+> **Windows:** the startup and seed scripts are bash scripts. Run them from [Git Bash](https://gitforwindows.org/) or WSL, e.g. `bash run.sh`.
+
 `run.sh` does three things:
 
 1. Creates `.env` from `.env.example` if it does not exist (with safe dev defaults)

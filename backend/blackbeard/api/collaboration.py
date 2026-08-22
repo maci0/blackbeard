@@ -517,7 +517,10 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
     # Send room state to the new user ("count" is the canonical field the
     # client reads; "participants" kept as an alias for older clients).
     await websocket.send_json(
-        {"type": "room_state", "data": {"participants": participant_count, "count": participant_count}}
+        {
+            "type": "room_state",
+            "data": {"participants": participant_count, "count": participant_count},
+        }
     )
 
     # Per-client rate limiter for high-frequency message types.
