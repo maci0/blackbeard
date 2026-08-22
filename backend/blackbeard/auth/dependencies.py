@@ -109,6 +109,13 @@ async def get_current_user(
         cached = getattr(request.state, "jwt_payload", None)
         return await _resolve_bearer_user(auth_header[7:], session, cached_payload=cached)
 
+    # EventSource cannot set custom headers either — accept a JWT via
+    # ?token= on SSE endpoints (mirrors the WebSocket ?token= contract).
+    if not auth_header and SSE_STREAM_RE.match(request.url.path):
+        token = request.query_params.get("token", "")
+        if token:
+            return await _resolve_bearer_user(token, session)
+
     # Try resolving the X-API-Key to a user (optional — API key may belong to
     # the global system key rather than a user-specific key).
     # Only accept query-string keys on SSE/stream endpoints where EventSource

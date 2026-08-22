@@ -106,9 +106,10 @@ export default function Settings() {
     api
       .get<{ has_key: boolean; masked_key?: string }>('/api/v1/auth/api-key')
       .then((res) => {
-        if (res.has_key && res.masked_key) {
+        // The backend stores only a hash, so masked_key may be absent.
+        if (res.has_key) {
           setKeyStatus('active')
-          setMaskedKey(res.masked_key)
+          setMaskedKey(res.masked_key ?? '')
         } else {
           setKeyStatus('none')
           setMaskedKey('')
@@ -401,13 +402,13 @@ export default function Settings() {
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">OpenAPI Docs</span>
               <a
-                href="/api/v1/docs"
+                href="/docs"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 text-xs text-primary hover:underline"
                 title="Open API documentation"
               >
-                /api/v1/docs <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                /docs <ExternalLink className="h-3 w-3" aria-hidden="true" />
                 <span className="sr-only">(opens in new tab)</span>
               </a>
             </div>

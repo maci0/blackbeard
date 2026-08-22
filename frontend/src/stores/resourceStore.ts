@@ -26,8 +26,9 @@ interface ResourceState {
       metadata?: { name: string; project?: string; labels?: Record<string, string> }
       version: number
     },
+    project?: string,
   ) => Promise<Resource>
-  deleteResource: (kindPlural: string, name: string) => Promise<void>
+  deleteResource: (kindPlural: string, name: string, project?: string) => Promise<void>
 }
 
 export const useResourceStore = create<ResourceState>((set, get) => ({

@@ -514,12 +514,20 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
         {"type": "participant_joined", "data": {"count": participant_count}},
     )
 
-    # Send room state to the new user
-    await websocket.send_json({"type": "room_state", "data": {"participants": participant_count}})
+    # Send room state to the new user ("count" is the canonical field the
+    # client reads; "participants" kept as an alias for older clients).
+    await websocket.send_json(
+        {"type": "room_state", "data": {"participants": participant_count, "count": participant_count}}
+    )
 
     # Per-client rate limiter for high-frequency message types.
     # Uses a simple sliding-window counter to prevent cursor_move flooding.
     _hf_timestamps: collections.deque[float] = collections.deque()
+
+    # Identity of this client, learned from its own cursor_move broadcasts
+    # (each client tags its cursors with its userId) so other participants
+    # can clean up the departing user's cursor on leave.
+    client_user_id: str | None = None
 
     try:
         while True:
@@ -563,6 +571,12 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
                 if len(_hf_timestamps) >= _RATE_LIMIT_MAX:
                     continue
                 _hf_timestamps.append(now)
+
+            # Remember this client's identity for the leave broadcast.
+            if msg_type == "cursor_move" and msg_data is not None:
+                candidate = msg_data.get("userId")
+                if isinstance(candidate, str) and candidate:
+                    client_user_id = candidate
 
             await _broadcast(crew_name, websocket, message)
     except WebSocketDisconnect:
@@ -616,10 +630,14 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
         )
 
         if remaining > 0:
+            leave_data: dict[str, Any] = {"count": remaining}
+            if client_user_id is not None:
+                # Lets clients remove the departing user's remote cursor.
+                leave_data["userId"] = client_user_id
             await _broadcast(
                 crew_name,
                 websocket,
-                {"type": "participant_left", "data": {"count": remaining}},
+                {"type": "participant_left", "data": leave_data},
             )
 
 

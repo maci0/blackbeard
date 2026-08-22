@@ -229,6 +229,26 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         _log_request(request, response, start, client_ip)
         return response
 
+    # EventSource cannot set custom headers — on SSE endpoints also accept a
+    # JWT via ?token= (mirrors the WebSocket ?token= contract). Query-string
+    # credentials leak via proxy logs, browser history, and Referer headers
+    # (CWE-598), so this stays restricted to the execution stream path.
+    if not auth_header and SSE_STREAM_RE.match(path):
+        token = request.query_params.get("token", "")
+        if token:
+            try:
+                payload = decode_access_token(token)
+                request.state.jwt_payload = payload
+                user_id_var.set(payload.get("sub", ""))
+                response = await call_next(request)
+                response.headers["X-Request-Id"] = request_id
+                _log_request(request, response, start, client_ip)
+                return response
+            except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError):
+                # Fall through to the generic 401 below, which also
+                # records the auth failure for rate limiting.
+                pass
+
     # Check API key — constant-time compare (SHA-256 digests) so length and
     # content are not distinguishable via short-circuit timing (CWE-208).
     # Fall back to ?api_key= query parameter ONLY for SSE/stream endpoints where

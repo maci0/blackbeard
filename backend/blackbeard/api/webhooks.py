@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
+import json
 import logging
 import secrets
 from datetime import datetime
@@ -21,6 +24,7 @@ from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth import require_permission
 from blackbeard.config import settings
 from blackbeard.engine.execution_listener import invalidate_webhook_cache
+from blackbeard.http_client import get_sync_client
 from blackbeard.logging_config import safe_log_url
 from blackbeard.models import KNOWN_EXECUTION_EVENT_TYPES, User, Webhook, get_session
 from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
@@ -105,6 +109,14 @@ class WebhookCreateResponse(WebhookResponse):
     """Response after creating a webhook (includes secret once)."""
 
     secret: str = Field(description="HMAC-SHA256 signing secret — shown only on create")
+
+
+class WebhookTestResponse(BaseModel):
+    """Outcome of a test delivery to a webhook endpoint."""
+
+    delivered: bool
+    status_code: int | None = None
+    detail: str
 
 
 @router.post(
@@ -257,6 +269,95 @@ async def get_webhook(
         active=webhook.active,
         created_at=webhook.created_at,
     )
+
+
+_TEST_EVENT_TYPE = "crew_started"
+
+
+def _deliver_test_webhook_sync(url: str, secret: str, payload: str) -> tuple[bool, int | None]:
+    """POST a signed test payload to a webhook URL. Returns (delivered, status_code)."""
+    sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    try:
+        client = get_sync_client("webhook-deliver", timeout=10, follow_redirects=False)
+        resp = client.post(
+            url,
+            content=payload,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": sig,
+                "X-Blackbeard-Event": _TEST_EVENT_TYPE,
+            },
+        )
+    except Exception as exc:
+        logger.info(
+            "Webhook test delivery failed: %s (%s)",
+            safe_log_url(url),
+            type(exc).__name__,
+            extra={"event": "webhook_test_delivery_error", "webhook_url": safe_log_url(url)},
+        )
+        return False, None
+    return resp.status_code < 400, resp.status_code
+
+
+@router.post(
+    "/{webhook_id}/test",
+    response_model=WebhookTestResponse,
+    responses={
+        404: {"description": "Webhook not found"},
+        422: {"description": "Webhook URL is not reachable (SSRF blocked)"},
+        429: {"description": "Too many mutation requests"},
+    },
+)
+async def test_webhook(
+    request: Request,
+    webhook_id: UUID = Path(..., description="Webhook UUID"),
+    session: AsyncSession = Depends(get_session),
+    user: User | None = Depends(require_permission("get", "Webhook")),
+) -> WebhookTestResponse:
+    """Send a signed test event to the webhook endpoint.
+
+    Delivers a payload shaped like real execution events (same HMAC-SHA256
+    signature headers) so receivers can verify their integration end to end.
+    """
+    check_rate_limit(mutation_limiter, user, _MUTATION_RATE_MSG)
+    result = await session.execute(select(Webhook).where(Webhook.id == webhook_id))
+    webhook = result.scalar_one_or_none()
+    if webhook is None:
+        raise HTTPException(status_code=404, detail=f"Webhook '{webhook_id}' not found")
+
+    ssrf_error = await asyncio.to_thread(check_url_ssrf, webhook.url)
+    if ssrf_error:
+        raise HTTPException(status_code=422, detail=ssrf_error)
+
+    payload = json.dumps(
+        {
+            "event_type": _TEST_EVENT_TYPE,
+            "execution_id": "",
+            "data": {"test": True},
+        },
+        default=str,
+    )
+    delivered, status_code = await asyncio.to_thread(
+        _deliver_test_webhook_sync, webhook.url, webhook.secret, payload
+    )
+
+    await log_audit(
+        session,
+        action="webhook_tested",
+        resource_type="Webhook",
+        resource_id=str(webhook.id),
+        detail={"url": safe_log_url(webhook.url), "delivered": delivered},
+        **audit_from_request(request, user),
+    )
+    await session.commit()
+
+    if delivered:
+        detail = f"Test event delivered (HTTP {status_code})"
+    elif status_code is not None:
+        detail = f"Endpoint responded with HTTP {status_code}"
+    else:
+        detail = "Delivery failed: endpoint unreachable"
+    return WebhookTestResponse(delivered=delivered, status_code=status_code, detail=detail)
 
 
 @router.delete(

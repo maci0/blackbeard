@@ -281,6 +281,7 @@ class StreamEvent(BaseModel):
     """A single SSE event in the streaming chat response."""
 
     content: str = ""
+    reasoning_content: str | None = None
     done: bool = False
     error: str | None = None
     tokens: TokenUsage | None = None
@@ -379,7 +380,14 @@ async def chat_stream(
                     choices = chunk_data.get("choices") or []
                     if choices:
                         delta = choices[0].get("delta", {})
-                        content = delta.get("content") or delta.get("reasoning_content") or ""
+                        content = delta.get("content") or ""
+                        reasoning = delta.get("reasoning_content") or ""
+                        # Reasoning tokens are streamed as a separate field so
+                        # clients can render "thinking" apart from the answer.
+                        if reasoning:
+                            yield (
+                                f'data: {{"reasoning_content":{json.dumps(reasoning)},"done":false}}\n\n'
+                            )
                         if content:
                             yield f'data: {{"content":{json.dumps(content)},"done":false}}\n\n'
 

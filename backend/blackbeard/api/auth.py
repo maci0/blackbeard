@@ -411,6 +411,31 @@ class ApiKeyResponse(BaseModel):
     api_key: str
 
 
+class ApiKeyStatusResponse(BaseModel):
+    """Whether the current user has an API key configured."""
+
+    has_key: bool
+
+
+@router.get(
+    "/api-key",
+    response_model=ApiKeyStatusResponse,
+    responses={401: {"description": "JWT Bearer token required"}},
+)
+async def get_api_key_status(
+    response: Response,
+    user: User = Depends(require_jwt_user),
+) -> ApiKeyStatusResponse:
+    """Check whether the current user has an API key configured.
+
+    Requires JWT Bearer authentication (API key auth is not accepted).
+    Only the SHA-256 hash of the key is stored, so no masked preview
+    can be returned.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    return ApiKeyStatusResponse(has_key=user.api_key is not None)
+
+
 @router.post(
     "/api-key",
     response_model=ApiKeyResponse,
