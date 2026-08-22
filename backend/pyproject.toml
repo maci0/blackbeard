@@ -92,6 +92,8 @@ select = [
     "PIE",                       # misc
     "T20",                       # no print
     "TCH",                       # type-checking imports
+    "DTZ",                       # naive datetimes compare/marshal incorrectly
+    "ISC",                       # implicit string concat hides missing commas
 ]
 ignore = [
     "ANN401",   # Any in signatures — needed for crewai untyped APIs

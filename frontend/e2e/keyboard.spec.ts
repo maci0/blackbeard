@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { login, loginAndNavigate } from './helpers'
+import { loginAndNavigate } from './helpers'
 
 test.describe('Keyboard accessibility', () => {
   test('Tab through login form fields', async ({ page }) => {
@@ -10,13 +10,7 @@ test.describe('Keyboard accessibility', () => {
     const emailInput = page.getByRole('textbox', { name: /email/i })
     await expect(emailInput).toBeFocused()
 
-    // Tab to password field
-    await page.keyboard.press('Tab')
-    // Next tab may hit the show/hide password button or the password field
-    // depending on DOM order; password input is next significant field
-    const passwordInput = page.getByLabel(/password/i)
-
-    // Tab until we reach the submit button
+    // Tab through login form fields toward the submit button
     await page.keyboard.press('Tab')
     await page.keyboard.press('Tab')
 

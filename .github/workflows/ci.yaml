@@ -97,10 +97,10 @@ jobs:
         run: uv sync --frozen --extra dev
 
       - name: Lint
-        run: uv run ruff check blackbeard_cli/
+        run: uv run ruff check .
 
       - name: Format check
-        run: uv run ruff format --check blackbeard_cli/
+        run: uv run ruff format --check .
 
       - name: Verify CLI loads
         run: uv run blackbeard --help

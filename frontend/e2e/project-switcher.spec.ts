@@ -48,7 +48,6 @@ test.describe('Project Switcher', () => {
       page.getByRole('button', { name: /default/i }),
     )
 
-    const initialText = await switcher.textContent()
     await switcher.click()
 
     const defaultOption = page.getByRole('option', { name: /default/i }).or(

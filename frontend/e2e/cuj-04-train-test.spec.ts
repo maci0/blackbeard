@@ -87,7 +87,7 @@ test.describe('CUJ-04: Train and Test', () => {
     await expect(dialog.locator('#run-dialog-iterations')).not.toBeVisible()
 
     // Switch to Train mode
-    dialog
+    await dialog
       .getByRole('radiogroup', { name: /execution mode/i })
       .getByRole('radio', { name: /train/i })
       .click()
@@ -106,7 +106,7 @@ test.describe('CUJ-04: Train and Test', () => {
     const dialog = page.getByRole('dialog')
 
     // Switch to Test mode
-    dialog
+    await dialog
       .getByRole('radiogroup', { name: /execution mode/i })
       .getByRole('radio', { name: /test/i })
       .click()
@@ -126,7 +126,7 @@ test.describe('CUJ-04: Train and Test', () => {
     await expect(dialog.locator('#run-dialog-filename')).not.toBeVisible()
 
     // Switch to Train mode
-    dialog
+    await dialog
       .getByRole('radiogroup', { name: /execution mode/i })
       .getByRole('radio', { name: /train/i })
       .click()
@@ -145,7 +145,7 @@ test.describe('CUJ-04: Train and Test', () => {
     const dialog = page.getByRole('dialog')
 
     // Switch to Test mode
-    dialog
+    await dialog
       .getByRole('radiogroup', { name: /execution mode/i })
       .getByRole('radio', { name: /test/i })
       .click()
@@ -164,7 +164,7 @@ test.describe('CUJ-04: Train and Test', () => {
     const dialog = page.getByRole('dialog')
 
     // Switch to Train mode
-    dialog
+    await dialog
       .getByRole('radiogroup', { name: /execution mode/i })
       .getByRole('radio', { name: /train/i })
       .click()
@@ -189,7 +189,7 @@ test.describe('CUJ-04: Train and Test', () => {
 
     const dialog = page.getByRole('dialog')
 
-    dialog
+    await dialog
       .getByRole('radiogroup', { name: /execution mode/i })
       .getByRole('radio', { name: /train/i })
       .click()
@@ -208,7 +208,7 @@ test.describe('CUJ-04: Train and Test', () => {
 
     const dialog = page.getByRole('dialog')
 
-    dialog
+    await dialog
       .getByRole('radiogroup', { name: /execution mode/i })
       .getByRole('radio', { name: /test/i })
       .click()
@@ -227,7 +227,7 @@ test.describe('CUJ-04: Train and Test', () => {
 
     const dialog = page.getByRole('dialog')
 
-    dialog
+    await dialog
       .getByRole('radiogroup', { name: /execution mode/i })
       .getByRole('radio', { name: /train/i })
       .click()
@@ -245,7 +245,7 @@ test.describe('CUJ-04: Train and Test', () => {
 
     const dialog = page.getByRole('dialog')
 
-    dialog
+    await dialog
       .getByRole('radiogroup', { name: /execution mode/i })
       .getByRole('radio', { name: /test/i })
       .click()

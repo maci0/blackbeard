@@ -69,7 +69,8 @@ class TestShellStateHeaders:
             timeout=30.0,
         )
         with patch(
-            "blackbeard_cli.credentials.get_valid_token", return_value="jwt-token-abc",
+            "blackbeard_cli.credentials.get_valid_token",
+            return_value="jwt-token-abc",
         ):
             headers = state.headers()
 

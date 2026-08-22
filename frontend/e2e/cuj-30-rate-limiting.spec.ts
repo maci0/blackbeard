@@ -20,10 +20,7 @@ test.describe('CUJ-30: Rate Limiting', () => {
     expect(fulfilled.length).toBeGreaterThan(0)
 
     // Check response statuses
-    const statuses = fulfilled.map((r) => {
-      if (r.status === 'fulfilled') return r.value.status()
-      return 0
-    })
+    const statuses = fulfilled.map((r) => r.value.status())
 
     // At least some should succeed (200)
     const successCount = statuses.filter((s) => s === 200).length
@@ -35,7 +32,7 @@ test.describe('CUJ-30: Rate Limiting', () => {
     if (rateLimitedCount > 0) {
       // Verify rate-limited responses have appropriate structure
       for (const result of fulfilled) {
-        if (result.status === 'fulfilled' && result.value.status() === 429) {
+        if (result.value.status() === 429) {
           const body = await result.value.text()
           // Should contain error information
           expect(body.length).toBeGreaterThan(0)

@@ -97,7 +97,6 @@ test.describe('CUJ-15: Project Management', () => {
       page,
     }) => {
       const table = page.getByRole('table')
-      const emptyState = page.getByText(/no projects yet/i)
 
       if (await table.isVisible()) {
         await expect(table.getByText('Name')).toBeVisible()

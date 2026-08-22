@@ -17,7 +17,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write 'src/**/*.{ts,tsx,css,html}'",
     "format:check": "prettier --check 'src/**/*.{ts,tsx,css,html}'",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p e2e",
     "test": "vitest",
     "test:e2e": "bunx playwright test",
     "check": "bun run typecheck && bun run lint && bun run format:check",

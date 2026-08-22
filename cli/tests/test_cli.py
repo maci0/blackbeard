@@ -89,7 +89,7 @@ def test_subcommand_help(cmd):
 
 
 @pytest.mark.parametrize(
-    "group,sub",
+    ("group", "sub"),
     [
         ("user", "list"),
         ("user", "invite"),

@@ -30,7 +30,8 @@ target-version = "py313"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "ANN", "RUF", "C4", "PIE", "T20", "TCH"]
+# Mirrors backend/blackbeard's rule set (minus PT-specific per-file ignores there).
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "ANN", "RUF", "C4", "PIE", "T20", "TCH", "DTZ", "ISC", "RSE", "PT"]
 ignore = ["ANN401"]
 
 [tool.ruff.lint.per-file-ignores]

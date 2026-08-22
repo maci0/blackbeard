@@ -19,11 +19,11 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, errorMessage: error.message }
   }
 
-  componentDidCatch(error: Error, _info: ErrorInfo): void {
+  override componentDidCatch(error: Error, _info: ErrorInfo): void {
     console.error('ErrorBoundary caught an error:', error.message)
   }
 
-  render() {
+  override render() {
     if (this.state.hasError) {
       return (
         <div

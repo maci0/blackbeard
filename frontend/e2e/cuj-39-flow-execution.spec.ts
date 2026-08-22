@@ -40,11 +40,6 @@ test.describe('CUJ-39: Flow Execution', () => {
     })
 
     test('flow step node type is available in palette', async ({ page }) => {
-      // The palette lists draggable node types including Flow Step
-      const palette = page
-        .locator('[data-testid="palette"]')
-        .or(page.locator('aside, [class*="palette"]'))
-
       // Flow Step should appear as a palette item
       const flowStepItem = page.getByText('Flow Step')
       await expect(flowStepItem.first()).toBeVisible({ timeout: 10000 })
