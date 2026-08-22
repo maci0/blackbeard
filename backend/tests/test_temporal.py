@@ -143,6 +143,43 @@ class TestSubmitTemporalExecution:
 
 
 # ---------------------------------------------------------------------------
+# Crew runner registration (composition-root injection point)
+# ---------------------------------------------------------------------------
+
+
+class TestRegisterCrewRunner:
+    def test_registration_stores_hooks(self):
+        from blackbeard.engine import temporal
+
+        async def _fake_run(**kwargs):
+            return None
+
+        def _fake_session_factory():
+            return None
+
+        original = (temporal._crew_session_factory, temporal._run_crew_handler)
+        try:
+            temporal.register_crew_runner(
+                session_factory=_fake_session_factory,
+                run_crew=_fake_run,
+            )
+            assert temporal._crew_session_factory is _fake_session_factory
+            assert temporal._run_crew_handler is _fake_run
+        finally:
+            temporal._crew_session_factory, temporal._run_crew_handler = original
+
+    def test_module_does_not_import_executor(self):
+        # Dependency direction: executor imports temporal to dispatch;
+        # temporal must not reach back into executor internals.
+        import inspect
+
+        from blackbeard.engine import temporal
+
+        source = inspect.getsource(temporal)
+        assert "blackbeard.engine.executor" not in source
+
+
+# ---------------------------------------------------------------------------
 # Settings defaults for temporal fields
 # ---------------------------------------------------------------------------
 

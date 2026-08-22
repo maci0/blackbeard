@@ -358,6 +358,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             from blackbeard.engine.temporal import TEMPORAL_AVAILABLE, start_temporal_worker
 
             if TEMPORAL_AVAILABLE:
+                from blackbeard.engine.executor import (
+                    _run_crew_async,
+                    _thread_session_factory,
+                )
+                from blackbeard.engine.temporal import register_crew_runner
+
+                register_crew_runner(
+                    session_factory=_thread_session_factory,
+                    run_crew=_run_crew_async,
+                )
                 await start_temporal_worker()
                 temporal_running = True
                 logger.info(

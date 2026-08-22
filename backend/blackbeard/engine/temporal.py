@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
@@ -78,6 +79,28 @@ _run_crew_activity: Any = None
 # Workflow class reference (set inside the TEMPORAL_AVAILABLE block)
 _CrewExecutionWorkflow: Any = None
 
+# Crew-execution core, wired in by the application composition root at
+# startup via register_crew_runner().  Kept as injected callables so this
+# module never imports the executor (which imports this module to dispatch).
+SessionFactory = Callable[[], Any]
+CrewRunner = Callable[..., Awaitable[None]]
+
+_crew_session_factory: SessionFactory | None = None
+_run_crew_handler: CrewRunner | None = None
+
+
+def register_crew_runner(session_factory: SessionFactory, run_crew: CrewRunner) -> None:
+    """Wire the crew-execution core into Temporal activities.
+
+    Must be called before any activity runs.  The composition root
+    (application lifespan) passes the executor's session factory and crew
+    runner here instead of this module importing them, keeping the
+    dependency direction one-way: executor -> temporal.
+    """
+    global _crew_session_factory, _run_crew_handler
+    _crew_session_factory = session_factory
+    _run_crew_handler = run_crew
+
 
 def _register_temporal_definitions() -> None:
     """Register Temporal workflow and activity definitions.
@@ -92,10 +115,16 @@ def _register_temporal_definitions() -> None:
     async def _activity_impl(payload: CrewExecutionInput) -> dict[str, Any]:
         """Temporal activity that runs a crew execution.
 
-        Reuses the existing ``_run_crew_async`` logic from the executor
-        module, running inside a Temporal activity context instead of a
-        raw thread.
+        Delegates to the crew runner registered at startup via
+        ``register_crew_runner()``, running inside a Temporal activity
+        context instead of a raw thread.
         """
+        if _run_crew_handler is None or _crew_session_factory is None:
+            raise RuntimeError(
+                "Crew runner not registered for Temporal activities; "
+                "register_crew_runner() must be called at startup"
+            )
+
         from uuid import UUID as _UUID
 
         from blackbeard.models import ExecutionType as _ExecType
@@ -103,12 +132,7 @@ def _register_temporal_definitions() -> None:
         execution_id = _UUID(payload.execution_id)
         execution_type = _ExecType(payload.execution_type)
 
-        from blackbeard.engine.executor import (
-            _run_crew_async,
-            _thread_session_factory,
-        )
-
-        thread_session = _thread_session_factory()
+        thread_session = _crew_session_factory()
 
         activity.logger.info(
             "Running crew activity: execution_id=%s crew=%s type=%s",
@@ -117,7 +141,7 @@ def _register_temporal_definitions() -> None:
             payload.execution_type,
         )
 
-        await _run_crew_async(
+        await _run_crew_handler(
             execution_id,
             payload.resource_snapshot,
             payload.crew_name,
