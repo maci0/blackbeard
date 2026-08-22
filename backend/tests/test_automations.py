@@ -215,17 +215,230 @@ async def test_webhook_trigger_not_webhook_type(client):
 # ── Scheduler unit tests ─────────────────────────────────────────────
 
 
-async def test_scheduler_start_stop():
-    """Scheduler can start and stop without errors."""
+async def test_scheduler_start_stop(db_session, monkeypatch):
+    """Scheduler can start against an empty DB and stop cleanly."""
     from blackbeard.engine.scheduler import AutomationScheduler
 
+    monkeypatch.setattr("blackbeard.engine.scheduler.async_session", lambda: db_session)
+    scheduler = AutomationScheduler()
+    await scheduler.start()
+    assert scheduler._running is True
+    await scheduler.stop()
+    assert len(scheduler._tasks) == 0
+    assert scheduler._running is False
+
+
+async def test_scheduler_start_skips_disabled_and_non_cron(db_session, monkeypatch):
+    """start() only schedules enabled automations with cron triggers."""
+    from blackbeard.engine.scheduler import AutomationScheduler
+    from tests.conftest import make_resource
+
+    rows = [
+        make_resource(
+            "Automation",
+            "cron-enabled",
+            {
+                "target": {"kind": "Crew", "name": "c"},
+                "trigger": {"type": "cron", "cron": "0 12 * * *"},
+                "enabled": True,
+            },
+        ),
+        make_resource(
+            "Automation",
+            "cron-disabled",
+            {
+                "target": {"kind": "Crew", "name": "c"},
+                "trigger": {"type": "cron", "cron": "0 12 * * *"},
+                "enabled": False,
+            },
+        ),
+        make_resource(
+            "Automation",
+            "webhook-only",
+            {
+                "target": {"kind": "Crew", "name": "c"},
+                "trigger": {"type": "webhook", "webhook_secret": "s" * 20},
+            },
+        ),
+    ]
+    db_session.add_all(rows)
+    await db_session.commit()
+
+    monkeypatch.setattr("blackbeard.engine.scheduler.async_session", lambda: db_session)
     scheduler = AutomationScheduler()
     try:
         await scheduler.start()
-    except OSError:
-        pytest.skip("PostgreSQL unavailable in unit test environment")
-    await scheduler.stop()
-    assert len(scheduler._tasks) == 0
+        assert set(scheduler._tasks) == {"cron-enabled"}
+    finally:
+        await scheduler.stop()
+
+
+class TestScheduleValidation:
+    """_schedule() must reject dangerous cron expressions (DoS guard)."""
+
+    async def _schedule_and_stop(self, cron_expr: str) -> int:
+        from blackbeard.engine.scheduler import AutomationScheduler
+
+        scheduler = AutomationScheduler()
+        scheduler._running = True
+        try:
+            scheduler._schedule("auto-1", cron_expr, {"kind": "Crew", "name": "c"}, {}, "default")
+            return len(scheduler._tasks)
+        finally:
+            scheduler._running = False
+            await scheduler.stop()
+
+    async def test_rejects_sub_minute_six_field_expression(self):
+        """Second-resolution (6-field) crons can fire every second and are rejected."""
+        assert await self._schedule_and_stop("*/5 * * * * *") == 0
+
+    async def test_rejects_invalid_cron_expression(self):
+        """Garbage expressions are rejected without raising."""
+        assert await self._schedule_and_stop("not a cron") == 0
+
+    async def test_accepts_valid_cron_expression(self):
+        """A normal 5-field expression schedules exactly one task."""
+        assert await self._schedule_and_stop("*/5 * * * *") == 1
+
+    async def test_reschedule_cancels_previous_task(self):
+        """Re-scheduling the same automation cancels the previous task."""
+        from blackbeard.engine.scheduler import AutomationScheduler
+
+        scheduler = AutomationScheduler()
+        scheduler._running = True
+        try:
+            scheduler._schedule("auto-1", "0 12 * * *", {"kind": "Crew", "name": "c"}, {}, "d")
+            first = scheduler._tasks["auto-1"]
+            scheduler._schedule("auto-1", "0 13 * * *", {"kind": "Crew", "name": "c"}, {}, "d")
+            second = scheduler._tasks["auto-1"]
+            assert second is not first
+        finally:
+            scheduler._running = False
+            await scheduler.stop()
+        # stop() awaits cancellation of every task it saw, including `first`.
+        assert first.cancelled()
+
+
+class TestClaimFiring:
+    """Cross-replica dedup via unique insert on automation_runs."""
+
+    @pytest.fixture
+    def _patched_session(self, db_session, monkeypatch):
+        monkeypatch.setattr("blackbeard.engine.scheduler.async_session", lambda: db_session)
+
+    @pytest.mark.usefixtures("_patched_session")
+    async def test_first_claim_wins(self):
+        from datetime import UTC, datetime
+
+        from blackbeard.engine.scheduler import AutomationScheduler
+
+        scheduler = AutomationScheduler()
+        when = datetime.now(UTC).replace(microsecond=0)
+        assert await scheduler._claim_firing("auto-1", when) is True
+        # A different automation at the same time does not conflict.
+        assert await scheduler._claim_firing("auto-2", when) is True
+
+    @pytest.mark.usefixtures("_patched_session")
+    async def test_duplicate_claim_is_deduped(self):
+        """The same (automation, scheduled_at) claimed twice loses the second time."""
+        from datetime import UTC, datetime
+
+        from blackbeard.engine.scheduler import AutomationScheduler
+
+        scheduler = AutomationScheduler()
+        when = datetime.now(UTC).replace(microsecond=0)
+        assert await scheduler._claim_firing("dup-auto", when) is True
+        assert await scheduler._claim_firing("dup-auto", when) is False
+
+    async def test_db_failure_fails_open(self, monkeypatch):
+        """Non-conflict DB errors trigger the firing anyway (fail open)."""
+        from datetime import UTC, datetime
+
+        from sqlalchemy.exc import OperationalError
+
+        from blackbeard.engine.scheduler import AutomationScheduler
+
+        class BrokenSession:
+            def add(self, _):
+                pass
+
+            async def flush(self):
+                raise OperationalError("stmt", {}, Exception("db gone"))
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+        monkeypatch.setattr("blackbeard.engine.scheduler.async_session", lambda: BrokenSession())
+        scheduler = AutomationScheduler()
+        when = datetime.now(UTC)
+        assert await scheduler._claim_firing("fail-open-auto", when) is True
+
+
+class TestTriggerTarget:
+    """_trigger_target dispatches Crew vs Flow targets to the executor."""
+
+    async def test_crew_target_calls_kickoff(self, monkeypatch):
+        from blackbeard.engine.scheduler import AutomationScheduler
+
+        calls: list[tuple[str, dict]] = []
+
+        async def fake_kickoff(_session, name, *, inputs, project):
+            calls.append((name, inputs))
+
+        async def fake_run_flow(*_a, **_kw):  # pragma: no cover - must not be called
+            raise AssertionError("run_flow called for a Crew target")
+
+        monkeypatch.setattr("blackbeard.engine.executor.kickoff", fake_kickoff)
+        monkeypatch.setattr("blackbeard.engine.executor.run_flow", fake_run_flow)
+
+        scheduler = AutomationScheduler()
+        await scheduler._trigger_target(
+            "t-auto",
+            {"kind": "Crew", "name": "my-crew"},
+            {"topic": "x"},
+            "default",
+        )
+        assert calls == [("my-crew", {"topic": "x"})]
+
+    async def test_flow_target_calls_run_flow(self, monkeypatch):
+        from blackbeard.engine.scheduler import AutomationScheduler
+
+        calls: list[str] = []
+
+        async def fake_kickoff(*_a, **_kw):  # pragma: no cover - must not be called
+            raise AssertionError("kickoff called for a Flow target")
+
+        async def fake_run_flow(_session, name, *, inputs, project):
+            calls.append(name)
+
+        monkeypatch.setattr("blackbeard.engine.executor.kickoff", fake_kickoff)
+        monkeypatch.setattr("blackbeard.engine.executor.run_flow", fake_run_flow)
+
+        scheduler = AutomationScheduler()
+        await scheduler._trigger_target(
+            "t-auto-flow",
+            {"kind": "Flow", "name": "my-flow"},
+            {},
+            "default",
+        )
+        assert calls == ["my-flow"]
+
+    async def test_trigger_failure_does_not_raise(self, monkeypatch):
+        """A failing target is logged, not raised (the cron task would die otherwise)."""
+        from blackbeard.engine.scheduler import AutomationScheduler
+
+        async def fake_kickoff(*_a, **_kw):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("blackbeard.engine.executor.kickoff", fake_kickoff)
+
+        scheduler = AutomationScheduler()
+        await scheduler._trigger_target(
+            "t-auto-fail", {"kind": "Crew", "name": "missing"}, {}, "default"
+        )
 
 
 # ── Kind registry tests ──────────────────────────────────────────────

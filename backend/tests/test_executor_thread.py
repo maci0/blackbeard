@@ -998,8 +998,9 @@ class TestFlush:
         listener._flush_timer = None
         listener._buffer = []
 
-        # Should not raise
+        # Should not raise, and must not touch the DB when there is nothing to flush.
         listener.flush()
+        mock_factory.assert_not_called()
 
 
 # ===========================================================================
@@ -1742,8 +1743,9 @@ class TestMarkFailedAsync:
         mock_ctx.__aexit__ = AsyncMock(return_value=False)
 
         with patch("blackbeard.engine.executor.async_session", return_value=mock_ctx):
-            # Should not raise
+            # Should not raise, and must not commit anything for a missing execution.
             await _mark_failed_async(eid, "Execution missing")
+        mock_session.commit.assert_not_called()
 
 
 # ===========================================================================

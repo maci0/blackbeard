@@ -178,8 +178,9 @@ class TestBroadcast:
 
     async def test_broadcast_empty_room(self) -> None:
         sender = FakeWebSocket()
-        # Room doesn't exist — should not raise
+        # Room doesn't exist — should not raise and must not create the room.
         await _broadcast_local("nonexistent", sender, {"type": "node_add", "data": {}})  # type: ignore[arg-type]
+        assert "nonexistent" not in _rooms
 
 
 # ---------------------------------------------------------------------------
