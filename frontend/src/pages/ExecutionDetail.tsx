@@ -344,6 +344,12 @@ function formatEventMessage(event: ExecutionEvent): string {
       return `⏸ Human input requested: "${str(d.prompt, 'Awaiting response…')}"`
     case 'hitl_response':
       return `✓ Human responded (${str(d.response_length, '?')} chars)`
+    case 'cost_alert': {
+      const alerts = Array.isArray(d.alerts_triggered)
+        ? d.alerts_triggered.map((a) => str(a)).join(', ')
+        : ''
+      return `⚠ Budget warning${alerts ? ` [${alerts}]` : ''}: ${str(d.total_tokens, '0')} tokens, $${str(d.cost_usd, '0')} spent`
+    }
     default:
       return `${event.event_type}: ${JSON.stringify(d)}`
   }
