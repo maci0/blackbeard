@@ -3,6 +3,8 @@
 Covers validate_resource() for all five resource kinds plus error paths.
 """
 
+import socket
+
 from blackbeard.resources.exceptions import ValidationError
 from blackbeard.resources.validator import validate_resource
 from tests.conftest import has_validation_error as _has_error
@@ -695,3 +697,80 @@ def test_validate_resource_no_refs():
     errors, refs = validate_resource("Agent", spec)
     assert errors == []
     assert len(refs) == 0
+
+
+# ---------------------------------------------------------------------------
+# host_resolves_external (delivery-time DNS re-check against rebinding)
+# ---------------------------------------------------------------------------
+
+from blackbeard.resources import validator
+from blackbeard.resources.validator import host_resolves_external
+
+
+def _reset_delivery_dns_cache() -> None:
+    with validator._delivery_dns_cache_lock:
+        validator._delivery_dns_cache.clear()
+
+
+def _fake_getaddrinfo(monkeypatch, results):
+    calls = []
+
+    def fake(host, *args, **kwargs):
+        calls.append(host)
+        if isinstance(results, Exception):
+            raise results
+        return results
+
+    monkeypatch.setattr(validator.socket, "getaddrinfo", fake)
+    return calls
+
+
+def test_host_resolves_external_public_ip(monkeypatch):
+    _reset_delivery_dns_cache()
+    _fake_getaddrinfo(monkeypatch, [(2, 1, 6, "", ("93.184.216.34", 0))])
+    assert host_resolves_external("example.com") is True
+
+
+def test_host_resolves_external_rebinds_to_metadata_ip(monkeypatch):
+    """A name that resolves to the cloud metadata IP must be rejected."""
+    _reset_delivery_dns_cache()
+    _fake_getaddrinfo(monkeypatch, [(2, 1, 6, "", ("169.254.169.254", 0))])
+    assert host_resolves_external("evil.example.com") is False
+
+
+def test_host_resolves_external_unresolvable_fails_closed(monkeypatch):
+    _reset_delivery_dns_cache()
+    _fake_getaddrinfo(monkeypatch, socket.gaierror(1, "Name or service not known"))
+    assert host_resolves_external("nonexistent.example.com") is False
+
+
+def test_host_resolves_external_unparseable_address_fails_closed(monkeypatch):
+    _reset_delivery_dns_cache()
+    _fake_getaddrinfo(monkeypatch, [(2, 1, 6, "", ("not-an-ip", 0))])
+    assert host_resolves_external("weird.example.com") is False
+
+
+def test_host_resolves_external_empty_hostname():
+    assert host_resolves_external("") is False
+
+
+def test_host_resolves_external_result_cached(monkeypatch):
+    _reset_delivery_dns_cache()
+    calls = _fake_getaddrinfo(monkeypatch, [(2, 1, 6, "", ("93.184.216.34", 0))])
+    assert host_resolves_external("cached.example.com") is True
+    assert host_resolves_external("cached.example.com") is True
+    assert len(calls) == 1
+
+
+def test_agent_policy_pii_proxy_url_ssrf():
+    """pii.proxy_url receives the LiteLLM master key; internal targets are blocked."""
+    from blackbeard.resources.validator import _validate_agent_policy_extra
+
+    errors: list[ValidationError] = []
+    _validate_agent_policy_extra({"pii": {"proxy_url": "http://169.254.169.254/redact"}}, errors)
+    assert any("proxy_url" in e.field for e in errors)
+
+
+def test_agent_policy_pii_proxy_url_ssrf_via_validate_resource():
+    errors, _ = validate_resource("AgentPolicy", {"pii": {"proxy_url": "http://10.0.0.5/redact"}})
+    assert any("proxy_url" in e.field for e in errors)

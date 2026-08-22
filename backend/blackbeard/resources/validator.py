@@ -411,6 +411,76 @@ def _check_dns_resolution(hostname: str, field_name: str, errors: list[Validatio
         errors.append(ValidationError(field_name, msg))
 
 
+# Short-TTL cache for delivery-time re-resolution. Registration-time DNS
+# checks go stale: attacker-controlled DNS can answer with a public IP during
+# validation and an internal IP later (DNS rebinding, TOCTOU). Outbound sinks
+# must re-resolve close to connect time, hence the short positive TTL.
+_DELIVERY_DNS_TTL = 60.0
+_delivery_dns_cache: collections.OrderedDict[str, tuple[float, bool]] = collections.OrderedDict()
+_delivery_dns_cache_lock = threading.Lock()
+
+
+def host_resolves_external(hostname: str, timeout: float = 2.0) -> bool:
+    """Resolve *hostname* now and verify every address is non-internal.
+
+    Delivery-time SSRF defense against DNS rebinding for URLs that already
+    passed registration-time validation. Fails closed: unresolvable or
+    unparseable addresses count as unsafe.
+    """
+    host = hostname.lower().rstrip(".")
+    if not host:
+        return False
+    if _allow_internal_urls():
+        return True
+
+    now = time.monotonic()
+    with _delivery_dns_cache_lock:
+        entry = _delivery_dns_cache.get(host)
+        if entry is not None and now - entry[0] < _DELIVERY_DNS_TTL:
+            _delivery_dns_cache.move_to_end(host)
+            return entry[1]
+
+    def _resolve() -> list[tuple[Any, ...]]:
+        return socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+
+    safe = False
+    try:
+        future = _get_dns_executor().submit(_resolve)
+        results = future.result(timeout=timeout)
+        safe = True
+        for _family, _type, _proto, _canonname, sockaddr in results:
+            try:
+                addr = ipaddress.ip_address(sockaddr[0])
+            except ValueError:
+                safe = False
+                break
+            if _is_internal_ip(addr):
+                safe = False
+                break
+    except (concurrent.futures.TimeoutError, OSError):
+        safe = False
+
+    with _delivery_dns_cache_lock:
+        while len(_delivery_dns_cache) >= _DNS_CACHE_MAX:
+            _delivery_dns_cache.popitem(last=False)
+        _delivery_dns_cache[host] = (time.monotonic(), safe)
+    return safe
+
+
+def _validate_agent_policy_extra(spec: dict[str, Any], errors: list[ValidationError]) -> None:
+    """Block SSRF via the PII redaction proxy URL.
+
+    ``pii.proxy_url`` receives the LiteLLM master key as a bearer token at
+    runtime (blackbeard.pii), so it must never be allowed to point at an
+    internal or attacker-chosen address.
+    """
+    pii = spec.get("pii")
+    if isinstance(pii, dict):
+        proxy_url = pii.get("proxy_url")
+        if proxy_url and isinstance(proxy_url, str):
+            _validate_url_ssrf(proxy_url, "spec.pii.proxy_url", errors)
+
+
 def _validate_knowledge_source_extra(spec: dict[str, Any], errors: list[ValidationError]) -> None:
     """Block path traversal in file_paths and SSRF in urls."""
     file_paths = spec.get("file_paths", [])
@@ -751,6 +821,8 @@ def validate_resource(
 
     if kind == "LLMConnection":
         _validate_llm_connection_extra(spec, errors)
+    elif kind == "AgentPolicy":
+        _validate_agent_policy_extra(spec, errors)
     elif kind == "KnowledgeSource":
         _validate_knowledge_source_extra(spec, errors)
     elif kind == "Tool":

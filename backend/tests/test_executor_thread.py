@@ -11,6 +11,7 @@ All external dependencies (DB sessions, CrewAI, LiteLLM, httpx) are mocked.
 
 from __future__ import annotations
 
+import socket
 import threading
 import uuid
 from datetime import UTC, datetime
@@ -1371,6 +1372,52 @@ class TestPrepareWebhookTargets:
 
         assert targets == []
         assert payload == ""
+
+
+# ===========================================================================
+# 12b. _get_webhook_hostname (delivery-time SSRF re-check)
+# ===========================================================================
+
+
+class TestGetWebhookHostname:
+    """Tests for blackbeard.engine.execution_listener._get_webhook_hostname."""
+
+    def test_internal_host_blocked(self) -> None:
+        import blackbeard.engine.execution_listener as el
+
+        el._webhook_host_cache.clear()
+        with patch.object(el, "host_resolves_external", return_value=True):
+            assert el._get_webhook_hostname("https://169.254.169.254/hook") is None
+            assert el._get_webhook_hostname("https://localhost/hook") is None
+
+    def test_dns_rebind_to_internal_blocked(self) -> None:
+        """A public-looking name that resolves internal at delivery time is blocked."""
+        import blackbeard.engine.execution_listener as el
+
+        el._webhook_host_cache.clear()
+        with patch.object(el, "host_resolves_external", return_value=False):
+            assert el._get_webhook_hostname("https://evil.example.com/hook") is None
+
+    def test_safe_external_host_returned(self) -> None:
+        import blackbeard.engine.execution_listener as el
+
+        el._webhook_host_cache.clear()
+        with patch.object(el, "host_resolves_external", return_value=True):
+            assert el._get_webhook_hostname("https://hooks.example.com/hook") == "hooks.example.com"
+
+    def test_unresolvable_host_blocked(self) -> None:
+        """Fail closed when delivery-time DNS resolution errors."""
+        import blackbeard.engine.execution_listener as el
+        from blackbeard.resources import validator
+
+        el._webhook_host_cache.clear()
+        validator._delivery_dns_cache.clear()
+
+        def _boom(*args: object, **kwargs: object) -> list[object]:
+            raise socket.gaierror(1, "Name or service not known")
+
+        with patch.object(validator.socket, "getaddrinfo", _boom):
+            assert el._get_webhook_hostname("https://unresolvable.invalid/hook") is None
 
 
 # ===========================================================================

@@ -48,7 +48,7 @@ from blackbeard.models import ExecutionEvent, ExecutionEventType, ExecutionTask,
 from blackbeard.models.execution_schemas import redact_sensitive_values
 from blackbeard.pii import redact_dict as _redact_dict
 from blackbeard.pii import redact_text as _redact_text_fn
-from blackbeard.resources import is_internal_host
+from blackbeard.resources import host_resolves_external, is_internal_host
 
 # ---------------------------------------------------------------------------
 # Optional OpenTelemetry integration
@@ -354,24 +354,29 @@ _MAX_WEBHOOK_HOST_CACHE = 1000
 
 
 def _get_webhook_hostname(webhook_url: str) -> str | None:
-    """Return cached parsed hostname for a webhook URL. None if internal (blocked)."""
+    """Return the URL hostname when safe to deliver to, else None.
+
+    The string-level blocklist parse is cached per URL; a fresh DNS
+    resolution runs on every call (short-TTL cached inside
+    ``host_resolves_external``) because registration-time SSRF checks go
+    stale when attacker-controlled DNS rebinds the name to an internal
+    address.
+    """
     with _webhook_host_cache_lock:
         cached = _webhook_host_cache.get(webhook_url)
         if cached is not None:
             _webhook_host_cache.move_to_end(webhook_url)
-            return cached if cached != "" else None
-    hostname = urlparse(webhook_url).hostname or ""
-    is_blocked = is_internal_host(hostname) if hostname else True
-    with _webhook_host_cache_lock:
-        # Another thread may have filled the entry while we parsed; reuse it.
-        cached = _webhook_host_cache.get(webhook_url)
-        if cached is not None:
-            _webhook_host_cache.move_to_end(webhook_url)
-            return cached if cached != "" else None
-        while len(_webhook_host_cache) >= _MAX_WEBHOOK_HOST_CACHE:
-            _webhook_host_cache.popitem(last=False)
-        _webhook_host_cache[webhook_url] = "" if is_blocked else hostname
-    return None if is_blocked else hostname
+            hostname = cached
+        else:
+            hostname = urlparse(webhook_url).hostname or ""
+            if hostname and is_internal_host(hostname):
+                hostname = ""
+            while len(_webhook_host_cache) >= _MAX_WEBHOOK_HOST_CACHE:
+                _webhook_host_cache.popitem(last=False)
+            _webhook_host_cache[webhook_url] = hostname
+    if not hostname or not host_resolves_external(hostname):
+        return None
+    return hostname
 
 
 def _prepare_webhook_targets(
