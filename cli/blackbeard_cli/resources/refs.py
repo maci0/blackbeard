@@ -13,7 +13,6 @@ from typing import Any, NamedTuple
 from blackbeard_cli.kinds import PLURAL_TO_KIND_ENUM, ResourceKind
 
 __all__ = [
-    "CycleError",
     "RefInfo",
     "RefParseError",
     "build_adjacency",
@@ -27,15 +26,6 @@ REF_PATTERN = re.compile(r"^ref:([a-z\-]+)/([a-z0-9][a-z0-9\-]*)$")
 
 class RefParseError(Exception):
     """Raised when a ref string cannot be parsed."""
-
-
-class CycleError(Exception):
-    """Raised when a dependency cycle is detected."""
-
-    def __init__(self, cycle: list[str]) -> None:
-        self.cycle = cycle
-        path = " -> ".join(cycle)
-        super().__init__(f"Dependency cycle detected: {path}")
 
 
 class RefInfo(NamedTuple):

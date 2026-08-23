@@ -16,21 +16,10 @@ from blackbeard.resources import parse_ref
 __all__ = [
     "DEFAULT_POLICY",
     "AgentPolicy",
-    "PolicyDeniedError",
     "resolve_policy",
 ]
 
 logger = logging.getLogger(__name__)
-
-
-class PolicyDeniedError(Exception):
-    """Raised when a policy check denies an action."""
-
-    def __init__(self, agent: str, action: str, reason: str) -> None:
-        self.agent = agent
-        self.action = action
-        self.reason = reason
-        super().__init__(f"Policy denied for agent '{agent}': {action} — {reason}")
 
 
 class AgentPolicy:
@@ -90,26 +79,6 @@ class AgentPolicy:
             return None
         targets = delegation.get("targets")
         return list(targets) if targets else None
-
-    def check_tool_access(self, agent_name: str, tool_name: str) -> None:
-        """Check if an agent is allowed to use a tool.
-
-        Raises PolicyDeniedError if denied.
-        """
-        if self.tool_mode == "allowlist":
-            if tool_name not in self.allowed_tools:
-                raise PolicyDeniedError(
-                    agent=agent_name,
-                    action=f"use tool '{tool_name}'",
-                    reason=f"Tool not in allowlist. Allowed: {sorted(self.allowed_tools)}",
-                )
-        elif self.tool_mode == "denylist" and tool_name in self.denied_tools:
-            raise PolicyDeniedError(
-                agent=agent_name,
-                action=f"use tool '{tool_name}'",
-                reason="Tool is in denylist",
-            )
-        # mode == "all" → everything allowed
 
 
 # Default policy — no restrictions

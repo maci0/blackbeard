@@ -11,9 +11,7 @@ from typing import Any
 
 __all__ = [
     "derive_budget_and_pii",
-    "derive_budget_limits",
     "extract_policy_specs",
-    "get_pii_config",
 ]
 
 from blackbeard.engine.policy import resolve_policy
@@ -31,32 +29,6 @@ def extract_policy_specs(
         for snap in resource_snapshot.values()
         if snap.get("kind") == "AgentPolicy"
     }
-
-
-def get_pii_config(
-    resource_snapshot: dict[str, dict[str, Any]],
-    crew_name: str,
-    policy_specs: dict[str, dict[str, Any]] | None = None,
-) -> dict[str, Any] | None:
-    """Extract PII redaction config from applicable AgentPolicy resources.
-
-    Returns the first PII config block with ``enabled=True``, or ``None``.
-    """
-    _, _, pii, _ = derive_budget_and_pii(resource_snapshot, crew_name, policy_specs)
-    return pii
-
-
-def derive_budget_limits(
-    resource_snapshot: dict[str, dict[str, Any]],
-    crew_name: str,
-    policy_specs: dict[str, dict[str, Any]] | None = None,
-) -> tuple[float | None, int | None]:
-    """Derive the most restrictive budget limits from applicable policies.
-
-    Returns ``(max_budget_usd, max_tokens)`` -- either may be ``None``.
-    """
-    budget, tokens, _, _ = derive_budget_and_pii(resource_snapshot, crew_name, policy_specs)
-    return budget, tokens
 
 
 def derive_budget_and_pii(

@@ -1,11 +1,8 @@
-"""Tests for agent policy enforcement (AgentPolicy, resolve_policy, PolicyDeniedError)."""
-
-import pytest
+"""Tests for agent policy enforcement (AgentPolicy, resolve_policy)."""
 
 from blackbeard.engine.policy import (
     DEFAULT_POLICY,
     AgentPolicy,
-    PolicyDeniedError,
     resolve_policy,
 )
 
@@ -16,8 +13,6 @@ from blackbeard.engine.policy import (
 
 def test_default_policy_allows_all():
     assert DEFAULT_POLICY.tool_mode == "all"
-    assert DEFAULT_POLICY.check_tool_access("any-agent", "any_tool") is None
-    assert DEFAULT_POLICY.check_tool_access("any-agent", "dangerous_tool") is None
 
 
 # ---------------------------------------------------------------------------
@@ -27,18 +22,14 @@ def test_default_policy_allows_all():
 
 def test_allowlist_allows_listed_tool():
     policy = AgentPolicy({"tools": {"mode": "allowlist", "allow": ["web_search", "calculator"]}})
-    result = policy.check_tool_access("agent-1", "web_search")
-    assert result is None
+    assert policy.tool_mode == "allowlist"
+    assert "web_search" in policy.allowed_tools
+    assert "calculator" in policy.allowed_tools
 
 
-def test_allowlist_denies_unlisted_tool():
+def test_allowlist_unlisted_tool_not_allowed():
     policy = AgentPolicy({"tools": {"mode": "allowlist", "allow": ["web_search"]}})
-    with pytest.raises(PolicyDeniedError) as exc_info:
-        policy.check_tool_access("agent-1", "file_writer")
-    err = exc_info.value
-    assert err.agent == "agent-1"
-    assert "file_writer" in err.action
-    assert err.reason, "PolicyDeniedError must include a reason"
+    assert "file_writer" not in policy.allowed_tools
 
 
 # ---------------------------------------------------------------------------
@@ -46,18 +37,11 @@ def test_allowlist_denies_unlisted_tool():
 # ---------------------------------------------------------------------------
 
 
-def test_denylist_allows_unlisted_tool():
+def test_denylist_lists_denied_tool():
     policy = AgentPolicy({"tools": {"mode": "denylist", "deny": ["file_writer"]}})
-    result = policy.check_tool_access("agent-1", "web_search")
-    assert result is None
-
-
-def test_denylist_denies_listed_tool():
-    policy = AgentPolicy({"tools": {"mode": "denylist", "deny": ["file_writer"]}})
-    with pytest.raises(PolicyDeniedError) as exc_info:
-        policy.check_tool_access("agent-1", "file_writer")
-    err = exc_info.value
-    assert "denylist" in err.reason.lower()
+    assert policy.tool_mode == "denylist"
+    assert "file_writer" in policy.denied_tools
+    assert "web_search" not in policy.denied_tools
 
 
 # ---------------------------------------------------------------------------
@@ -67,8 +51,7 @@ def test_denylist_denies_listed_tool():
 
 def test_all_mode_allows_everything():
     policy = AgentPolicy({"tools": {"mode": "all"}})
-    assert policy.check_tool_access("agent-1", "any_tool") is None
-    assert policy.check_tool_access("agent-1", "another_tool") is None
+    assert policy.tool_mode == "all"
 
 
 # ---------------------------------------------------------------------------
@@ -108,9 +91,7 @@ def test_resolve_agent_policy():
     policies = {"strict-policy": {"tools": {"mode": "allowlist", "allow": ["web_search"]}}}
     resolved = resolve_policy(agent_spec, policies=policies)
     assert resolved.tool_mode == "allowlist"
-    assert resolved.check_tool_access("researcher", "web_search") is None
-    with pytest.raises(PolicyDeniedError):
-        resolved.check_tool_access("researcher", "file_writer")
+    assert resolved.allowed_tools == {"web_search"}
 
 
 def test_resolve_crew_default_policy():
@@ -149,20 +130,6 @@ def test_resolve_missing_agent_policy_falls_to_crew():
 
 
 # ---------------------------------------------------------------------------
-# PolicyDeniedError
-# ---------------------------------------------------------------------------
-
-
-def test_policy_denied_error_message():
-    err = PolicyDeniedError(agent="my-agent", action="use tool 'rm'", reason="Tool is in denylist")
-    assert "my-agent" in str(err)
-    assert "use tool 'rm'" in str(err)
-    assert err.agent == "my-agent"
-    assert err.action == "use tool 'rm'"
-    assert err.reason == "Tool is in denylist"
-
-
-# ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
 
@@ -170,14 +137,7 @@ def test_policy_denied_error_message():
 def test_allowlist_empty_denies_everything():
     """An allowlist with no entries should deny all tools."""
     policy = AgentPolicy({"tools": {"mode": "allowlist", "allow": []}})
-    with pytest.raises(PolicyDeniedError):
-        policy.check_tool_access("agent-1", "any_tool")
-
-
-def test_denylist_empty_allows_everything():
-    """A denylist with no entries should allow all tools."""
-    policy = AgentPolicy({"tools": {"mode": "denylist", "deny": []}})
-    assert policy.check_tool_access("agent-1", "any_tool") is None
+    assert policy.allowed_tools == set()
 
 
 def test_default_policy_properties():

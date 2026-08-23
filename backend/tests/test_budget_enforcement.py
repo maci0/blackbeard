@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
+from blackbeard.engine.budget import derive_budget_and_pii as _derive
 from blackbeard.engine.budget import (
     derive_budget_and_pii as _derive_budget_and_pii,
 )
-from blackbeard.engine.budget import derive_budget_limits as _derive_budget_limits
 from blackbeard.engine.loader import ResourceLoader
 from blackbeard.kinds import ResourceKind
 from blackbeard.litellm.key_manager import VirtualKeyError, VirtualKeyManager
@@ -95,14 +95,14 @@ def _make_snapshot(
 
 
 # ---------------------------------------------------------------------------
-# Tests — _derive_budget_limits
+# Tests — derive_budget_and_pii
 # ---------------------------------------------------------------------------
 
 
 def test_derive_no_policies_returns_none():
     """Without any policies, both limits should be None."""
     snapshot = _make_snapshot()
-    max_budget, max_tokens = _derive_budget_limits(snapshot, "test-crew")
+    max_budget, max_tokens, _, _ = _derive(snapshot, "test-crew")
     assert max_budget is None
     assert max_tokens is None
 
@@ -114,7 +114,7 @@ def test_derive_single_policy_with_max_usd():
         agent_policy_refs={"agent-a": "ref:agent-policies/budget-policy"},
         policies={"budget-policy": _policy_spec(max_usd=5.0)},
     )
-    max_budget, max_tokens = _derive_budget_limits(snapshot, "test-crew")
+    max_budget, max_tokens, _, _ = _derive(snapshot, "test-crew")
     assert max_budget == 5.0
     assert max_tokens is None
 
@@ -126,7 +126,7 @@ def test_derive_single_policy_with_max_tokens():
         agent_policy_refs={"agent-a": "ref:agent-policies/token-policy"},
         policies={"token-policy": _policy_spec(max_tokens=10000)},
     )
-    max_budget, max_tokens = _derive_budget_limits(snapshot, "test-crew")
+    max_budget, max_tokens, _, _ = _derive(snapshot, "test-crew")
     assert max_budget is None
     assert max_tokens == 10000
 
@@ -138,7 +138,7 @@ def test_derive_single_policy_with_both_limits():
         agent_policy_refs={"agent-a": "ref:agent-policies/full-policy"},
         policies={"full-policy": _policy_spec(max_usd=2.5, max_tokens=5000)},
     )
-    max_budget, max_tokens = _derive_budget_limits(snapshot, "test-crew")
+    max_budget, max_tokens, _, _ = _derive(snapshot, "test-crew")
     assert max_budget == 2.5
     assert max_tokens == 5000
 
@@ -156,7 +156,7 @@ def test_derive_multiple_agents_takes_minimum():
             "tight-policy": _policy_spec(max_usd=2.0, max_tokens=10000),
         },
     )
-    max_budget, max_tokens = _derive_budget_limits(snapshot, "test-crew")
+    max_budget, max_tokens, _, _ = _derive(snapshot, "test-crew")
     assert max_budget == 2.0
     assert max_tokens == 10000
 
@@ -172,7 +172,7 @@ def test_derive_partial_policies_only_limits_from_present():
             "budget-only": _policy_spec(max_usd=3.0),
         },
     )
-    max_budget, max_tokens = _derive_budget_limits(snapshot, "test-crew")
+    max_budget, max_tokens, _, _ = _derive(snapshot, "test-crew")
     assert max_budget == 3.0
     assert max_tokens is None
 
@@ -184,7 +184,7 @@ def test_derive_crew_default_policy():
         crew_default_policy="ref:agent-policies/default-policy",
         policies={"default-policy": _policy_spec(max_usd=7.5, max_tokens=20000)},
     )
-    max_budget, max_tokens = _derive_budget_limits(snapshot, "test-crew")
+    max_budget, max_tokens, _, _ = _derive(snapshot, "test-crew")
     assert max_budget == 7.5
     assert max_tokens == 20000
 
@@ -200,7 +200,7 @@ def test_derive_agent_policy_overrides_crew_default():
             "crew-default": _policy_spec(max_usd=100.0),
         },
     )
-    max_budget, _ = _derive_budget_limits(snapshot, "test-crew")
+    max_budget, _, _, _ = _derive(snapshot, "test-crew")
     assert max_budget == 1.0
 
 
@@ -214,7 +214,7 @@ def test_derive_missing_policy_falls_through():
             "fallback": _policy_spec(max_usd=5.0),
         },
     )
-    max_budget, _ = _derive_budget_limits(snapshot, "test-crew")
+    max_budget, _, _, _ = _derive(snapshot, "test-crew")
     assert max_budget == 5.0
 
 
@@ -225,7 +225,7 @@ def test_derive_empty_policy_no_limits():
         agent_policy_refs={"agent-a": "ref:agent-policies/empty-policy"},
         policies={"empty-policy": {}},
     )
-    max_budget, max_tokens = _derive_budget_limits(snapshot, "test-crew")
+    max_budget, max_tokens, _, _ = _derive(snapshot, "test-crew")
     assert max_budget is None
     assert max_tokens is None
 

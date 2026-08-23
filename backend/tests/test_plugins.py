@@ -73,12 +73,10 @@ class TestPluginRegistry:
         reg.register(meta, handler)
 
         assert reg.get(PluginType.TOOL, "my-tool") is handler
-        assert reg.get_meta(PluginType.TOOL, "my-tool") == meta
 
     def test_get_missing(self):
         reg = PluginRegistry()
         assert reg.get(PluginType.TOOL, "nonexistent") is None
-        assert reg.get_meta(PluginType.TOOL, "nonexistent") is None
 
     def test_list_all(self):
         reg = PluginRegistry()
@@ -112,15 +110,6 @@ class TestPluginRegistry:
         reg.register(meta, h2)
 
         assert reg.get(PluginType.TOOL, "x") is h2
-
-    def test_unregister(self):
-        reg = PluginRegistry()
-        meta = PluginMeta("x", "1.0", "", PluginType.TOOL)
-        reg.register(meta, object())
-
-        assert reg.unregister(PluginType.TOOL, "x") is True
-        assert reg.get(PluginType.TOOL, "x") is None
-        assert reg.unregister(PluginType.TOOL, "x") is False
 
     def test_clear(self):
         reg = PluginRegistry()

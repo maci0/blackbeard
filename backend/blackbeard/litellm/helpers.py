@@ -10,7 +10,7 @@ from blackbeard.config import settings
 def build_model_string(provider: str, model: str) -> str:
     """Build the LiteLLM model identifier string from provider and model name.
 
-    Used by config_gen to create proxy config entries (needs provider prefix).
+    Used by model_sync to register proxy models (needs provider prefix).
     """
     if provider == "openai" or not provider:
         return model

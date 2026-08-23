@@ -214,7 +214,6 @@ Responses short-circuited by auth or the body size limiter never reach `CORSMidd
 
 The API server manages LiteLLM's configuration and uses it as a proxy for all LLM calls:
 
-- **`litellm/config_gen.py`** -- Generates LiteLLM router config from `LLMConnection` resources
 - **`litellm/key_manager.py`** -- Creates and deletes per-execution virtual keys for budget enforcement
 - **`litellm/helpers.py`** -- Utility functions for model name resolution
 

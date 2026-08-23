@@ -86,38 +86,12 @@ class PluginRegistry:
                 },
             )
 
-    def unregister(self, plugin_type: PluginType, name: str) -> bool:
-        """Remove a plugin from the registry. Returns True if it was found."""
-        key = (plugin_type, name)
-        with self._lock:
-            removed = self._plugins.pop(key, None)
-        if removed:
-            logger.info(
-                "Plugin unregistered: %s/%s",
-                plugin_type.value,
-                name,
-                extra={
-                    "event": "plugin_unregistered",
-                    "plugin_type": plugin_type.value,
-                    "plugin_name": name,
-                },
-            )
-            return True
-        return False
-
     def get(self, plugin_type: PluginType, name: str) -> Any | None:
         """Retrieve a plugin handler by type and name, or None if not found."""
         key = (plugin_type, name)
         with self._lock:
             entry = self._plugins.get(key)
         return entry.handler if entry else None
-
-    def get_meta(self, plugin_type: PluginType, name: str) -> PluginMeta | None:
-        """Retrieve plugin metadata by type and name."""
-        key = (plugin_type, name)
-        with self._lock:
-            entry = self._plugins.get(key)
-        return entry.meta if entry else None
 
     def list_plugins(self, plugin_type: PluginType | None = None) -> list[PluginMeta]:
         """List metadata for all plugins, optionally filtered by type."""

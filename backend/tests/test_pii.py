@@ -332,7 +332,7 @@ class TestLLMPIIRecognizer:
 
 
 # ---------------------------------------------------------------------------
-# _get_pii_config (executor integration)
+# PII config derivation (executor integration)
 # ---------------------------------------------------------------------------
 
 
@@ -340,7 +340,7 @@ class TestGetPIIConfig:
     """Tests for PII config resolution from resource snapshots."""
 
     def test_returns_none_when_no_pii_policy(self):
-        from blackbeard.engine.budget import get_pii_config as _get_pii_config
+        from blackbeard.engine.budget import derive_budget_and_pii as _derive
 
         snapshot = {
             "Crew/test-crew": {
@@ -364,10 +364,10 @@ class TestGetPIIConfig:
                 },
             },
         }
-        assert _get_pii_config(snapshot, "test-crew") is None
+        assert _derive(snapshot, "test-crew")[2] is None
 
     def test_returns_pii_config_from_agent_policy(self):
-        from blackbeard.engine.budget import get_pii_config as _get_pii_config
+        from blackbeard.engine.budget import derive_budget_and_pii as _derive
 
         snapshot = {
             "Crew/test-crew": {
@@ -404,13 +404,13 @@ class TestGetPIIConfig:
                 },
             },
         }
-        config = _get_pii_config(snapshot, "test-crew")
+        config = _derive(snapshot, "test-crew")[2]
         assert config is not None
         assert config["enabled"] is True
         assert config["entities"] == ["EMAIL_ADDRESS"]
 
     def test_returns_none_when_pii_disabled(self):
-        from blackbeard.engine.budget import get_pii_config as _get_pii_config
+        from blackbeard.engine.budget import derive_budget_and_pii as _derive
 
         snapshot = {
             "Crew/test-crew": {
@@ -445,10 +445,10 @@ class TestGetPIIConfig:
                 },
             },
         }
-        assert _get_pii_config(snapshot, "test-crew") is None
+        assert _derive(snapshot, "test-crew")[2] is None
 
     def test_returns_pii_from_crew_default_policy(self):
-        from blackbeard.engine.budget import get_pii_config as _get_pii_config
+        from blackbeard.engine.budget import derive_budget_and_pii as _derive
 
         snapshot = {
             "Crew/test-crew": {
@@ -487,7 +487,7 @@ class TestGetPIIConfig:
                 },
             },
         }
-        config = _get_pii_config(snapshot, "test-crew")
+        config = _derive(snapshot, "test-crew")[2]
         assert config is not None
         assert config["backend"] == "litellm"
         assert config["redact_events"] is False
