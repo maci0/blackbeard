@@ -220,9 +220,9 @@ if [ "${DEBUG:-false}" = "true" ]; then
   ADMIN_PASSWORD="${BLACKBEARD_ADMIN_PASSWORD:-$(python3 -c "import secrets; print(secrets.token_urlsafe(16))" 2>/dev/null || openssl rand -base64 16)}"
   CREDS_FILE="${BLACKBEARD_CREDS_FILE:-.admin-credentials}"
   echo "  (DEBUG mode: creating default admin user)"
-  admin_resp=$(curl -sSf -X POST "$API/api/v1/auth/register" \
+  curl -sSf -X POST "$API/api/v1/auth/register" \
     -H "Content-Type: application/json" \
-    -d "{\"email\": \"admin@blackbeard.sh\", \"password\": \"${ADMIN_PASSWORD}\", \"display_name\": \"Admin\"}" 2>&1) && \
+    -d "{\"email\": \"admin@blackbeard.sh\", \"password\": \"${ADMIN_PASSWORD}\", \"display_name\": \"Admin\"}" >/dev/null 2>&1 && \
     {
       echo "  + User/admin@blackbeard.sh"
       cat > "$CREDS_FILE" <<CREDS

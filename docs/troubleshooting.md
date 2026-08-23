@@ -18,7 +18,7 @@ docker compose logs api
 **Common causes:**
 - **Database not ready:** The API waits for PostgreSQL. If PG takes longer than the health check start period (120s), the API may fail. Increase `start_period` in docker-compose.yaml.
 - **Missing environment variables:** Check `.env` has `DATABASE_URL`, `JWT_SECRET`, `BLACKBEARD_API_KEY`.
-- **Port conflict:** Another process on port 8000. Run `lsof -i :8000` to check.
+- **Port conflict:** Another process on port 8000. Check with `ss -ltnp 'sport = :8000'` (Linux) or `lsof -i :8000` (macOS).
 
 ### UI shows "API Unavailable"
 
