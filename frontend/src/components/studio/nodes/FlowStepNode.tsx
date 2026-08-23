@@ -1,7 +1,8 @@
 import { memo } from 'react'
 import { type NodeProps } from '@xyflow/react'
 import { Workflow } from 'lucide-react'
-import { cn, parseRef } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { parseRef } from '@/lib/refs'
 import { NodeShell } from './NodeShell'
 
 const TYPE_COLORS: Record<string, { bg: string; text: string; border: string }> = {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cn, toResourceName, capitalize, caseFold, compareStrings, parseRef } from '../utils'
+import { cn, toResourceName, capitalize, caseFold, compareStrings } from '../utils'
 
 describe('cn()', () => {
   it('merges class names', () => {
@@ -108,31 +108,5 @@ describe('compareStrings()', () => {
 
   it('treats accented variants as equal at base sensitivity', () => {
     expect(compareStrings('cafe', 'café')).toBe(0)
-  })
-})
-
-describe('parseRef()', () => {
-  it('extracts name from ref string', () => {
-    expect(parseRef('ref:agents/researcher')).toBe('researcher')
-  })
-
-  it('handles non-ref strings without slash', () => {
-    expect(parseRef('researcher')).toBe('researcher')
-  })
-
-  it('handles deeply nested paths', () => {
-    expect(parseRef('ref:a/b/c')).toBe('c')
-  })
-
-  it('handles ref with just kind and name', () => {
-    expect(parseRef('ref:tools/web-search')).toBe('web-search')
-  })
-
-  it('handles plain path', () => {
-    expect(parseRef('tasks/write-report')).toBe('write-report')
-  })
-
-  it('handles trailing slash', () => {
-    expect(parseRef('agents/')).toBe('')
   })
 })

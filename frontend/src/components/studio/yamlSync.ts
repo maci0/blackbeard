@@ -3,7 +3,8 @@
 import yaml from 'js-yaml'
 import type { Node, Edge } from '@xyflow/react'
 import { API_VERSION } from '@/lib/kinds'
-import { capitalize, toResourceName, parseRef } from '@/lib/utils'
+import { capitalize, toResourceName } from '@/lib/utils'
+import { parseRef } from '@/lib/refs'
 import { DATAFLOW_MARKER_END } from './defaults'
 
 /* ------------------------------------------------------------------ */

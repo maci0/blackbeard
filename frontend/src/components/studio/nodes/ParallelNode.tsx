@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { type NodeProps } from '@xyflow/react'
 import { Columns3 } from 'lucide-react'
-import { parseRef } from '@/lib/utils'
+import { parseRef } from '@/lib/refs'
 import { NodeShell } from './NodeShell'
 
 export default memo(function ParallelNode({ data, selected }: NodeProps) {

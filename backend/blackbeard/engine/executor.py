@@ -912,10 +912,10 @@ def _run_crew_sync(
         },
     )
     loop = asyncio.new_event_loop()
-    thread_session = _thread_session_factory()
+    thread_session = thread_session_factory()
     try:
         loop.run_until_complete(
-            _run_crew_async(
+            run_crew_async(
                 execution_id,
                 resource_snapshot,
                 crew_name,
@@ -945,7 +945,7 @@ def _run_crew_sync(
         loop.close()
 
 
-def _thread_session_factory() -> async_sessionmaker[AsyncSession]:
+def thread_session_factory() -> async_sessionmaker[AsyncSession]:
     """Return the shared session factory backed by the shared background engine.
 
     All executor threads share one connection pool and one session factory
@@ -1028,7 +1028,7 @@ def _resolve_eval_llm(
     return "gpt-4o"
 
 
-async def _run_crew_async(
+async def run_crew_async(
     execution_id: UUID,
     resource_snapshot: dict[str, dict[str, Any]],
     crew_name: str,

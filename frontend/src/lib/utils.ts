@@ -3,9 +3,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
-// Re-export so existing `@/lib/utils` consumers keep working; prefer `@/lib/refs`.
-export { parseRef } from './refs'
-
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }

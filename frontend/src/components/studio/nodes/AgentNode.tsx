@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { type NodeProps } from '@xyflow/react'
 import { User, CheckCircle2, XCircle } from 'lucide-react'
-import { parseRef } from '@/lib/utils'
+import { parseRef } from '@/lib/refs'
 import { NodeShell } from './NodeShell'
 import { ExecStatusBadge } from './ExecStatusBadge'
 

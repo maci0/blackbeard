@@ -1,6 +1,6 @@
 """Unit tests for background-thread functions in executor and execution_listener.
 
-Covers _run_crew_sync, _run_crew_async, _snapshot_crew_resources,
+Covers _run_crew_sync, run_crew_async, _snapshot_crew_resources,
 recover_stale_executions, cleanup_orphaned_keys, and
 BlackbeardExecutionListener methods (_flush_buffer, flush,
 setup_listeners, _write_event, _deliver_webhooks_sync,
@@ -151,7 +151,7 @@ class TestRunCrewSync:
 
         with (
             patch("blackbeard.engine.executor.asyncio.new_event_loop", return_value=mock_loop),
-            patch("blackbeard.engine.executor._thread_session_factory", return_value=mock_factory),
+            patch("blackbeard.engine.executor.thread_session_factory", return_value=mock_factory),
         ):
             _run_crew_sync(eid, snapshot, "test-crew", {"topic": "AI"})
 
@@ -170,7 +170,7 @@ class TestRunCrewSync:
 
         with (
             patch("blackbeard.engine.executor.asyncio.new_event_loop", return_value=mock_loop),
-            patch("blackbeard.engine.executor._thread_session_factory", return_value=mock_factory),
+            patch("blackbeard.engine.executor.thread_session_factory", return_value=mock_factory),
             pytest.raises(RuntimeError, match="crew exploded"),
         ):
             _run_crew_sync(eid, snapshot, "test-crew", {})
@@ -187,8 +187,8 @@ class TestRunCrewSync:
 
         with (
             patch("blackbeard.engine.executor.asyncio.new_event_loop", return_value=mock_loop),
-            patch("blackbeard.engine.executor._thread_session_factory", return_value=mock_factory),
-            patch("blackbeard.engine.executor._run_crew_async") as mock_async,
+            patch("blackbeard.engine.executor.thread_session_factory", return_value=mock_factory),
+            patch("blackbeard.engine.executor.run_crew_async") as mock_async,
         ):
             _run_crew_sync(
                 eid,
@@ -201,7 +201,7 @@ class TestRunCrewSync:
             )
 
         assert mock_loop.run_until_complete.call_count == 1
-        # _run_crew_sync passes these kwargs through to _run_crew_async
+        # _run_crew_sync passes these kwargs through to run_crew_async
         kwargs = mock_async.call_args.kwargs
         assert kwargs["execution_type"] == ExecutionType.TRAIN
         assert kwargs["n_iterations"] == 5
@@ -209,16 +209,16 @@ class TestRunCrewSync:
 
 
 # ===========================================================================
-# 2. _run_crew_async — the async execution function
+# 2. run_crew_async — the async execution function
 # ===========================================================================
 
 
 class TestRunCrewAsync:
-    """Tests for blackbeard.engine.executor._run_crew_async."""
+    """Tests for blackbeard.engine.executor.run_crew_async."""
 
     @pytest.mark.asyncio
     async def test_updates_status_to_running_then_completed(self) -> None:
-        from blackbeard.engine.executor import _run_crew_async
+        from blackbeard.engine.executor import run_crew_async
 
         eid = uuid.uuid4()
         snapshot = _minimal_snapshot()
@@ -269,7 +269,7 @@ class TestRunCrewAsync:
             mock_listener = MagicMock()
             mock_listener_cls.return_value = mock_listener
 
-            await _run_crew_async(
+            await run_crew_async(
                 eid,
                 snapshot,
                 "test-crew",
@@ -285,7 +285,7 @@ class TestRunCrewAsync:
 
     @pytest.mark.asyncio
     async def test_marks_failed_on_crew_exception(self) -> None:
-        from blackbeard.engine.executor import _run_crew_async
+        from blackbeard.engine.executor import run_crew_async
 
         eid = uuid.uuid4()
         snapshot = _minimal_snapshot()
@@ -326,7 +326,7 @@ class TestRunCrewAsync:
             mock_listener_cls.return_value = mock_listener
 
             # The function handles exceptions internally and marks execution as failed
-            await _run_crew_async(
+            await run_crew_async(
                 eid,
                 snapshot,
                 "test-crew",
@@ -339,7 +339,7 @@ class TestRunCrewAsync:
 
     @pytest.mark.asyncio
     async def test_returns_early_if_cancelled_before_start(self) -> None:
-        from blackbeard.engine.executor import _run_crew_async
+        from blackbeard.engine.executor import run_crew_async
 
         eid = uuid.uuid4()
         snapshot = _minimal_snapshot()
@@ -363,7 +363,7 @@ class TestRunCrewAsync:
             ),
             patch("blackbeard.engine.executor.ResourceLoader") as mock_loader_cls,
         ):
-            await _run_crew_async(
+            await run_crew_async(
                 eid,
                 snapshot,
                 "test-crew",
@@ -376,7 +376,7 @@ class TestRunCrewAsync:
 
     @pytest.mark.asyncio
     async def test_returns_early_if_execution_not_found(self) -> None:
-        from blackbeard.engine.executor import _run_crew_async
+        from blackbeard.engine.executor import run_crew_async
 
         eid = uuid.uuid4()
         snapshot = _minimal_snapshot()
@@ -398,7 +398,7 @@ class TestRunCrewAsync:
             ),
             patch("blackbeard.engine.executor.logger") as mock_logger,
         ):
-            await _run_crew_async(
+            await run_crew_async(
                 eid,
                 snapshot,
                 "test-crew",
@@ -411,7 +411,7 @@ class TestRunCrewAsync:
 
     @pytest.mark.asyncio
     async def test_virtual_key_deleted_in_finally(self) -> None:
-        from blackbeard.engine.executor import _run_crew_async
+        from blackbeard.engine.executor import run_crew_async
 
         eid = uuid.uuid4()
         snapshot = _minimal_snapshot()
@@ -458,7 +458,7 @@ class TestRunCrewAsync:
             mock_listener = MagicMock()
             mock_listener_cls.return_value = mock_listener
 
-            await _run_crew_async(
+            await run_crew_async(
                 eid,
                 snapshot,
                 "test-crew",
@@ -471,7 +471,7 @@ class TestRunCrewAsync:
 
     @pytest.mark.asyncio
     async def test_train_execution_calls_crew_train(self) -> None:
-        from blackbeard.engine.executor import _run_crew_async
+        from blackbeard.engine.executor import run_crew_async
 
         eid = uuid.uuid4()
         snapshot = _minimal_snapshot()
@@ -510,7 +510,7 @@ class TestRunCrewAsync:
             mock_listener = MagicMock()
             mock_listener_cls.return_value = mock_listener
 
-            await _run_crew_async(
+            await run_crew_async(
                 eid,
                 snapshot,
                 "test-crew",
