@@ -179,7 +179,7 @@ Blackbeard supports two authentication methods:
 - **API key** -- `X-API-Key` header, validated with `hmac.compare_digest` against `BLACKBEARD_API_KEY`
 - **JWT Bearer** -- `Authorization: Bearer <token>`, with 15-minute access tokens and 7-day refresh tokens
 
-**Public endpoints** (no auth required): health checks (`/api/v1/health`, `/api/v1/health/ready`), auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), automation webhook paths (`/automations/{name}/webhook` -- use their own HMAC validation), and API docs (`/docs`, `/redoc` in debug mode).
+**Public endpoints** (no auth required): health and metrics (`/api/v1/health`, `/api/v1/health/ready`, `/api/v1/metrics`), the agent card (`/.well-known/agent-card.json`) and event schema (`/api/v1/asyncapi.json`), auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), automation webhook paths (`/automations/{name}/webhook` -- use their own HMAC validation), and API docs (`/docs`, `/openapi.json`, `/redoc` in debug mode).
 
 **RBAC model:**
 
@@ -240,28 +240,32 @@ LiteLLM's own data (spend tracking, virtual keys) is stored in a separate `litel
 ### Page Structure
 
 ```
-/                     → Dashboard (default)  -- execution metrics, resource counts, recent activity
-/studio               → Visual crew editor
-/resources            → Generic resource list (all kinds)
+/                            → Redirects to /dashboard
+/dashboard                   → Dashboard (default landing page) -- execution metrics, resource counts, recent activity
+/studio                      → Visual crew editor
+/resources                   → Generic resource list (all kinds)
 /resources/:kindPlural/:name → Resource detail view
-/executions           → Execution list
-/executions/:id       → Execution detail with task breakdown
-/models               → LLM model management + connectivity test
-/chat                 → Chat playground for interactive LLM conversations
-/tools                → Tool management
-/roles                → RBAC role management
-/users                → User management
-/audit-logs           → Audit log viewer (all mutation history)
-/automations          → Automation management (cron, webhook, API triggers)
-/webhooks             → Webhook subscription management
-/login                → Login form
-/register             → Registration form
-/marketplace          → Import crews from git (search, category chips, preview dialog)
-/settings             → Platform configuration (user preferences, scheduled reports)
-/knowledge            → Knowledge Sources management (card grid with source type badges)
-/credentials          → Credentials Manager (centralized secret management)
-/guardrails/playground → Guardrail Playground (test guardrails with sample input)
-/executions/compare   → Execution Comparison (side-by-side metrics diff, ?a=&b= params)
+/executions                  → Execution list
+/executions/:id              → Execution detail with task breakdown
+/executions/compare          → Execution Comparison (side-by-side metrics diff, ?a=&b= params)
+/models                      → LLM model management + connectivity test
+/chat                        → Chat playground for interactive LLM conversations
+/tools                       → Tool management
+/tools/library               → Tools Library (bundled installable tool catalog)
+/roles                       → RBAC role management
+/users                       → User management
+/projects                    → Project management
+/service-accounts            → ServiceAccount management
+/audit-logs                  → Audit log viewer (all mutation history)
+/automations                 → Automation management (cron, webhook, API triggers)
+/webhooks                    → Webhook subscription management
+/login                       → Login form
+/register                    → Registration form
+/marketplace                 → Import crews from git (search, category chips, preview dialog)
+/settings                    → Instance settings (API connection, API keys, service links, preferences)
+/knowledge                   → Knowledge Sources management (card grid with source type badges)
+/credentials                 → Credentials Manager (centralized secret management)
+/guardrails/playground       → Guardrail Playground (test guardrails with sample input)
 ```
 
 **Command palette:** Press `Cmd+K` (macOS) or `Ctrl+K` (Windows/Linux) to open the command palette for quick navigation to any page, resource, or action.
@@ -323,6 +327,7 @@ blackbeard_cli/
 ├── export_cmd.py      # export (YAML dump of all resources)
 ├── rbac.py            # role, rolebinding management
 ├── users.py           # user, group management
+├── shell.py           # Interactive TUI REPL used by the shell command
 ├── credentials.py     # JWT credential storage (~/.config/blackbeard/)
 ├── helpers.py         # Shared utilities, output formatting, auth resolution
 ├── kinds.py           # Kind registry (copied from backend)
@@ -583,29 +588,6 @@ The Marketplace (`/marketplace` page) allows importing resources from external g
 
 ---
 
-## CLI Package
-
-The CLI (`cli/` directory) is a standalone Python package named `blackbeard-cli` with no server dependencies.
-
-**Dependencies:** click, httpx, rich, pyyaml, jsonschema, prompt-toolkit only -- no FastAPI, SQLAlchemy, or CrewAI.
-
-**Module structure:**
-
-| Module | Commands |
-|--------|----------|
-| `__main__.py` | apply, validate, get, list, delete, kickoff, train, test-crew, status, pull, health, shell |
-| `auth_cmds.py` | login, logout, whoami, register |
-| `exec.py` | executions (list), events, cancel |
-| `export_cmd.py` | export (YAML dump) |
-| `rbac.py` | role, rolebinding management |
-| `users.py` | user (list, invite), group (list, create, delete) |
-
-**Auth resolution order:** `--api-key` flag > `BLACKBEARD_API_KEY` env var > stored JWT in `~/.config/blackbeard/`.
-
-The CLI copies `kinds.py` and the `resources/` validation code from the backend. This avoids a runtime dependency on the backend package while keeping validation logic identical.
-
----
-
 ## SDKs
 
 **Python SDK** (`sdks/python/`): Thin wrapper over httpx. Covers auth (login, register, refresh, whoami), resource CRUD (list, get, create, update, delete, apply, export), and executions (kickoff, train, test, run_flow, cancel, wait, events, spend).
@@ -694,7 +676,7 @@ The Temporal integration (`backend/blackbeard/engine/temporal.py`) provides an a
 
 ## CI Pipeline
 
-GitHub Actions runs 11 jobs on every push:
+GitHub Actions runs 12 jobs on every push:
 
 1. **Backend** -- ruff check + ruff format + mypy + pytest + bandit + pip-audit
 2. **CLI** -- ruff lint + mypy (strict) + offline validation
@@ -706,7 +688,8 @@ GitHub Actions runs 11 jobs on every push:
 8. **Frontend** -- prettier + eslint + tsc + vitest + production build
 9. **Docker API image** -- build + Trivy scan (after backend passes)
 10. **Docker UI image** -- build + Trivy scan (after frontend passes)
-11. **CI gate** -- aggregate check that all jobs above are green
+11. **SBOM** -- CycloneDX inventory of the resolved backend dependency tree (informational, not gated)
+12. **CI gate** -- aggregate check that all blocking jobs above are green (SBOM is informational and excluded)
 
 **Security scanning:** Bandit runs as part of the backend CI job, checking for common Python security issues (SQL injection, hardcoded secrets, unsafe deserialization, etc.). Trivy scans the built Docker images for vulnerabilities.
 

@@ -133,7 +133,7 @@ spec:
 | `output_file` | string |  -- | Write output to a file (flat filename, no path separators) |
 | `output_pydantic` | string |  -- | Dotted class path to parse output into a Pydantic model (must be in allowed module prefixes) |
 | `output_json` | object |  -- | JSON Schema for structured output |
-| `callback` | string |  -- | Dotted callable path invoked on completion (stored but not yet passed to CrewAI at runtime) |
+| `callback` | string |  -- | Dotted callable path invoked on completion (passed to CrewAI; subject to the callable import allowlist) |
 | `guardrails` | string[] |  -- | `ref:` guardrail resources applied to output |
 
 ---
@@ -208,6 +208,7 @@ spec:
 | `inputs[].required` | boolean |  -- | Whether input is mandatory (default `true`) |
 | `inputs[].default` | any |  -- | Default value when not provided |
 | `inline` | object |  -- | Embed agents, tasks, and LLM connections directly in the crew YAML (see below) |
+| `hooks` | object |  -- | Lifecycle hook callables, by dotted path. `before_kickoff` receives the inputs dict, `after_kickoff` receives the kickoff result; both are invoked around `crew.kickoff()` (kickoff executions only). The schema accepts `before_task`, `after_task`, and `on_error`, but the executor does not yet invoke them |
 | `a2a` | object |  -- | Agent-to-Agent protocol configuration |
 | `a2a.enabled` | boolean |  -- | Enable A2A protocol (default `false`) |
 | `a2a.protocol_versions` | string[] |  -- | Supported protocol versions |
@@ -627,7 +628,7 @@ spec:
 | `chunk_size` | integer 100–10000 |  -- | Text chunk size (default `4000`) |
 | `chunk_overlap` | integer 0–1000 |  -- | Overlap between chunks (default `200`) |
 
-> **Note:** For MVP, only `text`, `pdf`, `csv`, `json`, and `string` types are supported at runtime. `excel` and `url` are accepted by the schema but not yet handled by the resource loader.
+> **Note:** The loader supports the `text`, `pdf`, `csv`, `json`, `excel`, and `string` types at runtime. `url` is accepted by the schema but not yet handled by the resource loader.
 
 ---
 

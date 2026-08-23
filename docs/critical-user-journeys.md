@@ -127,13 +127,15 @@ Every journey below is a sequence a real user would follow to accomplish a goal.
 3. Fill email, name, optional role
 4. Submit, user appears in list
 5. Navigate to `/roles`
-6. View predefined roles (owner, admin, developer, operator, viewer)
+6. View predefined roles (owner, admin, developer, operator, viewer, policy-admin, plus agent-unrestricted/agent-standard/agent-read-only)
 7. Create a custom role with specific resource/verb permissions
 8. Navigate back to users, assign role to user
 9. Log out, log in as new user
 10. Verify restricted pages show permission errors
 
 **Success criteria:** User created, role assigned, permissions enforced.
+
+**Status:** Steps 2-5 and 8 have no backend support: `POST /api/v1/users/invite` (called by the UI invite dialog) has no route in the backend, and the Users page offers no role assignment. Roles are granted by creating RoleBinding resources via `/api/v1/role-bindings`; users otherwise self-register at `/auth/register`.
 
 ---
 
@@ -781,6 +783,8 @@ Every journey below is a sequence a real user would follow to accomplish a goal.
 12. Admin reactivates the user, user can log in again
 
 **Success criteria:** Full lifecycle (invite, activate, role assignment, deactivate, reactivate) works, deactivated users cannot authenticate.
+
+**Status:** Not implementable as written against the current code. There is no invite API (`POST /api/v1/users/invite` has no backend route) and no invited/active/inactive status field (users carry a boolean `is_active`, shown as Active/Inactive in the UI). `DELETE /api/v1/users/{id}` is a self-only GDPR erasure that anonymizes the account; admins cannot deactivate other users and there is no reactivation path or admin role-assignment UI. The E2E spec covers UI rendering of the invite dialog and table columns only.
 
 ---
 

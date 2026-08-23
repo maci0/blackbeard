@@ -30,7 +30,7 @@ Domain events, commands, aggregates, read models, and policies for the Blackbear
 - **User** (id, email, password_hash, display_name, is_active, api_key_hash)
 
 ### Policies
-- Password complexity: min 8 chars, at least 1 digit and 1 uppercase
+- Password complexity: min 8 chars, at least 1 letter and 1 digit
 - API key uses HMAC comparison (constant-time)
 - JWT: access token 15min, refresh token 7d
 - Rate limit on auth endpoints
@@ -63,7 +63,7 @@ Domain events, commands, aggregates, read models, and policies for the Blackbear
 
 ### Policies
 - `require_permission(verb, kind)` checks on every API call
-- Predefined roles: owner, admin, developer, operator, viewer, policy-admin
+- Predefined roles: owner, admin, developer, operator, viewer, policy-admin, agent-unrestricted, agent-standard, agent-read-only
 - Subject can be User, Group, Agent, or Crew
 
 ---
@@ -89,8 +89,6 @@ Domain events, commands, aggregates, read models, and policies for the Blackbear
 - `ResourceRefResolved(ref_string, target_kind, target_name)`
 - `ResourceRefBroken(ref_string, reason)`
 - `BulkImportCompleted(created, updated, failed)`
-- `ResourceGitCommitted(kind, name, commit_sha)`
-- `ResourceGitDeleted(kind, name, commit_sha)`
 
 ### Aggregates
 - **Resource** (kind, name, project, spec, version, labels)
@@ -182,12 +180,12 @@ Domain events, commands, aggregates, read models, and policies for the Blackbear
 - `ModelFallbackTriggered(primary_model, fallback_model, reason)`
 
 ### Aggregates
-- **LLMConnection** (name, provider, model, base_url, params, fallbacks[], rpm_limit, tpm_limit)
+- **LLMConnection** (name, provider, model, base_url, params, fallbacks[])
 
 ### Policies
 - Dynamic LiteLLM sync on create/update/delete (no restart)
 - Fallback chain: try primary, then spec.fallbacks in order
-- Rate limits: rpm_limit and tpm_limit per connection
+- Rate limits: Agent-level `max_rpm` (CrewAI) and per-execution LiteLLM virtual keys (`tpm_limit`); connections carry no RPM/TPM fields
 
 ---
 
@@ -226,7 +224,7 @@ Domain events, commands, aggregates, read models, and policies for the Blackbear
 - `DetectPII(text, preset)`
 
 ### Domain Events
-- `GuardrailCreated(name, type=function|llm|schema)`
+- `GuardrailCreated(name, type=function|llm|schema|pii|hallucination|composite)`
 - `GuardrailTriggered(execution_id, guardrail_name, result=pass|fail)`
 - `PIIDetected(entities[], preset)`
 - `PIIRedacted(text_length, entity_count)`
