@@ -527,6 +527,12 @@ class BlackbeardExecutionListener(BaseEventListener):
         self._seq = 0
         self._task_order = 0  # tracks which task (by order) is currently running
         self._lock = threading.Lock()  # guards _seq, _task_order, and _buffer
+        # Serializes event-batch DB writes (_flush_buffer and the direct write
+        # in _write_event_with_task_update) so batches always COMMIT in
+        # sequence order. Without this, a later batch committing first makes
+        # SSE consumers polling ``sequence > last`` skip earlier events.
+        # Acquired BEFORE _lock everywhere (never the reverse).
+        self._io_lock = threading.Lock()
         self._session_factory = _get_sync_session_factory(db_url)
         self._buffer: list[ExecutionEvent] = []
         self._flush_timer: threading.Timer | None = None
@@ -571,64 +577,71 @@ class BlackbeardExecutionListener(BaseEventListener):
                 self._flush_timer.start()
 
     def _flush_buffer(self) -> None:
-        """Flush buffered events to DB in a single transaction."""
-        with self._lock:
-            to_flush = self._buffer
-            self._buffer = []
-            # Clear timer so writers can schedule again while we do I/O.
-            self._flush_timer = None
-            if not to_flush:
-                return
-            self._flushing = True
-        failed = False
-        try:
+        """Flush buffered events to DB in a single transaction.
+
+        Serialized on ``_io_lock`` so concurrent callers (buffer-full
+        writers, timer, final flush) cannot run their DB writes overlapped;
+        see the ``_io_lock`` comment in ``__init__`` for why commit order
+        must match sequence order.
+        """
+        with self._io_lock:
+            with self._lock:
+                to_flush = self._buffer
+                self._buffer = []
+                # Clear timer so writers can schedule again while we do I/O.
+                self._flush_timer = None
+                if not to_flush:
+                    return
+                self._flushing = True
+            failed = False
             try:
-                with self._session_factory() as session:
-                    session.add_all(to_flush)
-                    session.commit()
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(
-                        "Events flushed: execution=%s count=%d",
-                        self._execution_id,
+                try:
+                    with self._session_factory() as session:
+                        session.add_all(to_flush)
+                        session.commit()
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug(
+                            "Events flushed: execution=%s count=%d",
+                            self._execution_id,
+                            len(to_flush),
+                            extra={
+                                "event": "events_flushed",
+                                "execution_id": self._execution_id_str,
+                                "count": len(to_flush),
+                            },
+                        )
+                except Exception as exc:
+                    failed = True
+                    if isinstance(exc, IntegrityError):
+                        self._renumber_events(to_flush)
+                    with self._lock:
+                        if isinstance(exc, IntegrityError) and self._buffer:
+                            next_seq = self._seq
+                            for evt in self._buffer:
+                                evt.sequence = next_seq
+                                next_seq += 1
+                            self._seq = next_seq
+                        self._buffer = to_flush + self._buffer
+                    logger.error(
+                        "Re-queued %d events for %s (flush failed, will retry on next flush): %s",
                         len(to_flush),
+                        self._execution_id,
+                        exc,
+                        exc_info=True,
                         extra={
-                            "event": "events_flushed",
+                            "event": "event_flush_failed",
                             "execution_id": self._execution_id_str,
-                            "count": len(to_flush),
+                            "requeued_count": len(to_flush),
+                            "requeued_sequences": [e.sequence for e in to_flush],
+                            "requeued_event_types": [e.event_type for e in to_flush],
+                            "error_type": type(exc).__name__,
+                            "error_message": str(exc)[:500],
                         },
                     )
-            except Exception as exc:
-                failed = True
-                if isinstance(exc, IntegrityError):
-                    self._renumber_events(to_flush)
+            finally:
                 with self._lock:
-                    if isinstance(exc, IntegrityError) and self._buffer:
-                        next_seq = self._seq
-                        for evt in self._buffer:
-                            evt.sequence = next_seq
-                            next_seq += 1
-                        self._seq = next_seq
-                    self._buffer = to_flush + self._buffer
-                logger.error(
-                    "Re-queued %d events for %s (flush failed, will retry on next flush): %s",
-                    len(to_flush),
-                    self._execution_id,
-                    exc,
-                    exc_info=True,
-                    extra={
-                        "event": "event_flush_failed",
-                        "execution_id": self._execution_id_str,
-                        "requeued_count": len(to_flush),
-                        "requeued_sequences": [e.sequence for e in to_flush],
-                        "requeued_event_types": [e.event_type for e in to_flush],
-                        "error_type": type(exc).__name__,
-                        "error_message": str(exc)[:500],
-                    },
-                )
-        finally:
-            with self._lock:
-                self._flushing = False
-                need_schedule = failed or len(self._buffer) > 0
+                    self._flushing = False
+                    need_schedule = failed or len(self._buffer) > 0
             if need_schedule:
                 self._schedule_flush()
 
@@ -962,71 +975,77 @@ class BlackbeardExecutionListener(BaseEventListener):
             _time.sleep(0.01)
 
         now = datetime.now(UTC)
-        with self._lock:
-            seq = self._seq
-            self._seq += 1
-            event = ExecutionEvent(
-                execution_id=self._execution_id,
-                sequence=seq,
-                event_type=event_type,
-                timestamp=now,
-                data=data,
-            )
-            to_flush = self._buffer
-            self._buffer = []
-            to_flush.append(event)
-        try:
-            with self._session_factory() as session:
-                session.add_all(to_flush)
-                values: dict[str, Any] = {"status": task_status}
-                if task_output is not None:
-                    values["output"] = task_output
-                if task_started_at is not None:
-                    values["started_at"] = task_started_at
-                if task_completed_at is not None:
-                    values["completed_at"] = task_completed_at
-                # Bulk UPDATE bypasses ORM onupdate — set updated_at explicitly.
-                values["updated_at"] = now
-                session.execute(
-                    update(ExecutionTask)
-                    .where(
-                        ExecutionTask.execution_id == self._execution_id,
-                        ExecutionTask.order == task_order,
-                    )
-                    .values(**values)
-                )
-                session.commit()
-            # Fire webhook delivery in background
-            self._dispatch_webhook(event_type, data)
-        except Exception as exc:
-            if isinstance(exc, IntegrityError):
-                self._renumber_events(to_flush)
+        # _io_lock covers drain-through-commit so this batch cannot interleave
+        # (and commit out of sequence order) with a concurrent _flush_buffer.
+        with self._io_lock:
             with self._lock:
-                if isinstance(exc, IntegrityError) and self._buffer:
-                    next_seq = self._seq
-                    for evt in self._buffer:
-                        evt.sequence = next_seq
-                        next_seq += 1
-                    self._seq = next_seq
-                self._buffer = to_flush + self._buffer
-            self._schedule_flush()
-            logger.exception(
-                "Failed to write event+task for %s: type=%s order=%d — "
-                "task status in DB may be stale (expected %s)",
-                self._execution_id,
-                event_type,
-                task_order,
-                task_status.value,
-                extra={
-                    "event": "event_task_write_failed",
-                    "execution_id": self._execution_id_str,
-                    "event_type": event_type,
-                    "task_order": task_order,
-                    "expected_task_status": task_status.value,
-                    "error_type": type(exc).__name__,
-                    "error_message": str(exc)[:500],
-                },
-            )
+                seq = self._seq
+                self._seq += 1
+                event = ExecutionEvent(
+                    execution_id=self._execution_id,
+                    sequence=seq,
+                    event_type=event_type,
+                    timestamp=now,
+                    data=data,
+                )
+                to_flush = self._buffer
+                self._buffer = []
+                to_flush.append(event)
+            committed = False
+            try:
+                with self._session_factory() as session:
+                    session.add_all(to_flush)
+                    values: dict[str, Any] = {"status": task_status}
+                    if task_output is not None:
+                        values["output"] = task_output
+                    if task_started_at is not None:
+                        values["started_at"] = task_started_at
+                    if task_completed_at is not None:
+                        values["completed_at"] = task_completed_at
+                    # Bulk UPDATE bypasses ORM onupdate — set updated_at explicitly.
+                    values["updated_at"] = now
+                    session.execute(
+                        update(ExecutionTask)
+                        .where(
+                            ExecutionTask.execution_id == self._execution_id,
+                            ExecutionTask.order == task_order,
+                        )
+                        .values(**values)
+                    )
+                    session.commit()
+                committed = True
+            except Exception as exc:
+                if isinstance(exc, IntegrityError):
+                    self._renumber_events(to_flush)
+                with self._lock:
+                    if isinstance(exc, IntegrityError) and self._buffer:
+                        next_seq = self._seq
+                        for evt in self._buffer:
+                            evt.sequence = next_seq
+                            next_seq += 1
+                        self._seq = next_seq
+                    self._buffer = to_flush + self._buffer
+                self._schedule_flush()
+                logger.exception(
+                    "Failed to write event+task for %s: type=%s order=%d — "
+                    "task status in DB may be stale (expected %s)",
+                    self._execution_id,
+                    event_type,
+                    task_order,
+                    task_status.value,
+                    extra={
+                        "event": "event_task_write_failed",
+                        "execution_id": self._execution_id_str,
+                        "event_type": event_type,
+                        "task_order": task_order,
+                        "expected_task_status": task_status.value,
+                        "error_type": type(exc).__name__,
+                        "error_message": str(exc)[:500],
+                    },
+                )
+        if committed:
+            # Fire webhook delivery in background (outside _io_lock)
+            self._dispatch_webhook(event_type, data)
 
     def setup_listeners(self, crewai_event_bus: Any) -> None:
         @crewai_event_bus.on(CrewKickoffStartedEvent)  # type: ignore[untyped-decorator]
