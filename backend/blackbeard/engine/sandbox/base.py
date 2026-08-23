@@ -12,7 +12,6 @@ import logging
 import re
 import shutil
 import uuid
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
@@ -87,33 +86,39 @@ class SandboxResult:
         }
 
 
-class BaseSandbox(ABC):
-    """Abstract base for container-based sandbox runtimes.
+class BaseSandbox:
+    """Base class for container-based sandbox runtimes.
 
     Provides shared logic for:
     - Container runtime auto-detection (prefers Podman for rootless)
     - Security-hardened command building (cap-drop, no-new-privileges, etc.)
     - Async subprocess execution with timeout handling
 
-    Subclasses implement ``_extra_flags()`` to add runtime-specific flags
-    (e.g. ``--runtime=runsc`` for gVisor, ``--runtime=krun`` for MicroVM)
-    and ``_runtime_flag`` / ``_default_memory`` / ``_default_timeout``
-    for tier-specific defaults.
+    Subclasses configure tier behavior via class attributes:
+    ``_runtime_flag`` (e.g. ``--runtime=runsc`` for gVisor,
+    ``--runtime=krun`` for MicroVM), ``_default_memory``,
+    ``_default_timeout``, error types, and log prefix.
     """
 
     # Subclasses should set these class-level defaults.
-    _runtime_flag: str = ""  # e.g. "runsc", "krun"; empty = standard container
+    _runtime_flag: str = ""  # e.g. "--runtime=runsc"; empty = standard container
     _default_memory: str = "256m"
     _default_timeout: int = 30
-    _error_prefix: str = "Container"  # for error messages
+    _error_prefix: str = "Container"  # for log messages and event names
+    _runtime_error_type: type[Exception] = SandboxRuntimeError
+    _timeout_error_type: type[Exception] = SandboxTimeoutError
 
     def __init__(self, container_runtime: str = "auto") -> None:
         self._runtime = self._detect_runtime(container_runtime)
+        self._verify()
 
     @property
     def runtime(self) -> str:
         """The resolved container runtime binary name."""
         return self._runtime
+
+    def _verify(self) -> None:
+        """Optional tier-specific availability check (soft warning only)."""
 
     def _detect_runtime(self, preference: str) -> str:
         """Detect available container runtime.
@@ -126,25 +131,18 @@ class BaseSandbox(ABC):
         """
         if preference != "auto":
             if shutil.which(preference) is None:
-                raise SandboxRuntimeError(f"Container runtime '{preference}' not found on PATH")
+                raise self._runtime_error_type(
+                    f"Container runtime '{preference}' not found on PATH"
+                )
             return preference
         # Auto-detect: prefer podman (rootless by default)
         if shutil.which("podman"):
             return "podman"
         if shutil.which("docker"):
             return "docker"
-        raise SandboxRuntimeError(
+        raise self._runtime_error_type(
             f"No container runtime found for {self._error_prefix} (install docker or podman)"
         )
-
-    @abstractmethod
-    def _extra_flags(self) -> list[str]:
-        """Return subclass-specific flags to insert after ``run --rm``.
-
-        For example, gVisor returns ``["--runtime=runsc"]`` and MicroVM
-        returns ``["--runtime=krun"]``.  The base container sandbox returns
-        an empty list.
-        """
 
     def _build_command(
         self,
@@ -166,15 +164,16 @@ class BaseSandbox(ABC):
         """
         # SECURITY: Validate the image name to prevent argument injection.
         if not _IMAGE_RE.fullmatch(image):
-            raise SandboxRuntimeError(f"Invalid container image name: {image!r}")
+            raise self._runtime_error_type(f"Invalid container image name: {image!r}")
 
         mem = memory_limit or self._default_memory
         cmd: list[str] = [
             self._runtime,
             "run",
             "--rm",
-            *self._extra_flags(),
         ]
+        if self._runtime_flag:
+            cmd.append(self._runtime_flag)
         # Named container so a timed-out run can be force-removed (the
         # daemon-owned container outlives the killed CLI process).
         if container_name:
@@ -220,7 +219,7 @@ class BaseSandbox(ABC):
         cmd.extend(command)
         return cmd
 
-    async def _execute_subprocess(
+    async def execute(
         self,
         image: str,
         command: list[str],
@@ -233,17 +232,13 @@ class BaseSandbox(ABC):
         read_only: bool = True,
         env: dict[str, str] | None = None,
     ) -> SandboxResult:
-        """Run a command in a sandboxed container (shared implementation).
-
-        Subclasses call this from their ``execute()`` method, which may
-        have different default parameters or return a subclass-specific
-        result type.
+        """Run a command in a sandboxed container.
 
         Args:
             image: Container image to run (e.g. ``python:3.13-slim``).
             command: Command and arguments to run inside the container.
             input_data: Optional string to pass via stdin.
-            timeout: Maximum wall-clock time in seconds.
+            timeout: Maximum wall-clock time in seconds (default ``_default_timeout``).
             memory_limit: Container memory limit (e.g. ``"256m"``).
             cpu_limit: CPU limit as a float (e.g. ``1.0`` = 1 CPU).
             network: Whether to allow network access (default ``False``).
@@ -296,12 +291,12 @@ class BaseSandbox(ABC):
                 stderr=asyncio.subprocess.PIPE,
             )
         except FileNotFoundError as exc:
-            raise SandboxRuntimeError(
+            raise self._runtime_error_type(
                 f"Container runtime '{self._runtime}' not found: {exc}"
             ) from exc
         except OSError as exc:
-            raise SandboxRuntimeError(
-                f"Failed to start {self._error_prefix.lower()} container: {exc}"
+            raise self._runtime_error_type(
+                f"Failed to start {self._error_prefix} sandbox: {exc}"
             ) from exc
 
         try:
@@ -314,7 +309,7 @@ class BaseSandbox(ABC):
             await proc.wait()
             # The daemon-owned container survives the killed CLI; remove it.
             await force_remove_container(self._runtime, container_name)
-            raise SandboxTimeoutError(
+            raise self._timeout_error_type(
                 f"{self._error_prefix} timed out after {effective_timeout}s"
             ) from exc
 

@@ -27,8 +27,7 @@ _VALID_IMAGE = "python:3.13-slim"
 
 
 class _StubSandbox(BaseSandbox):
-    def _extra_flags(self) -> list[str]:
-        return []
+    pass
 
 
 def _make_sandbox(cls):

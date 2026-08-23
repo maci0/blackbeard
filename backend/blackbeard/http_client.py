@@ -14,7 +14,6 @@ import httpx
 
 __all__ = [
     "close_all_clients",
-    "close_client",
     "get_client",
     "get_litellm_client",
     "get_sync_client",
@@ -79,14 +78,6 @@ def get_litellm_client(name: str, timeout: float = _DEFAULT_TIMEOUT) -> httpx.As
 
     key = settings.litellm_master_key.get_secret_value()
     return get_client(name, timeout=timeout, headers={"Authorization": f"Bearer {key}"})
-
-
-async def close_client(name: str) -> None:
-    """Close and remove a named client."""
-    with _lock:
-        client = _clients.pop(name, None)
-    if client is not None:
-        await client.aclose()
 
 
 async def close_all_clients() -> None:

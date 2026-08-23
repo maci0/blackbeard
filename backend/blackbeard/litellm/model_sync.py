@@ -26,10 +26,6 @@ from blackbeard.logging_config import scrub_pii
 logger = logging.getLogger(__name__)
 
 
-class LiteLLMSyncError(Exception):
-    """Raised when a LiteLLM model sync operation fails."""
-
-
 def _build_model_info(spec: dict[str, Any]) -> dict[str, Any] | None:
     """Build model_info dict with fallback configuration from an LLMConnection spec.
 
@@ -102,21 +98,6 @@ async def add_model(name: str, spec: dict[str, Any]) -> bool:
             extra={"event": "litellm_add_model_error", "model_name": name},
         )
         return False
-
-
-async def update_model(name: str, spec: dict[str, Any]) -> None:
-    """Update a model on LiteLLM proxy (delete + re-add)."""
-    await delete_model(name)
-    if not await add_model(name, spec):
-        logger.error(
-            "LiteLLM update_model: re-add failed after delete for %s — "
-            "model may be missing until next sync",
-            name,
-            extra={"event": "litellm_update_readd_failed", "model_name": name},
-        )
-        raise LiteLLMSyncError(
-            f"Model '{name}' deleted but re-add failed — model unavailable until next sync"
-        )
 
 
 async def delete_model(name: str) -> bool:
