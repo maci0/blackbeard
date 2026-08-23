@@ -38,6 +38,7 @@ from blackbeard_cli.helpers import (
     out,
     parse_key_value_inputs,
     print_json,
+    render_execution_detail,
     require_auth,
     validate_name,
     warn_unused_interval,
@@ -845,6 +846,68 @@ def list_resources_cmd(ctx: click.Context, kind: str, labels: tuple[str, ...], l
         out.print(f"[dim]{len(items)} resource(s)[/]")
 
 
+def _submit_and_report(
+    ctx: click.Context,
+    *,
+    url: str,
+    body: dict[str, Any],
+    submitting_msg: str,
+    panel_title: str,
+    detail_lines: list[str],
+    watch: bool,
+    interval: int,
+) -> None:
+    """Submit an execution request, print the confirmation panel, then watch or hint."""
+    server = ctx.obj["server"]
+    project = ctx.obj["project"]
+    prog = ctx.find_root().info_name or "blackbeard"
+
+    with console.status(submitting_msg):
+        try:
+            with httpx.Client(timeout=ctx.obj["timeout"]) as client:
+                response = client.post(
+                    url,
+                    json=body,
+                    headers=require_auth(ctx),
+                    params={"project": project},
+                )
+        except httpx.RequestError as exc:
+            handle_request_error(server, exc)
+
+    if response.status_code not in (200, 201, 202):
+        handle_http_error(response)
+
+    data = response.json()
+    execution_id = str(data.get("id", "unknown"))
+    status_val = data.get("status", "unknown")
+
+    if ctx.obj["json"] and not watch:
+        print_json(data)
+        return
+
+    if not ctx.obj["json"]:
+        details = "".join(f"{line}\n" for line in detail_lines)
+        out.print(
+            Panel.fit(
+                f"{details}"
+                f"[bold]Execution ID:[/] {escape(execution_id)}\n"
+                f"[bold]Status:[/] {escape(status_val)}",
+                title=f"[green]{panel_title}[/]",
+                border_style="green",
+            )
+        )
+
+    if watch:
+        ctx.invoke(
+            status,
+            execution_id=execution_id,
+            watch=True,
+            interval=interval,
+        )
+    else:
+        console.print(f"\nTrack with: [bold]{prog} status {escape(execution_id)} -w[/]")
+
+
 @cli.command(
     epilog="""\b
 Examples:
@@ -949,62 +1012,22 @@ def kickoff(
 
     parsed_inputs = parse_key_value_inputs(inputs)
 
-    server = ctx.obj["server"]
-
-    project = ctx.obj["project"]
     prog = ctx.find_root().info_name or "blackbeard"
-
     warn_unused_interval(ctx, watch, interval, f"{prog} kickoff {crew_name}")
 
-    url = f"{server}/api/v1/crews/{crew_name}/kickoff"
-    headers = require_auth(ctx)
-    body = {"inputs": parsed_inputs}
-
-    with console.status("Submitting execution..."):
-        try:
-            with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-                response = client.post(
-                    url,
-                    json=body,
-                    headers=headers,
-                    params={"project": project},
-                )
-        except httpx.RequestError as exc:
-            handle_request_error(server, exc)
-
-    if response.status_code not in (200, 201, 202):
-        handle_http_error(response)
-
-    data = response.json()
-    execution_id = data.get("id", "unknown")
-    status_val = data.get("status", "unknown")
-    is_json = ctx.obj["json"]
-
-    if is_json and not watch:
-        print_json(data)
-        return
-
-    if not is_json:
-        out.print(
-            Panel.fit(
-                f"[bold]Crew:[/] {escape(crew_name)}\n"
-                f"[bold]Project:[/] {escape(project)}\n"
-                f"[bold]Execution ID:[/] {escape(execution_id)}\n"
-                f"[bold]Status:[/] {escape(status_val)}",
-                title="[green]Execution Submitted[/]",
-                border_style="green",
-            )
-        )
-
-    if watch:
-        ctx.invoke(
-            status,
-            execution_id=execution_id,
-            watch=True,
-            interval=interval,
-        )
-    else:
-        console.print(f"\nTrack with: [bold]{prog} status {escape(execution_id)} -w[/]")
+    _submit_and_report(
+        ctx,
+        url=f"{ctx.obj['server']}/api/v1/crews/{crew_name}/kickoff",
+        body={"inputs": parsed_inputs},
+        submitting_msg="Submitting execution...",
+        panel_title="Execution Submitted",
+        detail_lines=[
+            f"[bold]Crew:[/] {escape(crew_name)}",
+            f"[bold]Project:[/] {escape(ctx.obj['project'])}",
+        ],
+        watch=watch,
+        interval=interval,
+    )
 
 
 def _validate_pkl_filename(_ctx: click.Context, _param: click.Parameter, value: str) -> str:
@@ -1086,64 +1109,25 @@ def train(
 
     parsed_inputs = parse_key_value_inputs(inputs)
 
-    server = ctx.obj["server"]
-    project = ctx.obj["project"]
     prog = ctx.find_root().info_name or "blackbeard"
-
     warn_unused_interval(ctx, watch, interval, f"{prog} train {crew_name}")
 
-    url = f"{server}/api/v1/crews/{crew_name}/train"
-    headers = require_auth(ctx)
-    body = {"inputs": parsed_inputs, "n_iterations": iterations, "filename": filename}
-
-    with console.status("Submitting training execution..."):
-        try:
-            with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-                response = client.post(
-                    url,
-                    json=body,
-                    headers=headers,
-                    params={"project": project},
-                )
-        except httpx.RequestError as exc:
-            handle_request_error(server, exc)
-
-    if response.status_code not in (200, 201, 202):
-        handle_http_error(response)
-
-    data = response.json()
-    execution_id = data.get("id", "unknown")
-    status_val = data.get("status", "unknown")
-    is_json = ctx.obj["json"]
-
-    if is_json and not watch:
-        print_json(data)
-        return
-
-    if not is_json:
-        out.print(
-            Panel.fit(
-                f"[bold]Crew:[/] {escape(crew_name)}\n"
-                f"[bold]Project:[/] {escape(project)}\n"
-                f"[bold]Mode:[/] train\n"
-                f"[bold]Iterations:[/] {iterations}\n"
-                f"[bold]Filename:[/] {escape(filename)}\n"
-                f"[bold]Execution ID:[/] {escape(execution_id)}\n"
-                f"[bold]Status:[/] {escape(status_val)}",
-                title="[green]Training Submitted[/]",
-                border_style="green",
-            )
-        )
-
-    if watch:
-        ctx.invoke(
-            status,
-            execution_id=execution_id,
-            watch=True,
-            interval=interval,
-        )
-    else:
-        console.print(f"\nTrack with: [bold]{prog} status {escape(execution_id)} -w[/]")
+    _submit_and_report(
+        ctx,
+        url=f"{ctx.obj['server']}/api/v1/crews/{crew_name}/train",
+        body={"inputs": parsed_inputs, "n_iterations": iterations, "filename": filename},
+        submitting_msg="Submitting training execution...",
+        panel_title="Training Submitted",
+        detail_lines=[
+            f"[bold]Crew:[/] {escape(crew_name)}",
+            f"[bold]Project:[/] {escape(ctx.obj['project'])}",
+            "[bold]Mode:[/] train",
+            f"[bold]Iterations:[/] {iterations}",
+            f"[bold]Filename:[/] {escape(filename)}",
+        ],
+        watch=watch,
+        interval=interval,
+    )
 
 
 @cli.command(
@@ -1207,63 +1191,24 @@ def test_crew_cmd(
 
     parsed_inputs = parse_key_value_inputs(inputs)
 
-    server = ctx.obj["server"]
-    project = ctx.obj["project"]
     prog = ctx.find_root().info_name or "blackbeard"
-
     warn_unused_interval(ctx, watch, interval, f"{prog} test-crew {crew_name}")
 
-    url = f"{server}/api/v1/crews/{crew_name}/test"
-    headers = require_auth(ctx)
-    body = {"inputs": parsed_inputs, "n_iterations": iterations}
-
-    with console.status("Submitting test execution..."):
-        try:
-            with httpx.Client(timeout=ctx.obj["timeout"]) as client:
-                response = client.post(
-                    url,
-                    json=body,
-                    headers=headers,
-                    params={"project": project},
-                )
-        except httpx.RequestError as exc:
-            handle_request_error(server, exc)
-
-    if response.status_code not in (200, 201, 202):
-        handle_http_error(response)
-
-    data = response.json()
-    execution_id = data.get("id", "unknown")
-    status_val = data.get("status", "unknown")
-    is_json = ctx.obj["json"]
-
-    if is_json and not watch:
-        print_json(data)
-        return
-
-    if not is_json:
-        out.print(
-            Panel.fit(
-                f"[bold]Crew:[/] {escape(crew_name)}\n"
-                f"[bold]Project:[/] {escape(project)}\n"
-                f"[bold]Mode:[/] test\n"
-                f"[bold]Iterations:[/] {iterations}\n"
-                f"[bold]Execution ID:[/] {escape(execution_id)}\n"
-                f"[bold]Status:[/] {escape(status_val)}",
-                title="[green]Test Submitted[/]",
-                border_style="green",
-            )
-        )
-
-    if watch:
-        ctx.invoke(
-            status,
-            execution_id=execution_id,
-            watch=True,
-            interval=interval,
-        )
-    else:
-        console.print(f"\nTrack with: [bold]{prog} status {escape(execution_id)} -w[/]")
+    _submit_and_report(
+        ctx,
+        url=f"{ctx.obj['server']}/api/v1/crews/{crew_name}/test",
+        body={"inputs": parsed_inputs, "n_iterations": iterations},
+        submitting_msg="Submitting test execution...",
+        panel_title="Test Submitted",
+        detail_lines=[
+            f"[bold]Crew:[/] {escape(crew_name)}",
+            f"[bold]Project:[/] {escape(ctx.obj['project'])}",
+            "[bold]Mode:[/] test",
+            f"[bold]Iterations:[/] {iterations}",
+        ],
+        watch=watch,
+        interval=interval,
+    )
 
 
 @cli.command(
@@ -1326,62 +1271,7 @@ def status(ctx: click.Context, execution_id: str, watch: bool, interval: int) ->
             return cast("dict[str, Any]", response.json())
 
         def render(data: dict[str, Any]) -> None:
-            status_val = data.get("status", "unknown")
-            color = STATUS_COLORS.get(status_val, "dim")
-
-            table = Table(show_header=False, box=None, padding=(0, 2))
-            table.add_column("Key", style="bold dim", width=14)
-            table.add_column("Value")
-
-            table.add_row("Execution ID", str(data.get("id", execution_id)))
-            table.add_row("Status", f"[{color} bold]{status_val}[/]")
-            table.add_row("Crew", str(data.get("crew_name", "—")))
-
-            tokens = data.get("total_tokens")
-            if tokens:
-                table.add_row("Tokens", f"{tokens:,}")
-
-            cost = data.get("cost_usd")
-            if cost and isinstance(cost, (int, float)) and cost > 0:
-                table.add_row("Cost", f"${cost:.4f}")
-
-            started = data.get("started_at")
-            if started:
-                table.add_row("Started", str(started))
-
-            completed = data.get("completed_at")
-            if completed:
-                table.add_row("Completed", str(completed))
-
-            out.print(
-                Panel(
-                    table,
-                    title=f"Execution [{color}]{status_val}[/]",
-                    border_style=color,
-                )
-            )
-
-            # Error
-            error = data.get("error")
-            if error:
-                out.print(
-                    Panel(
-                        f"[red]{escape(str(error))}[/]",
-                        title="[red]Error[/]",
-                        border_style="red",
-                    )
-                )
-
-            # Outputs
-            outputs = data.get("outputs")
-            if outputs:
-                out.print(
-                    Panel(
-                        Syntax(json.dumps(outputs, indent=2, default=str), "json", theme="monokai"),
-                        title="Outputs",
-                        border_style="green",
-                    )
-                )
+            render_execution_detail(data, execution_id)
 
             # Tasks
             tasks = data.get("tasks", [])

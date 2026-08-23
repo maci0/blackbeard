@@ -6,6 +6,7 @@ persistent history, and live execution watching.
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import time
@@ -13,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import yaml
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.formatted_text import HTML
@@ -23,13 +25,13 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 from blackbeard_cli.helpers import (
-    STATUS_COLORS,
     TERMINAL_STATUSES,
+    build_executions_table,
     console,
     extract_detail,
     extract_items,
-    format_timestamp,
     out,
+    render_execution_detail,
 )
 from blackbeard_cli.kinds import ALL_KINDS, KIND_TO_PLURAL
 
@@ -269,41 +271,50 @@ def _cmd_ls(state: ShellState, args: list[str]) -> None:
     out.print(f"[dim]{len(items)} resource(s)[/]")
 
 
+def _fetch_resource(
+    state: ShellState, kind_raw: str, name: str
+) -> tuple[str, dict[str, Any]] | None:
+    """GET a resource by kind and name; print errors and return None on failure."""
+    kind = _resolve_kind(kind_raw)
+    if not kind:
+        return None
+
+    try:
+        with httpx.Client(timeout=state.timeout) as client:
+            resp = client.get(
+                f"{state.server}/api/v1/{KIND_TO_PLURAL[kind]}/{name}",
+                headers=state.headers(),
+                params={"project": state.project},
+            )
+    except httpx.RequestError as exc:
+        console.print(f"[red]Error:[/] {exc}")
+        return None
+
+    if resp.status_code != 200:
+        console.print(f"[red]Error:[/] HTTP {resp.status_code}: {extract_detail(resp)}")
+        return None
+
+    return kind, resp.json()
+
+
 def _cmd_get(state: ShellState, args: list[str]) -> None:
     """Show resource detail."""
     if len(args) < 2:
         out.print("[red]Usage:[/] get <Kind> <name>")
         return
 
-    kind = _resolve_kind(args[0])
-    if not kind:
+    fetched = _fetch_resource(state, args[0], args[1])
+    if fetched is None:
         return
-    name = args[1]
-    plural = KIND_TO_PLURAL[kind]
+    kind, data = fetched
 
-    try:
-        with httpx.Client(timeout=state.timeout) as client:
-            resp = client.get(
-                f"{state.server}/api/v1/{plural}/{name}",
-                headers=state.headers(),
-                params={"project": state.project},
-            )
-    except httpx.RequestError as exc:
-        console.print(f"[red]Error:[/] {exc}")
-        return
-
-    if resp.status_code != 200:
-        console.print(f"[red]Error:[/] HTTP {resp.status_code}: {extract_detail(resp)}")
-        return
-
-    data = resp.json()
     meta = data.get("metadata", {})
 
     header = Table(show_header=False, box=None, padding=(0, 2))
     header.add_column("Key", style="bold dim", width=12)
     header.add_column("Value")
     header.add_row("Kind", kind)
-    header.add_row("Name", meta.get("name", name))
+    header.add_row("Name", meta.get("name", args[1]))
     header.add_row("Project", meta.get("project", state.project))
     header.add_row("Version", str(data.get("version", "")))
     labels = meta.get("labels", {})
@@ -311,8 +322,6 @@ def _cmd_get(state: ShellState, args: list[str]) -> None:
         header.add_row("Labels", ", ".join(f"{k}={v}" for k, v in labels.items()))
     out.print(header)
     out.print()
-
-    import json
 
     spec_json = json.dumps(data.get("spec", data), indent=2, default=str)
     out.print(Syntax(spec_json, "json", theme="monokai"))
@@ -324,30 +333,10 @@ def _cmd_cat(state: ShellState, args: list[str]) -> None:
         out.print("[red]Usage:[/] cat <Kind> <name>")
         return
 
-    kind = _resolve_kind(args[0])
-    if not kind:
+    fetched = _fetch_resource(state, args[0], args[1])
+    if fetched is None:
         return
-    name = args[1]
-    plural = KIND_TO_PLURAL[kind]
-
-    try:
-        with httpx.Client(timeout=state.timeout) as client:
-            resp = client.get(
-                f"{state.server}/api/v1/{plural}/{name}",
-                headers=state.headers(),
-                params={"project": state.project},
-            )
-    except httpx.RequestError as exc:
-        console.print(f"[red]Error:[/] {exc}")
-        return
-
-    if resp.status_code != 200:
-        console.print(f"[red]Error:[/] HTTP {resp.status_code}: {extract_detail(resp)}")
-        return
-
-    data = resp.json()
-
-    import yaml
+    kind, data = fetched
 
     # Build a clean resource document
     resource = {
@@ -435,7 +424,7 @@ def _cmd_watch(state: ShellState, args: list[str]) -> None:
                 data = resp.json()
                 if not first:
                     console.print("[dim]--- refreshed ---[/]\n")
-                _render_execution(data, execution_id)
+                render_execution_detail(data, execution_id)
                 first = False
 
                 current = data.get("status", "")
@@ -468,7 +457,7 @@ def _cmd_status(state: ShellState, args: list[str]) -> None:
         console.print(f"[red]Error:[/] HTTP {resp.status_code}: {extract_detail(resp)}")
         return
 
-    _render_execution(resp.json(), execution_id)
+    render_execution_detail(resp.json(), execution_id)
 
 
 def _cmd_executions(state: ShellState, args: list[str]) -> None:
@@ -494,34 +483,7 @@ def _cmd_executions(state: ShellState, args: list[str]) -> None:
         out.print("[dim]No executions found.[/]")
         return
 
-    table = Table(title="Recent Executions")
-    table.add_column("ID", style="dim", no_wrap=True)
-    table.add_column("Crew", style="bold")
-    table.add_column("Status")
-    table.add_column("Created")
-    table.add_column("Tokens", justify="right")
-    table.add_column("Cost", justify="right")
-
-    for ex in items:
-        ex_id = str(ex.get("id", "—"))
-        status_val = ex.get("status", "—")
-        color = STATUS_COLORS.get(status_val, "dim")
-        tokens = ex.get("total_tokens")
-        cost = ex.get("cost_usd")
-        try:
-            cost_str = f"${float(cost):.4f}" if cost else "—"
-        except (TypeError, ValueError):
-            cost_str = "—"
-        table.add_row(
-            ex_id,
-            escape(str(ex.get("crew_name", "—"))),
-            f"[{color}]{status_val}[/]",
-            format_timestamp(ex.get("created_at")),
-            f"{tokens:,}" if tokens else "—",
-            cost_str,
-        )
-
-    out.print(table)
+    out.print(build_executions_table(items, title="Recent Executions"))
     out.print(f"[dim]{len(items)} execution(s)[/]")
 
 
@@ -563,60 +525,6 @@ def _resolve_kind(raw: str) -> str | None:
     console.print(f"[red]Unknown kind:[/] {escape(raw)}")
     console.print("[dim]Valid kinds:[/]", ", ".join(sorted(ALL_KINDS)))
     return None
-
-
-def _render_execution(data: dict[str, Any], execution_id: str) -> None:
-    """Render an execution status panel."""
-    import json
-
-    status_val = data.get("status", "unknown")
-    color = STATUS_COLORS.get(status_val, "dim")
-
-    table = Table(show_header=False, box=None, padding=(0, 2))
-    table.add_column("Key", style="bold dim", width=14)
-    table.add_column("Value")
-
-    table.add_row("Execution ID", str(data.get("id", execution_id)))
-    table.add_row("Status", f"[{color} bold]{status_val}[/]")
-    table.add_row("Crew", str(data.get("crew_name", "—")))
-
-    tokens = data.get("total_tokens")
-    if tokens:
-        table.add_row("Tokens", f"{tokens:,}")
-
-    cost = data.get("cost_usd")
-    if cost and isinstance(cost, (int, float)) and cost > 0:
-        table.add_row("Cost", f"${cost:.4f}")
-
-    started = data.get("started_at")
-    if started:
-        table.add_row("Started", str(started))
-
-    completed = data.get("completed_at")
-    if completed:
-        table.add_row("Completed", str(completed))
-
-    out.print(Panel(table, title=f"Execution [{color}]{status_val}[/]", border_style=color))
-
-    error = data.get("error")
-    if error:
-        out.print(
-            Panel(
-                f"[red]{escape(str(error))}[/]",
-                title="[red]Error[/]",
-                border_style="red",
-            )
-        )
-
-    outputs = data.get("outputs")
-    if outputs:
-        out.print(
-            Panel(
-                Syntax(json.dumps(outputs, indent=2, default=str), "json", theme="monokai"),
-                title="Outputs",
-                border_style="green",
-            )
-        )
 
 
 # ── Command dispatch table ─────────────────────────────────────────────────────

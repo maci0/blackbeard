@@ -28,6 +28,35 @@ def _make_tool_with_name(name: str) -> MagicMock:
     return tool
 
 
+def _mock_tool_class(cls_name: str, tool_name: str) -> MagicMock:
+    """Create a mock tool class whose instances report *tool_name*."""
+    cls = MagicMock(name=cls_name)
+    cls.return_value = _make_tool_with_name(tool_name)
+    return cls
+
+
+def _setup_mock_tools(mock_importlib: MagicMock, **tool_classes: MagicMock) -> None:
+    """Route import_module to fake modules; each key is a module fragment ("search" -> SearchTool)."""
+
+    def import_side_effect(module_path: str) -> ModuleType:
+        mod = ModuleType(module_path)
+        for fragment, cls in tool_classes.items():
+            if fragment in module_path:
+                setattr(mod, f"{fragment.capitalize()}Tool", cls)
+        return mod
+
+    mock_importlib.import_module.side_effect = import_side_effect
+
+
+def _tool_resource(name: str, class_name: str):
+    """Create a python TOOL resource for crewai_tools.<name>.<class_name>."""
+    return make_resource(
+        ResourceKind.TOOL,
+        name,
+        {"type": "python", "class_path": f"crewai_tools.{name}.{class_name}"},
+    )
+
+
 def _basic_agent_spec(**overrides: object) -> dict:
     base = {"role": "R", "goal": "G", "backstory": "B"}
     base.update(overrides)
@@ -45,34 +74,12 @@ def _basic_agent_spec(**overrides: object) -> dict:
 def test_policy_allowlist_keeps_only_allowed_tools(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Agent with allowlist policy should only keep tools in the allow list."""
     # Set up two tools
-    search_cls = MagicMock(name="SearchToolCls")
-    search_instance = _make_tool_with_name("SearchTool")
-    search_cls.return_value = search_instance
+    search_cls = _mock_tool_class("SearchToolCls", "SearchTool")
+    writer_cls = _mock_tool_class("WriterToolCls", "WriterTool")
+    _setup_mock_tools(mock_importlib, search=search_cls, writer=writer_cls)
 
-    writer_cls = MagicMock(name="WriterToolCls")
-    writer_instance = _make_tool_with_name("WriterTool")
-    writer_cls.return_value = writer_instance
-
-    def import_side_effect(module_path):
-        mod = ModuleType(module_path)
-        if "search" in module_path:
-            mod.SearchTool = search_cls  # type: ignore[attr-defined]
-        elif "writer" in module_path:
-            mod.WriterTool = writer_cls  # type: ignore[attr-defined]
-        return mod
-
-    mock_importlib.import_module.side_effect = import_side_effect
-
-    search_res = make_resource(
-        ResourceKind.TOOL,
-        "search",
-        {"type": "python", "class_path": "crewai_tools.search.SearchTool"},
-    )
-    writer_res = make_resource(
-        ResourceKind.TOOL,
-        "writer",
-        {"type": "python", "class_path": "crewai_tools.writer.WriterTool"},
-    )
+    search_res = _tool_resource("search", "SearchTool")
+    writer_res = _tool_resource("writer", "WriterTool")
     agent_res = make_resource(
         ResourceKind.AGENT,
         "researcher",
@@ -107,34 +114,12 @@ def test_policy_allowlist_keeps_only_allowed_tools(mock_agent_cls, mock_llm_cls,
 @patch("blackbeard.engine.loader.Agent")
 def test_policy_denylist_removes_denied_tools(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Agent with denylist policy should have denied tools removed."""
-    search_cls = MagicMock(name="SearchToolCls")
-    search_instance = _make_tool_with_name("SearchTool")
-    search_cls.return_value = search_instance
+    search_cls = _mock_tool_class("SearchToolCls", "SearchTool")
+    writer_cls = _mock_tool_class("WriterToolCls", "WriterTool")
+    _setup_mock_tools(mock_importlib, search=search_cls, writer=writer_cls)
 
-    writer_cls = MagicMock(name="WriterToolCls")
-    writer_instance = _make_tool_with_name("WriterTool")
-    writer_cls.return_value = writer_instance
-
-    def import_side_effect(module_path):
-        mod = ModuleType(module_path)
-        if "search" in module_path:
-            mod.SearchTool = search_cls  # type: ignore[attr-defined]
-        elif "writer" in module_path:
-            mod.WriterTool = writer_cls  # type: ignore[attr-defined]
-        return mod
-
-    mock_importlib.import_module.side_effect = import_side_effect
-
-    search_res = make_resource(
-        ResourceKind.TOOL,
-        "search",
-        {"type": "python", "class_path": "crewai_tools.search.SearchTool"},
-    )
-    writer_res = make_resource(
-        ResourceKind.TOOL,
-        "writer",
-        {"type": "python", "class_path": "crewai_tools.writer.WriterTool"},
-    )
+    search_res = _tool_resource("search", "SearchTool")
+    writer_res = _tool_resource("writer", "WriterTool")
     agent_res = make_resource(
         ResourceKind.AGENT,
         "researcher",
@@ -171,22 +156,10 @@ def test_policy_allowlist_removes_all_tools_when_none_match(
     mock_agent_cls, mock_llm_cls, mock_importlib
 ):
     """When allowlist excludes all tools, agent should be built with no tools."""
-    writer_cls = MagicMock(name="WriterToolCls")
-    writer_instance = _make_tool_with_name("WriterTool")
-    writer_cls.return_value = writer_instance
+    writer_cls = _mock_tool_class("WriterToolCls", "WriterTool")
+    _setup_mock_tools(mock_importlib, writer=writer_cls)
 
-    def import_side_effect(module_path):
-        mod = ModuleType(module_path)
-        mod.WriterTool = writer_cls  # type: ignore[attr-defined]
-        return mod
-
-    mock_importlib.import_module.side_effect = import_side_effect
-
-    writer_res = make_resource(
-        ResourceKind.TOOL,
-        "writer",
-        {"type": "python", "class_path": "crewai_tools.writer.WriterTool"},
-    )
+    writer_res = _tool_resource("writer", "WriterTool")
     agent_res = make_resource(
         ResourceKind.AGENT,
         "researcher",
@@ -219,22 +192,10 @@ def test_policy_allowlist_removes_all_tools_when_none_match(
 @patch("blackbeard.engine.loader.Agent")
 def test_no_policy_preserves_all_tools(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Agent without a policy ref should keep all tools unchanged."""
-    search_cls = MagicMock(name="SearchToolCls")
-    search_instance = _make_tool_with_name("SearchTool")
-    search_cls.return_value = search_instance
+    search_cls = _mock_tool_class("SearchToolCls", "SearchTool")
+    _setup_mock_tools(mock_importlib, search=search_cls)
 
-    def import_side_effect(module_path):
-        mod = ModuleType(module_path)
-        mod.SearchTool = search_cls  # type: ignore[attr-defined]
-        return mod
-
-    mock_importlib.import_module.side_effect = import_side_effect
-
-    search_res = make_resource(
-        ResourceKind.TOOL,
-        "search",
-        {"type": "python", "class_path": "crewai_tools.search.SearchTool"},
-    )
+    search_res = _tool_resource("search", "SearchTool")
     agent_res = make_resource(
         ResourceKind.AGENT,
         "researcher",
@@ -266,22 +227,10 @@ def test_no_policy_preserves_all_tools(mock_agent_cls, mock_llm_cls, mock_import
 @patch("blackbeard.engine.loader.Agent")
 def test_empty_policies_dict_preserves_all_tools(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Agent with empty policies dict should keep all tools unchanged."""
-    search_cls = MagicMock(name="SearchToolCls")
-    search_instance = _make_tool_with_name("SearchTool")
-    search_cls.return_value = search_instance
+    search_cls = _mock_tool_class("SearchToolCls", "SearchTool")
+    _setup_mock_tools(mock_importlib, search=search_cls)
 
-    def import_side_effect(module_path):
-        mod = ModuleType(module_path)
-        mod.SearchTool = search_cls  # type: ignore[attr-defined]
-        return mod
-
-    mock_importlib.import_module.side_effect = import_side_effect
-
-    search_res = make_resource(
-        ResourceKind.TOOL,
-        "search",
-        {"type": "python", "class_path": "crewai_tools.search.SearchTool"},
-    )
+    search_res = _tool_resource("search", "SearchTool")
     agent_res = make_resource(
         ResourceKind.AGENT,
         "researcher",
@@ -307,22 +256,10 @@ def test_empty_policies_dict_preserves_all_tools(mock_agent_cls, mock_llm_cls, m
 @patch("blackbeard.engine.loader.Agent")
 def test_policy_mode_all_preserves_all_tools(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Agent with policy mode='all' should keep all tools."""
-    search_cls = MagicMock(name="SearchToolCls")
-    search_instance = _make_tool_with_name("SearchTool")
-    search_cls.return_value = search_instance
+    search_cls = _mock_tool_class("SearchToolCls", "SearchTool")
+    _setup_mock_tools(mock_importlib, search=search_cls)
 
-    def import_side_effect(module_path):
-        mod = ModuleType(module_path)
-        mod.SearchTool = search_cls  # type: ignore[attr-defined]
-        return mod
-
-    mock_importlib.import_module.side_effect = import_side_effect
-
-    search_res = make_resource(
-        ResourceKind.TOOL,
-        "search",
-        {"type": "python", "class_path": "crewai_tools.search.SearchTool"},
-    )
+    search_res = _tool_resource("search", "SearchTool")
     agent_res = make_resource(
         ResourceKind.AGENT,
         "researcher",
@@ -459,22 +396,10 @@ def test_crew_default_policy_applies_tool_filter(
     mock_crew_cls, mock_task_cls, mock_agent_cls, mock_llm_cls, mock_importlib
 ):
     """Agent without own policy inherits crew default_agent_policy tool filter."""
-    search_cls = MagicMock(name="SearchToolCls")
-    search_instance = _make_tool_with_name("SearchTool")
-    search_cls.return_value = search_instance
+    search_cls = _mock_tool_class("SearchToolCls", "SearchTool")
+    _setup_mock_tools(mock_importlib, search=search_cls)
 
-    def import_side_effect(module_path):
-        mod = ModuleType(module_path)
-        mod.SearchTool = search_cls  # type: ignore[attr-defined]
-        return mod
-
-    mock_importlib.import_module.side_effect = import_side_effect
-
-    search_res = make_resource(
-        ResourceKind.TOOL,
-        "search",
-        {"type": "python", "class_path": "crewai_tools.search.SearchTool"},
-    )
+    search_res = _tool_resource("search", "SearchTool")
     # Agent has no policy ref — should inherit crew default_agent_policy
     agent_res = make_resource(
         ResourceKind.AGENT,
@@ -621,34 +546,12 @@ def test_agent_policy_delegation_targets_empty():
 @patch("blackbeard.engine.loader.Agent")
 def test_combined_policy_tool_filter_and_delegation(mock_agent_cls, mock_llm_cls, mock_importlib):
     """Policy with both tool filter and delegation constraints should apply both."""
-    search_cls = MagicMock(name="SearchToolCls")
-    search_instance = _make_tool_with_name("SearchTool")
-    search_cls.return_value = search_instance
+    search_cls = _mock_tool_class("SearchToolCls", "SearchTool")
+    writer_cls = _mock_tool_class("WriterToolCls", "WriterTool")
+    _setup_mock_tools(mock_importlib, search=search_cls, writer=writer_cls)
 
-    writer_cls = MagicMock(name="WriterToolCls")
-    writer_instance = _make_tool_with_name("WriterTool")
-    writer_cls.return_value = writer_instance
-
-    def import_side_effect(module_path):
-        mod = ModuleType(module_path)
-        if "search" in module_path:
-            mod.SearchTool = search_cls  # type: ignore[attr-defined]
-        elif "writer" in module_path:
-            mod.WriterTool = writer_cls  # type: ignore[attr-defined]
-        return mod
-
-    mock_importlib.import_module.side_effect = import_side_effect
-
-    search_res = make_resource(
-        ResourceKind.TOOL,
-        "search",
-        {"type": "python", "class_path": "crewai_tools.search.SearchTool"},
-    )
-    writer_res = make_resource(
-        ResourceKind.TOOL,
-        "writer",
-        {"type": "python", "class_path": "crewai_tools.writer.WriterTool"},
-    )
+    search_res = _tool_resource("search", "SearchTool")
+    writer_res = _tool_resource("writer", "WriterTool")
     agent_res = make_resource(
         ResourceKind.AGENT,
         "researcher",

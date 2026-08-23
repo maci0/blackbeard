@@ -143,6 +143,20 @@ function FieldGroup({ label, children }: { label: string; children: React.ReactN
 const EMPTY_RESOURCES: Resource[] = []
 const EMPTY_STRINGS: string[] = []
 
+/** Names of other step-like nodes, for duplicate-name validation in forms. */
+function useOtherStepNames(types: string[], currentName: string): string[] {
+  const stepNodes = useStudioStore(
+    useShallow((state) => state.nodes.filter((n) => types.includes(n.type ?? ''))),
+  )
+  return useMemo(
+    () =>
+      stepNodes
+        .map((n) => (n.data['name'] as string | undefined) ?? '')
+        .filter((n) => n && n !== currentName),
+    [stepNodes, currentName],
+  )
+}
+
 const TOOL_TYPE_OPTIONS = [
   { label: 'Python', value: 'python' },
   { label: 'WebAssembly', value: 'wasm' },
@@ -406,10 +420,6 @@ function FlowStepForm({
   const hasCrewData = useResourceStore((state) => 'crews' in state.resources)
   const fetchResources = useResourceStore((state) => state.fetchResources)
 
-  const flowStepNodes = useStudioStore(
-    useShallow((state) => state.nodes.filter((n) => n.type === 'flowStep')),
-  )
-
   useEffect(() => {
     if (!hasCrewData) void fetchResources('crews')
   }, [hasCrewData, fetchResources])
@@ -418,13 +428,7 @@ function FlowStepForm({
   const listenTo = (data['listen_to'] as string[] | undefined) ?? []
   const currentName = str(data, 'name')
 
-  const otherStepNames = useMemo(
-    () =>
-      flowStepNodes
-        .map((n) => (n.data['name'] as string | undefined) ?? '')
-        .filter((n) => n && n !== currentName),
-    [flowStepNodes, currentName],
-  )
+  const otherStepNames = useOtherStepNames(['flowStep'], currentName)
 
   const crewOptions = useMemo(
     () => [
@@ -644,25 +648,10 @@ function ConditionForm({
   data: Record<string, unknown>
   onChange: (field: string, value: unknown) => void
 }) {
-  const flowStepNodes = useStudioStore(
-    useShallow((state) =>
-      state.nodes.filter(
-        (n) =>
-          n.type === 'flowStep' ||
-          n.type === 'condition' ||
-          n.type === 'router' ||
-          n.type === 'parallel',
-      ),
-    ),
-  )
-
   const currentName = str(data, 'name')
-  const otherStepNames = useMemo(
-    () =>
-      flowStepNodes
-        .map((n) => (n.data['name'] as string | undefined) ?? '')
-        .filter((n) => n && n !== currentName),
-    [flowStepNodes, currentName],
+  const otherStepNames = useOtherStepNames(
+    ['flowStep', 'condition', 'router', 'parallel'],
+    currentName,
   )
 
   const branchOptions = useMemo(
@@ -815,27 +804,12 @@ function ParallelForm({
   data: Record<string, unknown>
   onChange: (field: string, value: unknown) => void
 }) {
-  const flowStepNodes = useStudioStore(
-    useShallow((state) =>
-      state.nodes.filter(
-        (n) =>
-          n.type === 'flowStep' ||
-          n.type === 'condition' ||
-          n.type === 'router' ||
-          n.type === 'parallel',
-      ),
-    ),
-  )
-
   const currentName = str(data, 'name')
   const branches = (data['branches'] as string[] | undefined) ?? []
 
-  const otherStepNames = useMemo(
-    () =>
-      flowStepNodes
-        .map((n) => (n.data['name'] as string | undefined) ?? '')
-        .filter((n) => n && n !== currentName),
-    [flowStepNodes, currentName],
+  const otherStepNames = useOtherStepNames(
+    ['flowStep', 'condition', 'router', 'parallel'],
+    currentName,
   )
 
   return (

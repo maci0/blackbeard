@@ -8,17 +8,16 @@ from typing import Any
 import click
 import httpx
 from rich.markup import escape
-from rich.table import Table
 
 from blackbeard_cli.helpers import (
     STATUS_COLORS,
     TERMINAL_STATUSES,
     HelpCommand,
+    build_executions_table,
     confirm_destructive,
     console,
     extract_items,
     extract_total,
-    format_timestamp,
     handle_http_error,
     handle_request_error,
     json_opt,
@@ -132,34 +131,7 @@ def executions_list(
         out.print(f"[dim]{msg}.[/]")
         return
 
-    table = Table(title="Executions")
-    table.add_column("ID", style="dim", no_wrap=True)
-    table.add_column("Crew", style="bold")
-    table.add_column("Status")
-    table.add_column("Created")
-    table.add_column("Tokens", justify="right")
-    table.add_column("Cost", justify="right")
-
-    for ex in items:
-        ex_id = str(ex.get("id", "—"))
-        status_val = ex.get("status", "—")
-        color = STATUS_COLORS.get(status_val, "dim")
-        tokens = ex.get("total_tokens")
-        cost = ex.get("cost_usd")
-        try:
-            cost_str = f"${float(cost):.4f}" if cost else "—"
-        except (TypeError, ValueError):
-            cost_str = "—"
-        table.add_row(
-            ex_id,
-            escape(str(ex.get("crew_name", "—"))),
-            f"[{color}]{status_val}[/]",
-            format_timestamp(ex.get("created_at")),
-            f"{tokens:,}" if tokens else "—",
-            cost_str,
-        )
-
-    out.print(table)
+    out.print(build_executions_table(items, title="Executions"))
     total = extract_total(data, items)
     if total > len(items):
         out.print(f"[dim]Showing {len(items)} of {total} (increase --limit to see more)[/]")

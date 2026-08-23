@@ -10,6 +10,9 @@ from typing import TYPE_CHECKING, Any, NoReturn
 import click
 from rich.console import Console
 from rich.markup import escape
+from rich.panel import Panel
+from rich.syntax import Syntax
+from rich.table import Table
 
 from blackbeard_cli.kinds import ALL_KINDS, NAME_PATTERN
 
@@ -359,3 +362,86 @@ def extract_total(data: Any, items: list[Any]) -> int:
         return len(items)
     total = data.get("total")
     return total if isinstance(total, int) else len(items)
+
+
+def build_executions_table(items: list[Any], *, title: str) -> Table:
+    """Build the shared executions list table (rows only; caller adds its footer)."""
+    table = Table(title=title)
+    table.add_column("ID", style="dim", no_wrap=True)
+    table.add_column("Crew", style="bold")
+    table.add_column("Status")
+    table.add_column("Created")
+    table.add_column("Tokens", justify="right")
+    table.add_column("Cost", justify="right")
+
+    for ex in items:
+        ex_id = str(ex.get("id", "—"))
+        status_val = ex.get("status", "—")
+        color = STATUS_COLORS.get(status_val, "dim")
+        tokens = ex.get("total_tokens")
+        cost = ex.get("cost_usd")
+        try:
+            cost_str = f"${float(cost):.4f}" if cost else "—"
+        except (TypeError, ValueError):
+            cost_str = "—"
+        table.add_row(
+            ex_id,
+            escape(str(ex.get("crew_name", "—"))),
+            f"[{color}]{status_val}[/]",
+            format_timestamp(ex.get("created_at")),
+            f"{tokens:,}" if tokens else "—",
+            cost_str,
+        )
+    return table
+
+
+def render_execution_detail(data: dict[str, Any], execution_id: str) -> None:
+    """Render an execution status panel with error and outputs sections."""
+    status_val = data.get("status", "unknown")
+    color = STATUS_COLORS.get(status_val, "dim")
+
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column("Key", style="bold dim", width=14)
+    table.add_column("Value")
+
+    table.add_row("Execution ID", str(data.get("id", execution_id)))
+    table.add_row("Status", f"[{color} bold]{status_val}[/]")
+    table.add_row("Crew", str(data.get("crew_name", "—")))
+
+    tokens = data.get("total_tokens")
+    if tokens:
+        table.add_row("Tokens", f"{tokens:,}")
+
+    cost = data.get("cost_usd")
+    if cost and isinstance(cost, (int, float)) and cost > 0:
+        table.add_row("Cost", f"${cost:.4f}")
+
+    started = data.get("started_at")
+    if started:
+        table.add_row("Started", str(started))
+
+    completed = data.get("completed_at")
+    if completed:
+        table.add_row("Completed", str(completed))
+
+    out.print(Panel(table, title=f"Execution [{color}]{status_val}[/]", border_style=color))
+
+    error = data.get("error")
+    if error:
+        out.print(
+            Panel(
+                f"[red]{escape(str(error))}[/]",
+                title="[red]Error[/]",
+                border_style="red",
+            )
+        )
+
+    outputs = data.get("outputs")
+    if outputs:
+        out.print(
+            Panel(
+                Syntax(json.dumps(outputs, indent=2, default=str), "json", theme="monokai"),
+                title="Outputs",
+                border_style="green",
+            )
+        )

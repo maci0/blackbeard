@@ -148,6 +148,41 @@ function buildCrewGroupNode(crewName: string, childNodes: Node[]): Node {
   }
 }
 
+/** Build agent/task nodes plus agent-ref dataflow edges from crew resources. */
+function buildCrewGraph(
+  agents: { metadata: { name: string }; spec: Record<string, unknown> }[],
+  tasks: { metadata: { name: string }; spec: Record<string, unknown> }[],
+): { nodes: Node[]; edges: Edge[] } {
+  const agentNodes: Node[] = agents.map((agent, i) => ({
+    id: `agent-${agent.metadata.name}`,
+    type: 'agent',
+    position: { x: 80, y: 60 + i * 200 },
+    data: { ...agent.spec },
+  }))
+
+  const taskNodes: Node[] = tasks.map((task, i) => ({
+    id: `task-${task.metadata.name}`,
+    type: 'task',
+    position: { x: 360, y: 60 + i * 200 },
+    data: { name: task.metadata.name, ...task.spec },
+  }))
+
+  const edges: Edge[] = tasks
+    .filter((task) => typeof task.spec.agent === 'string' && task.spec.agent)
+    .map((task) => {
+      const agentName = parseRef(task.spec.agent as string)
+      return {
+        id: `edge-agent-${agentName}-task-${task.metadata.name}`,
+        source: `agent-${agentName}`,
+        target: `task-${task.metadata.name}`,
+        type: 'dataflow',
+        markerEnd: DATAFLOW_MARKER_END,
+      } satisfies Edge
+    })
+
+  return { nodes: [...agentNodes, ...taskNodes], edges }
+}
+
 /* ------------------------------------------------------------------ */
 /* Studio inner — uses the ReactFlowProvider context from parent       */
 /* ------------------------------------------------------------------ */
@@ -369,36 +404,8 @@ function StudioInner() {
           Promise.all(taskNames.map((n) => api.get<Resource>(`/api/v1/tasks/${n}`))),
         ])
 
-        // Build nodes — agents on left, tasks in middle
-        const agentNodes: Node[] = agentResources.map((agent, i) => ({
-          id: `agent-${agent.metadata.name}`,
-          type: 'agent',
-          position: { x: 80, y: 60 + i * 200 },
-          data: { ...agent.spec },
-        }))
+        const { nodes: childNodes, edges } = buildCrewGraph(agentResources, taskResources)
 
-        const taskNodes: Node[] = taskResources.map((task, i) => ({
-          id: `task-${task.metadata.name}`,
-          type: 'task',
-          position: { x: 360, y: 60 + i * 200 },
-          data: { name: task.metadata.name, ...task.spec },
-        }))
-
-        // Build edges: task.spec.agent ref → agent node
-        const edges: Edge[] = taskResources
-          .filter((task) => typeof task.spec.agent === 'string' && task.spec.agent)
-          .map((task) => {
-            const agentName = parseRef(task.spec.agent as string)
-            return {
-              id: `edge-agent-${agentName}-task-${task.metadata.name}`,
-              source: `agent-${agentName}`,
-              target: `task-${task.metadata.name}`,
-              type: 'dataflow',
-              markerEnd: DATAFLOW_MARKER_END,
-            } satisfies Edge
-          })
-
-        const childNodes = [...agentNodes, ...taskNodes]
         let allNodes: Node[]
         try {
           const laid = await autoLayout(childNodes, edges)
@@ -845,34 +852,7 @@ function StudioInner() {
       const taskResources = resources.filter((r) => r.kind === 'Task')
       const crewResource = resources.find((r) => r.kind === 'Crew')
 
-      // Build nodes — agents on left, tasks on right
-      const agentNodes: Node[] = agentResources.map((agent, i) => ({
-        id: `agent-${agent.metadata.name}`,
-        type: 'agent',
-        position: { x: 80, y: 60 + i * 200 },
-        data: { ...agent.spec },
-      }))
-
-      const taskNodes: Node[] = taskResources.map((task, i) => ({
-        id: `task-${task.metadata.name}`,
-        type: 'task',
-        position: { x: 360, y: 60 + i * 200 },
-        data: { name: task.metadata.name, ...task.spec },
-      }))
-
-      // Build edges: task.spec.agent ref -> agent node
-      const edges: Edge[] = taskResources
-        .filter((task) => typeof task.spec.agent === 'string' && task.spec.agent)
-        .map((task) => {
-          const agentName = parseRef(task.spec.agent as string)
-          return {
-            id: `edge-agent-${agentName}-task-${task.metadata.name}`,
-            source: `agent-${agentName}`,
-            target: `task-${task.metadata.name}`,
-            type: 'dataflow',
-            markerEnd: DATAFLOW_MARKER_END,
-          } satisfies Edge
-        })
+      const { nodes: childNodes, edges } = buildCrewGraph(agentResources, taskResources)
 
       // Add context edges between tasks
       for (const task of taskResources) {
@@ -889,7 +869,6 @@ function StudioInner() {
         }
       }
 
-      const childNodes = [...agentNodes, ...taskNodes]
       const groupName = crewResource?.metadata.name ?? toResourceName(crewName)
 
       // Wrap in a crew group node
