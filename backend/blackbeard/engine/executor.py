@@ -1303,6 +1303,15 @@ async def _run_crew_async(
 
             # --- Cost alert checking ---
             if alert_thresholds and listener is not None:
+                # Backfill the stored cost from LiteLLM spend logs when a USD
+                # alert is configured: without this, cost_usd stays 0 and the
+                # alert can never fire. Best-effort — None leaves it untouched.
+                if alert_thresholds.get("warn_at_usd") is not None:
+                    from blackbeard.litellm.spend import fetch_execution_spend
+
+                    spend_total = await fetch_execution_spend(execution_id)
+                    if spend_total is not None:
+                        execution.cost_usd = spend_total
                 cost_usd = float(execution.cost_usd) if execution.cost_usd else 0.0
                 total_tokens = execution.total_tokens or 0
                 warn_usd = alert_thresholds.get("warn_at_usd")

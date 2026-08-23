@@ -1144,7 +1144,9 @@ class BlackbeardExecutionListener(BaseEventListener):
             started = getattr(event, "started_at", None)
             finished = getattr(event, "finished_at", None)
             if started and finished:
-                duration_ms = int((finished - started).total_seconds() * 1000)
+                # Clamp clock skew so a finished-before-started pair cannot
+                # persist a negative duration (UI timeline / OTEL expect >= 0).
+                duration_ms = max(0, int((finished - started).total_seconds() * 1000))
             data: dict[str, Any] = {
                 "tool_name": event.tool_name,
                 "from_cache": event.from_cache,
@@ -1190,7 +1192,7 @@ class BlackbeardExecutionListener(BaseEventListener):
             started = getattr(event, "started_at", None)
             finished = getattr(event, "finished_at", None)
             if started and finished:
-                duration_ms = int((finished - started).total_seconds() * 1000)
+                duration_ms = max(0, int((finished - started).total_seconds() * 1000))
             data: dict[str, Any] = {
                 "model": event.model,
                 "tokens": usage.get("total_tokens", 0) if isinstance(usage, dict) else 0,
