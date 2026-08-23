@@ -131,14 +131,22 @@ def derive_budget_and_pii(
     max_budget = min(budgets) if budgets else None
     max_tokens = min(token_limits) if token_limits else None
 
-    # Use the most restrictive (lowest) alert thresholds across all agents
+    # Use the most restrictive (lowest) alert thresholds across all agents,
+    # clamped to the winning hard caps so a warning threshold can never sit
+    # at or above the enforced limit (where it could never fire first).
     alert_thresholds: dict[str, Any] | None = None
     if warn_usd_values or warn_token_values:
         alert_thresholds = {}
         if warn_usd_values:
-            alert_thresholds["warn_at_usd"] = min(warn_usd_values)
+            warn_usd = min(warn_usd_values)
+            if max_budget is not None:
+                warn_usd = min(warn_usd, max_budget)
+            alert_thresholds["warn_at_usd"] = warn_usd
         if warn_token_values:
-            alert_thresholds["warn_at_tokens"] = min(warn_token_values)
+            warn_tokens = min(warn_token_values)
+            if max_tokens is not None:
+                warn_tokens = min(warn_tokens, max_tokens)
+            alert_thresholds["warn_at_tokens"] = warn_tokens
 
     if max_budget is not None or max_tokens is not None:
         logger.info(

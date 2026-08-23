@@ -83,8 +83,9 @@ export function formatDurationMs(ms: number): string {
   if (sec < 60)
     return `${formatNumber(sec, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}s`
   const min = Math.floor(sec / 60)
-  const rem = sec % 60
-  return `${min}m ${Math.round(rem)}s`
+  const rem = Math.round(sec % 60)
+  if (rem === 60) return `${min + 1}m 0s`
+  return `${min}m ${rem}s`
 }
 
 export function parseCost(cost: number | string | null | undefined): number {

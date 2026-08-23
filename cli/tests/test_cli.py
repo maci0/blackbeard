@@ -6,6 +6,7 @@ to a server are tested with error-path assertions (e.g. connection refused).
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
@@ -766,3 +767,41 @@ def test_event_summary_empty_data():
 
     result = _event_summary("task_started", {})
     assert result == ""
+
+
+def test_execution_detail_renders_string_cost():
+    """The API serializes cost_usd as a string; the Cost row must still render."""
+    from rich.console import Console
+
+    from blackbeard_cli import helpers
+
+    data = {
+        "id": 42,
+        "status": "completed",
+        "crew_name": "research",
+        "total_tokens": 1234,
+        "cost_usd": "1.234500",
+    }
+    buf = io.StringIO()
+    with patch.object(helpers, "out", Console(file=buf, width=200)):
+        helpers.render_execution_detail(data, "42")
+    assert "$1.2345" in buf.getvalue()
+
+
+def test_execution_detail_hides_zero_and_bad_cost():
+    """Zero, missing, and unparseable costs render no Cost row."""
+    from rich.console import Console
+
+    from blackbeard_cli import helpers
+
+    for bad in (None, "0.000000", 0, "not-a-number"):
+        data = {
+            "id": 42,
+            "status": "completed",
+            "crew_name": "research",
+            "cost_usd": bad,
+        }
+        buf = io.StringIO()
+        with patch.object(helpers, "out", Console(file=buf, width=200)):
+            helpers.render_execution_detail(data, "42")
+        assert "$" not in buf.getvalue()

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   formatDate,
   getDuration,
+  formatDurationMs,
   formatCost,
   formatCostZero,
   formatNumber,
@@ -120,6 +121,32 @@ describe('getDuration', () => {
     const start = '2024-01-01T00:00:00Z'
     const end = '2024-01-01T00:00:00Z'
     expect(getDuration(start, end)).toBe('0s')
+  })
+})
+
+describe('formatDurationMs', () => {
+  it('formats sub-second durations as ms', () => {
+    expect(formatDurationMs(850)).toBe('850ms')
+  })
+
+  it('rounds fractional milliseconds', () => {
+    expect(formatDurationMs(850.6)).toBe('851ms')
+  })
+
+  it('formats seconds with one decimal', () => {
+    expect(formatDurationMs(23456)).toBe('23.5s')
+  })
+
+  it('formats minutes and seconds', () => {
+    expect(formatDurationMs(135000)).toBe('2m 15s')
+  })
+
+  it('rolls 59.9s remainder up to the next minute instead of 60s', () => {
+    expect(formatDurationMs(179970)).toBe('3m 0s')
+  })
+
+  it('rolls a 59.8s remainder at the hour boundary up instead of printing 60s', () => {
+    expect(formatDurationMs(119 * 60_000 + 59_800)).toBe('120m 0s')
   })
 })
 

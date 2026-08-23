@@ -241,7 +241,7 @@ export default function ExecutionCompare() {
 
   const costA = execA ? parseCost(execA.cost_usd) : 0
   const costB = execB ? parseCost(execB.cost_usd) : 0
-  const costDiffPct = costA !== 0 ? Math.abs((costB - costA) / costA) * 100 : 0
+  const costDiffPct = costA !== 0 ? Math.abs((costB - costA) / costA) * 100 : costB !== 0 ? 100 : 0
   const costDiffSignificant = costDiffPct > 10
 
   const durationA = execA?.started_at

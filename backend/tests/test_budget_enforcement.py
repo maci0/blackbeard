@@ -12,6 +12,9 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
+from blackbeard.engine.budget import (
+    derive_budget_and_pii as _derive_budget_and_pii,
+)
 from blackbeard.engine.budget import derive_budget_limits as _derive_budget_limits
 from blackbeard.engine.loader import ResourceLoader
 from blackbeard.kinds import ResourceKind
@@ -225,6 +228,62 @@ def test_derive_empty_policy_no_limits():
     max_budget, max_tokens = _derive_budget_limits(snapshot, "test-crew")
     assert max_budget is None
     assert max_tokens is None
+
+
+def test_derive_warn_above_cap_is_clamped():
+    """A warn threshold above the winning hard cap is clamped to the cap.
+
+    Otherwise the cost_alert event could never fire before LiteLLM blocks
+    spend at the cap.
+    """
+    snapshot = _make_snapshot(
+        agent_names=["agent-a", "agent-b"],
+        agent_policy_refs={
+            "agent-a": "ref:agent-policies/cap-policy",
+            "agent-b": "ref:agent-policies/alert-policy",
+        },
+        policies={
+            "cap-policy": _policy_spec(max_usd=5.0),
+            "alert-policy": {"budget": {"alerts": {"warn_at_usd": 10.0}}},
+        },
+    )
+    _, _, _, alerts = _derive_budget_and_pii(snapshot, "test-crew")
+    assert alerts == {"warn_at_usd": 5.0}
+
+
+def test_derive_warn_below_cap_unchanged():
+    """A warn threshold below the winning cap passes through untouched."""
+    snapshot = _make_snapshot(
+        agent_names=["agent-a", "agent-b"],
+        agent_policy_refs={
+            "agent-a": "ref:agent-policies/cap-policy",
+            "agent-b": "ref:agent-policies/alert-policy",
+        },
+        policies={
+            "cap-policy": _policy_spec(max_usd=5.0),
+            "alert-policy": {"budget": {"alerts": {"warn_at_usd": 2.5, "warn_at_tokens": 100}}},
+        },
+    )
+    _, max_tokens, _, alerts = _derive_budget_and_pii(snapshot, "test-crew")
+    assert alerts == {"warn_at_usd": 2.5, "warn_at_tokens": 100}
+    assert max_tokens is None
+
+
+def test_derive_warn_tokens_clamped_to_token_cap():
+    """A warn token threshold above the winning max_tokens is clamped."""
+    snapshot = _make_snapshot(
+        agent_names=["agent-a", "agent-b"],
+        agent_policy_refs={
+            "agent-a": "ref:agent-policies/cap-policy",
+            "agent-b": "ref:agent-policies/alert-policy",
+        },
+        policies={
+            "cap-policy": _policy_spec(max_tokens=10000),
+            "alert-policy": {"budget": {"alerts": {"warn_at_tokens": 50000}}},
+        },
+    )
+    _, _, _, alerts = _derive_budget_and_pii(snapshot, "test-crew")
+    assert alerts == {"warn_at_tokens": 10000}
 
 
 # ---------------------------------------------------------------------------

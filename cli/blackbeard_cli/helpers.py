@@ -413,8 +413,12 @@ def render_execution_detail(data: dict[str, Any], execution_id: str) -> None:
         table.add_row("Tokens", f"{tokens:,}")
 
     cost = data.get("cost_usd")
-    if cost and isinstance(cost, (int, float)) and cost > 0:
-        table.add_row("Cost", f"${cost:.4f}")
+    try:
+        cost_val = float(cost) if cost else 0.0
+    except (TypeError, ValueError):
+        cost_val = 0.0
+    if cost_val > 0:
+        table.add_row("Cost", f"${cost_val:.4f}")
 
     started = data.get("started_at")
     if started:
