@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     db_slow_query_threshold_s: float = Field(default=1.0, ge=0.01)
     db_long_checkout_threshold_s: float = Field(default=5.0, ge=0.1)
 
+    # Human-in-the-loop: how long a crew waits for a human response when a
+    # task pauses on human_input before continuing unattended.
+    hitl_response_timeout_s: int = Field(default=3600, ge=1)
+
     max_concurrent_executions: int = Field(default=4, ge=1)
     max_concurrent_sse: int = Field(default=20, ge=1)
     # Stable instance identity for execution-ownership scoping in startup

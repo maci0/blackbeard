@@ -45,6 +45,7 @@ from blackbeard.engine.budget import extract_policy_specs as _extract_policy_spe
 from blackbeard.engine.execution_listener import BlackbeardExecutionListener
 from blackbeard.engine.flow_runner import call_hook
 from blackbeard.engine.flow_runner import run_flow_steps as _run_flow_steps
+from blackbeard.engine.hitl import database_human_input
 from blackbeard.engine.loader import ResourceLoader
 from blackbeard.kinds import ResourceKind
 from blackbeard.logging_config import (
@@ -1210,28 +1211,32 @@ async def run_crew_async(
                 hooks = crew_spec.get("hooks", {})
 
                 def _run_crew_sync() -> Any:
-                    if execution_type == ExecutionType.TRAIN:
-                        crew.train(
-                            n_iterations=n_iterations,
-                            inputs=inputs,
-                            filename=training_file,
-                        )
-                        return None
-                    elif execution_type == ExecutionType.TEST:
-                        eval_llm = _resolve_eval_llm(loader, resource_snapshot, crew_name)
-                        crew.test(
-                            n_iterations=n_iterations,
-                            eval_llm=eval_llm,
-                            inputs=inputs,
-                        )
-                        return None
-                    else:
-                        if hooks.get("before_kickoff"):
-                            call_hook(loader, hooks["before_kickoff"], inputs, "before_kickoff")
-                        r = crew.kickoff(inputs=inputs)
-                        if hooks.get("after_kickoff"):
-                            call_hook(loader, hooks["after_kickoff"], r, "after_kickoff")
-                        return r
+                    # Tasks with human_input pause for feedback; without the
+                    # DB-backed provider CrewAI would read stdin in this
+                    # threadless-terminal context and block forever.
+                    with database_human_input(execution_id):
+                        if execution_type == ExecutionType.TRAIN:
+                            crew.train(
+                                n_iterations=n_iterations,
+                                inputs=inputs,
+                                filename=training_file,
+                            )
+                            return None
+                        elif execution_type == ExecutionType.TEST:
+                            eval_llm = _resolve_eval_llm(loader, resource_snapshot, crew_name)
+                            crew.test(
+                                n_iterations=n_iterations,
+                                eval_llm=eval_llm,
+                                inputs=inputs,
+                            )
+                            return None
+                        else:
+                            if hooks.get("before_kickoff"):
+                                call_hook(loader, hooks["before_kickoff"], inputs, "before_kickoff")
+                            r = crew.kickoff(inputs=inputs)
+                            if hooks.get("after_kickoff"):
+                                call_hook(loader, hooks["after_kickoff"], r, "after_kickoff")
+                            return r
 
                 result = await asyncio.to_thread(_run_crew_sync)
             # flush() does synchronous DB writes and can block for seconds

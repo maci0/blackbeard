@@ -11,7 +11,9 @@ import logging
 import math
 import operator
 from typing import Any
+from uuid import UUID
 
+from blackbeard.engine.hitl import database_human_input
 from blackbeard.resources import check_callable_path
 
 __all__ = [
@@ -203,7 +205,11 @@ def run_flow_steps(
                 call_hook(loader, step_hooks["before"], step_inputs, f"step:{step_name}:before")
 
             try:
-                result = crew.kickoff(inputs=step_inputs)
+                # human_input tasks pause via the execution event log; without
+                # the provider CrewAI would read stdin in this thread (none).
+                listener_id = getattr(listener, "_execution_id", None)
+                with database_human_input(listener_id if isinstance(listener_id, UUID) else None):
+                    result = crew.kickoff(inputs=step_inputs)
             except Exception as step_exc:
                 if step_hooks.get("on_error"):
                     call_hook(
