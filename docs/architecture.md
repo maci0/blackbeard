@@ -698,8 +698,8 @@ The Temporal integration (`backend/blackbeard/engine/temporal.py`) provides an a
 GitHub Actions runs 11 jobs on every push:
 
 1. **Backend** -- ruff check + ruff format + mypy + pytest + bandit + pip-audit
-2. **CLI** -- ruff lint + offline validation
-3. **Python SDK** -- pytest with mock transport
+2. **CLI** -- ruff lint + mypy (strict) + offline validation
+3. **Python SDK** -- ruff check + ruff format + pytest with mock transport
 4. **TypeScript SDK** -- tsc type-check
 5. **React SDK** -- tsc type-check
 6. **Version lockstep** -- fails if the six package manifests drift apart

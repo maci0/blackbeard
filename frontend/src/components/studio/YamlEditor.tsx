@@ -40,7 +40,7 @@ export function YamlEditor() {
     setYamlText(newYaml)
     setSyncStatus('synced')
     setParseError(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately keyed on fingerprint only; nodes is read via canvasToYaml and would re-trigger on drag
   }, [nodeDataFingerprint])
 
   const handleYamlChange = useCallback(

@@ -41,6 +41,7 @@ uv run blackbeard validate -f ../examples/research-crew/  # offline validation
 uv run blackbeard login          # store JWT credentials
 uv run blackbeard shell          # interactive TUI REPL
 uv run ruff check blackbeard_cli/  # lint (needs --extra dev)
+uv run mypy blackbeard_cli/ --ignore-missing-imports  # type check (strict mode via pyproject)
 ```
 
 ### Full Stack
@@ -165,7 +166,7 @@ DB schema is managed by `backend/blackbeard/db_setup.py` (invoked from `backend/
 
 **SDKs**: Python (`sdks/python/`), TypeScript (`sdks/typescript/`), and React (`sdks/react/`) — thin wrappers over httpx/fetch. Cover auth, resources, executions, train/test/flow. React SDK provides `BlackbeardProvider`, `CrewViewer`, `CrewRunner`, and `ExecutionStatus` components.
 
-**CI**: GitHub Actions — 10 jobs: backend (ruff check + ruff format + mypy + pytest + pip-audit + bandit security scan) → CLI (lint + validate) → Python SDK (pytest) → TypeScript SDK (tsc) → React SDK (tsc) → Helm lint → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (docker-api after backend, docker-ui after frontend, cached) → ci-gate (all-green check). Includes Hypothesis property-based testing (backend) and fast-check fuzzing (frontend) for schema validation edge cases.
+**CI**: GitHub Actions — 10 jobs: backend (ruff check + ruff format + mypy + pytest + pip-audit + bandit security scan) → CLI (lint + mypy + validate) → Python SDK (ruff check + ruff format + pytest) → TypeScript SDK (tsc) → React SDK (tsc) → Helm lint → frontend (prettier + eslint + tsc + vitest + build) → Docker image builds (docker-api after backend, docker-ui after frontend, cached) → ci-gate (all-green check). Includes Hypothesis property-based testing (backend) and fast-check fuzzing (frontend) for schema validation edge cases.
 
 **Webhooks**: Register webhook URLs via `POST /api/v1/webhooks`. Execution events delivered with HMAC-SHA256 signature. Fire-and-forget delivery.
 

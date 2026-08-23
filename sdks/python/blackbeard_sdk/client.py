@@ -13,7 +13,7 @@ from blackbeard_sdk.executions import ExecutionMixin
 from blackbeard_sdk.resources import ResourceMixin
 
 # Re-export so tests/consumers can import from the top-level package
-__all__ = ["BlackbeardClient", "BlackbeardApiError"]
+__all__ = ["BlackbeardApiError", "BlackbeardClient"]
 
 
 class BlackbeardClient(AuthMixin, ResourceMixin, ExecutionMixin):

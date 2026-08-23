@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import json
 from collections import deque
-from collections.abc import Generator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
 
 from blackbeard_sdk import BlackbeardClient
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 def _mock_response(

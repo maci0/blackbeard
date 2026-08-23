@@ -134,9 +134,7 @@ class ExecutionMixin:
         Returns:
             Execution dict.
         """
-        return self._send(
-            "GET", f"/api/v1/executions/{quote(execution_id, safe='')}"
-        ).json()
+        return self._send("GET", f"/api/v1/executions/{quote(execution_id, safe='')}").json()
 
     def list_executions(
         self,
@@ -166,9 +164,7 @@ class ExecutionMixin:
             params["project"] = project
         if status:
             params["status"] = status
-        return self._send(
-            "GET", "/api/v1/executions", params=params
-        ).json()["items"]
+        return self._send("GET", "/api/v1/executions", params=params).json()["items"]
 
     def cancel(self, execution_id: str) -> dict[str, Any]:
         """Cancel a queued or running execution.

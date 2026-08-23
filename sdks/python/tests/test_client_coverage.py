@@ -22,28 +22,21 @@ from blackbeard_sdk.resources import KIND_TO_PLURAL, _kind_plural
 
 from .conftest import MockTransport, _mock_response
 
-
 # -- Error handling tests -----------------------------------------------------
 
 
 class TestErrorHandling:
-    def test_health_404(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_health_404(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(404, {"detail": "Not found"}))
         with pytest.raises(BlackbeardApiError):
             client.health()
 
-    def test_health_500(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_health_500(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(500, {"detail": "Internal error"}))
         with pytest.raises(BlackbeardApiError):
             client.health()
 
-    def test_readiness_500(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_readiness_500(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(500, {"detail": "degraded"}))
         with pytest.raises(BlackbeardApiError):
             client.readiness()
@@ -58,37 +51,27 @@ class TestErrorHandling:
         with pytest.raises(BlackbeardApiError):
             client.get("Agent", "nonexistent")
 
-    def test_create_422(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_create_422(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(422, {"detail": "Validation error"}))
         with pytest.raises(BlackbeardApiError):
             client.create({"kind": "Agent", "metadata": {"name": "bad"}})
 
-    def test_update_409(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_update_409(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(409, {"detail": "Version conflict"}))
         with pytest.raises(BlackbeardApiError):
             client.update("Agent", "test", {"spec": {}, "version": 1})
 
-    def test_delete_500(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_delete_500(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(500, {"detail": "Internal error"}))
         with pytest.raises(BlackbeardApiError):
             client.delete("Agent", "test")
 
-    def test_kickoff_404(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_kickoff_404(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(404, {"detail": "Crew not found"}))
         with pytest.raises(BlackbeardApiError):
             client.kickoff("nonexistent-crew")
 
-    def test_train_404(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_train_404(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(404, {"detail": "Crew not found"}))
         with pytest.raises(BlackbeardApiError):
             client.train("nonexistent-crew")
@@ -98,51 +81,37 @@ class TestErrorHandling:
         with pytest.raises(BlackbeardApiError):
             client.test("nonexistent-crew")
 
-    def test_run_flow_404(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_run_flow_404(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(404, {"detail": "Flow not found"}))
         with pytest.raises(BlackbeardApiError):
             client.run_flow("nonexistent-flow")
 
-    def test_get_execution_404(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_get_execution_404(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(404, {"detail": "Not found"}))
         with pytest.raises(BlackbeardApiError):
             client.get_execution("nonexistent-id")
 
-    def test_cancel_404(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_cancel_404(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(404, {"detail": "Not found"}))
         with pytest.raises(BlackbeardApiError):
             client.cancel("nonexistent-id")
 
-    def test_login_401(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_login_401(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(401, {"detail": "Invalid credentials"}))
         with pytest.raises(BlackbeardApiError):
             client.login("bad@email.com", "wrongpass")
 
-    def test_register_409(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_register_409(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(409, {"detail": "Already exists"}))
         with pytest.raises(BlackbeardApiError):
             client.register("dup@email.com", "pass123", "Dup User")
 
-    def test_whoami_401(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_whoami_401(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(401, {"detail": "Not authenticated"}))
         with pytest.raises(BlackbeardApiError):
             client.whoami()
 
-    def test_refresh_401(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_refresh_401(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(401, {"detail": "Invalid token"}))
         with pytest.raises(BlackbeardApiError):
             client.refresh("bad-refresh-token")
@@ -186,9 +155,7 @@ class TestResourceEdgeCases:
         req = transport.requests[0]
         assert "label_selector=env" in str(req.url)
 
-    def test_list_with_offset(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_list_with_offset(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(
             _mock_response(
                 200,
@@ -210,9 +177,7 @@ class TestResourceEdgeCases:
     def test_get_with_custom_namespace(
         self, client: BlackbeardClient, transport: MockTransport
     ) -> None:
-        transport.queue(
-            _mock_response(200, {"kind": "Agent", "metadata": {"name": "test"}})
-        )
+        transport.queue(_mock_response(200, {"kind": "Agent", "metadata": {"name": "test"}}))
         client.get("Agent", "test", project="prod")
         req = transport.requests[0]
         assert "project=prod" in str(req.url)
@@ -233,9 +198,7 @@ class TestResourceEdgeCases:
         req = transport.requests[0]
         assert "project=prod" in str(req.url)
 
-    def test_apply_empty_list(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_apply_empty_list(self, client: BlackbeardClient, transport: MockTransport) -> None:
         results = client.apply([])
         assert results == []
         assert len(transport.requests) == 0
@@ -270,18 +233,14 @@ class TestExecutionEdgeCases:
         body = json.loads(transport.requests[0].content)
         assert body["filename"] == "custom.pkl"
 
-    def test_train_with_inputs(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_train_with_inputs(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(202, {"id": "exec-x", "status": "queued"}))
         client.train("my-crew", inputs={"topic": "AI"}, n_iterations=10)
         body = json.loads(transport.requests[0].content)
         assert body["inputs"]["topic"] == "AI"
         assert body["n_iterations"] == 10
 
-    def test_test_with_inputs(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_test_with_inputs(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(202, {"id": "exec-x", "status": "queued"}))
         client.test("my-crew", inputs={"topic": "ML"}, n_iterations=5)
         body = json.loads(transport.requests[0].content)
@@ -348,9 +307,7 @@ class TestExecutionEdgeCases:
     def test_wait_failed_execution(
         self, client: BlackbeardClient, transport: MockTransport
     ) -> None:
-        transport.queue(
-            _mock_response(200, {"id": "e1", "status": "failed", "error": "boom"})
-        )
+        transport.queue(_mock_response(200, {"id": "e1", "status": "failed", "error": "boom"}))
         with patch("blackbeard_sdk.executions.time.sleep"):
             result = client.wait("e1")
         assert result["status"] == "failed"
@@ -456,9 +413,7 @@ class TestExportAll:
 
 
 class TestAuthEdgeCases:
-    def test_generate_api_key(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_generate_api_key(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(200, {"api_key": "bb-test-key-123"}))
         result = client.generate_api_key()
         assert result["api_key"] == "bb-test-key-123"
@@ -466,9 +421,7 @@ class TestAuthEdgeCases:
         assert req.method == "POST"
         assert req.url.path == "/api/v1/auth/api-key"
 
-    def test_revoke_api_key(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_revoke_api_key(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(_mock_response(204))
         client.revoke_api_key()
         req = transport.requests[0]
@@ -480,9 +433,7 @@ class TestAuthEdgeCases:
 
 
 class TestVersioning:
-    def test_list_versions(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_list_versions(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(
             _mock_response(
                 200,
@@ -512,9 +463,7 @@ class TestVersioning:
         assert req.url.path == "/api/v1/agents/researcher/versions"
         assert "project=default" in str(req.url)
 
-    def test_get_version(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_get_version(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(
             _mock_response(
                 200,
@@ -564,9 +513,7 @@ class TestVersioning:
 
 
 class TestAuditLogs:
-    def test_list_audit_logs(
-        self, client: BlackbeardClient, transport: MockTransport
-    ) -> None:
+    def test_list_audit_logs(self, client: BlackbeardClient, transport: MockTransport) -> None:
         transport.queue(
             _mock_response(
                 200,
@@ -629,9 +576,7 @@ class TestRespondWithFeedback:
     def test_respond_with_feedback(
         self, client: BlackbeardClient, transport: MockTransport
     ) -> None:
-        transport.queue(
-            _mock_response(200, {"status": "recorded", "execution_id": "e1"})
-        )
+        transport.queue(_mock_response(200, {"status": "recorded", "execution_id": "e1"}))
         result = client.respond("e1", "Approved", feedback="Looks good")
         assert result["status"] == "recorded"
         body = json.loads(transport.requests[0].content)
@@ -641,9 +586,7 @@ class TestRespondWithFeedback:
     def test_respond_without_feedback_omits_key(
         self, client: BlackbeardClient, transport: MockTransport
     ) -> None:
-        transport.queue(
-            _mock_response(200, {"status": "recorded", "execution_id": "e1"})
-        )
+        transport.queue(_mock_response(200, {"status": "recorded", "execution_id": "e1"}))
         client.respond("e1", "OK")
         body = json.loads(transport.requests[0].content)
         assert "feedback" not in body
@@ -743,9 +686,7 @@ class TestTransportErrorWrapping:
             def handle_request(self, request: httpx.Request) -> httpx.Response:
                 raise httpx.ConnectError("Connection refused")
 
-        client = BlackbeardClient(
-            base_url="http://test:8000", transport=FailTransport()
-        )
+        client = BlackbeardClient(base_url="http://test:8000", transport=FailTransport())
         with pytest.raises(BlackbeardApiError) as exc_info:
             client.health()
         assert exc_info.value.status_code == 0
@@ -760,9 +701,7 @@ class TestTransportErrorWrapping:
             def handle_request(self, request: httpx.Request) -> httpx.Response:
                 raise httpx.ReadTimeout("Read timed out")
 
-        client = BlackbeardClient(
-            base_url="http://test:8000", transport=TimeoutTransport()
-        )
+        client = BlackbeardClient(base_url="http://test:8000", transport=TimeoutTransport())
         with pytest.raises(BlackbeardApiError) as exc_info:
             client.list("Agent")
         assert exc_info.value.status_code == 0
@@ -778,9 +717,7 @@ class TestTransportErrorWrapping:
             def handle_request(self, request: httpx.Request) -> httpx.Response:
                 raise original
 
-        client = BlackbeardClient(
-            base_url="http://test:8000", transport=FailTransport()
-        )
+        client = BlackbeardClient(base_url="http://test:8000", transport=FailTransport())
         with pytest.raises(BlackbeardApiError) as exc_info:
             client.health()
         assert exc_info.value.__cause__ is original

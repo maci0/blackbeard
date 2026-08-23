@@ -37,7 +37,7 @@ TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "cancelled
 _KIND_LOOKUP: dict[str, str] = {k.lower(): k for k in ALL_KINDS}
 
 
-class ResourceKindType(click.ParamType):
+class ResourceKindType(click.ParamType[str]):
     """Accept resource kinds case-insensitively; keep TitleCase values and metavar."""
 
     name = "kind"

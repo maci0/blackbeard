@@ -102,6 +102,9 @@ jobs:
       - name: Format check
         run: uv run ruff format --check .
 
+      - name: Type check
+        run: uv run mypy blackbeard_cli/ --ignore-missing-imports
+
       - name: Verify CLI loads
         run: uv run blackbeard --help
 
@@ -131,6 +134,12 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --frozen --extra dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
 
       - name: Test
         run: uv run pytest tests/ -x

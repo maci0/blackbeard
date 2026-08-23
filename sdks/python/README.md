@@ -44,22 +44,28 @@ prod_agents = client.list("Agent", label_selector="env=prod,team=ml")
 agent = client.get("Agent", "researcher")
 
 # Create a resource
-client.create({
-    "kind": "Agent",
-    "apiVersion": "blackbeard/v1",
-    "metadata": {"name": "researcher", "project": "default"},
-    "spec": {
-        "role": "Research Analyst",
-        "goal": "Find relevant data",
-        "backstory": "You are a skilled researcher.",
-    },
-})
+client.create(
+    {
+        "kind": "Agent",
+        "apiVersion": "blackbeard/v1",
+        "metadata": {"name": "researcher", "project": "default"},
+        "spec": {
+            "role": "Research Analyst",
+            "goal": "Find relevant data",
+            "backstory": "You are a skilled researcher.",
+        },
+    }
+)
 
 # Update a resource (requires version for optimistic locking)
-client.update("Agent", "researcher", {
-    "spec": {"verbose": False},
-    "version": 1,
-})
+client.update(
+    "Agent",
+    "researcher",
+    {
+        "spec": {"verbose": False},
+        "version": 1,
+    },
+)
 
 # Delete a resource
 client.delete("Agent", "researcher")

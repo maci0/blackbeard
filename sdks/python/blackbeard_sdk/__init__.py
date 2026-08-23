@@ -14,9 +14,9 @@ try:
 except PackageNotFoundError:  # running from source without an installed dist
     __version__ = "0.0.0.dev0"
 __all__ = [
-    "BlackbeardApiError",
-    "BlackbeardClient",
     "KIND_TO_PLURAL",
     "TERMINAL_STATUSES",
+    "BlackbeardApiError",
+    "BlackbeardClient",
     "__version__",
 ]

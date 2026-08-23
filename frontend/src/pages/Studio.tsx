@@ -51,7 +51,7 @@ function buildResourceBody(node: Node, crewName: string) {
     (data['role'] as string | undefined) ?? (data['name'] as string | undefined) ?? node.id
 
   // 'name' is used for metadata.name, not a spec field — exclude to avoid validation failure
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- omit-only destructure: name moves to metadata below
   const { name: _unused, ...spec } = data
 
   return {
@@ -499,7 +499,7 @@ function StudioInner() {
         ...piiNodes.map((node) => {
           const data = node.data
           const rawName = (data['name'] as string | undefined) ?? node.id
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars -- omit-only destructure: name becomes node label, not a spec field
           const { name: _unused, ...rest } = data
           const spec: Record<string, unknown> = {
             type: 'pii',

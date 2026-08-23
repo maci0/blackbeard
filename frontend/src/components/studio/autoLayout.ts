@@ -67,7 +67,7 @@ export async function autoLayout(
   // Apply positions to leaf nodes (stripping parentId for now — we rebuild below)
   const layoutedLeaves = leafNodes.map((n) => {
     const pos = positionMap.get(n.id)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- omit-only destructure: parentId/extent are stripped, not consumed
     const { parentId: _p, extent: _e, ...rest } = n
     return pos ? { ...rest, position: pos } : { ...rest }
   })

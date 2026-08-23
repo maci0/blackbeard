@@ -124,7 +124,7 @@ export default function ToolsLibrary() {
 
   useEffect(() => {
     void fetchLibrary()
-  }, [activeCategory]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeCategory]) // eslint-disable-line react-hooks/exhaustive-deps -- fetchLibrary is stable and must not re-trigger the fetch
 
   const filtered = useMemo(() => {
     if (!filter) return tools
