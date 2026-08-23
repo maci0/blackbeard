@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "ResourceService",
+    "smart_total",
 ]
 
 
@@ -46,6 +47,20 @@ def _parse_kind(kind_str: str) -> ResourceKind:
 
 
 logger = logging.getLogger(__name__)
+
+
+async def smart_total(
+    session: AsyncSession,
+    items: list[Any],
+    limit: int,
+    offset: int,
+    count_stmt: Any,
+) -> int:
+    """Derive total count without a DB query when the page is incomplete."""
+    if len(items) < limit and (len(items) > 0 or offset == 0):
+        return offset + len(items)
+    result = await session.execute(count_stmt)
+    return int(result.scalar_one())
 
 
 class ResourceService:
@@ -216,11 +231,13 @@ class ResourceService:
         if skip_total:
             return items, -1
 
-        if len(items) < limit and (len(items) > 0 or offset == 0):
-            total = offset + len(items)
-        else:
-            count_query = select(func.count(Resource.id)).where(*filters)
-            total = (await self.session.execute(count_query)).scalar_one()
+        total = await smart_total(
+            session=self.session,
+            items=items,
+            limit=limit,
+            offset=offset,
+            count_stmt=select(func.count(Resource.id)).where(*filters),
+        )
 
         return items, total
 

@@ -350,7 +350,8 @@ async def test_create_key_sends_correct_payload():
     assert payload["max_budget"] == 3.0
     assert payload["tpm_limit"] == 5000
     assert payload["metadata"]["crew_name"] == "my-crew"
-    assert "Bearer sk-master-key" in captured_kwargs["headers"]["Authorization"]
+    # Auth headers are client defaults set by _get_client(), not per-request.
+    assert mgr._get_client().headers["Authorization"] == "Bearer sk-master-key"
 
 
 async def test_create_key_without_limits():

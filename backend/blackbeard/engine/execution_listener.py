@@ -270,6 +270,20 @@ def invalidate_webhook_cache() -> None:
         _webhook_host_cache.clear()
 
 
+def signed_webhook_headers(payload: str, secret: str, event_type: str) -> dict[str, str]:
+    """Build headers for a signed webhook delivery (HMAC-SHA256 over the payload).
+
+    Shared by live delivery and test delivery so the signature scheme
+    cannot drift between them.
+    """
+    sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return {
+        "Content-Type": "application/json",
+        "X-Webhook-Signature": sig,
+        "X-Blackbeard-Event": event_type,
+    }
+
+
 def _deliver_single_webhook(
     webhook: Any,
     payload: str,
@@ -281,15 +295,10 @@ def _deliver_single_webhook(
     t0 = _time.monotonic()
     try:
         client = get_sync_client("webhook-deliver", timeout=10, follow_redirects=False)
-        sig = hmac.new(webhook.secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
         resp = client.post(
             webhook.url,
             content=payload,
-            headers={
-                "Content-Type": "application/json",
-                "X-Webhook-Signature": sig,
-                "X-Blackbeard-Event": event_type,
-            },
+            headers=signed_webhook_headers(payload, webhook.secret, event_type),
         )
         latency_ms = round((_time.monotonic() - t0) * 1000, 1)
         latency_s = latency_ms / 1000.0

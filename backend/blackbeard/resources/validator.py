@@ -362,6 +362,28 @@ def _dns_cache_put(hostname: str, error: str | None) -> None:
         _dns_cache[hostname] = (time.monotonic(), error)
 
 
+def _resolve_addresses(host: str, timeout: float) -> tuple[list[str] | None, str | None]:
+    """Resolve *host* to address strings via the shared DNS executor pool.
+
+    Returns ``(addresses, None)`` on success or ``(None, error_message)``
+    on timeout or resolution failure.
+    """
+
+    def _resolve() -> list[tuple[Any, ...]]:
+        return socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+
+    try:
+        future = _get_dns_executor().submit(_resolve)
+        results = future.result(timeout=timeout)
+    except concurrent.futures.TimeoutError:
+        return None, "URL hostname DNS resolution timed out. Verify the hostname is correct."
+    except socket.gaierror:
+        return None, "URL hostname could not be resolved. Verify the hostname is correct."
+    except OSError:
+        return None, "URL hostname could not be resolved."
+    return [sockaddr[0] for _family, _type, _proto, _canonname, sockaddr in results], None
+
+
 def _check_dns_resolution(hostname: str, field_name: str, errors: list[ValidationError]) -> None:
     """Resolve hostname via DNS and reject if any address is internal.
 
@@ -374,41 +396,31 @@ def _check_dns_resolution(hostname: str, field_name: str, errors: list[Validatio
             errors.append(ValidationError(field_name, cached_error))
         return
 
-    def _resolve() -> list[tuple[Any, ...]]:
-        return socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    addresses, resolve_error = _resolve_addresses(hostname, timeout=2.0)
+    if resolve_error is not None:
+        _dns_cache_put(hostname, resolve_error)
+        errors.append(ValidationError(field_name, resolve_error))
+        return
 
-    try:
-        pool = _get_dns_executor()
-        future = pool.submit(_resolve)
-        results = future.result(timeout=2.0)
-        for _family, _type, _proto, _canonname, sockaddr in results:
-            addr_str = sockaddr[0]
-            try:
-                addr = ipaddress.ip_address(addr_str)
-                if _is_internal_ip(addr):
-                    _dns_cache_put(hostname, _DNS_INTERNAL_IP_MSG)
-                    errors.append(ValidationError(field_name, _DNS_INTERNAL_IP_MSG))
-                    return
-            except ValueError:
-                logger.debug(
-                    "Resolved DNS address %r for %s not parseable as IP",
-                    addr_str,
-                    hostname,
-                    extra={
-                        "event": "dns_resolve_parse_error",
-                        "hostname": hostname,
-                        "addr": addr_str,
-                    },
-                )
-        _dns_cache_put(hostname, None)
-    except concurrent.futures.TimeoutError:
-        msg = "URL hostname DNS resolution timed out. Verify the hostname is correct."
-        _dns_cache_put(hostname, msg)
-        errors.append(ValidationError(field_name, msg))
-    except socket.gaierror:
-        msg = "URL hostname could not be resolved. Verify the hostname is correct."
-        _dns_cache_put(hostname, msg)
-        errors.append(ValidationError(field_name, msg))
+    for addr_str in addresses or []:
+        try:
+            addr = ipaddress.ip_address(addr_str)
+            if _is_internal_ip(addr):
+                _dns_cache_put(hostname, _DNS_INTERNAL_IP_MSG)
+                errors.append(ValidationError(field_name, _DNS_INTERNAL_IP_MSG))
+                return
+        except ValueError:
+            logger.debug(
+                "Resolved DNS address %r for %s not parseable as IP",
+                addr_str,
+                hostname,
+                extra={
+                    "event": "dns_resolve_parse_error",
+                    "hostname": hostname,
+                    "addr": addr_str,
+                },
+            )
+    _dns_cache_put(hostname, None)
 
 
 # Short-TTL cache for delivery-time re-resolution. Registration-time DNS
@@ -689,6 +701,9 @@ def check_callable_path(path: str) -> str | None:
             f"not in the allowed module list. "
             f"Permitted prefixes: {', '.join(ALLOWED_CALLABLE_MODULE_PREFIXES)}"
         )
+    attr_name = path.rsplit(":", 1)[1] if ":" in path else path.rsplit(".", 1)[-1]
+    if attr_name.startswith("_"):
+        return f"references a private/dunder attribute '{attr_name}'"
     return None
 
 

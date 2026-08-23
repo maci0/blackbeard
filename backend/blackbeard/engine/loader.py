@@ -176,14 +176,19 @@ class ResourceLoader:
             logger.debug("Resolved ref: %s → %s/%s", ref_str, resource.kind.value, resource.name)
         return resource
 
+    def _resolve_typed(self, ref_or_name: str, kind: ResourceKind) -> Resource:
+        """Resolve a ref and require it to have the given kind."""
+        resource = self._resolve_ref(ref_or_name)
+        if resource.kind != kind:
+            raise LoaderError(f"Expected {kind.value}, got {resource.kind.value}")
+        return resource
+
     def build_llm(self, ref_or_name: str) -> LLM:
         """Build a CrewAI LLM from an LLMConnection ref string."""
         if ref_or_name in self._llm_cache:
             return self._llm_cache[ref_or_name]
 
-        resource = self._resolve_ref(ref_or_name)
-        if resource.kind != ResourceKind.LLM_CONNECTION:
-            raise LoaderError(f"Expected LLMConnection, got {resource.kind.value}")
+        resource = self._resolve_typed(ref_or_name, ResourceKind.LLM_CONNECTION)
 
         spec = resource.spec
         # LiteLLM registers the model under the resource name, not the provider model string.
@@ -301,9 +306,7 @@ class ResourceLoader:
         if ref_or_name in self._tool_cache:
             return self._tool_cache[ref_or_name]
 
-        resource = self._resolve_ref(ref_or_name)
-        if resource.kind != ResourceKind.TOOL:
-            raise LoaderError(f"Expected Tool, got {resource.kind.value}")
+        resource = self._resolve_typed(ref_or_name, ResourceKind.TOOL)
 
         spec = resource.spec
         tool_type = spec.get("type", "python")
@@ -524,34 +527,7 @@ class ResourceLoader:
             if tool_type in ("mcp-stdio", "mcp-http"):
                 mcp = self._build_mcp_server(tool_resource)
                 # Policy filter by resource name for allow/deny lists
-                if policy.tool_mode == "denylist" and tool_resource.name in policy.denied_tools:
-                    logger.warning(
-                        "Policy denied MCP tool '%s' for agent '%s'",
-                        tool_resource.name,
-                        agent_name,
-                        extra={
-                            "event": "policy_tool_denied",
-                            "tool_name": tool_resource.name,
-                            "agent_name": agent_name,
-                            "policy_mode": "denylist",
-                        },
-                    )
-                    continue
-                if (
-                    policy.tool_mode == "allowlist"
-                    and tool_resource.name not in policy.allowed_tools
-                ):
-                    logger.warning(
-                        "Policy allowlist excludes MCP tool '%s' for agent '%s'",
-                        tool_resource.name,
-                        agent_name,
-                        extra={
-                            "event": "policy_tool_excluded",
-                            "tool_name": tool_resource.name,
-                            "agent_name": agent_name,
-                            "allowed_tools": sorted(policy.allowed_tools),
-                        },
-                    )
+                if self._policy_denies_tool(tool_resource.name, policy, agent_name):
                     continue
                 mcps.append(mcp)
                 logger.info(
@@ -606,61 +582,70 @@ class ResourceLoader:
             tools.append(tool)
         return tools, mcps
 
+    def _policy_denies_tool(
+        self,
+        tool_name: str,
+        policy: AgentPolicy,
+        agent_name: str,
+    ) -> bool:
+        """Return True when the agent's policy excludes this tool name.
+
+        - mode='denylist': denied when the name is in ``policy.denied_tools``.
+        - mode='allowlist': denied unless the name is in ``policy.allowed_tools``.
+        - mode='all' (default): never denied.
+        """
+        if policy.tool_mode == "denylist" and tool_name in policy.denied_tools:
+            logger.warning(
+                "Policy denied tool '%s' for agent '%s'",
+                tool_name,
+                agent_name,
+                extra={
+                    "event": "policy_tool_denied",
+                    "tool_name": tool_name,
+                    "agent_name": agent_name,
+                    "policy_mode": "denylist",
+                },
+            )
+            return True
+        if policy.tool_mode == "allowlist" and tool_name not in policy.allowed_tools:
+            logger.warning(
+                "Policy allowlist excludes tool '%s' for agent '%s'",
+                tool_name,
+                agent_name,
+                extra={
+                    "event": "policy_tool_excluded",
+                    "tool_name": tool_name,
+                    "agent_name": agent_name,
+                    "allowed_tools": sorted(policy.allowed_tools),
+                },
+            )
+            return True
+        return False
+
     def _filter_tools_by_policy(
         self,
         tools: list[Any],
         policy: AgentPolicy,
         agent_name: str,
     ) -> list[Any]:
-        """Filter tools according to the agent's policy allowlist/denylist.
-
-        - mode='allowlist': only tools whose name is in ``policy.allowed_tools`` pass.
-        - mode='denylist': tools whose name is in ``policy.denied_tools`` are removed.
-        - mode='all' (default): all tools pass through unchanged.
-        """
+        """Filter tools according to the agent's policy allowlist/denylist."""
         if policy.tool_mode == "all":
             return tools
 
-        filtered: list[Any] = []
-        for tool in tools:
-            tool_name = getattr(tool, "name", str(tool))
-            if policy.tool_mode == "denylist" and tool_name in policy.denied_tools:
-                logger.warning(
-                    "Policy denied tool '%s' for agent '%s'",
-                    tool_name,
-                    agent_name,
-                    extra={
-                        "event": "policy_tool_denied",
-                        "tool_name": tool_name,
-                        "agent_name": agent_name,
-                        "policy_mode": "denylist",
-                    },
-                )
-                continue
-            if policy.tool_mode == "allowlist" and tool_name not in policy.allowed_tools:
-                logger.warning(
-                    "Policy allowlist excludes tool '%s' for agent '%s'",
-                    tool_name,
-                    agent_name,
-                    extra={
-                        "event": "policy_tool_excluded",
-                        "tool_name": tool_name,
-                        "agent_name": agent_name,
-                        "allowed_tools": sorted(policy.allowed_tools),
-                    },
-                )
-                continue
-            filtered.append(tool)
-        return filtered
+        return [
+            tool
+            for tool in tools
+            if not self._policy_denies_tool(
+                getattr(tool, "name", str(tool)), policy, agent_name
+            )
+        ]
 
     def build_agent(self, ref_or_name: str) -> Agent:
         """Build a CrewAI Agent from an Agent resource ref."""
         if ref_or_name in self._agent_cache:
             return self._agent_cache[ref_or_name]
 
-        resource = self._resolve_ref(ref_or_name)
-        if resource.kind != ResourceKind.AGENT:
-            raise LoaderError(f"Expected Agent, got {resource.kind.value}")
+        resource = self._resolve_typed(ref_or_name, ResourceKind.AGENT)
 
         spec = resource.spec
         agent_kwargs: dict[str, Any] = {
@@ -808,13 +793,6 @@ class ResourceLoader:
             )
             raise LoaderError(msg)
         module_path, attr_name = dotted_path.rsplit(".", 1)
-        if attr_name.startswith("_"):
-            msg = f"Blocked import of private/dunder attribute: {dotted_path}"
-            logger.warning(
-                msg,
-                extra={"event": "callable_import_blocked", "dotted_path": dotted_path},
-            )
-            raise LoaderError(msg)
         try:
             module = importlib.import_module(module_path)
             return getattr(module, attr_name)
@@ -1112,9 +1090,7 @@ class ResourceLoader:
         if ref_or_name in self._task_cache:
             return self._task_cache[ref_or_name]
 
-        resource = self._resolve_ref(ref_or_name)
-        if resource.kind != ResourceKind.TASK:
-            raise LoaderError(f"Expected Task, got {resource.kind.value}")
+        resource = self._resolve_typed(ref_or_name, ResourceKind.TASK)
 
         spec = resource.spec
         task_kwargs: dict[str, Any] = {

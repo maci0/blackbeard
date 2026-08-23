@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac
 import json
 import logging
 import secrets
@@ -23,7 +21,10 @@ from blackbeard.api import smart_total
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth import require_permission
 from blackbeard.config import settings
-from blackbeard.engine.execution_listener import invalidate_webhook_cache
+from blackbeard.engine.execution_listener import (
+    invalidate_webhook_cache,
+    signed_webhook_headers,
+)
 from blackbeard.http_client import get_sync_client
 from blackbeard.logging_config import safe_log_url
 from blackbeard.models import KNOWN_EXECUTION_EVENT_TYPES, User, Webhook, get_session
@@ -276,17 +277,12 @@ _TEST_EVENT_TYPE = "crew_started"
 
 def _deliver_test_webhook_sync(url: str, secret: str, payload: str) -> tuple[bool, int | None]:
     """POST a signed test payload to a webhook URL. Returns (delivered, status_code)."""
-    sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
     try:
         client = get_sync_client("webhook-deliver", timeout=10, follow_redirects=False)
         resp = client.post(
             url,
             content=payload,
-            headers={
-                "Content-Type": "application/json",
-                "X-Webhook-Signature": sig,
-                "X-Blackbeard-Event": _TEST_EVENT_TYPE,
-            },
+            headers=signed_webhook_headers(payload, secret, _TEST_EVENT_TYPE),
         )
     except Exception as exc:
         logger.info(

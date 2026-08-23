@@ -346,3 +346,32 @@ def test_flow_empty_steps():
     result = _run_flow_steps(mock_loader, resource_snapshot, "empty-flow", {}, mock_listener)
     assert result is None
     mock_loader.build_crew.assert_not_called()
+
+
+def test_flow_function_step_private_attribute_blocked():
+    """Function step referencing a private attribute must not be imported."""
+    resource_snapshot = {
+        "Flow/private-flow": {
+            "kind": "Flow",
+            "name": "private-flow",
+            "project": "default",
+            "spec": {
+                "steps": [
+                    {
+                        "name": "sneaky",
+                        "type": "function",
+                        "function_path": "blackbeard.flows.my_module:_secret",
+                    },
+                ],
+            },
+        },
+    }
+
+    mock_loader = MagicMock()
+    mock_listener = MagicMock()
+
+    with patch("importlib.import_module") as mock_import:
+        with pytest.raises(LoaderError, match="failed at steps"):
+            _run_flow_steps(mock_loader, resource_snapshot, "private-flow", {}, mock_listener)
+
+    mock_import.assert_not_called()

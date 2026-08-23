@@ -133,41 +133,15 @@ async def trigger_automation(
 
     execution = await _execute_target(session, target, merged_inputs, target_project, user)
 
-    await log_audit(
+    return await _finish_trigger(
         session,
-        action="automation_triggered",
-        resource_type="Automation",
-        resource_id=name,
-        detail={
-            "trigger": "api",
-            "target_kind": target.get("kind"),
-            "target_name": target.get("name"),
-        },
-        **audit_from_request(request, user),
-    )
-    await session.commit()
-
-    if execution is not None:
-        response.headers["Location"] = f"/api/v1/executions/{execution.id}"
-
-    logger.info(
-        "Automation '%s' triggered via API: %s/%s",
-        name,
-        target.get("kind"),
-        target.get("name"),
-        extra={
-            "event": "automation_api_trigger",
-            "automation_name": name,
-            "target_kind": target.get("kind"),
-            "target_name": target.get("name"),
-            "project": target_project,
-        },
-    )
-
-    return TriggerResponse(
-        status="triggered",
-        automation_name=name,
-        execution=ExecutionResponse.from_db(execution) if execution else None,
+        response,
+        name=name,
+        target=target,
+        target_project=target_project,
+        source="API",
+        execution=execution,
+        audit_kwargs=dict(audit_from_request(request, user)),
     )
 
 
@@ -243,19 +217,45 @@ async def webhook_trigger(
 
     execution = await _execute_target(session, target, merged_inputs, target_project, user=None)
 
+    return await _finish_trigger(
+        session,
+        response,
+        name=name,
+        target=target,
+        target_project=target_project,
+        source="webhook",
+        execution=execution,
+        audit_kwargs={
+            "actor_type": "system",
+            "actor_id": f"webhook:{name}",
+            "ip_address": get_client_ip(request),
+        },
+    )
+
+
+async def _finish_trigger(
+    session: AsyncSession,
+    response: Response,
+    *,
+    name: str,
+    target: dict[str, Any],
+    target_project: str,
+    source: str,
+    execution: Execution | None,
+    audit_kwargs: dict[str, Any],
+) -> TriggerResponse:
+    """Shared tail of both triggers: audit log, Location header, structured log, response."""
     await log_audit(
         session,
         action="automation_triggered",
         resource_type="Automation",
         resource_id=name,
         detail={
-            "trigger": "webhook",
+            "trigger": source.lower(),
             "target_kind": target.get("kind"),
             "target_name": target.get("name"),
         },
-        actor_type="system",
-        actor_id=f"webhook:{name}",
-        ip_address=get_client_ip(request),
+        **audit_kwargs,
     )
     await session.commit()
 
@@ -263,12 +263,13 @@ async def webhook_trigger(
         response.headers["Location"] = f"/api/v1/executions/{execution.id}"
 
     logger.info(
-        "Automation '%s' triggered via webhook: %s/%s",
+        "Automation '%s' triggered via %s: %s/%s",
         name,
+        source,
         target.get("kind"),
         target.get("name"),
         extra={
-            "event": "automation_webhook_trigger",
+            "event": f"automation_{source.lower()}_trigger",
             "automation_name": name,
             "target_kind": target.get("kind"),
             "target_name": target.get("name"),

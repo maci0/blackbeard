@@ -99,10 +99,6 @@ class VirtualKeyManager:
             resp = await client.post(
                 f"{self._proxy_url}/key/generate",
                 json=payload,
-                headers={
-                    "Authorization": f"Bearer {self._master_key}",
-                    "Content-Type": "application/json",
-                },
             )
             resp.raise_for_status()
             data = cast("dict[str, Any]", resp.json())
@@ -169,10 +165,6 @@ class VirtualKeyManager:
             resp = await client.post(
                 f"{self._proxy_url}/key/delete",
                 json={"keys": [key]},
-                headers={
-                    "Authorization": f"Bearer {self._master_key}",
-                    "Content-Type": "application/json",
-                },
             )
             resp.raise_for_status()
         except httpx.HTTPError as exc:
