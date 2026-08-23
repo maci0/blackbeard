@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, NoReturn
 
 import click
@@ -347,9 +348,22 @@ def confirm_destructive(ctx: click.Context, prompt_msg: str, *, yes: bool) -> bo
 
 
 def format_timestamp(value: object, fallback: str = "—") -> str:
-    """Format an API timestamp to 'YYYY-MM-DDTHH:MM:SS' (19 chars)."""
-    raw = str(value) if value else fallback
-    return raw[:19] if raw != fallback else fallback
+    """Format an API timestamp as a UTC 'YYYY-MM-DDTHH:MM:SS' instant (19 chars).
+
+    The API returns timezone-aware instants (currently always +00:00); the
+    offset suffix is stripped for table alignment. Aware values are converted
+    to UTC first so a non-UTC offset still renders the correct wall time.
+    """
+    raw = str(value) if value else ""
+    if not raw or raw == fallback:
+        return fallback
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return raw[:19]
+    if dt.tzinfo is not None:
+        raw = dt.astimezone(UTC).isoformat()
+    return raw[:19]
 
 
 def extract_items(data: Any) -> list[Any]:
@@ -370,7 +384,7 @@ def build_executions_table(items: list[Any], *, title: str) -> Table:
     table.add_column("ID", style="dim", no_wrap=True)
     table.add_column("Crew", style="bold")
     table.add_column("Status")
-    table.add_column("Created")
+    table.add_column("Created (UTC)")
     table.add_column("Tokens", justify="right")
     table.add_column("Cost", justify="right")
 

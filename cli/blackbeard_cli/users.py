@@ -94,7 +94,7 @@ def user_list(ctx: click.Context, limit: int) -> None:
     table.add_column("Email", style="bold")
     table.add_column("Display Name")
     table.add_column("Status")
-    table.add_column("Created")
+    table.add_column("Created (UTC)")
 
     for u in items:
         active = "[green]active[/]" if u.get("is_active") else "[red]inactive[/]"
@@ -261,7 +261,7 @@ def group_list(ctx: click.Context, limit: int) -> None:
     table.add_column("ID", style="dim", no_wrap=True)
     table.add_column("Name", style="bold")
     table.add_column("Description")
-    table.add_column("Created")
+    table.add_column("Created (UTC)")
 
     for g in items:
         table.add_row(

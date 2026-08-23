@@ -11,6 +11,7 @@ import json
 import logging
 import re
 import sys
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse, urlunparse
@@ -298,8 +299,18 @@ def safe_log_url(url: str) -> str:
     )
 
 
+def _utc_time_converter(seconds: float | None = None) -> time.struct_time:
+    """logging.Formatter-compatible converter rendering timestamps in UTC."""
+    return time.gmtime(time.time() if seconds is None else seconds)
+
+
 class _PiiScrubFormatter(logging.Formatter):
     """Text formatter that scrubs PII patterns from the final output."""
+
+    # Render %(asctime)s in UTC (default is host-local time with no zone
+    # marker), so debug logs match the JSON formatter's UTC timestamps and
+    # stay comparable across replicas running in different timezones.
+    converter = staticmethod(_utc_time_converter)
 
     def format(self, record: logging.LogRecord) -> str:
         return scrub_pii(super().format(record))
