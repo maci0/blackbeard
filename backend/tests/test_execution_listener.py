@@ -217,3 +217,56 @@ class TestExecutionListenerSequencing:
 
         with listener._lock:
             assert listener._task_order == 1
+
+
+class _FailingSession:
+    """Session stand-in simulating a prolonged DB outage."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args: object):
+        return False
+
+    def add_all(self, events):
+        raise RuntimeError("db down")
+
+    def commit(self):
+        raise RuntimeError("db down")
+
+
+class TestPendingBufferBound:
+    """Failed flushes requeue into the buffer; pending events must stay bounded.
+
+    Without the cap, a long-running execution during a DB outage grows the
+    in-memory buffer without bound for its whole lifetime.
+    """
+
+    def _make_outage_stub(self) -> BlackbeardExecutionListener:
+        listener = _make_full_stub(CommitRecorder())
+        listener._session_factory = lambda: _FailingSession()
+        return listener
+
+    def test_buffer_never_exceeds_cap_during_outage(self):
+        listener = self._make_outage_stub()
+        cap = BlackbeardExecutionListener._MAX_PENDING_EVENTS
+        total = cap + 250
+        for i in range(total):
+            listener._write_event(ExecutionEventType.CREW_STARTED.value, {"i": i})
+        assert len(listener._buffer) == cap
+        assert listener._buffer[0].sequence == total - cap
+        assert listener._buffer[-1].sequence == total - 1
+
+    def test_direct_write_path_also_bounded(self):
+        listener = self._make_outage_stub()
+        cap = BlackbeardExecutionListener._MAX_PENDING_EVENTS
+        with listener._lock:
+            listener._buffer = [_event(listener._execution_id, i) for i in range(cap)]
+            listener._seq = cap
+        listener._write_event_with_task_update(
+            ExecutionEventType.TASK_COMPLETED.value,
+            {},
+            task_order=0,
+            task_status=TaskStatus.COMPLETED,
+        )
+        assert len(listener._buffer) == cap

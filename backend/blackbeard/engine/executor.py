@@ -176,6 +176,12 @@ _bg_engine: AsyncEngine | None = None
 _bg_session_factory: async_sessionmaker[AsyncSession] | None = None
 _bg_engine_lock = threading.Lock()
 
+# Dispose task for _bg_engine scheduled by shutdown_executor() while an event
+# loop was running. Awaited via wait_for_bg_engine_dispose(); without this the
+# fire-and-forget task can be cut off by process exit, leaking pool
+# connections.
+_bg_dispose_task: asyncio.Task[None] | None = None
+
 # Queued/running thread-pool futures keyed by execution id — allows cancel of
 # still-queued work so cancelled jobs do not consume worker slots.
 _execution_futures: dict[UUID, asyncio.Future[None]] = {}
@@ -309,7 +315,7 @@ def _cancel_execution_future(execution_id: UUID) -> bool:
 
 def shutdown_executor(wait: bool = False) -> None:
     """Shut down the thread pool executor and dispose all background DB engines."""
-    global _executor, _bg_engine, _bg_session_factory
+    global _executor, _bg_engine, _bg_session_factory, _bg_dispose_task
     with _execution_futures_lock:
         _execution_futures.clear()
     with _executor_lock:
@@ -335,8 +341,11 @@ def shutdown_executor(wait: bool = False) -> None:
         except RuntimeError:
             loop = None
         if loop and loop.is_running():
-            task = loop.create_task(bg.dispose())
-            task.add_done_callback(log_task_exception)
+            # Cannot await from sync code: stash the task for
+            # wait_for_bg_engine_dispose() so the caller's async shutdown can
+            # hold the process open until pool connections are released.
+            _bg_dispose_task = loop.create_task(bg.dispose())
+            _bg_dispose_task.add_done_callback(log_task_exception)
         else:
             _loop = asyncio.new_event_loop()
             try:
@@ -349,6 +358,25 @@ def shutdown_executor(wait: bool = False) -> None:
 
     dispose_sync_engine()
     logger.info("Sync DB engine disposed", extra={"event": "sync_engine_disposed"})
+
+
+async def wait_for_bg_engine_dispose(timeout: float = 10.0) -> None:
+    """Await the bg-engine dispose scheduled by shutdown_executor().
+
+    Uses ``asyncio.wait`` so a timeout does not cancel the in-flight dispose.
+    """
+    global _bg_dispose_task
+    task = _bg_dispose_task
+    _bg_dispose_task = None
+    if task is None or task.done():
+        return
+    done, pending = await asyncio.wait({task}, timeout=timeout)
+    if pending:
+        logger.warning(
+            "Background DB engine dispose did not finish within %.0fs",
+            timeout,
+            extra={"event": "bg_engine_dispose_timeout"},
+        )
 
 
 class ExecutionError(Exception):

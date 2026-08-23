@@ -27,6 +27,7 @@ __all__ = [
     "get_pool_status",
     "recover_stale_executions",
     "shutdown_executor",
+    "wait_for_bg_engine_dispose",
 ]
 
 _EXECUTOR_ATTRS = frozenset(__all__)

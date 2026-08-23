@@ -517,6 +517,12 @@ class BlackbeardExecutionListener(BaseEventListener):
 
     _FLUSH_INTERVAL = 0.5
     _MAX_BUFFER = 20
+    # Hard cap on events pending DB write. While flushes keep failing
+    # (prolonged Postgres outage), failed batches are re-queued into the
+    # buffer; without this cap a long-running execution grows memory
+    # without bound for its whole lifetime. Oldest events drop first —
+    # they were never committed, so no SSE consumer can have seen them.
+    _MAX_PENDING_EVENTS = 1000
     _PII_CACHE_MAX = 1024
 
     def __init__(
@@ -621,16 +627,25 @@ class BlackbeardExecutionListener(BaseEventListener):
                         )
                 except Exception as exc:
                     failed = True
-                    if isinstance(exc, IntegrityError):
+                    collision = isinstance(exc, IntegrityError)
+                    if collision:
                         self._renumber_events(to_flush)
                     with self._lock:
-                        if isinstance(exc, IntegrityError) and self._buffer:
-                            next_seq = self._seq
-                            for evt in self._buffer:
-                                evt.sequence = next_seq
-                                next_seq += 1
-                            self._seq = next_seq
-                        self._buffer = to_flush + self._buffer
+                        dropped = self._requeue_locked(to_flush, collision)
+                    if dropped:
+                        logger.warning(
+                            "Dropped %d oldest pending events for %s: "
+                            "buffer exceeded %d during DB outage",
+                            dropped,
+                            self._execution_id,
+                            self._MAX_PENDING_EVENTS,
+                            extra={
+                                "event": "events_dropped_buffer_full",
+                                "execution_id": self._execution_id_str,
+                                "dropped_count": dropped,
+                                "buffer_max": self._MAX_PENDING_EVENTS,
+                            },
+                        )
                     logger.error(
                         "Re-queued %d events for %s (flush failed, will retry on next flush): %s",
                         len(to_flush),
@@ -653,6 +668,31 @@ class BlackbeardExecutionListener(BaseEventListener):
                     need_schedule = failed or len(self._buffer) > 0
             if need_schedule:
                 self._schedule_flush()
+
+    def _requeue_locked(
+        self,
+        failed_batch: list[ExecutionEvent],
+        sequence_collision: bool,
+    ) -> int:
+        """Merge a failed batch back ahead of buffered events. Lock held.
+
+        Renumbers already-buffered events after a sequence collision, then
+        prepends the failed batch so commit order stays sequence order.
+        Returns how many oldest events were dropped to honour
+        ``_MAX_PENDING_EVENTS`` (see that constant's comment).
+        """
+        if sequence_collision and self._buffer:
+            next_seq = self._seq
+            for evt in self._buffer:
+                evt.sequence = next_seq
+                next_seq += 1
+            self._seq = next_seq
+        merged = failed_batch + self._buffer
+        dropped = max(len(merged) - self._MAX_PENDING_EVENTS, 0)
+        if dropped:
+            del merged[:dropped]
+        self._buffer = merged
+        return dropped
 
     def _renumber_events(self, events: list[ExecutionEvent]) -> None:
         """Re-assign sequence numbers from current DB max after a collision.
@@ -1024,16 +1064,25 @@ class BlackbeardExecutionListener(BaseEventListener):
                     session.commit()
                 committed = True
             except Exception as exc:
-                if isinstance(exc, IntegrityError):
+                collision = isinstance(exc, IntegrityError)
+                if collision:
                     self._renumber_events(to_flush)
                 with self._lock:
-                    if isinstance(exc, IntegrityError) and self._buffer:
-                        next_seq = self._seq
-                        for evt in self._buffer:
-                            evt.sequence = next_seq
-                            next_seq += 1
-                        self._seq = next_seq
-                    self._buffer = to_flush + self._buffer
+                    dropped = self._requeue_locked(to_flush, collision)
+                if dropped:
+                    logger.warning(
+                        "Dropped %d oldest pending events for %s: "
+                        "buffer exceeded %d during DB outage",
+                        dropped,
+                        self._execution_id,
+                        self._MAX_PENDING_EVENTS,
+                        extra={
+                            "event": "events_dropped_buffer_full",
+                            "execution_id": self._execution_id_str,
+                            "dropped_count": dropped,
+                            "buffer_max": self._MAX_PENDING_EVENTS,
+                        },
+                    )
                 self._schedule_flush()
                 logger.exception(
                     "Failed to write event+task for %s: type=%s order=%d — "

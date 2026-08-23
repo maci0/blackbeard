@@ -185,6 +185,41 @@ class TestShutdownExecutor:
             mod._bg_engine = original_bg_engine
             mod._bg_session_factory = original_bg_session
 
+    def test_dispose_task_awaited_when_loop_running(self) -> None:
+        import threading
+
+        import blackbeard.engine.executor as mod
+
+        original_executor = mod._executor
+        original_bg_engine = mod._bg_engine
+        original_bg_session = mod._bg_session_factory
+        original_task = mod._bg_dispose_task
+        disposed = threading.Event()
+
+        class _FakeEngine:
+            async def dispose(self) -> None:
+                disposed.set()
+
+        async def scenario() -> None:
+            mod._executor = ThreadPoolExecutor(max_workers=1)
+            mod._bg_engine = _FakeEngine()
+            mod._bg_session_factory = None
+            mod._bg_dispose_task = None
+            with patch("blackbeard.engine.execution_listener.dispose_sync_engine"):
+                mod.shutdown_executor(wait=True)
+            assert mod._bg_dispose_task is not None, "dispose task not stashed"
+            await mod.wait_for_bg_engine_dispose(timeout=5.0)
+
+        try:
+            asyncio.run(scenario())
+            assert disposed.is_set(), "bg engine dispose never ran"
+            assert mod._executor is None
+        finally:
+            mod._executor = original_executor
+            mod._bg_engine = original_bg_engine
+            mod._bg_session_factory = original_bg_session
+            mod._bg_dispose_task = original_task
+
 
 # ---------------------------------------------------------------------------
 # 5. api.executions._poll_backoff

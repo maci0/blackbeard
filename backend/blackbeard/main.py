@@ -443,6 +443,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
         await drain_background_tasks()
         shutdown_executor()
+        from blackbeard.engine import wait_for_bg_engine_dispose
+
+        await wait_for_bg_engine_dispose()
         logger.info("Executor shut down", extra={"event": "executor_shutdown"})
         shutdown_webhook_executor()
         shutdown_otel()
