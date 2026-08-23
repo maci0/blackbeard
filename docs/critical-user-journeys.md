@@ -1,6 +1,6 @@
 # Critical User Journeys (CUJs)
 
-Every journey below is a sequence a real user would follow to accomplish a goal. Each journey maps to one or more E2E test specs in `frontend/e2e/`.
+Every journey below is a sequence a real user would follow to accomplish a goal. Each journey maps to one or more E2E test specs in `frontend/e2e/` unless its **Coverage** note says otherwise (CUJ-23, CUJ-26, and CUJ-27 are covered outside the E2E suite).
 
 ---
 
@@ -395,11 +395,13 @@ Every journey below is a sequence a real user would follow to accomplish a goal.
 **Goal:** Monitor platform health, spend, and execution metrics at a glance  
 
 1. Navigate to `/` (Dashboard)
-2. View execution metrics (total runs, success rate, average duration, active count)
-3. View resource counts and recent activity
+2. View stat cards: Total Resources, Active Executions, LLM Spend, Total Models, Automations
+3. View resource counts by kind, recent executions, and spend charts
 4. Click a stat card to navigate to the related detail page (e.g., executions, resources)
 
 **Success criteria:** Dashboard renders metric groups, cards link to correct detail pages.
+
+**Coverage:** `frontend/src/pages/__tests__/Dashboard.test.tsx` (unit; no E2E spec).
 
 ---
 
@@ -449,6 +451,8 @@ Every journey below is a sequence a real user would follow to accomplish a goal.
 
 **Success criteria:** Shell launches, completions work, CRUD and execution commands operate correctly.
 
+**Coverage:** `cli/tests/test_shell.py` (CLI unit tests; command completion, dispatch, and project switching).
+
 ---
 
 ## CUJ-27: Temporal Workflow Execution
@@ -463,6 +467,8 @@ Every journey below is a sequence a real user would follow to accomplish a goal.
 5. Simulate a failure mid-execution and confirm Temporal retries the workflow according to its retry policy
 
 **Success criteria:** Execution runs as a Temporal workflow, visible in Temporal UI, retries on failure.
+
+**Coverage:** `backend/tests/test_temporal.py` (workflow logic; steps 2 and 4 need a live Temporal cluster and have no automated spec).
 
 ---
 
