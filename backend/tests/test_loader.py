@@ -766,6 +766,31 @@ def test_build_knowledge_source_unsupported_type():
     assert result is None
 
 
+def test_knowledge_source_map_covers_schema_types():
+    """Every file-based type in KNOWLEDGE_SOURCE_SCHEMA must have a loader map entry.
+
+    'url' is excluded: the schema admits it but no native CrewAI source exists,
+    so the loader warns and skips it at build time.
+    """
+    import blackbeard.engine.loader as loader_mod
+    from blackbeard.resources.spec_schemas import KNOWLEDGE_SOURCE_SCHEMA
+
+    allowed = set(KNOWLEDGE_SOURCE_SCHEMA["properties"]["type"]["enum"])
+    missing = (allowed - {"url"}) - set(loader_mod._KS_TYPE_MAP)
+    assert not missing, f"Schema types missing from _KS_TYPE_MAP: {sorted(missing)}"
+
+
+def test_knowledge_source_excel_entry_importable():
+    """The excel map entry must resolve to a real CrewAI class in the pinned version."""
+    import importlib
+
+    import blackbeard.engine.loader as loader_mod
+
+    module_path, class_name = loader_mod._KS_TYPE_MAP["excel"]
+    module = importlib.import_module(module_path)
+    assert hasattr(module, class_name)
+
+
 # ---------------------------------------------------------------------------
 # Memory config tests
 # ---------------------------------------------------------------------------
@@ -1082,6 +1107,37 @@ def test_build_task_async_and_human_input(mock_task_cls, mock_agent_cls, mock_ll
     _, kwargs = mock_task_cls.call_args
     assert kwargs["async_execution"] is True
     assert kwargs["human_input"] is True
+
+
+@patch("blackbeard.engine.loader.LLM")
+@patch("blackbeard.engine.loader.Agent")
+@patch("blackbeard.engine.loader.Task")
+def test_build_task_with_callback(mock_task_cls, mock_agent_cls, mock_llm_cls):
+    """Task with a callback path should import it and forward the callable."""
+    agent_res = make_resource(
+        ResourceKind.AGENT,
+        "ag",
+        {"role": "R", "goal": "G", "backstory": "B"},
+    )
+    task_res = make_resource(
+        ResourceKind.TASK,
+        "callback-task",
+        {
+            "description": "D",
+            "expected_output": "E",
+            "agent": "ref:agents/ag",
+            "callback": "myapp.callbacks.on_task_done",
+        },
+    )
+    loader = ResourceLoader(_resource_map(agent_res, task_res))
+
+    mock_cb = MagicMock()
+    with patch.object(ResourceLoader, "import_callable", return_value=mock_cb) as mock_import:
+        loader.build_task("ref:tasks/callback-task")
+
+    mock_import.assert_called_once_with("myapp.callbacks.on_task_done")
+    _, kwargs = mock_task_cls.call_args
+    assert kwargs["callback"] is mock_cb
 
 
 # ---------------------------------------------------------------------------

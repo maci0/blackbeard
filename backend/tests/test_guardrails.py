@@ -258,3 +258,85 @@ def test_build_guardrails_failed_import_skipped():
         guardrails = loader._build_guardrails(["some.module.function"])
 
     assert len(guardrails) == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests -- _build_pii_guardrail
+# ---------------------------------------------------------------------------
+
+
+def _make_pii_loader(action: str = "redact") -> ResourceLoader:
+    guardrail_res = make_resource(
+        ResourceKind.GUARDRAIL,
+        "pii-guard",
+        {
+            "type": "pii",
+            "pii_entities": ["EMAIL_ADDRESS"],
+            "pii_action": action,
+        },
+    )
+    return ResourceLoader(_resource_map(guardrail_res))
+
+
+def test_build_guardrails_pii_ref_redacts():
+    """PII-type Guardrail ref should produce a callable that redacts PII."""
+    loader = _make_pii_loader()
+
+    guardrails = loader._build_guardrails(["ref:guardrails/pii-guard"])
+
+    assert len(guardrails) == 1
+    fn = guardrails[0]
+    assert callable(fn)
+
+    redacted = fn("Contact john.doe@example.com for details.")
+    assert "john.doe@example.com" not in redacted
+    assert "<EMAIL_ADDRESS>" in redacted
+
+
+def test_build_guardrails_pii_clean_output_unchanged():
+    """PII guardrail should pass clean output through unchanged."""
+    loader = _make_pii_loader()
+
+    (fn,) = loader._build_guardrails(["ref:guardrails/pii-guard"])
+
+    text = "The weather is sunny today."
+    assert fn(text) == text
+
+
+def test_build_guardrails_pii_reject_raises():
+    """PII guardrail with pii_action=reject should raise on PII output."""
+    loader = _make_pii_loader(action="reject")
+
+    (fn,) = loader._build_guardrails(["ref:guardrails/pii-guard"])
+
+    with pytest.raises(ValueError, match="pii-guard"):
+        fn("Contact john.doe@example.com for details.")
+
+
+def test_build_guardrails_pii_reject_clean_output_passes():
+    """PII reject guardrail should not raise on clean output."""
+    loader = _make_pii_loader(action="reject")
+
+    (fn,) = loader._build_guardrails(["ref:guardrails/pii-guard"])
+
+    text = "No sensitive data here."
+    assert fn(text) == text
+
+
+def test_build_guardrails_pii_warn_passes_through():
+    """PII guardrail with pii_action=warn should log and pass PII through."""
+    loader = _make_pii_loader(action="warn")
+
+    (fn,) = loader._build_guardrails(["ref:guardrails/pii-guard"])
+
+    text = "Contact john.doe@example.com for details."
+    assert fn(text) == text
+
+
+def test_build_guardrails_pii_short_output_unchanged():
+    """PII guardrail should skip outputs too short to analyze."""
+    loader = _make_pii_loader()
+
+    (fn,) = loader._build_guardrails(["ref:guardrails/pii-guard"])
+
+    assert fn("ab") == "ab"

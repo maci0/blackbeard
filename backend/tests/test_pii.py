@@ -195,6 +195,33 @@ class TestPIISchemaValidation:
         }
         jsonschema.validate(spec, GUARDRAIL_SCHEMA)
 
+    def test_guardrail_pii_backend_and_model_valid(self):
+        """Studio emits backend/model fields for PII guardrails; schema must admit them."""
+        import jsonschema
+
+        from blackbeard.resources.spec_schemas import GUARDRAIL_SCHEMA
+
+        spec = {
+            "type": "pii",
+            "pii_entities": ["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"],
+            "pii_action": "redact",
+            "backend": "default",
+            "model": "ollama/gliner-pii",
+        }
+        jsonschema.validate(spec, GUARDRAIL_SCHEMA)
+
+    def test_guardrail_pii_invalid_backend(self):
+        import jsonschema
+
+        from blackbeard.resources.spec_schemas import GUARDRAIL_SCHEMA
+
+        spec = {
+            "type": "pii",
+            "backend": "invalid-backend",
+        }
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(spec, GUARDRAIL_SCHEMA)
+
     def test_guardrail_pii_type_reject_action(self):
         import jsonschema
 

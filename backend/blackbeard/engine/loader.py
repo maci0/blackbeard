@@ -104,6 +104,7 @@ _KS_TYPE_MAP: dict[str, tuple[str, str]] = {
     "pdf": ("crewai.knowledge.source.pdf_knowledge_source", "PDFKnowledgeSource"),
     "csv": ("crewai.knowledge.source.csv_knowledge_source", "CSVKnowledgeSource"),
     "json": ("crewai.knowledge.source.json_knowledge_source", "JSONKnowledgeSource"),
+    "excel": ("crewai.knowledge.source.excel_knowledge_source", "ExcelKnowledgeSource"),
     "string": ("crewai.knowledge.source.string_knowledge_source", "StringKnowledgeSource"),
 }
 _ks_class_cache: dict[str, type] = {}
@@ -219,7 +220,7 @@ class ResourceLoader:
     def _build_knowledge_source(self, ref_or_name: str) -> Any:
         """Build a CrewAI knowledge source from a KnowledgeSource resource ref.
 
-        Supported types: text, pdf, csv, json, string (see ``_KS_TYPE_MAP``).
+        Supported types: text, pdf, csv, json, excel, string (see ``_KS_TYPE_MAP``).
         Returns ``None`` with a warning on unsupported types or build failures.
         """
         try:
@@ -851,6 +852,53 @@ class ResourceLoader:
         return _schema_guardrail
 
     @staticmethod
+    def _build_pii_guardrail(gspec: dict[str, Any], guardrail_name: str) -> Any:
+        """Build a callable guardrail that handles PII in task output.
+
+        Uses the Presidio-backed ``redact_text`` machinery with the
+        guardrail's entity preset/list and recognizer backend.
+        ``pii_action`` selects behavior when PII is detected:
+        "redact" (default) replaces matches with ``<ENTITY_TYPE>``
+        placeholders, "reject" fails the output, "warn" logs and
+        passes the output through unchanged.
+        """
+        from blackbeard.pii import redact_text, resolve_pii_entities
+
+        entities = resolve_pii_entities(
+            preset=gspec.get("pii_preset"),
+            entities=gspec.get("pii_entities"),
+        )
+        action = gspec.get("pii_action", "redact")
+        config: dict[str, Any] = {}
+        if gspec.get("backend"):
+            config["backend"] = gspec["backend"]
+        if gspec.get("model"):
+            config["model"] = gspec["model"]
+
+        def _pii_guardrail(output: str) -> str:
+            if not isinstance(output, str) or len(output) < 3:
+                return output
+            redacted = redact_text(output, entities=entities, config=config)
+            if redacted == output:
+                return output
+            if action == "reject":
+                raise ValueError(f"PII guardrail '{guardrail_name}': output contains PII")
+            if action == "warn":
+                logger.warning(
+                    "PII guardrail '%s': PII detected in output (action=warn, "
+                    "passing through unredacted)",
+                    guardrail_name,
+                    extra={
+                        "event": "pii_guardrail_warn",
+                        "guardrail_name": guardrail_name,
+                    },
+                )
+                return output
+            return redacted
+
+        return _pii_guardrail
+
+    @staticmethod
     def _build_hallucination_guardrail(
         gspec: dict[str, Any],
         guardrail_name: str,
@@ -1031,6 +1079,9 @@ class ResourceLoader:
                             gspec["json_schema"], resource.name
                         )
                         result.append(guardrail_fn)
+                    elif gspec.get("type") == "pii":
+                        pii_fn = self._build_pii_guardrail(gspec, resource.name)
+                        result.append(pii_fn)
                     elif gspec.get("type") == "hallucination":
                         prompt = self._build_hallucination_guardrail(gspec, resource.name)
                         result.append(prompt)
@@ -1094,6 +1145,11 @@ class ResourceLoader:
                 task_kwargs["output_pydantic"] = pydantic_cls
         elif spec.get("output_json"):
             task_kwargs["output_json"] = spec["output_json"]
+
+        if spec.get("callback"):
+            callback_fn = self.import_callable(spec["callback"])
+            if callback_fn:
+                task_kwargs["callback"] = callback_fn
 
         guardrail_refs = list(spec.get("guardrails", []))
         if self._crew_guardrail_refs:

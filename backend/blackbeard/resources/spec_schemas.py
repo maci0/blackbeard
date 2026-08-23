@@ -455,6 +455,12 @@ GUARDRAIL_SCHEMA = {
             "enum": ["redact", "reject", "warn"],
             "default": "redact",
         },
+        "backend": {
+            "type": "string",
+            "enum": ["default", "presidio-nlp", "litellm"],
+            "default": "default",
+        },
+        "model": {"type": "string", "maxLength": 255},
         "hallucination_check": {
             "type": "string",
             "enum": ["factual_consistency", "source_grounding", "self_contradiction"],
