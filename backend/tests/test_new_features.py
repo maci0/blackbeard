@@ -259,15 +259,15 @@ class TestHITLSchemas:
 class TestHITLEndpoint:
     """Test the HITL respond endpoint."""
 
-    async def test_respond_to_running_execution(self, client, db_session):
-        """POST /executions/{id}/respond should record a HITL response."""
-        # Create a running execution
+    @staticmethod
+    def _make_execution(status: ExecutionStatus, *, outputs: dict | None = None) -> Execution:
+        """Build an Execution with defaults for HITL endpoint tests."""
         execution = Execution(
             id=uuid.uuid4(),
             crew_name="test-crew",
             crew_project="default",
             execution_type=ExecutionType.KICKOFF,
-            status=ExecutionStatus.RUNNING,
+            status=status,
             inputs={},
             total_tokens=0,
             prompt_tokens=0,
@@ -275,7 +275,16 @@ class TestHITLEndpoint:
             cost_usd=Decimal("0"),
             created_at=datetime.now(UTC),
             started_at=datetime.now(UTC),
+            outputs=outputs,
         )
+        if status in (ExecutionStatus.COMPLETED, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED):
+            execution.completed_at = datetime.now(UTC)
+        return execution
+
+    async def test_respond_to_running_execution(self, client, db_session):
+        """POST /executions/{id}/respond should record a HITL response."""
+        # Create a running execution
+        execution = self._make_execution(ExecutionStatus.RUNNING)
         db_session.add(execution)
         await db_session.commit()
 
@@ -314,20 +323,8 @@ class TestHITLEndpoint:
 
     async def test_respond_to_completed_execution(self, client, db_session):
         """POST /executions/{id}/respond should return 409 for terminal execution."""
-        execution = Execution(
-            id=uuid.uuid4(),
-            crew_name="test-crew",
-            crew_project="default",
-            execution_type=ExecutionType.KICKOFF,
-            status=ExecutionStatus.COMPLETED,
-            inputs={},
-            total_tokens=0,
-            prompt_tokens=0,
-            completion_tokens=0,
-            cost_usd=Decimal("0"),
-            created_at=datetime.now(UTC),
-            started_at=datetime.now(UTC),
-            completed_at=datetime.now(UTC),
+        execution = self._make_execution(
+            ExecutionStatus.COMPLETED,
             outputs={"raw": "done"},
         )
         db_session.add(execution)
@@ -342,20 +339,7 @@ class TestHITLEndpoint:
 
     async def test_respond_without_feedback(self, client, db_session):
         """HITL response without feedback should still work."""
-        execution = Execution(
-            id=uuid.uuid4(),
-            crew_name="test-crew",
-            crew_project="default",
-            execution_type=ExecutionType.KICKOFF,
-            status=ExecutionStatus.RUNNING,
-            inputs={},
-            total_tokens=0,
-            prompt_tokens=0,
-            completion_tokens=0,
-            cost_usd=Decimal("0"),
-            created_at=datetime.now(UTC),
-            started_at=datetime.now(UTC),
-        )
+        execution = self._make_execution(ExecutionStatus.RUNNING)
         db_session.add(execution)
         await db_session.commit()
 

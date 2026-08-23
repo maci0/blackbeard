@@ -98,6 +98,39 @@ def _minimal_snapshot(crew_name: str = "test-crew") -> dict[str, dict[str, Any]]
     }
 
 
+def _make_listener(
+    session: MagicMock | None = None,
+    execution_id: uuid.UUID | None = None,
+) -> tuple[Any, MagicMock]:
+    """Build a BlackbeardExecutionListener with a mocked sync-session factory and no OTEL tracer.
+
+    When ``session`` is given, the factory yields a context manager wrapping it.
+    Returns ``(listener, mock_factory)``.
+    """
+    from blackbeard.engine.execution_listener import BlackbeardExecutionListener
+
+    if session is not None:
+        session_ctx = MagicMock()
+        session_ctx.__enter__ = MagicMock(return_value=session)
+        session_ctx.__exit__ = MagicMock(return_value=False)
+        mock_factory: MagicMock = MagicMock(return_value=session_ctx)
+    else:
+        mock_factory = MagicMock()
+
+    with (
+        patch(
+            "blackbeard.engine.execution_listener._get_sync_session_factory",
+            return_value=mock_factory,
+        ),
+        patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
+    ):
+        listener = BlackbeardExecutionListener(
+            execution_id=execution_id or uuid.uuid4(),
+            db_url="postgresql+asyncpg://localhost/test",
+        )
+    return listener, mock_factory
+
+
 # ===========================================================================
 # 1. _run_crew_sync — main background thread entry point
 # ===========================================================================
@@ -837,26 +870,8 @@ class TestFlushBuffer:
     """Tests for BlackbeardExecutionListener._flush_buffer."""
 
     def test_flushes_events_to_db(self) -> None:
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-
-        eid = uuid.uuid4()
         mock_session = MagicMock()
-        mock_session_ctx = MagicMock()
-        mock_session_ctx.__enter__ = MagicMock(return_value=mock_session)
-        mock_session_ctx.__exit__ = MagicMock(return_value=False)
-        mock_factory = MagicMock(return_value=mock_session_ctx)
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            listener = BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
+        listener, _ = _make_listener(session=mock_session)
 
         # Put events in buffer
         event1 = MagicMock(spec=ExecutionEvent)
@@ -870,22 +885,7 @@ class TestFlushBuffer:
         assert listener._buffer == []
 
     def test_noop_when_buffer_empty(self) -> None:
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-
-        eid = uuid.uuid4()
-        mock_factory = MagicMock()
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            listener = BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
+        listener, mock_factory = _make_listener()
 
         listener._buffer = []
         listener._flush_buffer()
@@ -894,27 +894,9 @@ class TestFlushBuffer:
         mock_factory.assert_not_called()
 
     def test_requeues_events_on_db_error(self) -> None:
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-
-        eid = uuid.uuid4()
         mock_session = MagicMock()
         mock_session.commit.side_effect = RuntimeError("DB connection lost")
-        mock_session_ctx = MagicMock()
-        mock_session_ctx.__enter__ = MagicMock(return_value=mock_session)
-        mock_session_ctx.__exit__ = MagicMock(return_value=False)
-        mock_factory = MagicMock(return_value=mock_session_ctx)
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            listener = BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
+        listener, _ = _make_listener(session=mock_session)
 
         event = MagicMock(spec=ExecutionEvent)
         event.sequence = 0
@@ -942,26 +924,8 @@ class TestFlush:
     """Tests for BlackbeardExecutionListener.flush."""
 
     def test_cancels_timer_and_flushes(self) -> None:
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-
-        eid = uuid.uuid4()
         mock_session = MagicMock()
-        mock_session_ctx = MagicMock()
-        mock_session_ctx.__enter__ = MagicMock(return_value=mock_session)
-        mock_session_ctx.__exit__ = MagicMock(return_value=False)
-        mock_factory = MagicMock(return_value=mock_session_ctx)
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            listener = BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
+        listener, _ = _make_listener(session=mock_session)
 
         # Set up a mock timer
         mock_timer = MagicMock()
@@ -980,26 +944,7 @@ class TestFlush:
         mock_session.add_all.assert_called()
 
     def test_flush_with_no_timer(self) -> None:
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-
-        eid = uuid.uuid4()
-        mock_session = MagicMock()
-        mock_session_ctx = MagicMock()
-        mock_session_ctx.__enter__ = MagicMock(return_value=mock_session)
-        mock_session_ctx.__exit__ = MagicMock(return_value=False)
-        mock_factory = MagicMock(return_value=mock_session_ctx)
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            listener = BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
+        listener, mock_factory = _make_listener()
 
         listener._flush_timer = None
         listener._buffer = []
@@ -1018,22 +963,7 @@ class TestSetupListeners:
     """Tests for BlackbeardExecutionListener.setup_listeners."""
 
     def test_registers_all_event_handlers(self) -> None:
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-
-        eid = uuid.uuid4()
-        mock_factory = MagicMock()
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            listener = BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
+        listener, _ = _make_listener()
 
         mock_bus = MagicMock()
         # Mock the .on() decorator to capture event types
@@ -1074,26 +1004,9 @@ class TestSetupListeners:
 class TestListenerClose:
     """Tests for BlackbeardExecutionListener.close() bus teardown."""
 
-    def _make_listener(self) -> Any:
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-
-        eid = uuid.uuid4()
-        mock_factory = MagicMock()
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            return BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
-
     def test_close_unregisters_all_handlers(self) -> None:
-        listener = self._make_listener()
+        listener, _ = _make_listener()
+
         mock_bus = MagicMock()
         handlers: dict[type, Any] = {}
 
@@ -1120,7 +1033,7 @@ class TestListenerClose:
         assert {evt for evt, _ in unregistered} == set(handlers)
 
     def test_close_is_idempotent(self) -> None:
-        listener = self._make_listener()
+        listener, _ = _make_listener()
         mock_bus = MagicMock()
 
         def fake_on(event_type):
@@ -1137,7 +1050,7 @@ class TestListenerClose:
         assert mock_bus.off.call_count == 8
 
     def test_close_swallows_unregister_errors(self) -> None:
-        listener = self._make_listener()
+        listener, _ = _make_listener()
         mock_bus = MagicMock()
 
         def fake_on(event_type):
@@ -1165,22 +1078,7 @@ class TestWriteEvent:
     """Tests for BlackbeardExecutionListener._write_event."""
 
     def test_increments_sequence_counter(self) -> None:
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-
-        eid = uuid.uuid4()
-        mock_factory = MagicMock()
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            listener = BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
+        listener, _ = _make_listener()
 
         with patch.object(listener, "_dispatch_webhook"), patch.object(listener, "_schedule_flush"):
             listener._write_event("test_event", {"key": "value1"})
@@ -1192,26 +1090,7 @@ class TestWriteEvent:
         assert listener._buffer[1].sequence == 1
 
     def test_triggers_flush_when_buffer_full(self) -> None:
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-
-        eid = uuid.uuid4()
-        mock_session = MagicMock()
-        mock_session_ctx = MagicMock()
-        mock_session_ctx.__enter__ = MagicMock(return_value=mock_session)
-        mock_session_ctx.__exit__ = MagicMock(return_value=False)
-        mock_factory = MagicMock(return_value=mock_session_ctx)
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            listener = BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
+        listener, _ = _make_listener()
 
         with (
             patch.object(listener, "_dispatch_webhook"),
@@ -1228,22 +1107,8 @@ class TestWriteEvent:
         mock_flush.assert_called_once()
 
     def test_buffers_event_with_correct_data(self) -> None:
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-
         eid = uuid.uuid4()
-        mock_factory = MagicMock()
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            listener = BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
+        listener, _ = _make_listener(execution_id=eid)
 
         with patch.object(listener, "_dispatch_webhook"), patch.object(listener, "_schedule_flush"):
             listener._write_event("crew_started", {"crew_name": "test-crew"})
@@ -1809,30 +1674,11 @@ class TestRenumberEvents:
     """Tests for BlackbeardExecutionListener._renumber_events."""
 
     def test_renumbers_from_db_max(self) -> None:
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-
-        eid = uuid.uuid4()
-
         mock_result = MagicMock()
         mock_result.scalar.return_value = 5  # max sequence in DB is 5
         mock_session = MagicMock()
         mock_session.execute.return_value = mock_result
-        mock_session_ctx = MagicMock()
-        mock_session_ctx.__enter__ = MagicMock(return_value=mock_session)
-        mock_session_ctx.__exit__ = MagicMock(return_value=False)
-        mock_factory = MagicMock(return_value=mock_session_ctx)
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            listener = BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
+        listener, _ = _make_listener(session=mock_session)
 
         events = [MagicMock(spec=ExecutionEvent), MagicMock(spec=ExecutionEvent)]
         events[0].sequence = 0
@@ -1846,28 +1692,9 @@ class TestRenumberEvents:
         assert listener._seq == 8
 
     def test_falls_back_to_local_counter_on_db_failure(self) -> None:
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-
-        eid = uuid.uuid4()
-
         mock_session = MagicMock()
         mock_session.execute.side_effect = RuntimeError("DB down")
-        mock_session_ctx = MagicMock()
-        mock_session_ctx.__enter__ = MagicMock(return_value=mock_session)
-        mock_session_ctx.__exit__ = MagicMock(return_value=False)
-        mock_factory = MagicMock(return_value=mock_session_ctx)
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            listener = BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
+        listener, _ = _make_listener(session=mock_session)
 
         listener._seq = 10
         events = [MagicMock(spec=ExecutionEvent)]
@@ -1927,22 +1754,7 @@ class TestDispatchWebhook:
     """Tests for BlackbeardExecutionListener._dispatch_webhook."""
 
     def test_dispatches_to_matching_targets(self) -> None:
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
-
-        eid = uuid.uuid4()
-        mock_factory = MagicMock()
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            listener = BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
+        listener, _ = _make_listener()
 
         mock_wh = MagicMock()
         mock_executor = MagicMock()
@@ -1966,22 +1778,8 @@ class TestDispatchWebhook:
 
     def test_skips_when_cache_empty(self) -> None:
         import blackbeard.engine.execution_listener as mod
-        from blackbeard.engine.execution_listener import BlackbeardExecutionListener
 
-        eid = uuid.uuid4()
-        mock_factory = MagicMock()
-
-        with (
-            patch(
-                "blackbeard.engine.execution_listener._get_sync_session_factory",
-                return_value=mock_factory,
-            ),
-            patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
-        ):
-            listener = BlackbeardExecutionListener(
-                execution_id=eid,
-                db_url="postgresql+asyncpg://localhost/test",
-            )
+        listener, _ = _make_listener()
 
         original_cache = mod._webhook_cache_entry
         try:

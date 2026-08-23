@@ -370,7 +370,7 @@ async def wait_for_bg_engine_dispose(timeout: float = 10.0) -> None:
     _bg_dispose_task = None
     if task is None or task.done():
         return
-    done, pending = await asyncio.wait({task}, timeout=timeout)
+    _, pending = await asyncio.wait({task}, timeout=timeout)
     if pending:
         logger.warning(
             "Background DB engine dispose did not finish within %.0fs",

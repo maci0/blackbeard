@@ -635,9 +635,7 @@ class ResourceLoader:
         return [
             tool
             for tool in tools
-            if not self._policy_denies_tool(
-                getattr(tool, "name", str(tool)), policy, agent_name
-            )
+            if not self._policy_denies_tool(getattr(tool, "name", str(tool)), policy, agent_name)
         ]
 
     def build_agent(self, ref_or_name: str) -> Agent:

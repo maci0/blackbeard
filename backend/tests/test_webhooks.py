@@ -61,6 +61,41 @@ def _make_webhook(
     return wh
 
 
+def _deliver(
+    client: MagicMock,
+    webhooks: list[MagicMock],
+    *,
+    event_type: str,
+    data: dict,
+    execution_id: str,
+) -> None:
+    """Run _deliver_webhooks_sync against a mocked DB (returning ``webhooks``) and HTTP client."""
+    mock_session = MagicMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value = webhooks
+    mock_session.__enter__ = MagicMock(return_value=mock_session)
+    mock_session.__exit__ = MagicMock(return_value=False)
+    mock_session.execute.return_value = mock_result
+    mock_factory = MagicMock(return_value=mock_session)
+
+    with (
+        patch(
+            "blackbeard.engine.execution_listener._get_sync_session_factory",
+            return_value=mock_factory,
+        ),
+        patch(
+            "blackbeard.engine.execution_listener.get_sync_client",
+            return_value=client,
+        ),
+    ):
+        _deliver_webhooks_sync(
+            event_type=event_type,
+            data=data,
+            execution_id=execution_id,
+            db_url="sqlite:///test.db",
+        )
+
+
 # ---------------------------------------------------------------------------
 # Tests -- HMAC signature correctness
 # ---------------------------------------------------------------------------
@@ -75,33 +110,15 @@ def test_webhook_hmac_signature_correct():
     mock_client = MagicMock()
     mock_client.post.return_value = mock_response
 
-    mock_session = MagicMock()
-    mock_result = MagicMock()
-    mock_result.scalars.return_value = [webhook]
-    mock_session.__enter__ = MagicMock(return_value=mock_session)
-    mock_session.__exit__ = MagicMock(return_value=False)
-    mock_session.execute.return_value = mock_result
-
-    mock_factory = MagicMock(return_value=mock_session)
-
     event_data = {"status": "completed", "output": "result"}
 
-    with (
-        patch(
-            "blackbeard.engine.execution_listener._get_sync_session_factory",
-            return_value=mock_factory,
-        ),
-        patch(
-            "blackbeard.engine.execution_listener.get_sync_client",
-            return_value=mock_client,
-        ),
-    ):
-        _deliver_webhooks_sync(
-            event_type="execution_completed",
-            data=event_data,
-            execution_id="exec-123",
-            db_url="sqlite:///test.db",
-        )
+    _deliver(
+        mock_client,
+        [webhook],
+        event_type="execution_completed",
+        data=event_data,
+        execution_id="exec-123",
+    )
 
     # Verify the POST was made with correct HMAC header
     mock_client.post.assert_called_once()
@@ -149,32 +166,14 @@ def test_webhook_event_filter_matches():
     mock_client = MagicMock()
     mock_client.post.return_value = mock_response
 
-    mock_session = MagicMock()
-    mock_result = MagicMock()
-    mock_result.scalars.return_value = [webhook]
-    mock_session.__enter__ = MagicMock(return_value=mock_session)
-    mock_session.__exit__ = MagicMock(return_value=False)
-    mock_session.execute.return_value = mock_result
-    mock_factory = MagicMock(return_value=mock_session)
-
-    with (
-        patch(
-            "blackbeard.engine.execution_listener._get_sync_session_factory",
-            return_value=mock_factory,
-        ),
-        patch(
-            "blackbeard.engine.execution_listener.get_sync_client",
-            return_value=mock_client,
-        ),
-    ):
-        _deliver_webhooks_sync(
-            event_type="execution_completed",
-            data={"status": "done"},
-            execution_id="exec-456",
-            db_url="sqlite:///test.db",
-        )
-
     # Should have been called since event matches filter
+    _deliver(
+        mock_client,
+        [webhook],
+        event_type="execution_completed",
+        data={"status": "done"},
+        execution_id="exec-456",
+    )
     mock_client.post.assert_called_once()
 
 
@@ -183,68 +182,29 @@ def test_webhook_event_filter_no_match():
     webhook = _make_webhook(events=["execution_completed"])
     mock_client = MagicMock()
 
-    mock_session = MagicMock()
-    mock_result = MagicMock()
-    mock_result.scalars.return_value = [webhook]
-    mock_session.__enter__ = MagicMock(return_value=mock_session)
-    mock_session.__exit__ = MagicMock(return_value=False)
-    mock_session.execute.return_value = mock_result
-    mock_factory = MagicMock(return_value=mock_session)
-
-    with (
-        patch(
-            "blackbeard.engine.execution_listener._get_sync_session_factory",
-            return_value=mock_factory,
-        ),
-        patch(
-            "blackbeard.engine.execution_listener.get_sync_client",
-            return_value=mock_client,
-        ),
-    ):
-        _deliver_webhooks_sync(
-            event_type="execution_started",  # not in filter
-            data={},
-            execution_id="exec-789",
-            db_url="sqlite:///test.db",
-        )
-
     # Should NOT have been called
+    _deliver(
+        mock_client,
+        [webhook],
+        event_type="execution_started",  # not in filter
+        data={},
+        execution_id="exec-789",
+    )
     mock_client.post.assert_not_called()
 
 
 def test_webhook_empty_events_receives_all():
     """Webhook with empty events list should receive all event types."""
     webhook = _make_webhook(events=[])
-    mock_response = MagicMock()
-    mock_response.status_code = 200
 
     mock_client = MagicMock()
-    mock_client.post.return_value = mock_response
-
-    mock_session = MagicMock()
-    mock_result = MagicMock()
-    mock_result.scalars.return_value = [webhook]
-    mock_session.__enter__ = MagicMock(return_value=mock_session)
-    mock_session.__exit__ = MagicMock(return_value=False)
-    mock_session.execute.return_value = mock_result
-    mock_factory = MagicMock(return_value=mock_session)
-
-    with (
-        patch(
-            "blackbeard.engine.execution_listener._get_sync_session_factory",
-            return_value=mock_factory,
-        ),
-        patch(
-            "blackbeard.engine.execution_listener.get_sync_client",
-            return_value=mock_client,
-        ),
-    ):
-        _deliver_webhooks_sync(
-            event_type="some_random_event",
-            data={},
-            execution_id="exec-000",
-            db_url="sqlite:///test.db",
-        )
+    _deliver(
+        mock_client,
+        [webhook],
+        event_type="some_random_event",
+        data={},
+        execution_id="exec-000",
+    )
 
     mock_client.post.assert_called_once()
 
@@ -263,33 +223,14 @@ def test_webhook_delivery_failure_doesnt_crash():
     mock_client = MagicMock()
     mock_client.post.return_value = mock_response
 
-    mock_session = MagicMock()
-    mock_result = MagicMock()
-    mock_result.scalars.return_value = [webhook]
-    mock_session.__enter__ = MagicMock(return_value=mock_session)
-    mock_session.__exit__ = MagicMock(return_value=False)
-    mock_session.execute.return_value = mock_result
-    mock_factory = MagicMock(return_value=mock_session)
-
-    with (
-        patch(
-            "blackbeard.engine.execution_listener._get_sync_session_factory",
-            return_value=mock_factory,
-        ),
-        patch(
-            "blackbeard.engine.execution_listener.get_sync_client",
-            return_value=mock_client,
-        ),
-    ):
-        # Should NOT raise
-        _deliver_webhooks_sync(
-            event_type="test_event",
-            data={},
-            execution_id="exec-err",
-            db_url="sqlite:///test.db",
-        )
-
-    # POST was attempted
+    # Should NOT raise; POST was attempted
+    _deliver(
+        mock_client,
+        [webhook],
+        event_type="test_event",
+        data={},
+        execution_id="exec-err",
+    )
     mock_client.post.assert_called_once()
 
 
@@ -300,31 +241,14 @@ def test_webhook_delivery_exception_doesnt_crash():
     mock_client = MagicMock()
     mock_client.post.side_effect = ConnectionError("Connection refused")
 
-    mock_session = MagicMock()
-    mock_result = MagicMock()
-    mock_result.scalars.return_value = [webhook]
-    mock_session.__enter__ = MagicMock(return_value=mock_session)
-    mock_session.__exit__ = MagicMock(return_value=False)
-    mock_session.execute.return_value = mock_result
-    mock_factory = MagicMock(return_value=mock_session)
-
-    with (
-        patch(
-            "blackbeard.engine.execution_listener._get_sync_session_factory",
-            return_value=mock_factory,
-        ),
-        patch(
-            "blackbeard.engine.execution_listener.get_sync_client",
-            return_value=mock_client,
-        ),
-    ):
-        # Should NOT raise
-        _deliver_webhooks_sync(
-            event_type="test_event",
-            data={},
-            execution_id="exec-net-err",
-            db_url="sqlite:///test.db",
-        )
+    # Should NOT raise
+    _deliver(
+        mock_client,
+        [webhook],
+        event_type="test_event",
+        data={},
+        execution_id="exec-net-err",
+    )
 
 
 def test_webhook_db_load_failure_doesnt_crash():
@@ -358,32 +282,14 @@ def test_webhook_no_webhooks_is_noop():
     """When no active webhooks exist, delivery should be a no-op."""
     mock_client = MagicMock()
 
-    mock_session = MagicMock()
-    mock_result = MagicMock()
-    mock_result.scalars.return_value = []
-    mock_session.__enter__ = MagicMock(return_value=mock_session)
-    mock_session.__exit__ = MagicMock(return_value=False)
-    mock_session.execute.return_value = mock_result
-    mock_factory = MagicMock(return_value=mock_session)
-
-    with (
-        patch(
-            "blackbeard.engine.execution_listener._get_sync_session_factory",
-            return_value=mock_factory,
-        ),
-        patch(
-            "blackbeard.engine.execution_listener.get_sync_client",
-            return_value=mock_client,
-        ),
-    ):
-        _deliver_webhooks_sync(
-            event_type="test_event",
-            data={},
-            execution_id="exec-no-wh",
-            db_url="sqlite:///test.db",
-        )
-
     # No HTTP calls should be made
+    _deliver(
+        mock_client,
+        [],
+        event_type="test_event",
+        data={},
+        execution_id="exec-no-wh",
+    )
     mock_client.post.assert_not_called()
 
 

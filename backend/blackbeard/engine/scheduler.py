@@ -12,7 +12,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from croniter import croniter  # type: ignore[import-untyped]
+from croniter import croniter
 from sqlalchemy import delete
 from sqlalchemy.exc import IntegrityError
 

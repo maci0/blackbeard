@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from blackbeard.engine.budget import derive_budget_and_pii
 from blackbeard.pii import redact_dict, redact_text, reset_engines
 
 # ---------------------------------------------------------------------------
@@ -339,9 +340,13 @@ class TestLLMPIIRecognizer:
 class TestGetPIIConfig:
     """Tests for PII config resolution from resource snapshots."""
 
-    def test_returns_none_when_no_pii_policy(self):
-        from blackbeard.engine.budget import derive_budget_and_pii as _derive
-
+    @staticmethod
+    def _snapshot(
+        crew_spec_extra: dict | None = None,
+        agent_spec_extra: dict | None = None,
+        policies: list[tuple[str, dict]] | None = None,
+    ) -> dict:
+        """Build a crew+agent snapshot with optional spec overrides and AgentPolicy resources."""
         snapshot = {
             "Crew/test-crew": {
                 "kind": "Crew",
@@ -351,6 +356,7 @@ class TestGetPIIConfig:
                     "process": "sequential",
                     "agents": ["ref:agents/researcher"],
                     "tasks": ["ref:tasks/research"],
+                    **(crew_spec_extra or {}),
                 },
             },
             "Agent/researcher": {
@@ -361,133 +367,70 @@ class TestGetPIIConfig:
                     "role": "Researcher",
                     "goal": "Research",
                     "backstory": "...",
+                    **(agent_spec_extra or {}),
                 },
             },
         }
-        assert _derive(snapshot, "test-crew")[2] is None
+        for name, policy_spec in policies or []:
+            snapshot[f"AgentPolicy/{name}"] = {
+                "kind": "AgentPolicy",
+                "name": name,
+                "project": "default",
+                "spec": policy_spec,
+            }
+        return snapshot
+
+    def test_returns_none_when_no_pii_policy(self):
+        snapshot = self._snapshot()
+        assert derive_budget_and_pii(snapshot, "test-crew")[2] is None
 
     def test_returns_pii_config_from_agent_policy(self):
-        from blackbeard.engine.budget import derive_budget_and_pii as _derive
-
-        snapshot = {
-            "Crew/test-crew": {
-                "kind": "Crew",
-                "name": "test-crew",
-                "project": "default",
-                "spec": {
-                    "process": "sequential",
-                    "agents": ["ref:agents/researcher"],
-                    "tasks": ["ref:tasks/research"],
-                },
-            },
-            "Agent/researcher": {
-                "kind": "Agent",
-                "name": "researcher",
-                "project": "default",
-                "spec": {
-                    "role": "Researcher",
-                    "goal": "Research",
-                    "backstory": "...",
-                    "policy": "ref:agent-policies/strict",
-                },
-            },
-            "AgentPolicy/strict": {
-                "kind": "AgentPolicy",
-                "name": "strict",
-                "project": "default",
-                "spec": {
-                    "pii": {
-                        "enabled": True,
-                        "backend": "default",
-                        "entities": ["EMAIL_ADDRESS"],
+        snapshot = self._snapshot(
+            agent_spec_extra={"policy": "ref:agent-policies/strict"},
+            policies=[
+                (
+                    "strict",
+                    {
+                        "pii": {
+                            "enabled": True,
+                            "backend": "default",
+                            "entities": ["EMAIL_ADDRESS"],
+                        },
                     },
-                },
-            },
-        }
-        config = _derive(snapshot, "test-crew")[2]
+                )
+            ],
+        )
+        config = derive_budget_and_pii(snapshot, "test-crew")[2]
         assert config is not None
         assert config["enabled"] is True
         assert config["entities"] == ["EMAIL_ADDRESS"]
 
     def test_returns_none_when_pii_disabled(self):
-        from blackbeard.engine.budget import derive_budget_and_pii as _derive
-
-        snapshot = {
-            "Crew/test-crew": {
-                "kind": "Crew",
-                "name": "test-crew",
-                "project": "default",
-                "spec": {
-                    "process": "sequential",
-                    "agents": ["ref:agents/researcher"],
-                    "tasks": ["ref:tasks/research"],
-                },
-            },
-            "Agent/researcher": {
-                "kind": "Agent",
-                "name": "researcher",
-                "project": "default",
-                "spec": {
-                    "role": "Researcher",
-                    "goal": "Research",
-                    "backstory": "...",
-                    "policy": "ref:agent-policies/relaxed",
-                },
-            },
-            "AgentPolicy/relaxed": {
-                "kind": "AgentPolicy",
-                "name": "relaxed",
-                "project": "default",
-                "spec": {
-                    "pii": {
-                        "enabled": False,
-                    },
-                },
-            },
-        }
-        assert _derive(snapshot, "test-crew")[2] is None
+        snapshot = self._snapshot(
+            agent_spec_extra={"policy": "ref:agent-policies/relaxed"},
+            policies=[("relaxed", {"pii": {"enabled": False}})],
+        )
+        assert derive_budget_and_pii(snapshot, "test-crew")[2] is None
 
     def test_returns_pii_from_crew_default_policy(self):
-        from blackbeard.engine.budget import derive_budget_and_pii as _derive
-
-        snapshot = {
-            "Crew/test-crew": {
-                "kind": "Crew",
-                "name": "test-crew",
-                "project": "default",
-                "spec": {
-                    "process": "sequential",
-                    "agents": ["ref:agents/researcher"],
-                    "tasks": ["ref:tasks/research"],
-                    "default_agent_policy": "ref:agent-policies/default-pii",
-                },
-            },
-            "Agent/researcher": {
-                "kind": "Agent",
-                "name": "researcher",
-                "project": "default",
-                "spec": {
-                    "role": "Researcher",
-                    "goal": "Research",
-                    "backstory": "...",
-                },
-            },
-            "AgentPolicy/default-pii": {
-                "kind": "AgentPolicy",
-                "name": "default-pii",
-                "project": "default",
-                "spec": {
-                    "pii": {
-                        "enabled": True,
-                        "backend": "litellm",
-                        "model": "ollama/gliner-pii",
-                        "redact_outputs": True,
-                        "redact_events": False,
+        snapshot = self._snapshot(
+            crew_spec_extra={"default_agent_policy": "ref:agent-policies/default-pii"},
+            policies=[
+                (
+                    "default-pii",
+                    {
+                        "pii": {
+                            "enabled": True,
+                            "backend": "litellm",
+                            "model": "ollama/gliner-pii",
+                            "redact_outputs": True,
+                            "redact_events": False,
+                        },
                     },
-                },
-            },
-        }
-        config = _derive(snapshot, "test-crew")[2]
+                )
+            ],
+        )
+        config = derive_budget_and_pii(snapshot, "test-crew")[2]
         assert config is not None
         assert config["backend"] == "litellm"
         assert config["redact_events"] is False

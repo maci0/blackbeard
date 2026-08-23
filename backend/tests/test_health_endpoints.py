@@ -9,9 +9,35 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 
 from tests.conftest import API_KEY_HEADER
+
+_VALKEY_UP = {"status": "up", "latency_ms": 1.0}
+_LITELLM_UP = {"status": "up", "latency_ms": 2.0}
+_CHECK_DOWN = {"status": "down", "reason": "connection_failed", "latency_ms": 5.0}
+
+
+async def _ready(
+    client: AsyncClient,
+    valkey: dict,
+    litellm: dict,
+) -> Response:
+    """GET /health/ready with the Valkey/LiteLLM dependency checks mocked."""
+    with (
+        patch(
+            "blackbeard.api.health._check_valkey",
+            new_callable=AsyncMock,
+            return_value=valkey,
+        ),
+        patch(
+            "blackbeard.api.health._check_litellm",
+            new_callable=AsyncMock,
+            return_value=litellm,
+        ),
+    ):
+        return await client.get("/api/v1/health/ready", headers=API_KEY_HEADER)
+
 
 # ---------------------------------------------------------------------------
 # GET /health (liveness)
@@ -83,19 +109,7 @@ async def test_metrics_exposes_red_series(client: AsyncClient):
 
 async def test_readiness_healthy(client: AsyncClient):
     """GET /health/ready returns healthy when all components are up."""
-    with (
-        patch(
-            "blackbeard.api.health._check_valkey",
-            new_callable=AsyncMock,
-            return_value={"status": "up", "latency_ms": 1.0},
-        ),
-        patch(
-            "blackbeard.api.health._check_litellm",
-            new_callable=AsyncMock,
-            return_value={"status": "up", "latency_ms": 2.0},
-        ),
-    ):
-        resp = await client.get("/api/v1/health/ready", headers=API_KEY_HEADER)
+    resp = await _ready(client, _VALKEY_UP, _LITELLM_UP)
 
     assert resp.status_code == 200
     data = resp.json()
@@ -110,19 +124,7 @@ async def test_readiness_healthy(client: AsyncClient):
 
 async def test_readiness_degraded_when_valkey_down(client: AsyncClient):
     """GET /health/ready returns degraded when Valkey is down (soft dependency)."""
-    with (
-        patch(
-            "blackbeard.api.health._check_valkey",
-            new_callable=AsyncMock,
-            return_value={"status": "down", "reason": "connection_failed", "latency_ms": 5.0},
-        ),
-        patch(
-            "blackbeard.api.health._check_litellm",
-            new_callable=AsyncMock,
-            return_value={"status": "up", "latency_ms": 2.0},
-        ),
-    ):
-        resp = await client.get("/api/v1/health/ready", headers=API_KEY_HEADER)
+    resp = await _ready(client, _CHECK_DOWN, _LITELLM_UP)
 
     assert resp.status_code == 200
     data = resp.json()
@@ -132,19 +134,7 @@ async def test_readiness_degraded_when_valkey_down(client: AsyncClient):
 
 async def test_readiness_degraded_when_litellm_down(client: AsyncClient):
     """GET /health/ready returns degraded when LiteLLM is down (soft dependency)."""
-    with (
-        patch(
-            "blackbeard.api.health._check_valkey",
-            new_callable=AsyncMock,
-            return_value={"status": "up", "latency_ms": 1.0},
-        ),
-        patch(
-            "blackbeard.api.health._check_litellm",
-            new_callable=AsyncMock,
-            return_value={"status": "down", "reason": "connection_failed", "latency_ms": 5.0},
-        ),
-    ):
-        resp = await client.get("/api/v1/health/ready", headers=API_KEY_HEADER)
+    resp = await _ready(client, _VALKEY_UP, _CHECK_DOWN)
 
     assert resp.status_code == 200
     data = resp.json()
@@ -154,19 +144,7 @@ async def test_readiness_degraded_when_litellm_down(client: AsyncClient):
 
 async def test_readiness_has_uptime(client: AsyncClient):
     """GET /health/ready response includes uptime_s."""
-    with (
-        patch(
-            "blackbeard.api.health._check_valkey",
-            new_callable=AsyncMock,
-            return_value={"status": "up", "latency_ms": 1.0},
-        ),
-        patch(
-            "blackbeard.api.health._check_litellm",
-            new_callable=AsyncMock,
-            return_value={"status": "up", "latency_ms": 2.0},
-        ),
-    ):
-        resp = await client.get("/api/v1/health/ready", headers=API_KEY_HEADER)
+    resp = await _ready(client, _VALKEY_UP, _LITELLM_UP)
 
     assert resp.status_code == 200
     data = resp.json()
@@ -176,19 +154,7 @@ async def test_readiness_has_uptime(client: AsyncClient):
 
 async def test_readiness_no_cache_header(client: AsyncClient):
     """GET /health/ready response includes Cache-Control: no-cache."""
-    with (
-        patch(
-            "blackbeard.api.health._check_valkey",
-            new_callable=AsyncMock,
-            return_value={"status": "up", "latency_ms": 1.0},
-        ),
-        patch(
-            "blackbeard.api.health._check_litellm",
-            new_callable=AsyncMock,
-            return_value={"status": "up", "latency_ms": 2.0},
-        ),
-    ):
-        resp = await client.get("/api/v1/health/ready", headers=API_KEY_HEADER)
+    resp = await _ready(client, _VALKEY_UP, _LITELLM_UP)
 
     assert resp.status_code == 200
     cache_ctrl = resp.headers.get("cache-control", "")
@@ -197,19 +163,7 @@ async def test_readiness_no_cache_header(client: AsyncClient):
 
 async def test_readiness_executor_check(client: AsyncClient):
     """GET /health/ready includes executor pool status."""
-    with (
-        patch(
-            "blackbeard.api.health._check_valkey",
-            new_callable=AsyncMock,
-            return_value={"status": "up", "latency_ms": 1.0},
-        ),
-        patch(
-            "blackbeard.api.health._check_litellm",
-            new_callable=AsyncMock,
-            return_value={"status": "up", "latency_ms": 2.0},
-        ),
-    ):
-        resp = await client.get("/api/v1/health/ready", headers=API_KEY_HEADER)
+    resp = await _ready(client, _VALKEY_UP, _LITELLM_UP)
 
     assert resp.status_code == 200
     data = resp.json()
@@ -221,19 +175,7 @@ async def test_readiness_executor_check(client: AsyncClient):
 
 async def test_readiness_database_check(client: AsyncClient):
     """GET /health/ready database check reports up with in-memory SQLite."""
-    with (
-        patch(
-            "blackbeard.api.health._check_valkey",
-            new_callable=AsyncMock,
-            return_value={"status": "up", "latency_ms": 1.0},
-        ),
-        patch(
-            "blackbeard.api.health._check_litellm",
-            new_callable=AsyncMock,
-            return_value={"status": "up", "latency_ms": 2.0},
-        ),
-    ):
-        resp = await client.get("/api/v1/health/ready", headers=API_KEY_HEADER)
+    resp = await _ready(client, _VALKEY_UP, _LITELLM_UP)
 
     assert resp.status_code == 200
     data = resp.json()
@@ -243,19 +185,7 @@ async def test_readiness_database_check(client: AsyncClient):
 
 async def test_readiness_both_soft_deps_down(client: AsyncClient):
     """GET /health/ready returns degraded when both Valkey and LiteLLM are down."""
-    with (
-        patch(
-            "blackbeard.api.health._check_valkey",
-            new_callable=AsyncMock,
-            return_value={"status": "down", "reason": "connection_failed", "latency_ms": 5.0},
-        ),
-        patch(
-            "blackbeard.api.health._check_litellm",
-            new_callable=AsyncMock,
-            return_value={"status": "down", "reason": "connection_failed", "latency_ms": 5.0},
-        ),
-    ):
-        resp = await client.get("/api/v1/health/ready", headers=API_KEY_HEADER)
+    resp = await _ready(client, _CHECK_DOWN, _CHECK_DOWN)
 
     assert resp.status_code == 200
     data = resp.json()
