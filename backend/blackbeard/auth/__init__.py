@@ -14,6 +14,7 @@ from __future__ import annotations
 from blackbeard.auth.api_key import get_api_key, set_api_key, verify_system_api_key
 from blackbeard.auth.authorizer import Authorizer
 from blackbeard.auth.dependencies import (
+    SSE_STREAM_RE,
     bearer_401,
     check_resource_permission,
     get_current_user,
@@ -31,6 +32,7 @@ from blackbeard.auth.jwt import (
 from blackbeard.auth.passwords import hash_password, secrets_equal, verify_password
 
 __all__ = [
+    "SSE_STREAM_RE",
     "Authorizer",
     "bearer_401",
     "check_resource_permission",

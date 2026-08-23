@@ -10,6 +10,10 @@ users, webhooks. Cross-cutting: ``middleware``.
 
 Keep domain logic out of this package; call into ``engine``, ``resources``,
 ``auth``, and ``models`` instead.
+
+This module must never import a sibling router or middleware module: many
+routers import these helpers via ``from blackbeard.api import ...``, so any
+eager sibling import here creates an import cycle across the whole package.
 """
 
 from __future__ import annotations

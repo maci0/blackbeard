@@ -17,8 +17,7 @@ if TYPE_CHECKING:
     from starlette.middleware.base import RequestResponseEndpoint
 
 from blackbeard.audit import get_client_ip
-from blackbeard.auth import decode_access_token, verify_system_api_key
-from blackbeard.auth.dependencies import SSE_STREAM_RE
+from blackbeard.auth import SSE_STREAM_RE, decode_access_token, verify_system_api_key
 from blackbeard.config import settings
 from blackbeard.logging_config import (
     SENSITIVE_KEYS,
