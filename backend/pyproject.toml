@@ -9,6 +9,7 @@ description = "Open, self-hosted Agent Management Platform wrapping CrewAI"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.136,<1",
+    "starlette>=1.3.1,<2",  # imported directly (middleware, OIDC, health); floor: PYSEC-2026-248/249
     "uvicorn[standard]>=0.34,<1",
     "sqlalchemy[asyncio]>=2.0,<3",
     "asyncpg>=0.30,<1",
@@ -38,7 +39,6 @@ dependencies = [
 [tool.uv]
 constraint-dependencies = [
     "pillow>=12.3.0",  # PYSEC-2026-2253..2257, 3451..3454, 3493..3496 (transitive via crewai)
-    "starlette>=1.3.1",  # PYSEC-2026-248, PYSEC-2026-249 (transitive via fastapi)
     "aiohttp>=3.14.3",  # GHSA-cq5v-8q36-5273 / mq44-7p77 / mfx4-hv73 (transitive)
     "cryptography>=50.0.0",  # GHSA-g6cj-pr64-35w5 and related (transitive via joserfc/authlib)
     "msgpack>=1.2.1",  # GHSA-6v7p-g79w-8964 (transitive)
@@ -68,6 +68,7 @@ dev = [
     "pip-audit>=2.9,<3",
     "hypothesis>=6.100,<7",
     "bandit[toml]>=1.8,<2",
+    "pytest-timeout>=2.3,<3",
 ]
 temporal = [
     "temporalio>=1.9,<2",
@@ -134,9 +135,4 @@ testpaths = ["tests"]
 # jobs do not sit until the full job timeout.
 timeout = 120
 timeout_method = "thread"
-
-[dependency-groups]
-dev = [
-    "pytest-timeout>=2.3,<3",
-]
 
