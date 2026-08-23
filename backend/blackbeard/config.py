@@ -40,7 +40,6 @@ class Settings(BaseSettings):
 
     google_cloud_project: str = ""
     cloud_ml_region: str = "us-east5"
-    google_application_credentials: str = ""
 
     jwt_secret: SecretStr = SecretStr("change-jwt-secret-in-production!")
     jwt_access_token_expire_minutes: int = Field(default=15, ge=1)
@@ -69,12 +68,6 @@ class Settings(BaseSettings):
     container_default_image: str = "python:3.13-slim"
     container_timeout: int = Field(default=30, ge=1)
     container_memory_limit: str = "256m"
-
-    # gVisor sandbox settings
-    gvisor_enabled: bool = False
-
-    # MicroVM sandbox settings (requires crun-krun + /dev/kvm)
-    microvm_enabled: bool = False
 
     # Firecracker MicroVM settings (alternative to libkrun for microvm tier)
     # Requires: firecracker binary, kernel image, rootfs image, /dev/kvm
