@@ -6,6 +6,8 @@ Handles auto-refresh of expired access tokens using the refresh token.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import logging
 import os
@@ -18,8 +20,34 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# 15 min token minus 60s safety margin to refresh before expiry.
+# Fallback access-token lifetime (15 min minus 60s safety margin), used only
+# when the token's own ``exp`` claim cannot be read.
 ACCESS_TOKEN_LIFETIME_S = 840
+
+# Stop treating an access token as valid this many seconds before its
+# actual ``exp`` so the refresh round-trip completes in time.
+_REFRESH_MARGIN_S = 60
+
+
+def _access_token_expiry(access_token: str) -> float:
+    """Return when the access token stops being usable, as epoch seconds.
+
+    Reads the authoritative ``exp`` claim from the JWT payload (no signature
+    check needed: we are only scheduling our own refresh) instead of assuming
+    the server's token lifetime — a server configured with a shorter
+    ``JWT_ACCESS_TOKEN_EXPIRE_MINUTES`` would otherwise leave the CLI using
+    expired tokens. Falls back to the default lifetime when the payload
+    cannot be parsed.
+    """
+    try:
+        payload_b64 = access_token.split(".")[1]
+        padded = payload_b64 + "=" * (-len(payload_b64) % 4)
+        claims: dict[str, Any] = json.loads(base64.urlsafe_b64decode(padded))
+        return float(claims["exp"]) - _REFRESH_MARGIN_S
+    except (IndexError, KeyError, TypeError, ValueError, binascii.Error):
+        logger.debug("Could not read exp claim from access token — using default lifetime")
+        return time.time() + ACCESS_TOKEN_LIFETIME_S
+
 
 _CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")) / "blackbeard"
 _CREDENTIALS_FILE = _CONFIG_DIR / "credentials.json"
@@ -106,7 +134,7 @@ def _refresh_token(server: str, refresh_token: str, timeout: float) -> StoredCre
             # new one or the session hard-dies 7 days after initial login.
             refresh_token=data.get("refresh_token") or refresh_token,
             email="",
-            expires_at=time.time() + ACCESS_TOKEN_LIFETIME_S,
+            expires_at=_access_token_expiry(data["access_token"]),
         )
     except (httpx.RequestError, KeyError, TypeError, ValueError):
         logger.debug("Token refresh failed", exc_info=True)

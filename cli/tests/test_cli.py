@@ -6,6 +6,7 @@ to a server are tested with error-path assertions (e.g. connection refused).
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import os
@@ -652,6 +653,62 @@ def test_credentials_clear(tmp_path):
     finally:
         creds_mod._CREDENTIALS_FILE = original_file
         creds_mod._CONFIG_DIR = original_dir
+
+
+# ---------------------------------------------------------------------------
+# Access-token expiry derivation (JWT exp claim)
+# ---------------------------------------------------------------------------
+
+
+def _make_jwt(payload: dict) -> str:
+    """Build an unsigned three-part JWT with base64url-encoded JSON payload."""
+
+    def b64(part: dict) -> str:
+        raw = json.dumps(part).encode()
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    return f"{b64({'alg': 'HS256'})}.{b64(payload)}.signature"
+
+
+def test_access_token_expiry_reads_exp_claim():
+    """Expiry comes from the token's exp minus the refresh margin, not a guess."""
+    import time as time_mod
+
+    from blackbeard_cli.credentials import _REFRESH_MARGIN_S, _access_token_expiry
+
+    exp = time_mod.time() + 900
+    token = _make_jwt({"sub": "u1", "exp": exp})
+    assert _access_token_expiry(token) == pytest.approx(exp - _REFRESH_MARGIN_S)
+
+
+def test_access_token_expiry_shorter_than_default_lifetime():
+    """A server-configured short lifetime is honored instead of assumed 15 min."""
+    import time as time_mod
+
+    from blackbeard_cli.credentials import (
+        _REFRESH_MARGIN_S,
+        ACCESS_TOKEN_LIFETIME_S,
+        _access_token_expiry,
+    )
+
+    now = time_mod.time()
+    token = _make_jwt({"exp": now + 300})
+    expiry = _access_token_expiry(token)
+    assert expiry == pytest.approx(now + 300 - _REFRESH_MARGIN_S)
+    # Old heuristic (now + 840) would have kept using a long-expired token.
+    assert expiry < now + ACCESS_TOKEN_LIFETIME_S
+
+
+def test_access_token_expiry_malformed_token_falls_back():
+    """Unparseable tokens fall back to the default lifetime heuristic."""
+    import time as time_mod
+
+    from blackbeard_cli.credentials import ACCESS_TOKEN_LIFETIME_S, _access_token_expiry
+
+    now = time_mod.time()
+    for bad in ["", "not-a-jwt", "a.b.c", "a.!.c", _make_jwt({"sub": "u1"})]:
+        expiry = _access_token_expiry(bad)
+        assert now + ACCESS_TOKEN_LIFETIME_S - 5 <= expiry <= now + ACCESS_TOKEN_LIFETIME_S + 5
 
 
 # ---------------------------------------------------------------------------

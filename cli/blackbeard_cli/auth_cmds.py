@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from urllib.parse import urlparse
 
 import click
@@ -11,7 +10,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from blackbeard_cli.credentials import (
-    ACCESS_TOKEN_LIFETIME_S,
+    _access_token_expiry,
     clear_credentials,
     load_credentials,
     save_credentials,
@@ -107,7 +106,7 @@ def login(ctx: click.Context, email: str | None, password: str | None) -> None:
         access_token=data["access_token"],
         refresh_token=data["refresh_token"],
         email=email,
-        expires_at=time.time() + ACCESS_TOKEN_LIFETIME_S,
+        expires_at=_access_token_expiry(data["access_token"]),
     )
 
     if ctx.obj["json"]:
@@ -279,7 +278,7 @@ def register(
         access_token=data["access_token"],
         refresh_token=data["refresh_token"],
         email=email,
-        expires_at=time.time() + ACCESS_TOKEN_LIFETIME_S,
+        expires_at=_access_token_expiry(data["access_token"]),
     )
 
     if ctx.obj["json"]:
