@@ -200,14 +200,45 @@ async def test_get_user_not_found(client: AsyncClient):
     assert resp.status_code == 404
 
 
-async def test_deactivate_self(client: AsyncClient):
-    """DELETE /users/{id} deactivates the calling user."""
+async def test_deactivate_self(client: AsyncClient, db_session):
+    """DELETE /users/{id} deactivates the caller and erases their stored identity."""
+    import uuid
+
+    from sqlalchemy import select
+
+    from blackbeard.models.audit import AuditLog
+    from blackbeard.models.user import User
+
     data = await _register_user(client, email=_DEP_EMAIL)
     user_id = data["user"]["id"]
     token = data["access_token"]
 
     resp = await client.delete(f"/api/v1/users/{user_id}", headers=_bearer(token))
     assert resp.status_code == 204
+
+    user = (
+        await db_session.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    ).scalar_one()
+    assert user.is_active is False
+    assert user.api_key is None
+    # Email is replaced by an anonymized address; the original must not survive.
+    assert user.email != _DEP_EMAIL
+    assert user.email.startswith(f"deleted-{user_id}@deactivated.local")
+
+    # Historical audit entries written under this identity are scrubbed.
+    audits = (
+        (await db_session.execute(select(AuditLog).where(AuditLog.actor_id == str(user.id))))
+        .scalars()
+        .all()
+    )
+    assert audits, "expected at least the registration audit entry"
+    for entry in audits:
+        if entry.action != "user_deactivated":
+            assert entry.actor_email is None, f"{entry.action} kept actor_email"
+
+    # The original identity can no longer authenticate.
+    resp = await client.post("/auth/login", json={"email": _DEP_EMAIL, "password": "securepass123"})
+    assert resp.status_code == 401
 
 
 # ---------------------------------------------------------------------------

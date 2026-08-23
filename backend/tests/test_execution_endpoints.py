@@ -9,11 +9,15 @@ executor unit tests already cover that layer.
 
 from __future__ import annotations
 
+import contextlib
+import json
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from httpx import AsyncClient
 
 from tests.conftest import API_KEY_HEADER
@@ -691,6 +695,172 @@ async def test_hitl_respond_terminal_status(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
+# POST /executions/{id}/retry
+# ---------------------------------------------------------------------------
+
+
+async def test_retry_kickoff_success(client: AsyncClient):
+    """POST /executions/{id}/retry for a failed kickoff creates a new queued execution."""
+    original = _make_mock_execution(status="failed", execution_type="kickoff")
+    original.inputs = {"topic": "AI"}
+    new_exec = _make_mock_execution(status="queued")
+
+    with (
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution",
+            new_callable=AsyncMock,
+            return_value=original,
+        ),
+        patch(
+            "blackbeard.api.executions._executor_mod.kickoff",
+            new_callable=AsyncMock,
+            return_value=new_exec,
+        ) as mock_kickoff,
+    ):
+        resp = await client.post(f"/api/v1/executions/{original.id}/retry", headers=API_KEY_HEADER)
+
+    assert resp.status_code == 202
+    data = resp.json()
+    assert data["id"] == str(new_exec.id)
+    assert data["status"] == "queued"
+    assert resp.headers["location"] == f"/api/v1/executions/{new_exec.id}"
+    mock_kickoff.assert_awaited_once()
+    call_args = mock_kickoff.await_args
+    assert call_args.args[1] == "test-crew"
+    assert call_args.args[2] == {"topic": "AI"}
+    assert call_args.args[3] == "default"
+
+
+async def test_retry_not_found(client: AsyncClient):
+    """POST /executions/{id}/retry for missing execution returns 404."""
+    fake_id = str(uuid.uuid4())
+
+    with patch(
+        "blackbeard.api.executions._executor_mod.get_execution",
+        new_callable=AsyncMock,
+        return_value=None,
+    ):
+        resp = await client.post(f"/api/v1/executions/{fake_id}/retry", headers=API_KEY_HEADER)
+
+    assert resp.status_code == 404
+    assert "not found" in resp.json()["detail"].lower()
+
+
+async def test_retry_non_terminal_rejected(client: AsyncClient):
+    """POST /executions/{id}/retry for a running execution returns 409 without re-running."""
+    running = _make_mock_execution(status="running")
+
+    with (
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution",
+            new_callable=AsyncMock,
+            return_value=running,
+        ),
+        patch(
+            "blackbeard.api.executions._executor_mod.kickoff", new_callable=AsyncMock
+        ) as mock_kickoff,
+    ):
+        resp = await client.post(f"/api/v1/executions/{running.id}/retry", headers=API_KEY_HEADER)
+
+    assert resp.status_code == 409
+    assert "terminal" in resp.json()["detail"].lower()
+    mock_kickoff.assert_not_awaited()
+
+
+async def test_retry_rejects_redacted_inputs(client: AsyncClient):
+    """POST /executions/{id}/retry refuses to re-run with redacted placeholder inputs."""
+    failed = _make_mock_execution(status="failed")
+    failed.inputs = {"api_token": "[REDACTED]"}
+
+    with (
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution",
+            new_callable=AsyncMock,
+            return_value=failed,
+        ),
+        patch(
+            "blackbeard.api.executions._executor_mod.kickoff", new_callable=AsyncMock
+        ) as mock_kickoff,
+    ):
+        resp = await client.post(f"/api/v1/executions/{failed.id}/retry", headers=API_KEY_HEADER)
+
+    assert resp.status_code == 409
+    assert "redact" in resp.json()["detail"].lower()
+    mock_kickoff.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("exec_type", "executor_attr"),
+    [
+        ("kickoff", "kickoff"),
+        ("flow", "run_flow"),
+        ("train", "train_crew"),
+        ("test", "test_crew"),
+    ],
+)
+async def test_retry_dispatches_by_execution_type(client: AsyncClient, exec_type, executor_attr):
+    """Retry dispatches to the executor function matching the original execution type."""
+    original = _make_mock_execution(status="completed", execution_type=exec_type)
+    new_exec = _make_mock_execution(status="queued")
+
+    all_entry_points = ["kickoff", "run_flow", "train_crew", "test_crew"]
+    patches = {
+        name: patch(
+            f"blackbeard.api.executions._executor_mod.{name}",
+            new_callable=AsyncMock,
+        )
+        for name in all_entry_points
+    }
+
+    with (
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution",
+            new_callable=AsyncMock,
+            return_value=original,
+        ) as mock_get,
+        contextlib.ExitStack() as stack,
+    ):
+        mocks = {name: stack.enter_context(p) for name, p in patches.items()}
+        mocks[executor_attr].return_value = new_exec
+        resp = await client.post(f"/api/v1/executions/{original.id}/retry", headers=API_KEY_HEADER)
+
+    assert resp.status_code == 202, f"{exec_type}: {resp.status_code} {resp.text}"
+    assert resp.headers["location"] == f"/api/v1/executions/{new_exec.id}"
+    mock_get.assert_awaited_once()
+    for name, mock_fn in mocks.items():
+        if name == executor_attr:
+            mock_fn.assert_awaited_once()
+        else:
+            mock_fn.assert_not_awaited()
+
+
+async def test_retry_train_passes_iterations_and_file(client: AsyncClient):
+    """Retrying a train execution preserves n_iterations and training file."""
+    original = _make_mock_execution(status="failed", execution_type="train")
+    original.n_iterations = 7
+    original.training_file = "custom.pkl"
+
+    with (
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution",
+            new_callable=AsyncMock,
+            return_value=original,
+        ),
+        patch(
+            "blackbeard.api.executions._executor_mod.train_crew",
+            new_callable=AsyncMock,
+            return_value=_make_mock_execution(status="queued"),
+        ) as mock_train,
+    ):
+        resp = await client.post(f"/api/v1/executions/{original.id}/retry", headers=API_KEY_HEADER)
+
+    assert resp.status_code == 202
+    kwargs = mock_train.await_args.kwargs
+    assert kwargs["n_iterations"] == 7
+    assert kwargs["filename"] == "custom.pkl"
+
+
+# ---------------------------------------------------------------------------
 # GET /executions/{id}/spend
 # ---------------------------------------------------------------------------
 
@@ -795,3 +965,262 @@ async def test_train_rejects_non_pkl_filename(client: AsyncClient):
         headers=API_KEY_HEADER,
     )
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# _poll_execution — shared SSE/WS polling loop
+# ---------------------------------------------------------------------------
+
+
+@contextlib.contextmanager
+def _patch_poll_loop():
+    """Patch async_session and poll backoff so _poll_execution runs instantly.
+
+    Yields (mock_session, mock_ctx) where mock_ctx is the patched
+    async_session context manager; executor functions stay unpatched.
+    """
+    mock_session = AsyncMock()
+    with (
+        patch("blackbeard.api.executions.async_session") as mock_session_ctx,
+        patch("blackbeard.api.executions._poll_backoff", return_value=0),
+    ):
+        mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+        yield mock_session, mock_session_ctx
+
+
+async def _collect(execution_id):
+    from blackbeard.api.executions import _poll_execution
+
+    return [ev async for ev in _poll_execution(execution_id)]
+
+
+async def test_poll_execution_not_found_yields_error():
+    """Unknown execution id yields a single error event and stops."""
+    exec_id = uuid.uuid4()
+
+    with (
+        _patch_poll_loop(),
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+    ):
+        events = await _collect(exec_id)
+
+    assert len(events) == 1
+    assert events[0].kind == "error"
+    assert "not found" in str(events[0].data["detail"])
+
+
+async def test_poll_execution_terminal_immediately():
+    """Already-terminal execution: one status event, no heartbeat, no timeout."""
+    from blackbeard.models.execution import ExecutionStatus  # noqa: F401
+
+    completed = _make_mock_execution(status="completed")
+    exec_id = completed.id
+
+    with (
+        _patch_poll_loop(),
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution",
+            new_callable=AsyncMock,
+            return_value=completed,
+        ) as mock_get,
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution_status",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "blackbeard.api.executions._executor_mod.list_execution_events",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+    ):
+        events = await _collect(exec_id)
+
+    kinds = [ev.kind for ev in events]
+    assert kinds == ["status"]
+    assert events[0].data["status"] == "completed"
+    # First poll loads the full execution directly; status polling never runs.
+    mock_get.assert_awaited_once()
+
+
+async def test_poll_execution_heartbeats_then_final_status():
+    """Running execution yields heartbeats between polls and a final status on completion."""
+    from blackbeard.models.execution import ExecutionStatus
+
+    running = _make_mock_execution(status="running")
+    completed = _make_mock_execution(status="completed")
+    exec_id = running.id
+
+    with (
+        _patch_poll_loop(),
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution",
+            new_callable=AsyncMock,
+            side_effect=[running, completed],
+        ) as mock_get,
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution_status",
+            new_callable=AsyncMock,
+            side_effect=[ExecutionStatus.RUNNING, ExecutionStatus.COMPLETED],
+        ) as mock_status,
+        patch(
+            "blackbeard.api.executions._executor_mod.list_execution_events",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+    ):
+        events = await _collect(exec_id)
+
+    assert [ev.kind for ev in events] == ["status", "heartbeat", "status"]
+    assert events[0].data["status"] == "running"
+    assert events[-1].data["status"] == "completed"
+    # Heartbeat payload mirrors the unchanged status.
+    assert events[1].data == {"status": "running"}
+    assert mock_status.await_count == 2
+    assert mock_get.await_count == 2
+
+
+async def test_poll_execution_streams_new_events_with_sequence_cursor():
+    """New events are forwarded and the next fetch resumes after the last sequence."""
+    completed = _make_mock_execution(status="completed")
+    exec_id = completed.id
+
+    ev1 = SimpleNamespace(
+        sequence=5, timestamp=datetime.now(UTC), event_type="task_started", data={"step": 1}
+    )
+    ev2 = SimpleNamespace(
+        sequence=6, timestamp=datetime.now(UTC), event_type="task_output", data={"line": "x"}
+    )
+
+    with (
+        _patch_poll_loop(),
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution",
+            new_callable=AsyncMock,
+            return_value=completed,
+        ),
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution_status",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "blackbeard.api.executions._executor_mod.list_execution_events",
+            new_callable=AsyncMock,
+            return_value=[ev1, ev2],
+        ) as mock_list,
+    ):
+        events = await _collect(exec_id)
+
+    event_items = [ev for ev in events if ev.kind == "event"]
+    assert [ev.event_type for ev in event_items] == ["task_started", "task_output"]
+    assert event_items[0].data["sequence"] == 5
+    assert event_items[1].data["sequence"] == 6
+    assert isinstance(event_items[0].data["timestamp"], str)
+    # Cursor starts before the first event.
+    assert mock_list.await_args_list[0].kwargs["after"] == -1
+
+
+async def test_poll_execution_times_out_when_still_running(monkeypatch):
+    """Exhausting the poll budget yields a final timeout error event."""
+    from blackbeard.models.execution import ExecutionStatus
+
+    monkeypatch.setattr("blackbeard.api.executions._MAX_STREAM_POLLS", 3)
+
+    running = _make_mock_execution(status="running")
+    exec_id = running.id
+
+    with (
+        _patch_poll_loop(),
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution",
+            new_callable=AsyncMock,
+            return_value=running,
+        ) as mock_get,
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution_status",
+            new_callable=AsyncMock,
+            return_value=ExecutionStatus.RUNNING,
+        ),
+        patch(
+            "blackbeard.api.executions._executor_mod.list_execution_events",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+    ):
+        events = await _collect(exec_id)
+
+    assert mock_get.await_count == 1  # only the initial load re-fetches full row
+    assert events[0].kind == "status"
+    assert events[-1].kind == "timeout"
+    assert "timeout" in str(events[-1].data["detail"]).lower()
+
+
+async def test_poll_execution_disappearing_execution_yields_error():
+    """Execution deleted mid-stream yields an error instead of looping forever."""
+    running = _make_mock_execution(status="running")
+    exec_id = running.id
+
+    with (
+        _patch_poll_loop(),
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution",
+            new_callable=AsyncMock,
+            return_value=running,
+        ),
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution_status",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "blackbeard.api.executions._executor_mod.list_execution_events",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+    ):
+        events = await _collect(exec_id)
+
+    assert events[0].kind == "status"
+    assert events[-1].kind == "error"
+    assert "not found" in str(events[-1].data["detail"])
+
+
+async def test_poll_execution_redacts_sensitive_event_data():
+    """Event payloads forwarded to SSE/WS clients have sensitive values scrubbed."""
+    completed = _make_mock_execution(status="completed")
+    exec_id = completed.id
+
+    ev = SimpleNamespace(
+        sequence=0,
+        timestamp=datetime.now(UTC),
+        event_type="task_output",
+        data={"line": "step done", "password": "hunter2"},
+    )
+
+    with (
+        _patch_poll_loop(),
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution",
+            new_callable=AsyncMock,
+            return_value=completed,
+        ),
+        patch(
+            "blackbeard.api.executions._executor_mod.get_execution_status",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "blackbeard.api.executions._executor_mod.list_execution_events",
+            new_callable=AsyncMock,
+            return_value=[ev],
+        ),
+    ):
+        events = await _collect(exec_id)
+
+    payload = events[-1].data
+    assert payload["line"] == "step done"
+    assert payload["password"] == "[REDACTED]"
+    assert "hunter2" not in json.dumps(payload)
