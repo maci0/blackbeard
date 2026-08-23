@@ -44,6 +44,20 @@ export function formatDate(dateStr: string | null | undefined): string {
   return fmt.format(d)
 }
 
+/** Calendar date of *date* in the browser's timezone as YYYY-MM-DD.
+ *
+ * Use instead of `toISOString().slice(0, 10)` whenever a timestamp is grouped
+ * or labeled by day ("Today", weekday names): the ISO slice yields the UTC
+ * date, which shifts spend/counts onto the wrong bar and can drop late-day
+ * events entirely for users away from UTC.
+ */
+export function localDateKey(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export function getDuration(
   start: string | null | undefined,
   end: string | null | undefined,

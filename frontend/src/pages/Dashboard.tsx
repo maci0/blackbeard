@@ -21,7 +21,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { KindBadge } from '@/components/ui/KindBadge'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { getDuration, formatCost, formatCostZero, parseCost } from '@/lib/formatters'
+import { getDuration, formatCost, formatCostZero, parseCost, localDateKey } from '@/lib/formatters'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { PLURAL_TO_KIND } from '@/lib/kinds'
 import { cn } from '@/lib/utils'
@@ -390,7 +390,7 @@ const SpendOverTime = memo(function SpendOverTime({
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now)
       d.setDate(d.getDate() - i)
-      const dateStr = d.toISOString().slice(0, 10)
+      const dateStr = localDateKey(d)
       const dayLabel =
         i === 0
           ? 'Today'
@@ -403,7 +403,9 @@ const SpendOverTime = memo(function SpendOverTime({
     const daysByDate = new Map(days.map((d) => [d.date, d]))
     for (const e of executions) {
       if (!e.created_at) continue
-      const eDate = e.created_at.slice(0, 10)
+      const created = new Date(e.created_at)
+      if (isNaN(created.getTime())) continue
+      const eDate = localDateKey(created)
       const cost = parseCost(e.cost_usd)
       if (cost > 0) {
         const day = daysByDate.get(eDate)

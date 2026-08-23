@@ -682,7 +682,11 @@ AUTOMATION_SCHEMA: dict[str, Any] = {
             "required": ["type"],
             "properties": {
                 "type": {"type": "string", "enum": ["cron", "webhook", "api"]},
-                "cron": {"type": "string", "maxLength": 100},
+                "cron": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "5-field cron expression, evaluated in UTC",
+                },
                 "webhook_secret": {"type": "string", "minLength": 16, "maxLength": 255},
             },
             "additionalProperties": False,

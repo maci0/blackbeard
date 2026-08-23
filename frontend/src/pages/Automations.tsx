@@ -146,13 +146,15 @@ function describeCron(expr: string): string {
 
   const [minute, hour, dayOfMonth, month, dayOfWeek] = parts
 
+  // Times are stated in UTC to match scheduler semantics (croniter runs on
+  // datetime.now(UTC)); without the suffix users assume local time.
   if (minute === '*' && hour === '*') return 'Every minute'
   if (minute === '0' && hour === '*') return 'Every hour'
   if (minute === '0' && hour === '0' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*')
-    return 'Daily at midnight'
+    return 'Daily at midnight UTC'
   if (minute !== '*' && hour !== '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*')
-    return `Daily at ${hour}:${minute?.padStart(2, '0')}`
-  if (dayOfWeek === '1-5') return `Weekdays at ${hour}:${minute?.padStart(2, '0')}`
+    return `Daily at ${hour}:${minute?.padStart(2, '0')} UTC`
+  if (dayOfWeek === '1-5') return `Weekdays at ${hour}:${minute?.padStart(2, '0')} UTC`
   if (minute?.startsWith('*/')) return `Every ${minute.slice(2)} minutes`
   if (hour?.startsWith('*/')) return `Every ${hour.slice(2)} hours`
 
@@ -388,6 +390,9 @@ function CreateAutomationDialog({
                     className="w-full rounded-md border bg-background px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     placeholder="0 9 * * 1-5"
                   />
+                  <p id="automation-schedule-tz" className="mt-1.5 text-xs text-muted-foreground">
+                    Cron expressions are evaluated in UTC.
+                  </p>
                   {cronPreview && cronPreview !== schedule && (
                     <p
                       id="automation-schedule-preview"

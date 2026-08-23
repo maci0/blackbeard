@@ -7,6 +7,7 @@ import {
   formatNumber,
   formatPercent,
   formatCompact,
+  localDateKey,
   plural,
   statusLabel,
   timeAgo,
@@ -226,6 +227,31 @@ describe('timeAgo', () => {
     }).format(0, 'second')
     expect(result).toBe(expected)
     vi.useRealTimers()
+  })
+})
+
+describe('localDateKey', () => {
+  it('formats local calendar date with zero-padded month and day', () => {
+    expect(localDateKey(new Date(2024, 0, 5))).toBe('2024-01-05')
+    expect(localDateKey(new Date(2024, 10, 25))).toBe('2024-11-25')
+    expect(localDateKey(new Date(2024, 11, 31))).toBe('2024-12-31')
+  })
+
+  it('uses local calendar fields, not UTC fields', () => {
+    // 23:30 local on Jan 5: in any zone east of UTC+0:30 the UTC date is
+    // already Jan 6, so toISOString().slice(0, 10) would disagree.
+    const d = new Date(2024, 0, 5, 23, 30)
+    expect(localDateKey(d)).toBe(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+    )
+    expect(localDateKey(d)).toBe('2024-01-05')
+  })
+
+  it('keeps the same calendar day across a DST spring-forward hour', () => {
+    // In DST zones (e.g. America/New_York) 2024-03-10 skips 02:00; a date
+    // built from local fields must still round-trip to that calendar day.
+    const d = new Date(2024, 2, 10, 12, 0)
+    expect(localDateKey(d)).toBe('2024-03-10')
   })
 })
 
