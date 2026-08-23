@@ -21,8 +21,18 @@ elif [ "${DEBUG:-false}" = "true" ]; then
 else
   uvi_log_level="info"
 fi
+# WEB_CONCURRENCY must be a positive integer or uvicorn refuses to start.
+# Validate here so a stray value cannot crash the container at boot.
+workers="${WEB_CONCURRENCY:-1}"
+case "$workers" in
+  ""|*[!0-9]*) workers=1 ;;
+esac
+if (( workers < 1 )); then
+  workers=1
+fi
+
 exec uvicorn blackbeard.main:app --host "${HOST:-0.0.0.0}" --port "${PORT:-8000}" \
   --proxy-headers --forwarded-allow-ips="${FORWARDED_ALLOW_IPS:-127.0.0.1}" \
   --log-level "$uvi_log_level" \
-  --workers "$(printf '%d' "${WEB_CONCURRENCY:-1}" 2>/dev/null || echo 1)" \
+  --workers "$workers" \
   ${reload_flag:+"$reload_flag"}
