@@ -1,0 +1,30 @@
+# Normalize line endings: LF in the repository and in every working tree.
+#
+# The project ships POSIX shell entry points (run.sh, deploy/seed.sh,
+# backend/entrypoint.sh) that are executed directly and, for
+# backend/entrypoint.sh, COPY'd into the API image as-is. A CRLF checkout
+# (the Git for Windows default) breaks them with "/bin/bash^M: bad
+# interpreter" or "$'\r': command not found", and ruff/prettier format
+# checks fail on CRLF working trees. Forcing LF everywhere removes the
+# whole class of failure.
+* text=auto eol=lf
+
+# Windows-only scripts would need CRLF if any are ever added:
+# *.bat text eol=crlf
+# *.cmd text eol=crlf
+
+# Binary assets: never normalize, never diff.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.wasm binary
+*.gz binary
+*.zip binary
+*.pdf binary
