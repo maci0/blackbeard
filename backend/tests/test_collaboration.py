@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 
@@ -11,6 +12,7 @@ from starlette.testclient import TestClient
 
 from blackbeard.api.collaboration import (
     ALLOWED_MESSAGE_TYPES,
+    ValkeyCollabBackend,
     _broadcast_local,
     _rooms,
     get_room_stats,
@@ -371,3 +373,90 @@ def test_all_message_types_broadcast() -> None:
                 ws1.send_json({"type": msg_type, "data": {"test": True}})
                 received = ws2.receive_json()
                 assert received["type"] == msg_type
+
+
+# ---------------------------------------------------------------------------
+# ValkeyCollabBackend shutdown lifecycle
+# ---------------------------------------------------------------------------
+
+
+class _FakeRedis:
+    def __init__(self) -> None:
+        self.closed = False
+        self.close_calls = 0
+
+    async def aclose(self) -> None:
+        self.close_calls += 1
+        self.closed = True
+
+
+def _make_backend() -> tuple[ValkeyCollabBackend, _FakeRedis]:
+    """Build a ValkeyCollabBackend without its redis-importing __init__."""
+    backend = object.__new__(ValkeyCollabBackend)
+    fake = _FakeRedis()
+    backend._redis = fake  # type: ignore[attr-defined]
+    backend._subscriptions = {}  # type: ignore[attr-defined]
+    backend._subscriber_lock = asyncio.Lock()  # type: ignore[attr-defined]
+    return backend, fake
+
+
+@pytest.fixture
+def _restore_backend_globals():
+    """Preserve module-level backend state across shutdown tests."""
+    import blackbeard.api.collaboration as collab_mod
+
+    saved = (collab_mod._valkey_backend, collab_mod._valkey_init_done)
+    yield
+    collab_mod._valkey_backend, collab_mod._valkey_init_done = saved
+
+
+async def test_aclose_cancels_listeners_and_closes_redis() -> None:
+    """aclose cancels every room listener task and closes the redis client."""
+    backend, fake = _make_backend()
+
+    started = asyncio.Event()
+
+    async def _listener() -> None:
+        started.set()
+        await asyncio.sleep(3600)
+
+    task = asyncio.create_task(_listener(), name="valkey-collab-test-room")
+    await started.wait()
+    assert not task.done()
+    backend._subscriptions["test-room"] = task
+
+    await asyncio.wait_for(backend.aclose(), timeout=5.0)
+
+    assert task.done()
+    assert task.cancelled()
+    assert backend._subscriptions == {}
+    assert fake.closed is True
+    # aclose is idempotent-safe: closing again must not raise.
+    await asyncio.wait_for(backend.aclose(), timeout=5.0)
+    assert fake.close_calls == 2
+
+
+@pytest.mark.usefixtures("_restore_backend_globals")
+async def test_shutdown_collab_backend_resets_module_state() -> None:
+    """shutdown_collab_backend closes the backend and detaches it from the module."""
+    import blackbeard.api.collaboration as collab_mod
+
+    backend, fake = _make_backend()
+    collab_mod._valkey_backend = backend
+    collab_mod._valkey_init_done = True
+    assert collab_mod._get_valkey_backend() is backend
+
+    await asyncio.wait_for(collab_mod.shutdown_collab_backend(), timeout=5.0)
+
+    assert fake.closed is True
+    assert collab_mod._get_valkey_backend() is None
+
+
+@pytest.mark.usefixtures("_restore_backend_globals")
+async def test_shutdown_collab_backend_noop_without_backend() -> None:
+    """shutdown_collab_backend is a no-op when the backend was never initialized."""
+    import blackbeard.api.collaboration as collab_mod
+
+    collab_mod._valkey_backend = None
+    await asyncio.wait_for(collab_mod.shutdown_collab_backend(), timeout=5.0)
+    assert collab_mod._get_valkey_backend() is None

@@ -157,6 +157,43 @@ class ValkeyCollabBackend:
                     extra={"event": "valkey_unsubscribe_timeout", "room": room},
                 )
 
+    async def aclose(self) -> None:
+        """Cancel every room listener and close the shared redis client.
+
+        Called during app shutdown so the process does not hold pub/sub
+        sockets past teardown.
+        """
+        async with self._subscriber_lock:
+            tasks = list(self._subscriptions.items())
+            self._subscriptions.clear()
+        for name, task in tasks:
+            task.cancel()
+            logger.debug(
+                "Cancelled Valkey listener for shutdown: room=%s",
+                name,
+                extra={"event": "valkey_listener_cancelled_shutdown", "room": name},
+            )
+        if tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*(task for _, task in tasks), return_exceptions=True),
+                    timeout=2.0,
+                )
+            except TimeoutError:
+                logger.warning(
+                    "Valkey listeners did not exit within 2s during shutdown (%d rooms)",
+                    len(tasks),
+                    extra={"event": "valkey_shutdown_timeout", "rooms": len(tasks)},
+                )
+        try:
+            await self._redis.aclose()
+        except Exception:
+            logger.debug(
+                "Valkey collab client close failed",
+                exc_info=True,
+                extra={"event": "valkey_collab_close_failed"},
+            )
+
     _MAX_LISTEN_RETRIES = 3
 
     async def _listen(self, room: str) -> None:
@@ -306,6 +343,25 @@ async def _init_valkey_backend() -> ValkeyCollabBackend | None:
 def _get_valkey_backend() -> ValkeyCollabBackend | None:
     """Return the cached Valkey backend (None if not yet initialized or unavailable)."""
     return _valkey_backend if _valkey_init_done else None
+
+
+async def shutdown_collab_backend() -> None:
+    """Close the Valkey collaboration backend during app shutdown.
+
+    Cancels any remaining room listeners and closes the shared redis
+    connection pool. After this, ``_get_valkey_backend()`` returns None so
+    late joins cannot rebuild a connection while the loop is closing.
+    """
+    global _valkey_backend
+    async with _valkey_init_lock:
+        backend = _valkey_backend
+        _valkey_backend = None
+    if backend is not None:
+        await backend.aclose()
+        logger.info(
+            "Valkey collaboration backend closed",
+            extra={"event": "valkey_collab_shutdown"},
+        )
 
 
 async def _broadcast_local(

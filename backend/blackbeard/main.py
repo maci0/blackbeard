@@ -421,6 +421,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         if loop_tasks:
             await asyncio.gather(*loop_tasks, return_exceptions=True)
         await scheduler.stop()
+        from blackbeard.api.collaboration import shutdown_collab_backend
+
+        await shutdown_collab_backend()
         if temporal_running:
             try:
                 from blackbeard.engine.temporal import stop_temporal_worker
