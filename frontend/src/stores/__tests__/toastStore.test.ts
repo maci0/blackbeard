@@ -105,48 +105,29 @@ describe('toastStore', () => {
   })
 
   describe('auto-dismiss', () => {
-    it('auto-dismisses success toast after 7 seconds + exit animation', () => {
-      useToastStore.getState().success('Temporary')
+    it.each([
+      { method: 'success', seconds: 7 },
+      { method: 'error', seconds: 15 },
+      { method: 'info', seconds: 7 },
+    ] as const)(
+      'auto-dismisses $method toast after $seconds seconds + exit animation',
+      ({ method, seconds }) => {
+        useToastStore.getState()[method](`${method} toast`)
 
-      expect(useToastStore.getState().toasts).toHaveLength(1)
+        expect(useToastStore.getState().toasts).toHaveLength(1)
 
-      vi.advanceTimersByTime(6999)
-      expect(useToastStore.getState().toasts).toHaveLength(1)
+        vi.advanceTimersByTime(seconds * 1000 - 1)
+        expect(useToastStore.getState().toasts).toHaveLength(1)
 
-      // Timer fires at 7000ms, sets dismissing=true
-      vi.advanceTimersByTime(1)
-      expect(useToastStore.getState().toasts[0]?.dismissing).toBe(true)
+        // Timer fires at exactly duration, sets dismissing=true
+        vi.advanceTimersByTime(1)
+        expect(useToastStore.getState().toasts[0]?.dismissing).toBe(true)
 
-      // Removed after exit animation
-      vi.advanceTimersByTime(EXIT_ANIMATION_MS)
-      expect(useToastStore.getState().toasts).toHaveLength(0)
-    })
-
-    it('auto-dismisses error toast after 15 seconds + exit animation', () => {
-      useToastStore.getState().error('Error toast')
-
-      vi.advanceTimersByTime(14999)
-      expect(useToastStore.getState().toasts).toHaveLength(1)
-
-      vi.advanceTimersByTime(1)
-      expect(useToastStore.getState().toasts[0]?.dismissing).toBe(true)
-
-      vi.advanceTimersByTime(EXIT_ANIMATION_MS)
-      expect(useToastStore.getState().toasts).toHaveLength(0)
-    })
-
-    it('auto-dismisses info toast after 7 seconds + exit animation', () => {
-      useToastStore.getState().info('Info toast')
-
-      vi.advanceTimersByTime(6999)
-      expect(useToastStore.getState().toasts).toHaveLength(1)
-
-      vi.advanceTimersByTime(1)
-      expect(useToastStore.getState().toasts[0]?.dismissing).toBe(true)
-
-      vi.advanceTimersByTime(EXIT_ANIMATION_MS)
-      expect(useToastStore.getState().toasts).toHaveLength(0)
-    })
+        // Removed after exit animation
+        vi.advanceTimersByTime(EXIT_ANIMATION_MS)
+        expect(useToastStore.getState().toasts).toHaveLength(0)
+      },
+    )
   })
 
   describe('pause and resume', () => {

@@ -150,6 +150,23 @@ function buildCrewGroupNode(crewName: string, childNodes: Node[]): Node {
   }
 }
 
+/** Wrap child nodes in a crew group so they are visually contained. */
+function wrapInCrewGroup(crewName: string, childNodes: Node[]): Node[] {
+  const groupNode = buildCrewGroupNode(crewName, childNodes)
+  return [
+    groupNode,
+    ...childNodes.map((n) => ({
+      ...n,
+      parentId: groupNode.id,
+      extent: 'parent' as const,
+      position: {
+        x: n.position.x - groupNode.position.x,
+        y: n.position.y - groupNode.position.y,
+      },
+    })),
+  ]
+}
+
 /** Build agent/task nodes plus agent-ref dataflow edges from crew resources. */
 function buildCrewGraph(
   agents: { metadata: { name: string }; spec: Record<string, unknown> }[],
@@ -408,38 +425,13 @@ function StudioInner() {
 
         const { nodes: childNodes, edges } = buildCrewGraph(agentResources, taskResources)
 
-        let allNodes: Node[]
         try {
           const laid = await autoLayout(childNodes, edges)
-          // Build crew group from laid-out positions
-          const groupNode = buildCrewGroupNode(crew.metadata.name, laid.nodes)
-          // Set parentId on child nodes so they are visually contained
-          const parented = laid.nodes.map((n) => ({
-            ...n,
-            parentId: groupNode.id,
-            extent: 'parent' as const,
-            position: {
-              x: n.position.x - groupNode.position.x,
-              y: n.position.y - groupNode.position.y,
-            },
-          }))
-          allNodes = [groupNode, ...parented]
-          setNodes(allNodes)
+          setNodes(wrapInCrewGroup(crew.metadata.name, laid.nodes))
           setEdges(laid.edges)
         } catch (err) {
           console.warn('[studio] Auto-layout failed, using fallback positioning:', err)
-          const groupNode = buildCrewGroupNode(crew.metadata.name, childNodes)
-          const parented = childNodes.map((n) => ({
-            ...n,
-            parentId: groupNode.id,
-            extent: 'parent' as const,
-            position: {
-              x: n.position.x - groupNode.position.x,
-              y: n.position.y - groupNode.position.y,
-            },
-          }))
-          allNodes = [groupNode, ...parented]
-          setNodes(allNodes)
+          setNodes(wrapInCrewGroup(crew.metadata.name, childNodes))
           setEdges(edges)
         }
         setCrewName(crew.metadata.name)
@@ -811,19 +803,7 @@ function StudioInner() {
       },
     ]
 
-    // Wrap child nodes in a crew group
-    const groupNode = buildCrewGroupNode('research-crew', childNodes)
-    const parentedNodes = childNodes.map((n) => ({
-      ...n,
-      parentId: groupNode.id,
-      extent: 'parent' as const,
-      position: {
-        x: n.position.x - groupNode.position.x,
-        y: n.position.y - groupNode.position.y,
-      },
-    }))
-
-    setNodes([groupNode, ...parentedNodes])
+    setNodes(wrapInCrewGroup('research-crew', childNodes))
     setEdges(exampleEdges)
     setCrewName('research-crew')
     markClean()
@@ -873,19 +853,7 @@ function StudioInner() {
 
       const groupName = crewResource?.metadata.name ?? toResourceName(crewName)
 
-      // Wrap in a crew group node
-      const groupNode = buildCrewGroupNode(groupName, childNodes)
-      const parentedNodes = childNodes.map((n) => ({
-        ...n,
-        parentId: groupNode.id,
-        extent: 'parent' as const,
-        position: {
-          x: n.position.x - groupNode.position.x,
-          y: n.position.y - groupNode.position.y,
-        },
-      }))
-
-      setNodes([groupNode, ...parentedNodes])
+      setNodes(wrapInCrewGroup(groupName, childNodes))
       setEdges(edges)
 
       if (crewResource?.metadata.name) {

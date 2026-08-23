@@ -4,23 +4,27 @@ import { formatDate, getDuration, formatCost, statusLabel } from '../formatters'
 
 const NUM_RUNS = 500
 
+function isoDateArb(minYear: number, maxYear: number) {
+  return fc
+    .tuple(
+      fc.integer({ min: minYear, max: maxYear }),
+      fc.integer({ min: 1, max: 12 }),
+      fc.integer({ min: 1, max: 28 }),
+      fc.integer({ min: 0, max: 23 }),
+      fc.integer({ min: 0, max: 59 }),
+      fc.integer({ min: 0, max: 59 }),
+    )
+    .map(
+      ([y, m, d, h, mi, s]) =>
+        `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}:${String(s).padStart(2, '0')}Z`,
+    )
+}
+
 /* ---------- formatDate ---------- */
 
 describe('fuzz: formatDate', () => {
   it('never throws on random ISO-like date strings', () => {
-    const isoArb = fc
-      .tuple(
-        fc.integer({ min: 1970, max: 2100 }),
-        fc.integer({ min: 1, max: 12 }),
-        fc.integer({ min: 1, max: 28 }),
-        fc.integer({ min: 0, max: 23 }),
-        fc.integer({ min: 0, max: 59 }),
-        fc.integer({ min: 0, max: 59 }),
-      )
-      .map(
-        ([y, m, d, h, mi, s]) =>
-          `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}:${String(s).padStart(2, '0')}Z`,
-      )
+    const isoArb = isoDateArb(1970, 2100)
 
     fc.assert(
       fc.property(isoArb, (dateStr) => {
@@ -69,19 +73,7 @@ describe('fuzz: formatDate', () => {
 
 describe('fuzz: getDuration', () => {
   it('always returns a string for random ISO date pairs', () => {
-    const isoArb = fc
-      .tuple(
-        fc.integer({ min: 2000, max: 2030 }),
-        fc.integer({ min: 1, max: 12 }),
-        fc.integer({ min: 1, max: 28 }),
-        fc.integer({ min: 0, max: 23 }),
-        fc.integer({ min: 0, max: 59 }),
-        fc.integer({ min: 0, max: 59 }),
-      )
-      .map(
-        ([y, m, d, h, mi, s]) =>
-          `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}:${String(s).padStart(2, '0')}Z`,
-      )
+    const isoArb = isoDateArb(2000, 2030)
 
     fc.assert(
       fc.property(isoArb, fc.option(isoArb), (start, end) => {
@@ -108,19 +100,7 @@ describe('fuzz: getDuration', () => {
   })
 
   it('result matches expected duration format', () => {
-    const isoArb = fc
-      .tuple(
-        fc.integer({ min: 2000, max: 2030 }),
-        fc.integer({ min: 1, max: 12 }),
-        fc.integer({ min: 1, max: 28 }),
-        fc.integer({ min: 0, max: 23 }),
-        fc.integer({ min: 0, max: 59 }),
-        fc.integer({ min: 0, max: 59 }),
-      )
-      .map(
-        ([y, m, d, h, mi, s]) =>
-          `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}:${String(s).padStart(2, '0')}Z`,
-      )
+    const isoArb = isoDateArb(2000, 2030)
 
     fc.assert(
       fc.property(isoArb, isoArb, (start, end) => {
