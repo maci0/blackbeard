@@ -194,19 +194,27 @@ _WEBHOOK_CACHE_TTL = 300.0
 def _get_cached_webhooks(db_url: str) -> list[Any]:
     """Return active webhooks, cached for 5min to avoid DB hit per event.
 
-    Uses lock-always pattern (safe under both GIL and free-threaded Python).
-    The lock is held during the DB query to prevent cache stampede — all
-    threads hitting an expired cache simultaneously would otherwise all
-    query the DB.  The query is bounded (LIMIT 1001) and fast.
+    Fast path reads the module-level snapshot without the lock: tuple
+    assignment is atomic, and a torn read is impossible because entries are
+    replaced wholesale.  The lock serialises refreshes only (single-flight,
+    which also prevents a cache stampede), so concurrent event threads never
+    block behind the DB query.
     """
     global _webhook_cache_entry
 
+    entry = _webhook_cache_entry
+    if entry is not None:
+        cache_time, cache = entry
+        if (_time.monotonic() - cache_time) < _WEBHOOK_CACHE_TTL:
+            return cache
+
     with _webhook_cache_lock:
-        now = _time.monotonic()
+        # Re-check after acquiring: another thread may have refreshed while
+        # we waited for the lock.
         entry = _webhook_cache_entry
         if entry is not None:
             cache_time, cache = entry
-            if (now - cache_time) < _WEBHOOK_CACHE_TTL:
+            if (_time.monotonic() - cache_time) < _WEBHOOK_CACHE_TTL:
                 return cache
 
         from blackbeard.models.webhook import Webhook
@@ -542,6 +550,9 @@ class BlackbeardExecutionListener(BaseEventListener):
         self._seq = 0
         self._task_order = 0  # tracks which task (by order) is currently running
         self._lock = threading.Lock()  # guards _seq, _task_order, and _buffer
+        # Signalled when an in-flight flush finishes; lets flush() and
+        # _write_event_with_task_update wait without busy-polling.
+        self._flush_done = threading.Condition(self._lock)
         # Serializes event-batch DB writes (_flush_buffer and the direct write
         # in _write_event_with_task_update) so batches always COMMIT in
         # sequence order. Without this, a later batch committing first makes
@@ -666,6 +677,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 with self._lock:
                     self._flushing = False
                     need_schedule = failed or len(self._buffer) > 0
+                    self._flush_done.notify_all()
             if need_schedule:
                 self._schedule_flush()
 
@@ -762,14 +774,8 @@ class BlackbeardExecutionListener(BaseEventListener):
             timer.cancel()
             timer.join(timeout=5.0)
         # Wait for any in-flight timer flush so its re-queue is visible.
-        deadline = _time.monotonic() + 5.0
-        while True:
-            with self._lock:
-                if not self._flushing:
-                    break
-            if _time.monotonic() >= deadline:
-                break
-            _time.sleep(0.01)
+        with self._lock:
+            self._flush_done.wait_for(lambda: not self._flushing, timeout=5.0)
         self._flush_buffer()
         for attempt in range(self._FLUSH_RETRIES):
             with self._lock:
@@ -1014,14 +1020,8 @@ class BlackbeardExecutionListener(BaseEventListener):
             timer.join(timeout=5.0)
         # Wait for an in-flight flush (started before we cancelled the timer)
         # so re-queued events are visible when we drain the buffer below.
-        deadline = _time.monotonic() + 5.0
-        while True:
-            with self._lock:
-                if not self._flushing:
-                    break
-            if _time.monotonic() >= deadline:
-                break
-            _time.sleep(0.01)
+        with self._lock:
+            self._flush_done.wait_for(lambda: not self._flushing, timeout=5.0)
 
         now = datetime.now(UTC)
         # _io_lock covers drain-through-commit so this batch cannot interleave

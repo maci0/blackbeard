@@ -1234,7 +1234,11 @@ async def run_crew_async(
                         return r
 
                 result = await asyncio.to_thread(_run_crew_sync)
-            listener.flush()
+            # flush() does synchronous DB writes and can block for seconds
+            # waiting on an in-flight timer flush; run it off the event loop
+            # (this coroutine is the Temporal activity handler when Temporal
+            # is configured, so a blocking call stalls all other activities).
+            await asyncio.to_thread(listener.flush)
 
             execution = await _get_execution_for_update(session, execution_id)
             if not execution:
@@ -1379,7 +1383,11 @@ async def run_crew_async(
                             "warn_at_tokens": warn_tokens,
                         },
                     )
-                    listener._write_event(ExecutionEventType.COST_ALERT.value, alert_data)
+                    # _write_event can block (DB commit on buffer-full path,
+                    # webhook dispatch) — keep it off the event loop.
+                    await asyncio.to_thread(
+                        listener._write_event, ExecutionEventType.COST_ALERT.value, alert_data
+                    )
 
             await session.commit()
             duration_s = (
@@ -1411,7 +1419,7 @@ async def run_crew_async(
         except Exception as e:
             if listener is not None:
                 try:
-                    listener.flush()
+                    await asyncio.to_thread(listener.flush)
                 except Exception as flush_exc:
                     logger.warning(
                         "Listener flush failed during error handling for execution %s: %s",

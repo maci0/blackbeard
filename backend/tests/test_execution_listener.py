@@ -27,6 +27,7 @@ def _make_full_stub(recorder: "CommitRecorder") -> BlackbeardExecutionListener:
     listener._seq = 0
     listener._task_order = 0
     listener._lock = threading.Lock()
+    listener._flush_done = threading.Condition(listener._lock)
     listener._io_lock = threading.Lock()
     listener._flush_timer = None
     listener._flushing = False

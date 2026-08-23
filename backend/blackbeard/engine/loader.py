@@ -55,6 +55,13 @@ _PROCESS_MAP: dict[str, Process] = {
 
 _PATH_TRAVERSAL_INDICATORS = ("..", "~", "\\", "\x00")
 
+# Compiled-JSON-Schema guardrail validator cache.  Schemas repeat across
+# tasks and flow steps; Draft7Validator compilation is not free, so reuse
+# validators keyed by canonical schema JSON.  Bounded: cleared wholesale at
+# the cap (races are benign — worst case a validator is rebuilt).
+_SCHEMA_VALIDATOR_CACHE_MAX = 256
+_schema_validator_cache: dict[str, jsonschema.Draft7Validator] = {}
+
 _SAFE_BUILTIN_NAME = re.compile(r"^[A-Z][a-zA-Z0-9]+$")
 
 _BLOCKED_BUILTIN_NAMES = frozenset(
@@ -811,7 +818,13 @@ class ResourceLoader:
         and validates it against ``schema``.  Returns the output unchanged on
         success; raises ``ValueError`` on validation failure.
         """
-        validator = jsonschema.Draft7Validator(schema)
+        cache_key = json.dumps(schema, sort_keys=True)
+        validator = _schema_validator_cache.get(cache_key)
+        if validator is None:
+            validator = jsonschema.Draft7Validator(schema)
+            if len(_schema_validator_cache) >= _SCHEMA_VALIDATOR_CACHE_MAX:
+                _schema_validator_cache.clear()
+            _schema_validator_cache[cache_key] = validator
 
         def _schema_guardrail(output: str) -> str:
             try:
