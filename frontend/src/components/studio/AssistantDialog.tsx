@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { X, Sparkles, AlertCircle, Check } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { api } from '@/api/client'
+import { isMac } from '@/lib/platform'
 
 interface AssistantResource {
   apiVersion: string
@@ -130,7 +131,7 @@ export function AssistantDialog({ open, onOpenChange, onApply }: AssistantDialog
                   {prompt.length}/5000 characters
                 </span>
                 <span className="text-[10px] text-muted-foreground">
-                  {navigator.platform.includes('Mac') ? 'Cmd' : 'Ctrl'}+Enter to generate
+                  {isMac ? 'Cmd' : 'Ctrl'}+Enter to generate
                 </span>
               </div>
             </div>
