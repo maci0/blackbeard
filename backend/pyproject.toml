@@ -76,6 +76,16 @@ temporal = [
 muninn = [
     "muninn-python>=0.1,<1",
 ]
+otel = [
+    # Imported lazily (guarded by try/except ImportError) when OTEL_ENDPOINT is set
+    "opentelemetry-api>=1.30,<2",
+    "opentelemetry-sdk>=1.30,<2",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.30,<2",
+]
+load = [
+    # tests/load/locustfile.py — ad-hoc API load testing against a running stack
+    "locust>=2.30,<3",
+]
 
 [tool.ruff]
 target-version = "py313"

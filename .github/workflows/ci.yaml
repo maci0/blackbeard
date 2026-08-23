@@ -403,6 +403,37 @@ jobs:
           ignore-unfixed: true
           cache-dir: ${{ runner.temp }}/trivy
 
+  sbom:
+    # CycloneDX inventory of the resolved backend dependency tree, derived from
+    # uv.lock (not the manifest) so it reflects exactly what ships. Informational:
+    # kept out of ci-gate so registry/tool hiccups cannot block PRs.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Export resolved requirements
+        run: uv export --frozen --no-dev --no-emit-project --format requirements-txt -o requirements-sbom.txt
+
+      - name: Generate CycloneDX SBOM
+        run: uvx cyclonedx-py requirements -i requirements-sbom.txt --format json --output-file sbom-backend.cdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom-backend-cyclonedx
+          path: backend/sbom-backend.cdx.json
+
   ci-gate:
     if: always()
     needs: [backend, cli, sdk-python, sdk-typescript, sdk-react, version-lockstep, helm-lint, frontend, docker-api, docker-ui]

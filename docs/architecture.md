@@ -644,6 +644,8 @@ helm install blackbeard deploy/helm/blackbeard/ \
 
 The backend supports exporting traces to an OpenTelemetry collector. Set the `OTEL_ENDPOINT` environment variable to enable trace export. When not set, tracing is disabled and has no performance impact.
 
+The OpenTelemetry SDK is an optional dependency; install it with `uv sync --extra otel` (from `backend/`).
+
 ### Structured Logging
 
 All backend log entries are structured with `extra` dicts containing event names and contextual fields (execution IDs, crew names, error types). This makes logs machine-parseable for aggregation in tools like Loki, Elasticsearch, or CloudWatch.

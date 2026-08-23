@@ -4,10 +4,11 @@ Load tests use [Locust](https://locust.io/) to simulate concurrent API traffic.
 
 ## Setup
 
+Locust is declared as the `load` extra of the backend package:
+
 ```bash
-pip install locust
-# or
-uv pip install locust
+cd backend && uv sync --extra load
+uv run locust -f ../tests/load/locustfile.py --host http://localhost:8000
 ```
 
 ## Run (with Web UI)
