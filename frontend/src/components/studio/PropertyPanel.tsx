@@ -22,7 +22,7 @@ import { ExpressionEditor } from './ExpressionEditor'
 import { Spinner } from '@/components/ui/Spinner'
 import { api } from '@/api/client'
 import { getErrorMessage } from '@/lib/utils'
-import { useCopyToClipboard } from '@/hooks'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 
 /** Context providing a generated field id from the enclosing FieldGroup */
 const FieldIdContext = createContext<string>('')

@@ -6,13 +6,7 @@
  * pointer-events-none so it never interferes with canvas interaction.
  */
 
-export interface RemoteCursor {
-  userId: string
-  name: string
-  x: number
-  y: number
-  color: string
-}
+import type { RemoteCursor } from '@/hooks/useCollaboration'
 
 export function CursorOverlay({ cursors }: { cursors: RemoteCursor[] }) {
   if (cursors.length === 0) return null

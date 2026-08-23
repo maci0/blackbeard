@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Anchor, LogIn, Shield, Eye, EyeOff } from 'lucide-react'
 import { api } from '@/api/client'
 import { useAuthStore, TOKEN_KEY, REFRESH_KEY } from '@/stores/authStore'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { Spinner } from '@/components/ui/Spinner'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 

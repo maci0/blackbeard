@@ -13,7 +13,7 @@ import {
   GitCompareArrows,
 } from 'lucide-react'
 import { api } from '@/api/client'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { Spinner } from '@/components/ui/Spinner'

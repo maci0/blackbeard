@@ -19,7 +19,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { RuleBuilder, type Rule } from '@/components/rbac/RuleBuilder'
 import { caseFold, cn, getErrorMessage } from '@/lib/utils'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useToastStore } from '@/stores/toastStore'
 
 /* ------------------------------------------------------------------ */

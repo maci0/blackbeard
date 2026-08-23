@@ -40,7 +40,8 @@ import {
   FlaskConical,
   UserCog,
 } from 'lucide-react'
-import { useDarkMode, useHealthCheck } from '@/hooks'
+import { useDarkMode } from '@/hooks/useDarkMode'
+import { useHealthCheck } from '@/hooks/useHealthCheck'
 import { Spinner } from '@/components/ui/Spinner'
 import { cn, STORAGE_KEYS, STORAGE_KEYS_NAV } from '@/lib/utils'
 import { useNotificationStore } from '@/stores/notificationStore'

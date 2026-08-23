@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useCopyToClipboard } from '@/hooks'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import {
   Webhook,
   Plus,
@@ -23,7 +23,8 @@ import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { cn, getErrorMessage } from '@/lib/utils'
 import { formatDate, timeAgo } from '@/lib/formatters'
-import { useDocumentTitle, useDeleteError } from '@/hooks'
+import { useDeleteError } from '@/hooks/useDeleteError'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useToastStore } from '@/stores/toastStore'
 
 const WEBHOOK_TEST_KEY = 'blackbeard_webhook_tests'

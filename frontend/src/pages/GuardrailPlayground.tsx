@@ -4,7 +4,7 @@ import { api } from '@/api/client'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
 import { cn, getErrorMessage } from '@/lib/utils'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import type { Resource } from '@/lib/types'
 
 interface RuleResult {

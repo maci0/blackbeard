@@ -10,7 +10,7 @@ import {
   AlertTriangle,
   Gauge,
 } from 'lucide-react'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { api } from '@/api/client'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ModelSelectorSkeleton } from '@/components/ui/Skeleton'

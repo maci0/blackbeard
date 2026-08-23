@@ -14,7 +14,8 @@ import {
   Sun,
   Moon,
 } from 'lucide-react'
-import { useDocumentTitle, useDarkMode } from '@/hooks'
+import { useDarkMode } from '@/hooks/useDarkMode'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { useToastStore } from '@/stores/toastStore'
 import { useProjectStore } from '@/stores/projectStore'

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
-import { useCopyToClipboard } from '@/hooks'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import {
   Timer,
   Search,
@@ -24,7 +24,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { caseFold, cn, getErrorMessage } from '@/lib/utils'
 import { formatDate } from '@/lib/formatters'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useToastStore } from '@/stores/toastStore'
 
 /* ------------------------------------------------------------------ */

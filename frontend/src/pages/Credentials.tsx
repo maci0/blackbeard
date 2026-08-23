@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useCopyToClipboard } from '@/hooks'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   KeyRound,
@@ -23,7 +23,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { caseFold, cn, getErrorMessage } from '@/lib/utils'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useToastStore } from '@/stores/toastStore'
 
 /* ------------------------------------------------------------------ */

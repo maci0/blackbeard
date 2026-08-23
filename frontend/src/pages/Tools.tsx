@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { Wrench, Search, RefreshCw, Code2, Box, Shield, X } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useResourceStore } from '@/stores/resourceStore'

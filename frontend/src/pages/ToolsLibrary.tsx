@@ -18,7 +18,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { CardSkeleton } from '@/components/ui/Skeleton'
 import { caseFold, cn, getErrorMessage } from '@/lib/utils'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useToastStore } from '@/stores/toastStore'
 
 interface LibraryTool {

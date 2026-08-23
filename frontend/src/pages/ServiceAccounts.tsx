@@ -8,7 +8,7 @@ import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { SmartTime } from '@/components/ui/SmartTime'
 import { cn, compareStrings } from '@/lib/utils'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 export default function ServiceAccounts() {
   useDocumentTitle('Service Accounts')

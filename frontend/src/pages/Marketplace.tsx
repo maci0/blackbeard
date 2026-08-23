@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { Store, ExternalLink, Download, Tag, Lock, Search, Eye, Package, X } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { api } from '@/api/client'

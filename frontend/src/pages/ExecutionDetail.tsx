@@ -18,7 +18,8 @@ import {
   GanttChart,
   Layers,
 } from 'lucide-react'
-import { useDocumentTitle, usePolling } from '@/hooks'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { usePolling } from '@/hooks/usePolling'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { useShallow } from 'zustand/react/shallow'
 import { useExecutionStore } from '@/stores/executionStore'

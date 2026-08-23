@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
-import { useDocumentTitle, useDeleteError } from '@/hooks'
+import { useDeleteError } from '@/hooks/useDeleteError'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { API_VERSION, NAME_PATTERN } from '@/lib/kinds'
 import * as Dialog from '@radix-ui/react-dialog'
 import {

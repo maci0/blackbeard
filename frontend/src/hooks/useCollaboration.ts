@@ -1,12 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { TOKEN_KEY } from '@/stores/authStore'
 import { useStudioStore } from '@/stores/studioStore'
-import type { RemoteCursor } from '@/components/studio/CursorOverlay'
 import type { Node, Edge } from '@xyflow/react'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
 /* ------------------------------------------------------------------ */
+
+/** Cursor position broadcast by a remote collaborator. */
+export interface RemoteCursor {
+  userId: string
+  name: string
+  x: number
+  y: number
+  color: string
+}
 
 interface CollabMessage {
   type: string

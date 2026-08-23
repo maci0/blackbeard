@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Anchor, UserPlus, Eye, EyeOff } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
-import { useDocumentTitle } from '@/hooks'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { Spinner } from '@/components/ui/Spinner'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 
