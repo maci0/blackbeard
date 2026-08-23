@@ -19,6 +19,7 @@ from blackbeard.models import User, get_session
 from blackbeard.models.resource_schemas import ResourceCreate, ResourceMetadata
 from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
 from blackbeard.resources import ResourceService
+from blackbeard.resources.exceptions import ResourceValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -195,11 +196,35 @@ async def install_library_tools(
             resource, _created = await service.create(data)
             await save_version_snapshot(session, resource, _current_user)
             installed += 1
+        except ResourceValidationError as exc:
+            label = f"Tool/{slug}"
+            msgs = "; ".join(e.message for e in exc.errors)
+            logger.warning(
+                "Tools library install validation failed for %s: %s",
+                label,
+                msgs,
+                extra={
+                    "event": "tools_library_install_validation_failed",
+                    "resource_label": label,
+                },
+            )
+            errors.append(f"{slug}: {msgs[:150]}")
         except Exception as exc:
-            if "already exists" in str(exc).lower() or "conflict" in str(exc).lower():
-                skipped += 1
-            else:
-                errors.append(f"{slug}: {str(exc)[:100]}")
+            # create() upserts, so an existing tool is updated (never a
+            # conflict); any exception here is an unexpected failure.
+            label = f"Tool/{slug}"
+            logger.warning(
+                "Tools library install failed for %s: %s",
+                label,
+                exc,
+                exc_info=True,
+                extra={
+                    "event": "tools_library_install_failed",
+                    "resource_label": label,
+                    "error_type": type(exc).__name__,
+                },
+            )
+            errors.append(f"{slug}: {str(exc)[:100]}")
 
     await log_audit(
         session=session,
