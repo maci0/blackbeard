@@ -21,8 +21,8 @@ export function useNotifications() {
       if (typeof Notification === 'undefined' || permission !== 'granted') return
       try {
         new Notification(title, { body, icon: '/favicon.ico' })
-      } catch {
-        /* falls back silently */
+      } catch (err) {
+        console.warn('[notifications] failed to show notification:', err)
       }
     },
     [permission],
