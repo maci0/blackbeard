@@ -217,10 +217,12 @@ Auto-layout recalculates Crew Group bounding boxes to fit their children with pa
 
 ### Export
 
-The Export dropdown in the toolbar offers two options:
+The Export dropdown in the toolbar offers four options:
 
 - **Export JSON**: Downloads a `.json` file containing the crew name, all nodes, and all edges.
 - **Copy as JSON**: Copies the same JSON structure to the clipboard.
+- **Export PNG**: Downloads a raster image of the canvas.
+- **Export SVG**: Downloads a vector image of the canvas.
 
 ### Minimap
 

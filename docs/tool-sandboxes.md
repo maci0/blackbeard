@@ -22,7 +22,7 @@ Python/builtin tools cannot run under `wasm` isolation; that tier is promoted to
 ### Command tool (recommended for real isolation)
 
 ```yaml
-apiVersion: blackbeard.io/v1
+apiVersion: blackbeard/v1
 kind: Tool
 metadata:
   name: echo-safe
@@ -30,7 +30,7 @@ spec:
   type: python
   description: Echo via sandboxed shell
   sandbox: docker
-  command: /bin/echo
+  command: echo
   args: []
   # Optional:
   # image: alpine:3.20

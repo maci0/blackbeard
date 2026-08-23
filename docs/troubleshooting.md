@@ -137,16 +137,15 @@ curl -X POST -H "X-API-Key: $KEY" \
 
 ### "Resource already exists" on import
 
-- The CLI `apply` command does upsert (create or update)
-- The API `POST` endpoint returns 409 if the resource exists
-- Use `PUT` for updates, or use the CLI `apply` command
+- Both the CLI `apply` command and the API `POST` endpoint upsert: a `POST` to an existing kind/name/project updates it and returns `200` instead of `201`
+- `PUT` requires the current `version` field (optimistic locking) and returns `409` on mismatch
 
 ### Broken resource references
 
 - Refs use format `ref:kind-plural/name` (e.g., `ref:agents/researcher`)
 - The referenced resource must exist before the referencing resource is used
 - `apply -f directory/` resolves dependencies in order
-- Check refs: `GET /api/v1/{kind}/{name}` includes resolved ref status
+- Refs are extracted and tracked on create/update; missing targets surface at crew build time as loader errors
 
 ---
 
@@ -216,7 +215,7 @@ uv run blackbeard health
 uv run blackbeard --server http://localhost:8000 health
 
 # Check stored config
-cat ~/.config/blackbeard/config.json
+cat ~/.config/blackbeard/credentials.json
 ```
 
 ### "Unknown kind" errors

@@ -1,4 +1,4 @@
-apiVersion: blackbeard.io/v1
+apiVersion: blackbeard/v1
 kind: Tool
 metadata:
   name: echo-sandboxed
@@ -7,11 +7,11 @@ metadata:
 spec:
   type: python
   description: |
-    Minimal sandboxed command tool. Runs /bin/echo inside a disposable
-    container. Prefer this pattern for isolation without shipping Python deps
-    into the tool image.
+    Minimal sandboxed command tool. Runs echo inside a disposable container.
+    Prefer this pattern for isolation without shipping Python deps into the
+    tool image.
   sandbox: docker
-  command: /bin/echo
+  command: echo
   args:
     - "sandboxed-ok"
   # Optional overrides:

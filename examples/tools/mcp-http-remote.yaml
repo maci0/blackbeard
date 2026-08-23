@@ -1,4 +1,4 @@
-apiVersion: blackbeard.io/v1
+apiVersion: blackbeard/v1
 kind: Tool
 metadata:
   name: mcp-http-remote

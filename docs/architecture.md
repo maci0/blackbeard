@@ -203,10 +203,12 @@ Both `Role` and `RoleBinding` are first-class resources -- managed through the s
 
 Middleware is applied from outermost to innermost:
 
-1. **CORS** -- `CORSMiddleware` configured via `CORS_ORIGINS`
-2. **Security headers** -- CSP, X-Content-Type-Options, X-Frame-Options, etc.
-3. **Auth + Request ID** -- API key or JWT validation, `X-Request-Id` header injection
-4. **Body size limiter** -- Rejects request bodies over 10MB
+1. **Security headers** -- CSP, X-Content-Type-Options, X-Frame-Options, etc.
+2. **Auth + Request ID** -- API key or JWT validation, `X-Request-Id` header injection
+3. **Body size limiter** -- Rejects request bodies over 10MB
+4. **CORS** -- `CORSMiddleware`, innermost because it is registered first (`add_middleware` is LIFO)
+
+Responses short-circuited by auth or the body size limiter never reach `CORSMiddleware`, so those responses carry no CORS headers. When `OIDC_ISSUER` is configured, `SessionMiddleware` is added last and becomes the true outermost layer.
 
 ### LiteLLM Integration
 
@@ -265,7 +267,7 @@ LiteLLM's own data (spend tracking, virtual keys) is stored in a separate `litel
 
 **Command palette:** Press `Cmd+K` (macOS) or `Ctrl+K` (Windows/Linux) to open the command palette for quick navigation to any page, resource, or action.
 
-**Global keyboard shortcuts:** `Cmd+Shift+S` (save), `Cmd+Shift+E` (executions), `Cmd+Shift+N` (new resource), `Cmd+.` (settings), `?` (keyboard shortcuts dialog).
+**Global keyboard shortcuts:** `Cmd+Shift+S` (go to Studio), `Cmd+Shift+E` (go to Executions), `Cmd+Shift+N` (go to Resources), `Cmd+.` (settings), `?` (keyboard shortcuts dialog).
 
 **Real-time presence:** `PresenceAvatars` component shows colored avatar circles for users currently viewing the same resource or canvas, powered by WebSocket rooms and Valkey pub/sub.
 
@@ -306,7 +308,7 @@ Two primary Zustand stores:
 The CLI (`cli/` directory) is a standalone Python package named `blackbeard-cli` with minimal dependencies:
 
 ```
-Dependencies: click, httpx, rich, pyyaml, jsonschema
+Dependencies: click, httpx, rich, pyyaml, jsonschema, prompt-toolkit
 No backend deps: no FastAPI, SQLAlchemy, or CrewAI
 ```
 
@@ -461,9 +463,11 @@ Tool specs may set `image` (container image override) and `capabilities: [networ
 Blackbeard supports webhook notifications for execution lifecycle events. Webhooks are registered via the API and receive HTTP POST callbacks with HMAC-SHA256 signed payloads.
 
 ```
-POST /api/v1/webhooks           → Register a webhook URL
-GET  /api/v1/webhooks           → List registered webhooks
-DELETE /api/v1/webhooks/{id}    → Remove a webhook
+POST   /api/v1/webhooks              → Register a webhook URL
+GET    /api/v1/webhooks              → List registered webhooks
+GET    /api/v1/webhooks/{id}         → Inspect a webhook
+POST   /api/v1/webhooks/{id}/test    → Send a signed test delivery
+DELETE /api/v1/webhooks/{id}         → Remove a webhook
 ```
 
 **Event types:** `crew_started`, `task_completed`, `execution_completed`, `execution_failed`, and others. Register with an empty `events` list to receive all event types.
@@ -584,7 +588,7 @@ The Marketplace (`/marketplace` page) allows importing resources from external g
 
 The CLI (`cli/` directory) is a standalone Python package named `blackbeard-cli` with no server dependencies.
 
-**Dependencies:** click, httpx, rich, pyyaml, jsonschema only -- no FastAPI, SQLAlchemy, or CrewAI.
+**Dependencies:** click, httpx, rich, pyyaml, jsonschema, prompt-toolkit only -- no FastAPI, SQLAlchemy, or CrewAI.
 
 **Module structure:**
 
@@ -689,18 +693,20 @@ The Temporal integration (`backend/blackbeard/engine/temporal.py`) provides an a
 
 ## CI Pipeline
 
-GitHub Actions runs 9 jobs on every push:
+GitHub Actions runs 11 jobs on every push:
 
-1. **Backend** -- ruff check + ruff format + mypy + pytest + pip-audit + bandit (security scanning)
+1. **Backend** -- ruff check + ruff format + mypy + pytest + bandit + pip-audit
 2. **CLI** -- ruff lint + offline validation
 3. **Python SDK** -- pytest with mock transport
 4. **TypeScript SDK** -- tsc type-check
 5. **React SDK** -- tsc type-check
-6. **Helm** -- helm lint
-7. **Frontend** -- prettier + eslint + tsc + vitest + production build
-8. **Docker API image** -- build (after backend passes)
-9. **Docker UI image** -- build (after frontend passes)
+6. **Version lockstep** -- fails if the six package manifests drift apart
+7. **Helm** -- helm lint + template rendering
+8. **Frontend** -- prettier + eslint + tsc + vitest + production build
+9. **Docker API image** -- build + Trivy scan (after backend passes)
+10. **Docker UI image** -- build + Trivy scan (after frontend passes)
+11. **CI gate** -- aggregate check that all jobs above are green
 
-**Security scanning:** Bandit runs as part of the backend CI job, checking for common Python security issues (SQL injection, hardcoded secrets, unsafe deserialization, etc.).
+**Security scanning:** Bandit runs as part of the backend CI job, checking for common Python security issues (SQL injection, hardcoded secrets, unsafe deserialization, etc.). Trivy scans the built Docker images for vulnerabilities.
 
 **Property-based testing:** Hypothesis (backend) and fast-check (frontend) are used for property-based testing of schema validation, YAML parsing, and input coercion. These catch edge cases that hand-written tests miss.

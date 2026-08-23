@@ -1,4 +1,4 @@
-apiVersion: blackbeard.io/v1
+apiVersion: blackbeard/v1
 kind: Tool
 metadata:
   name: mcp-filesystem
@@ -12,5 +12,3 @@ spec:
     - "-y"
     - "@modelcontextprotocol/server-filesystem"
     - "/tmp"
-  env:
-    HOME: /tmp

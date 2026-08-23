@@ -53,9 +53,9 @@ spec:
   max_rpm: 30                              # Maximum LLM requests per minute
   memory: true                             # Enable short-term memory between tasks
   cache: true                              # Cache tool results
-  system_template: "You are {role}..."     # Override the system prompt template
-  prompt_template: "Task: {task}..."       # Override the human prompt template
-  response_template: "Output: {output}"   # Override the response format template
+  system_template: "You are {role}..."     # Custom system prompt (stored but not yet passed to CrewAI)
+  prompt_template: "Task: {task}..."       # Custom task prompt (stored but not yet passed to CrewAI)
+  response_template: "Output: {output}"   # Custom response format (stored but not yet passed to CrewAI)
   serviceAccount: "sa-researcher"          # Service account identity for RBAC (default: sa-<name>)
 ```
 
@@ -191,7 +191,7 @@ spec:
 | `tasks` | string[] (≥1) | ✅ | Ordered task `ref:` list |
 | `description` | string |  -- | Human-readable description |
 | `verbose` | boolean |  -- | Verbose logging (default `true`) |
-| `memory` | boolean\|object |  -- | Shared cross-agent memory; object form supports `enabled`, `provider` (`lancedb`\|`chromadb`\|`qdrant`), `config` |
+| `memory` | boolean\|object |  -- | Shared cross-agent memory; object form supports `enabled`, `provider` (`lancedb`\|`chromadb`\|`qdrant`\|`muninndb`), `config` |
 | `embedder` | object |  -- | Embedder config for RAG (`provider`, `config`) |
 | `cache` | boolean |  -- | Shared tool cache |
 | `max_rpm` | integer ≥ 1 |  -- | Crew-wide LLM rate limit |
@@ -292,7 +292,7 @@ spec:
   # command: "npx"                        # Command to launch the MCP server
   # args: ["-y", "@modelcontextprotocol/server-filesystem"]
   # env:                                  # Environment variables for the MCP server process
-  #   HOME: /tmp
+  #   NODE_ENV: production                # Internal vars (PATH, HOME, PYTHONPATH, ...) are rejected
 
   # --- For type: mcp-http ---
   # type: mcp-http
@@ -575,12 +575,13 @@ spec:
 |-------|------|----------|-------------|
 | `steps` | object[] (≥1) | ✅ | Ordered list of flow steps |
 | `steps[].name` | string | ✅ | Step identifier |
-| `steps[].type` | `crew`\|`function`\|`router`\|`condition` | ✅ | Step type |
+| `steps[].type` | `crew`\|`function`\|`router`\|`condition`\|`transform` | ✅ | Step type |
 | `steps[].crew` | string |  -- | Crew ref (required for `crew` steps) |
 | `steps[].function_path` | string |  -- | `module:function` path (required for `function` steps) |
 | `steps[].listen_to` | string[] |  -- | Steps whose completion triggers this step |
 | `steps[].condition` | string |  -- | Condition expression (for `condition` steps) |
 | `steps[].routes` | object |  -- | Named routes mapping to step names (for `router` steps) |
+| `steps[].wasm_module` | string |  -- | Path to `.wasm` module (required for `transform` steps; output JSON becomes the step output) |
 | `description` | string |  -- | Human-readable description |
 | `state_schema` | object |  -- | JSON Schema for shared flow state |
 | `memory` | boolean |  -- | Flow-level memory (default `false`) |

@@ -106,7 +106,7 @@ uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 
 **Frontend (React + React Flow):** Studio visual editor and resource management views. The Studio lets you drag Agent, Task, and Tool nodes onto a canvas, configure them via a property panel, save as resources, kick off executions, and export the canvas as PNG or SVG. State is managed with Zustand (undo/redo with 30-snapshot history).
 
-**CLI:** Standalone Python package (`blackbeard-cli`) with 30 commands and no server dependencies. Validates YAML offline, applies resources in dependency order, and manages executions, users, roles, and exports. The `blackbeard shell` command launches an interactive TUI REPL for exploratory use.
+**CLI:** Standalone Python package (`blackbeard-cli`) with 31 commands and no server dependencies. Validates YAML offline, applies resources in dependency order, and manages executions, users, roles, and exports. The `blackbeard shell` command launches an interactive TUI REPL for exploratory use.
 
 > See [docs/architecture.md](docs/architecture.md) for a detailed breakdown.
 
@@ -115,7 +115,7 @@ uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 - **14 resource kinds** -- Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount
 - **Visual graph editor** -- drag-and-drop crew design with React Flow, undo/redo, YAML preview, PNG/SVG canvas export
 - **Full RBAC** -- JWT auth (access + refresh tokens), predefined roles (owner, admin, developer, operator, viewer, policy-admin), user/group management
-- **CLI with 30 commands** -- apply, validate, kickoff, train, test-crew, export, pull, status, shell, login, and more
+- **CLI with 31 commands** -- apply, validate, kickoff, train, test-crew, export, pull, status, shell, login, and more
 - **Interactive TUI shell** -- `blackbeard shell` launches a REPL for exploratory resource management
 - **Budget enforcement** -- per-execution spending caps via AgentPolicy `max_usd`/`max_tokens` and LiteLLM virtual keys
 - **Multi-provider LLM routing** -- Vertex AI, OpenAI, Anthropic, Ollama, and any LiteLLM-supported provider
@@ -315,7 +315,7 @@ Key variables (see [.env.example](.env.example) for the full list):
 
 ## API
 
-The API accepts `X-API-Key` header or `Authorization: Bearer <JWT>`. Public endpoints (no auth): health checks, register, login, refresh.
+The API accepts `X-API-Key` header or `Authorization: Bearer <JWT>`. Public endpoints (no auth) include health checks, register, login, refresh, automation webhooks (HMAC-validated), and `/.well-known/agent-card.json`; see [docs/architecture.md](docs/architecture.md) for the full list.
 
 ```bash
 # Health

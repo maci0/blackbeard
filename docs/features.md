@@ -77,9 +77,9 @@ curl -X POST -H "X-API-Key: $KEY" \
 curl -H "X-API-Key: $KEY" \
   http://localhost:8000/api/v1/credentials
 
-# Delete a credential
+# Delete a credential (by credential ID, shown in the list response)
 curl -X DELETE -H "X-API-Key: $KEY" \
-  http://localhost:8000/api/v1/credentials/openai-key
+  http://localhost:8000/api/v1/credentials/<credential-uuid>
 ```
 
 ---
@@ -95,7 +95,7 @@ Blackbeard implements the A2A protocol for inter-agent discovery. Crews with `sp
 curl http://localhost:8000/.well-known/agent-card.json
 ```
 
-Returns a JSON array of agent cards with skills (derived from task refs), authentication schemes, and capabilities. Cached for 60 seconds.
+Returns `{"agents": [ ... ]}` -- a list of agent cards with skills (derived from task refs), authentication schemes, and capabilities. Cached for 60 seconds.
 
 ### Enabling A2A on a Crew
 
@@ -158,10 +158,10 @@ The PII system supports four compliance presets that define which entity types t
 
 | Preset | Entities |
 |--------|----------|
-| `hipaa` | PERSON, PHONE_NUMBER, EMAIL_ADDRESS, DATE_TIME, LOCATION, US_SSN, MEDICAL_LICENSE, US_DRIVER_LICENSE, IP_ADDRESS |
-| `gdpr` | PERSON, PHONE_NUMBER, EMAIL_ADDRESS, LOCATION, DATE_TIME, IP_ADDRESS, IBAN_CODE, CREDIT_CARD |
-| `pci-dss` | CREDIT_CARD, IBAN_CODE, US_BANK_NUMBER, US_SSN |
-| `ccpa` | PERSON, PHONE_NUMBER, EMAIL_ADDRESS, LOCATION, DATE_TIME, IP_ADDRESS, US_SSN, US_DRIVER_LICENSE |
+| `hipaa` | PERSON, DATE_TIME, US_SSN, PHONE_NUMBER, EMAIL_ADDRESS, LOCATION, IP_ADDRESS, MEDICAL_LICENSE, US_DRIVER_LICENSE |
+| `gdpr` | PERSON, EMAIL_ADDRESS, PHONE_NUMBER, LOCATION, IP_ADDRESS, DATE_TIME, IBAN_CODE, NRP |
+| `pci-dss` | CREDIT_CARD, IBAN_CODE, US_BANK_NUMBER, PERSON |
+| `ccpa` | PERSON, EMAIL_ADDRESS, PHONE_NUMBER, LOCATION, IP_ADDRESS, US_SSN, US_DRIVER_LICENSE, CREDIT_CARD |
 
 Use presets in PII Studio nodes or guardrail configurations to automatically detect and redact sensitive data before it reaches LLM providers.
 
@@ -223,7 +223,7 @@ cd sdks/python && pip install -e .
 ```
 
 ```python
-from blackbeard import BlackbeardClient
+from blackbeard_sdk import BlackbeardClient
 
 client = BlackbeardClient("http://localhost:8000", api_key="your-key")
 
@@ -240,13 +240,13 @@ result = client.wait(execution["id"])
 ### TypeScript
 
 ```bash
-npm install @blackbeard/sdk
+npm install blackbeard-sdk
 # or from source
 cd sdks/typescript && npm install && npm run build
 ```
 
 ```typescript
-import { BlackbeardClient } from "@blackbeard/sdk";
+import { BlackbeardClient } from "blackbeard-sdk";
 
 const client = new BlackbeardClient("http://localhost:8000", { apiKey: "your-key" });
 
@@ -370,34 +370,7 @@ When `TEMPORAL_HOST` is not set, Blackbeard falls back to ThreadPoolExecutor (th
 
 ---
 
-## MCP tools
-
-Tool resources with `type: mcp-stdio` or `type: mcp-http` attach to agents as CrewAI MCP server configs (`mcps`), not in-process Python tools. Stdio servers need `command`/`args`/`env`; HTTP servers need `url` (SSRF-checked). See `examples/tools/mcp-*.yaml`.
-
-## Tool sandbox tiers
-
-Tools can run under isolation tiers (`none`, `wasm`, `docker`/`podman`, `gvisor`, `microvm`). See [tool-sandboxes.md](tool-sandboxes.md) for declaration patterns, `image` overrides, and network capabilities.
-
-## Resource Versioning
-
-Every resource create or update is snapshotted in the database. List versions, inspect a snapshot, and roll back via the REST API:
-
-```bash
-# List versions for a resource
-curl -H "X-API-Key: $KEY" \
-  http://localhost:8000/api/v1/agents/researcher/versions
-
-# Get a specific version
-curl -H "X-API-Key: $KEY" \
-  http://localhost:8000/api/v1/agents/researcher/versions/3
-
-# Roll back to a previous version
-curl -X POST -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
-  -d '{"version": 3}' \
-  http://localhost:8000/api/v1/agents/researcher/rollback
-```
-
-### Monitoring Stack
+## Monitoring Stack
 
 Optional OpenTelemetry export via `OTEL_ENDPOINT`. The `deploy/monitoring/` directory includes Prometheus scrape configs, Grafana dashboard JSON, and alerting rules for production deployments.
 
