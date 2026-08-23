@@ -179,6 +179,19 @@ class TestRegisterCrewRunner:
         assert "blackbeard.engine.executor" not in source
 
 
+class TestWorkerTaskObservation:
+    def test_worker_task_has_exception_observer(self):
+        # A crashed worker (lost connection, failed poller) must be logged:
+        # without the done-callback the failure is silent and dispatched
+        # executions sit in "running" until their workflow timeout.
+        import inspect
+
+        from blackbeard.engine.temporal import start_temporal_worker
+
+        source = inspect.getsource(start_temporal_worker)
+        assert "_worker_task.add_done_callback(log_task_exception)" in source
+
+
 # ---------------------------------------------------------------------------
 # Settings defaults for temporal fields
 # ---------------------------------------------------------------------------

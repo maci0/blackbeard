@@ -410,9 +410,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     t0 = time.monotonic()
     logger.info("Shutdown starting", extra={"event": "app_shutdown_start"})
     try:
+        # Stop the periodic loops and wait for them before disposing engines:
+        # an un-awaited cancelled task can still hold a DB session when
+        # engine.dispose() runs below.
+        loop_tasks = [scheduler_resync_task]
         if retention_task is not None:
-            retention_task.cancel()
-        scheduler_resync_task.cancel()
+            loop_tasks.append(retention_task)
+        for task in loop_tasks:
+            task.cancel()
+        if loop_tasks:
+            await asyncio.gather(*loop_tasks, return_exceptions=True)
         await scheduler.stop()
         if temporal_running:
             try:

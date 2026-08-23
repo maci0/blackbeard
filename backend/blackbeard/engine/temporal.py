@@ -21,6 +21,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from blackbeard.config import settings
+from blackbeard.logging_config import log_task_exception
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -303,6 +304,10 @@ async def start_temporal_worker() -> None:
         )
 
     _worker_task = asyncio.create_task(_run_worker())
+    # Observe worker death: without this a crashed worker (lost Temporal
+    # connection, failed poller) goes unlogged and dispatched executions sit
+    # in "running" until their workflow timeout with no signal to operators.
+    _worker_task.add_done_callback(log_task_exception)
 
 
 async def stop_temporal_worker() -> None:
