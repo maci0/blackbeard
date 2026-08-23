@@ -927,6 +927,11 @@ class TestFlushBuffer:
         assert len(listener._buffer) == 1
         assert listener._buffer[0] is event
 
+        # Failure schedules a retry timer; cancel it so no background thread
+        # keeps retrying the failing flush after this test ends.
+        assert listener._flush_timer is not None
+        listener._flush_timer.cancel()
+
 
 # ===========================================================================
 # 8. flush (final flush with timer cancellation)
