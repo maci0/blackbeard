@@ -913,8 +913,10 @@ def _run_crew_sync(
         },
     )
     loop = asyncio.new_event_loop()
-    thread_session = thread_session_factory()
     try:
+        # Inside try so a factory failure (e.g. bg engine already disposed
+        # during shutdown) cannot skip the loop.close() below.
+        thread_session = thread_session_factory()
         loop.run_until_complete(
             run_crew_async(
                 execution_id,
@@ -1090,6 +1092,11 @@ async def run_crew_async(
         )
 
         listener: BlackbeardExecutionListener | None = None
+        # Initialized before try: the finally block reads virtual_api_key, and
+        # a failure during snapshot materialization below must not surface as
+        # UnboundLocalError from the cleanup path instead of the real error.
+        virtual_api_key: str | None = None
+        key_mgr: Any = None
         try:
             mock_resources = {
                 key: Resource(
@@ -1102,7 +1109,6 @@ async def run_crew_async(
             }
 
             # --- Budget enforcement via LiteLLM virtual keys ---
-            virtual_api_key: str | None = None
             policy_specs = _extract_policy_specs(resource_snapshot)
             max_budget, max_tokens, listener_pii_config, alert_thresholds = _derive_budget_and_pii(
                 resource_snapshot, crew_name, policy_specs

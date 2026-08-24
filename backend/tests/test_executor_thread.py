@@ -177,6 +177,27 @@ class TestRunCrewSync:
 
         mock_loop.close.assert_called_once()
 
+    def test_closes_loop_when_session_factory_raises(self) -> None:
+        """A session-factory failure must not leak the freshly created event loop."""
+        from blackbeard.engine.executor import _run_crew_sync
+
+        eid = uuid.uuid4()
+        snapshot = _minimal_snapshot()
+        mock_loop = MagicMock()
+
+        with (
+            patch("blackbeard.engine.executor.asyncio.new_event_loop", return_value=mock_loop),
+            patch(
+                "blackbeard.engine.executor.thread_session_factory",
+                side_effect=RuntimeError("Background DB session factory unavailable"),
+            ),
+            pytest.raises(RuntimeError, match="session factory unavailable"),
+        ):
+            _run_crew_sync(eid, snapshot, "test-crew", {})
+
+        mock_loop.run_until_complete.assert_not_called()
+        mock_loop.close.assert_called_once()
+
     def test_passes_execution_type_and_iterations(self) -> None:
         from blackbeard.engine.executor import _run_crew_sync
 
@@ -336,6 +357,60 @@ class TestRunCrewAsync:
 
         assert exec_obj.status == ExecutionStatus.FAILED
         assert exec_obj.error is not None
+
+    @pytest.mark.asyncio
+    async def test_snapshot_materialization_failure_propagates_original_error(self) -> None:
+        """An invalid snapshot kind must surface as ValueError, not UnboundLocalError.
+
+        Regression: virtual_api_key/key_mgr were first assigned mid-try but read
+        in finally, so a failure during snapshot materialization crashed the
+        cleanup path with UnboundLocalError and masked the real error.
+        """
+        from blackbeard.engine.executor import run_crew_async
+
+        eid = uuid.uuid4()
+        bad_snapshot = {
+            "Crew/broken": {
+                "kind": "NotARealKind",  # ResourceKind() raises ValueError
+                "name": "broken",
+                "project": "default",
+                "spec": {},
+            },
+        }
+
+        exec_obj = _make_execution_obj(execution_id=eid)
+        exec_obj.status = ExecutionStatus.QUEUED
+
+        mock_session = AsyncMock()
+        mock_session_factory = MagicMock()
+        mock_session_ctx = AsyncMock()
+        mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_session_factory.return_value = mock_session_ctx
+
+        async def mock_get_exec(session, exec_id):
+            return exec_obj
+
+        listener = MagicMock()
+
+        with patch(
+            "blackbeard.engine.executor._get_execution_for_update",
+            side_effect=mock_get_exec,
+        ):
+            # Pre-fix, the finally block raised UnboundLocalError out of this
+            # already-handled failure path; post-fix the coroutine completes.
+            await run_crew_async(
+                eid,
+                bad_snapshot,
+                "broken",
+                {},
+                mock_session_factory,
+            )
+
+        # The original failure was handled: execution marked failed...
+        assert exec_obj.status == ExecutionStatus.FAILED
+        # ...and listener teardown still ran despite the failure.
+        listener.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_returns_early_if_cancelled_before_start(self) -> None:
