@@ -328,7 +328,7 @@ The Studio property panel includes a bidirectional YAML editor (Monaco). You can
 ### Create users
 
 ```bash
-uv run blackbeard user invite -e alice@example.com -d "Alice"
+uv run blackbeard user invite -e alice@example.com --display-name "Alice"
 ```
 
 ### Manage groups

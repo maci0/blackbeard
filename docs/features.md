@@ -313,18 +313,30 @@ Extend Blackbeard with custom functionality through 4 plugin extension types:
 | `auth_provider` | External authentication provider integration |
 | `execution_hook` | Pre/post execution callbacks for logging, metrics, or side effects |
 
-Plugins are registered via Python entry points or the plugin API. Each plugin type has a base class to implement:
+Plugins are discovered by scanning the plugin directory (`PLUGIN_DIR` env var, default `plugins/`) for Python modules that expose a `blackbeard_plugin` dict at module level. Each plugin type has a base class to implement:
 
 ```python
-from blackbeard.plugins import ToolPlugin
+from typing import Any
+
+from blackbeard.plugins.base import ToolPlugin
 
 class MyCustomTool(ToolPlugin):
     name = "my-tool"
     description = "Does something useful"
 
-    def run(self, input_data: str) -> str:
-        return f"Processed: {input_data}"
+    def execute(self, input: dict[str, Any]) -> dict[str, Any]:
+        return {"result": f"Processed: {input}"}
+
+blackbeard_plugin = {
+    "name": "my-tool",
+    "version": "1.0.0",
+    "description": "Does something useful",
+    "type": "tool",
+    "handler": MyCustomTool,
+}
 ```
+
+See `plugins/example_tool.py` in the repository for a complete example.
 
 ---
 

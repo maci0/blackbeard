@@ -68,4 +68,4 @@ spec:
 
 ## Sandbox
 
-Tools with `sandbox: wasm` run inside a WebAssembly runtime with restricted WASI capabilities. The `env` capability passes a fixed set of safe environment variables (`LANG`, `LC_ALL`, `TZ`, `TERM`).
+Only `type: wasm` tools run in the WebAssembly runtime, with restricted WASI capabilities. The `env` capability passes a fixed set of safe environment variables (`LANG`, `LC_ALL`, `TZ`, `TERM`). Python/builtin tools declared with `sandbox: wasm` are promoted to `docker` instead; see [docs/tool-sandboxes.md](../../docs/tool-sandboxes.md) for all tiers.

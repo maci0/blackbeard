@@ -290,7 +290,7 @@ Click the gear icon in the toolbar to open the Crew Settings dialog. You can con
 - **On Error Action**: What to do when the crew encounters an error (e.g., run a different crew).
 - **On Error Crew**: Which crew to run as an error handler.
 
-These settings save as `spec.hooks.on_error` in the Crew resource.
+These settings save as `spec.hooks.on_error` in the Crew resource (stored only; the executor does not yet invoke `on_error` at runtime).
 
 ## Tips
 

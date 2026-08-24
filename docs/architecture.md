@@ -474,7 +474,7 @@ POST   /api/v1/webhooks/{id}/test    → Send a signed test delivery
 DELETE /api/v1/webhooks/{id}         → Remove a webhook
 ```
 
-**Event types:** `crew_started`, `task_completed`, `execution_completed`, `execution_failed`, and others. Register with an empty `events` list to receive all event types.
+**Event types:** `crew_started`, `crew_completed`, `task_started`, `task_completed`, `tool_started`, `tool_finished`, `llm_started`, `llm_completed`, `cost_alert`, `hitl_request`, and `hitl_response` (see `ExecutionEventType` in `backend/blackbeard/models/execution.py`). Register with an empty `events` list to receive all event types.
 
 **Signing:** Each webhook has an HMAC-SHA256 signing secret (auto-generated or user-provided). The signature is included in the delivery headers so you can verify authenticity.
 
@@ -572,7 +572,7 @@ The Studio visual editor uses [ELK.js](https://github.com/kieler/elkjs) for auto
 
 **Canvas JSON export:** Toolbar "Export" button downloads canvas state as JSON; "Copy as JSON" copies to clipboard.
 
-**Crew Settings:** Configures error workflow (run error crew / retry N times / ignore) via a dialog accessible from crew node context menu.
+**Crew Settings:** Configures error workflow (no action / run an error crew / retry / ignore) via a dialog opened from the toolbar gear icon. Settings are stored as `spec.hooks.on_error` on the Crew resource (not yet enforced at runtime).
 
 ---
 
@@ -648,7 +648,7 @@ The plugin SDK (`backend/blackbeard/plugins/`) provides 4 extension points for c
 | `auth_provider` | `AuthProviderPlugin` | External authentication provider integration (LDAP, SAML, etc.) |
 | `execution_hook` | `ExecutionHookPlugin` | Pre/post execution callbacks for logging, metrics, or side effects |
 
-Plugins are discovered via Python entry points (`blackbeard.plugins` group) or registered programmatically through the plugin API. Each plugin type defines a base class with abstract methods that implementations must provide.
+Plugins are discovered by scanning the plugin directory (default `plugins/`, override with `PLUGIN_DIR`) for Python modules that expose a `blackbeard_plugin` dict at module level; each dict carries metadata and a handler class subclassing one of the base classes. The `/api/v1/plugins` REST API lists and reloads registered plugins. Each plugin type defines a base class with abstract methods that implementations must provide.
 
 ---
 
