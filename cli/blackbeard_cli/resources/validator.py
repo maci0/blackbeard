@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections
 import concurrent.futures
 import ipaddress
 import logging
@@ -9,6 +10,7 @@ import os
 import re
 import socket
 import threading
+import time
 from typing import Any
 from urllib.parse import urlparse
 
@@ -142,6 +144,7 @@ _BLOCKED_ENV_EXACT = frozenset(
         "MASTER_KEY",
     }
 )
+_BLOCKED_ENV_PREFIX_FIRST_CHARS = frozenset(p[0] for p in _BLOCKED_ENV_PREFIXES)
 
 _INTERNAL_HOSTNAMES = frozenset(
     {
@@ -226,15 +229,14 @@ _SAFE_PATH_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/ -]*$")
 
 def is_blocked_env_name(name: str) -> bool:
     """Check if an environment variable name is on the blocklist."""
+    if not name:
+        return False
     upper = name.upper()
-    return upper.startswith(_BLOCKED_ENV_PREFIXES) or upper in _BLOCKED_ENV_EXACT
-
-
-def check_url_ssrf(url: str) -> str | None:
-    """Check a URL for SSRF risks. Returns an error message or None if safe."""
-    errors: list[ValidationError] = []
-    _validate_url_ssrf(url, "url", errors)
-    return errors[0].message if errors else None
+    if upper in _BLOCKED_ENV_EXACT:
+        return True
+    if upper[0] not in _BLOCKED_ENV_PREFIX_FIRST_CHARS:
+        return False
+    return upper.startswith(_BLOCKED_ENV_PREFIXES)
 
 
 def _is_path_traversal(path: str) -> bool:
@@ -246,18 +248,33 @@ def _is_path_traversal(path: str) -> bool:
     normalized = path.replace("\\", "/")
     if ".." in normalized.split("/"):
         return True
-    return not _SAFE_PATH_PATTERN.match(path)
+    return not _SAFE_PATH_PATTERN.fullmatch(path)
 
 
-_ALLOW_INTERNAL_URLS = os.environ.get("ALLOW_INTERNAL_URLS", "").lower() in ("1", "true", "yes")
+def check_url_ssrf(url: str) -> str | None:
+    """Check a URL for SSRF risks. Returns an error message or None if safe."""
+    errors: list[ValidationError] = []
+    _validate_url_ssrf(url, "url", errors)
+    return errors[0].message if errors else None
+
+
+def _allow_internal_urls() -> bool:
+    # Read dynamically so tests and callers can toggle the flag per-run.
+    return os.environ.get("ALLOW_INTERNAL_URLS", "").lower() in ("1", "true", "yes")
 
 
 def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError]) -> None:
     """Validate a URL against SSRF, reusable across kinds.
 
+    Performs two layers of validation:
+    1. Hostname-based checks (blocklists, IP format checks)
+    2. DNS resolution check, resolves the hostname and verifies all resolved
+       IPs are routable. This prevents DNS rebinding attacks where a public
+       domain resolves to an internal IP (e.g., 169.254.169.254).
+
     Set ALLOW_INTERNAL_URLS=true to skip SSRF checks (local dev with Ollama, etc.).
     """
-    if _ALLOW_INTERNAL_URLS:
+    if _allow_internal_urls():
         return
     try:
         parsed = urlparse(url)
@@ -290,6 +307,10 @@ def _validate_url_ssrf(url: str, field_name: str, errors: list[ValidationError])
 _DNS_EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
 _DNS_EXECUTOR_LOCK = threading.Lock()
 
+_DNS_CACHE_TTL = 3600  # 1 hour
+_dns_cache: collections.OrderedDict[str, tuple[float, str | None]] = collections.OrderedDict()
+_dns_cache_lock = threading.Lock()
+
 
 def _get_dns_executor() -> concurrent.futures.ThreadPoolExecutor:
     """Return a shared executor for DNS resolution.
@@ -306,48 +327,170 @@ def _get_dns_executor() -> concurrent.futures.ThreadPoolExecutor:
         return _DNS_EXECUTOR
 
 
-def _check_dns_resolution(hostname: str, field_name: str, errors: list[ValidationError]) -> None:
-    """Resolve hostname via DNS and reject if any address is internal.
+def shutdown_dns_executor() -> None:
+    """Shut down the shared DNS resolution thread pool."""
+    global _DNS_EXECUTOR
+    with _DNS_EXECUTOR_LOCK:
+        executor = _DNS_EXECUTOR
+        _DNS_EXECUTOR = None
+    if executor is not None:
+        executor.shutdown(wait=False)
 
-    Runs in a thread with a 5-second timeout to avoid blocking the CLI
-    when DNS is slow or unresponsive.
+
+def _dns_cache_get(hostname: str) -> tuple[bool, str | None]:
+    """Return (hit, error_msg). error_msg is None when hostname is safe."""
+    with _dns_cache_lock:
+        entry = _dns_cache.get(hostname)
+        if entry is not None:
+            ts, val = entry
+            if time.monotonic() - ts < _DNS_CACHE_TTL:
+                _dns_cache.move_to_end(hostname)
+                return True, val
+            del _dns_cache[hostname]
+        return False, None
+
+
+_DNS_CACHE_MAX = 2048
+_DNS_INTERNAL_IP_MSG = "URL hostname resolves to an internal/private IP address."
+
+
+def _dns_cache_put(hostname: str, error: str | None) -> None:
+    """Cache DNS validation result. None = safe, str = error message."""
+    with _dns_cache_lock:
+        while len(_dns_cache) >= _DNS_CACHE_MAX:
+            _dns_cache.popitem(last=False)
+        _dns_cache[hostname] = (time.monotonic(), error)
+
+
+def _resolve_addresses(host: str, timeout: float) -> tuple[list[str] | None, str | None]:
+    """Resolve *host* to address strings via the shared DNS executor pool.
+
+    Returns ``(addresses, None)`` on success or ``(None, error_message)``
+    on timeout or resolution failure.
     """
 
     def _resolve() -> list[tuple[Any, ...]]:
-        return socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        return socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
 
     try:
-        pool = _get_dns_executor()
-        future = pool.submit(_resolve)
-        results = future.result(timeout=5.0)
-        for _family, _type, _proto, _canonname, sockaddr in results:
-            addr_str = sockaddr[0]
-            try:
-                addr = ipaddress.ip_address(addr_str)
-                if _is_internal_ip(addr):
-                    errors.append(
-                        ValidationError(
-                            field_name,
-                            "URL hostname resolves to an internal/private IP address.",
-                        )
-                    )
-                    return
-            except ValueError:
-                pass
+        future = _get_dns_executor().submit(_resolve)
+        results = future.result(timeout=timeout)
     except concurrent.futures.TimeoutError:
-        errors.append(
-            ValidationError(
-                field_name,
-                "URL hostname DNS resolution timed out. Verify the hostname is correct.",
-            )
-        )
+        return None, "URL hostname DNS resolution timed out. Verify the hostname is correct."
     except socket.gaierror:
-        errors.append(
-            ValidationError(
-                field_name,
-                "URL hostname could not be resolved. Verify the hostname is correct.",
+        return None, "URL hostname could not be resolved. Verify the hostname is correct."
+    except OSError:
+        return None, "URL hostname could not be resolved."
+    return [sockaddr[0] for _family, _type, _proto, _canonname, sockaddr in results], None
+
+
+def _check_dns_resolution(hostname: str, field_name: str, errors: list[ValidationError]) -> None:
+    """Resolve hostname via DNS and reject if any address is internal.
+
+    Results are cached for 1 hour as pass/fail to avoid repeated blocking
+    DNS lookups and IP re-parsing across resource create/update calls.
+    """
+    hit, cached_error = _dns_cache_get(hostname)
+    if hit:
+        if cached_error is not None:
+            errors.append(ValidationError(field_name, cached_error))
+        return
+
+    addresses, resolve_error = _resolve_addresses(hostname, timeout=2.0)
+    if resolve_error is not None:
+        _dns_cache_put(hostname, resolve_error)
+        errors.append(ValidationError(field_name, resolve_error))
+        return
+
+    for addr_str in addresses or []:
+        try:
+            addr = ipaddress.ip_address(addr_str)
+            if _is_internal_ip(addr):
+                _dns_cache_put(hostname, _DNS_INTERNAL_IP_MSG)
+                errors.append(ValidationError(field_name, _DNS_INTERNAL_IP_MSG))
+                return
+        except ValueError:
+            logger.debug(
+                "Resolved DNS address %r for %s not parseable as IP",
+                addr_str,
+                hostname,
+                extra={
+                    "event": "dns_resolve_parse_error",
+                    "hostname": hostname,
+                    "addr": addr_str,
+                },
             )
-        )
+    _dns_cache_put(hostname, None)
+
+
+# Short-TTL cache for delivery-time re-resolution. Registration-time DNS
+# checks go stale: attacker-controlled DNS can answer with a public IP during
+# validation and an internal IP later (DNS rebinding, TOCTOU). Outbound sinks
+# must re-resolve close to connect time, hence the short positive TTL.
+_DELIVERY_DNS_TTL = 60.0
+_delivery_dns_cache: collections.OrderedDict[str, tuple[float, bool]] = collections.OrderedDict()
+_delivery_dns_cache_lock = threading.Lock()
+
+
+def host_resolves_external(hostname: str, timeout: float = 2.0) -> bool:
+    """Resolve *hostname* now and verify every address is non-internal.
+
+    Delivery-time SSRF defense against DNS rebinding for URLs that already
+    passed registration-time validation. Fails closed: unresolvable or
+    unparseable addresses count as unsafe.
+    """
+    host = hostname.lower().rstrip(".")
+    if not host:
+        return False
+    if _allow_internal_urls():
+        return True
+
+    now = time.monotonic()
+    with _delivery_dns_cache_lock:
+        entry = _delivery_dns_cache.get(host)
+        if entry is not None and now - entry[0] < _DELIVERY_DNS_TTL:
+            _delivery_dns_cache.move_to_end(host)
+            return entry[1]
+
+    def _resolve() -> list[tuple[Any, ...]]:
+        return socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+
+    safe = False
+    try:
+        future = _get_dns_executor().submit(_resolve)
+        results = future.result(timeout=timeout)
+        safe = True
+        for _family, _type, _proto, _canonname, sockaddr in results:
+            try:
+                addr = ipaddress.ip_address(sockaddr[0])
+            except ValueError:
+                safe = False
+                break
+            if _is_internal_ip(addr):
+                safe = False
+                break
+    except (concurrent.futures.TimeoutError, OSError):
+        safe = False
+
+    with _delivery_dns_cache_lock:
+        while len(_delivery_dns_cache) >= _DNS_CACHE_MAX:
+            _delivery_dns_cache.popitem(last=False)
+        _delivery_dns_cache[host] = (time.monotonic(), safe)
+    return safe
+
+
+def _validate_agent_policy_extra(spec: dict[str, Any], errors: list[ValidationError]) -> None:
+    """Block SSRF via the PII redaction proxy URL.
+
+    ``pii.proxy_url`` receives the LiteLLM master key as a bearer token at
+    runtime (blackbeard.pii), so it must never be allowed to point at an
+    internal or attacker-chosen address.
+    """
+    pii = spec.get("pii")
+    if isinstance(pii, dict):
+        proxy_url = pii.get("proxy_url")
+        if proxy_url and isinstance(proxy_url, str):
+            _validate_url_ssrf(proxy_url, "spec.pii.proxy_url", errors)
 
 
 def _validate_knowledge_source_extra(spec: dict[str, Any], errors: list[ValidationError]) -> None:
@@ -382,45 +525,54 @@ ALLOWED_TOOL_MODULE_PREFIXES = (
     "langchain.tools.",
 )
 
-BLOCKED_TOOL_SUBMODULES = (
-    "langchain_community.tools.shell",
-    "langchain_community.tools.python",
-    "langchain_community.tools.file_management",
-    "langchain_community.tools.requests_tool",
-    "langchain_community.tools.sql_database",
-    "langchain_community.tools.zapier",
-    "langchain_community.tools.playwright",
-    "langchain.tools.python_tool",
-    "langchain.tools.shell_tool",
-    "crewai_tools.code_interpreter_tool",
-    "crewai_tools.code_docs_search_tool",
+BLOCKED_TOOL_SUBMODULES = frozenset(
+    {
+        "langchain_community.tools.shell",
+        "langchain_community.tools.python",
+        "langchain_community.tools.file_management",
+        "langchain_community.tools.requests_tool",
+        "langchain_community.tools.sql_database",
+        "langchain_community.tools.zapier",
+        "langchain_community.tools.playwright",
+        "langchain.tools.python_tool",
+        "langchain.tools.shell_tool",
+        "crewai_tools.code_interpreter_tool",
+        "crewai_tools.code_docs_search_tool",
+    }
 )
+_BLOCKED_TOOL_SUBMODULE_PREFIXES = tuple(b + "." for b in BLOCKED_TOOL_SUBMODULES)
+
+
+def check_tool_class_path(class_path: str) -> str | None:
+    """Return an error message if *class_path* is blocked, else ``None``.
+
+    Checks both the module prefix allowlist and the blocked-submodule denylist.
+    Used at validation time (resource creation) and at runtime (loader).
+    """
+    if not class_path.startswith(ALLOWED_TOOL_MODULE_PREFIXES):
+        return (
+            f"class_path '{class_path}' is not in the allowed module list. "
+            f"Permitted prefixes: {', '.join(ALLOWED_TOOL_MODULE_PREFIXES)}"
+        )
+    if "." in class_path:
+        module_path = class_path.rsplit(".", 1)[0]
+        if module_path in BLOCKED_TOOL_SUBMODULES or module_path.startswith(
+            _BLOCKED_TOOL_SUBMODULE_PREFIXES
+        ):
+            return (
+                f"class_path '{class_path}' references a blocked module "
+                f"that can execute arbitrary code."
+            )
+    return None
 
 
 def _validate_tool_extra(spec: dict[str, Any], errors: list[ValidationError]) -> None:
     """Block SSRF in tool URL, env var exfiltration, shell injection, and dangerous imports."""
     class_path = spec.get("class_path")
     if class_path and isinstance(class_path, str) and spec.get("type", "python") == "python":
-        if not class_path.startswith(ALLOWED_TOOL_MODULE_PREFIXES):
-            errors.append(
-                ValidationError(
-                    "spec.class_path",
-                    f"class_path '{class_path}' is not in the allowed module list. "
-                    f"Permitted prefixes: {', '.join(ALLOWED_TOOL_MODULE_PREFIXES)}",
-                )
-            )
-        elif "." in class_path:
-            module_path = class_path.rsplit(".", 1)[0]
-            for blocked in BLOCKED_TOOL_SUBMODULES:
-                if module_path == blocked or module_path.startswith(blocked + "."):
-                    errors.append(
-                        ValidationError(
-                            "spec.class_path",
-                            f"class_path '{class_path}' references a blocked module "
-                            f"that can execute arbitrary code.",
-                        )
-                    )
-                    break
+        error = check_tool_class_path(class_path)
+        if error:
+            errors.append(ValidationError("spec.class_path", error))
 
     url = spec.get("url")
     if url and isinstance(url, str):
@@ -446,7 +598,6 @@ def _validate_tool_extra(spec: dict[str, Any], errors: list[ValidationError]) ->
                 )
             )
 
-    # Validate args for shell injection
     args = spec.get("args", [])
     if isinstance(args, list):
         for i, arg in enumerate(args):
@@ -535,6 +686,27 @@ BLOCKED_CALLABLE_MODULES = frozenset(
 )
 
 
+def check_callable_path(path: str) -> str | None:
+    """Return an error message if callable *path* is blocked, else ``None``.
+
+    Handles both dotted paths (``module.func``) and colon notation
+    (``module.path:func``).  Used at validation time and at runtime
+    (loader, flow runner).
+    """
+    top_module = path.split(".")[0].split(":")[0]
+    if top_module in BLOCKED_CALLABLE_MODULES:
+        return f"references a blocked module '{top_module}'"
+    if not path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
+        return (
+            f"not in the allowed module list. "
+            f"Permitted prefixes: {', '.join(ALLOWED_CALLABLE_MODULE_PREFIXES)}"
+        )
+    attr_name = path.rsplit(":", 1)[1] if ":" in path else path.rsplit(".", 1)[-1]
+    if attr_name.startswith("_"):
+        return f"references a private/dunder attribute '{attr_name}'"
+    return None
+
+
 def _validate_function_path(
     spec: dict[str, Any], field_name: str, errors: list[ValidationError]
 ) -> None:
@@ -542,23 +714,9 @@ def _validate_function_path(
     func_path = spec.get("function_path")
     if not func_path or not isinstance(func_path, str):
         return
-    top_module = func_path.split(".")[0].split(":")[0]
-    if top_module in BLOCKED_CALLABLE_MODULES:
-        errors.append(
-            ValidationError(
-                field_name,
-                f"Function path '{func_path}' references a blocked module '{top_module}'.",
-            )
-        )
-        return
-    if not func_path.startswith(ALLOWED_CALLABLE_MODULE_PREFIXES):
-        errors.append(
-            ValidationError(
-                field_name,
-                f"Function path '{func_path}' is not in the allowed module list. "
-                f"Permitted prefixes: {', '.join(ALLOWED_CALLABLE_MODULE_PREFIXES)}",
-            )
-        )
+    error = check_callable_path(func_path)
+    if error:
+        errors.append(ValidationError(field_name, f"Function path '{func_path}' {error}"))
 
 
 def _validate_flow_extra(spec: dict[str, Any], errors: list[ValidationError]) -> None:
@@ -678,6 +836,8 @@ def validate_resource(
 
     if kind == "LLMConnection":
         _validate_llm_connection_extra(spec, errors)
+    elif kind == "AgentPolicy":
+        _validate_agent_policy_extra(spec, errors)
     elif kind == "KnowledgeSource":
         _validate_knowledge_source_extra(spec, errors)
     elif kind == "Tool":

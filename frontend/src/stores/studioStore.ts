@@ -12,7 +12,6 @@ import {
 } from '@xyflow/react'
 
 export const MAX_HISTORY = 30
-const HISTORY_DEBOUNCE_MS = 100
 const NODE_DATA_DEBOUNCE_MS = 500
 
 function cloneSnapshot(nodes: Node[], edges: Edge[]): HistorySnapshot {
@@ -70,12 +69,12 @@ export const useStudioStore = create<StudioState>()(
   persist(
     (set, get) => {
       let lastHistoryPush = 0
+      // True while the live canvas has diverged from every history snapshot.
+      // Only then does undo need to capture the live state as a redo target;
+      // stepping back from a restored snapshot (post-redo) must not append.
+      let liveDirty = false
 
       function pushHistory() {
-        const now = Date.now()
-        if (now - lastHistoryPush < HISTORY_DEBOUNCE_MS) return
-        lastHistoryPush = now
-
         const { nodes, edges, history, historyIndex } = get()
         const newHistory = history.slice(0, historyIndex + 1)
         newHistory.push(cloneSnapshot(nodes, edges))
@@ -84,7 +83,7 @@ export const useStudioStore = create<StudioState>()(
         set({
           history: newHistory,
           historyIndex: newIndex,
-          canUndo: newIndex >= 1,
+          canUndo: true,
           canRedo: false,
         })
       }
@@ -111,7 +110,11 @@ export const useStudioStore = create<StudioState>()(
               (c.type === 'position' && c.dragging === false),
           )
           if (hasStructuralChange) pushHistory()
-          set((state) => ({ nodes: applyNodeChanges(changes, state.nodes), dirty: true }))
+          liveDirty = true
+          set((state) => ({
+            nodes: applyNodeChanges(changes, state.nodes),
+            dirty: hasStructuralChange,
+          }))
         },
 
         onEdgesChange: (changes) => {
@@ -119,21 +122,28 @@ export const useStudioStore = create<StudioState>()(
             (c) => c.type === 'remove' || c.type === 'add' || c.type === 'replace',
           )
           if (hasStructuralChange) pushHistory()
-          set((state) => ({ edges: applyEdgeChanges(changes, state.edges), dirty: true }))
+          liveDirty = true
+          set((state) => ({
+            edges: applyEdgeChanges(changes, state.edges),
+            dirty: hasStructuralChange,
+          }))
         },
 
         onConnect: (connection) => {
           pushHistory()
+          liveDirty = true
           set((state) => ({ edges: addEdge(connection, state.edges), dirty: true }))
         },
 
         addNode: (node) => {
           pushHistory()
+          liveDirty = true
           set((state) => ({ nodes: [...state.nodes, node], dirty: true }))
         },
 
         removeNode: (id) => {
           pushHistory()
+          liveDirty = true
           set((state) => {
             const nodes = state.nodes.filter((n) => n.id !== id)
             const filteredEdges = state.edges.filter((e) => e.source !== id && e.target !== id)
@@ -152,6 +162,7 @@ export const useStudioStore = create<StudioState>()(
             pushHistory()
             lastHistoryPush = now
           }
+          liveDirty = true
           set((state) => {
             const idx = state.nodes.findIndex((n) => n.id === id)
             if (idx === -1) return state
@@ -165,13 +176,20 @@ export const useStudioStore = create<StudioState>()(
 
         setSelectedNode: (id) => set({ selectedNodeId: id }),
         setCrewName: (name) => set({ crewName: name }),
-        setNodes: (nodes) => set({ nodes }),
-        setEdges: (edges) => set({ edges }),
+        setNodes: (nodes) => {
+          liveDirty = true
+          set({ nodes })
+        },
+        setEdges: (edges) => {
+          liveDirty = true
+          set({ edges })
+        },
         setCrewSettings: (settings) => set({ crewSettings: settings, dirty: true }),
         markClean: () => set({ dirty: false }),
 
         pushNav: (crewName, nodes, edges) => {
           const state = get()
+          liveDirty = false
           set({
             navStack: [
               ...state.navStack,
@@ -194,6 +212,7 @@ export const useStudioStore = create<StudioState>()(
           if (state.navStack.length === 0) return null
           const stack = [...state.navStack]
           const entry = stack.pop()!
+          liveDirty = false
           set({
             navStack: stack,
             nodes: entry.nodes,
@@ -212,41 +231,47 @@ export const useStudioStore = create<StudioState>()(
         undo: () => {
           const state = get()
           const { history, historyIndex } = state
-          if (historyIndex < 0) return
+          if (historyIndex < 0 || history.length === 0) return
+          const atTip = historyIndex === history.length - 1
           let currentHistory = history
-          if (historyIndex === history.length - 1) {
+          let restoreIndex = historyIndex - 1
+          if (atTip && liveDirty) {
+            // The live state is not yet captured; record it as the redo
+            // target and step back to the last pushed snapshot.
             currentHistory = [...history, cloneSnapshot(state.nodes, state.edges)]
-            if (currentHistory.length > MAX_HISTORY + 1) currentHistory.shift()
+            if (currentHistory.length > MAX_HISTORY) currentHistory.shift()
+            restoreIndex = currentHistory.length - 2
+          } else if (restoreIndex < 0) {
+            return
           }
-          const prev = currentHistory[historyIndex]
-          if (prev) {
-            const newIndex = historyIndex - 1
-            set({
-              history: currentHistory,
-              nodes: prev.nodes,
-              edges: prev.edges,
-              historyIndex: newIndex,
-              dirty: true,
-              canUndo: newIndex >= 0,
-              canRedo: currentHistory[newIndex + 1] !== undefined,
-            })
-          }
+          const prev = currentHistory[restoreIndex]
+          if (!prev) return
+          liveDirty = false
+          set({
+            history: currentHistory,
+            nodes: prev.nodes,
+            edges: prev.edges,
+            historyIndex: restoreIndex,
+            dirty: true,
+            canUndo: restoreIndex >= 1,
+            canRedo: currentHistory[restoreIndex + 1] !== undefined,
+          })
         },
 
         redo: () => {
           const { history, historyIndex } = get()
           const next = history[historyIndex + 1]
-          if (next) {
-            const newIndex = historyIndex + 1
-            set({
-              nodes: next.nodes,
-              edges: next.edges,
-              historyIndex: newIndex,
-              dirty: true,
-              canUndo: newIndex >= 0,
-              canRedo: history[newIndex + 1] !== undefined,
-            })
-          }
+          if (!next) return
+          const newIndex = historyIndex + 1
+          liveDirty = false
+          set({
+            nodes: next.nodes,
+            edges: next.edges,
+            historyIndex: newIndex,
+            dirty: true,
+            canUndo: true,
+            canRedo: history[newIndex + 1] !== undefined,
+          })
         },
       }
     },

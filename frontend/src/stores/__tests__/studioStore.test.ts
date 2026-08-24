@@ -171,16 +171,14 @@ describe('studioStore', () => {
       expect(useStudioStore.getState().nodes).toHaveLength(2)
 
       // Undo: history records snapshot before each addNode.
-      // First undo saves live state at the tip, then restores the
+      // First undo saves live state as the redo target, then restores the
       // snapshot taken before addNode('node-2').
       useStudioStore.getState().undo()
       expect(useStudioStore.getState().nodes).toHaveLength(1)
       expect(useStudioStore.getState().nodes[0]!.id).toBe('node-1')
       expect(useStudioStore.getState().canRedo).toBe(true)
 
-      // Redo: steps forward through history, restoring the next snapshot.
-      // After two more redos we reach the saved live state (both nodes).
-      useStudioStore.getState().redo()
+      // Redo: steps forward through history, restoring the saved live state.
       useStudioStore.getState().redo()
       expect(useStudioStore.getState().nodes).toHaveLength(2)
       const ids = useStudioStore
@@ -196,6 +194,22 @@ describe('studioStore', () => {
       const state = useStudioStore.getState()
       expect(state.nodes).toHaveLength(0)
       expect(state.historyIndex).toBe(-1)
+    })
+
+    it('undo after redo steps back instead of re-appending the live state', () => {
+      useStudioStore.getState().addNode(makeNode('node-1'))
+      vi.advanceTimersByTime(200)
+      useStudioStore.getState().addNode(makeNode('node-2'))
+      vi.advanceTimersByTime(200)
+
+      useStudioStore.getState().undo()
+      useStudioStore.getState().redo()
+      expect(useStudioStore.getState().nodes).toHaveLength(2)
+
+      // This undo must go back to 1 node, not sit on the live snapshot.
+      useStudioStore.getState().undo()
+      expect(useStudioStore.getState().nodes).toHaveLength(1)
+      expect(useStudioStore.getState().nodes[0]!.id).toBe('node-1')
     })
 
     it('redo is a no-op when there is nothing to redo', () => {
