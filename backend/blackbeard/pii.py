@@ -124,10 +124,7 @@ def _analyzer_cache_key(config: dict[str, Any] | None) -> str:
     """
     backend = config.get("backend", "default") if config else "default"
     if backend == "litellm":
-        if config:
-            model, proxy_url = _resolve_litellm_config(config)
-        else:
-            model, proxy_url = _resolve_litellm_config({})
+        model, proxy_url = _resolve_litellm_config(config or {})
         return f"litellm:{model}:{proxy_url}"
     return str(backend)
 

@@ -639,25 +639,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                         )
                 except Exception as exc:
                     failed = True
-                    collision = isinstance(exc, IntegrityError)
-                    if collision:
-                        self._renumber_events(to_flush)
-                    with self._lock:
-                        dropped = self._requeue_locked(to_flush, collision)
-                    if dropped:
-                        logger.warning(
-                            "Dropped %d oldest pending events for %s: "
-                            "buffer exceeded %d during DB outage",
-                            dropped,
-                            self._execution_id,
-                            self._MAX_PENDING_EVENTS,
-                            extra={
-                                "event": "events_dropped_buffer_full",
-                                "execution_id": self._execution_id_str,
-                                "dropped_count": dropped,
-                                "buffer_max": self._MAX_PENDING_EVENTS,
-                            },
-                        )
+                    self._handle_failed_flush(to_flush, exc)
                     logger.error(
                         "Re-queued %d events for %s (flush failed, will retry on next flush): %s",
                         len(to_flush),
@@ -681,6 +663,33 @@ class BlackbeardExecutionListener(BaseEventListener):
                     self._flush_done.notify_all()
             if need_schedule:
                 self._schedule_flush()
+
+    def _handle_failed_flush(self, to_flush: list[ExecutionEvent], exc: Exception) -> None:
+        """Re-queue a batch whose DB write failed, dropping overflow if needed.
+
+        Renumbers the batch first on a sequence collision (unique constraint
+        on (execution_id, sequence)) so it can flush again; see
+        ``_renumber_events``. Callers hold ``_io_lock``.
+        """
+        collision = isinstance(exc, IntegrityError)
+        if collision:
+            self._renumber_events(to_flush)
+        with self._lock:
+            dropped = self._requeue_locked(to_flush, collision)
+        if dropped:
+            logger.warning(
+                "Dropped %d oldest pending events for %s: "
+                "buffer exceeded %d during DB outage",
+                dropped,
+                self._execution_id,
+                self._MAX_PENDING_EVENTS,
+                extra={
+                    "event": "events_dropped_buffer_full",
+                    "execution_id": self._execution_id_str,
+                    "dropped_count": dropped,
+                    "buffer_max": self._MAX_PENDING_EVENTS,
+                },
+            )
 
     def _requeue_locked(
         self,
@@ -1065,25 +1074,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                     session.commit()
                 committed = True
             except Exception as exc:
-                collision = isinstance(exc, IntegrityError)
-                if collision:
-                    self._renumber_events(to_flush)
-                with self._lock:
-                    dropped = self._requeue_locked(to_flush, collision)
-                if dropped:
-                    logger.warning(
-                        "Dropped %d oldest pending events for %s: "
-                        "buffer exceeded %d during DB outage",
-                        dropped,
-                        self._execution_id,
-                        self._MAX_PENDING_EVENTS,
-                        extra={
-                            "event": "events_dropped_buffer_full",
-                            "execution_id": self._execution_id_str,
-                            "dropped_count": dropped,
-                            "buffer_max": self._MAX_PENDING_EVENTS,
-                        },
-                    )
+                self._handle_failed_flush(to_flush, exc)
                 self._schedule_flush()
                 logger.exception(
                     "Failed to write event+task for %s: type=%s order=%d — "
