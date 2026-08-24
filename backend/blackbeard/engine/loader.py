@@ -58,8 +58,12 @@ _PATH_TRAVERSAL_INDICATORS = ("..", "~", "\\", "\x00")
 # Compiled-JSON-Schema guardrail validator cache.  Schemas repeat across
 # tasks and flow steps; Draft7Validator compilation is not free, so reuse
 # validators keyed by canonical schema JSON.  Bounded: cleared wholesale at
-# the cap (races are benign — worst case a validator is rebuilt).
+# the cap.  Guarded by a lock: build_crew()/build_task() run on concurrent
+# executor threads during parallel executions, so this dict is shared
+# mutable state (lock-always pattern, safe under GIL and free-threaded
+# Python).
 _SCHEMA_VALIDATOR_CACHE_MAX = 256
+_schema_validator_cache_lock = threading.Lock()
 _schema_validator_cache: dict[str, jsonschema.Draft7Validator] = {}
 
 _SAFE_BUILTIN_NAME = re.compile(r"^[A-Z][a-zA-Z0-9]+$")
@@ -819,12 +823,13 @@ class ResourceLoader:
         success; raises ``ValueError`` on validation failure.
         """
         cache_key = json.dumps(schema, sort_keys=True)
-        validator = _schema_validator_cache.get(cache_key)
-        if validator is None:
-            validator = jsonschema.Draft7Validator(schema)
-            if len(_schema_validator_cache) >= _SCHEMA_VALIDATOR_CACHE_MAX:
-                _schema_validator_cache.clear()
-            _schema_validator_cache[cache_key] = validator
+        with _schema_validator_cache_lock:
+            validator = _schema_validator_cache.get(cache_key)
+            if validator is None:
+                validator = jsonschema.Draft7Validator(schema)
+                if len(_schema_validator_cache) >= _SCHEMA_VALIDATOR_CACHE_MAX:
+                    _schema_validator_cache.clear()
+                _schema_validator_cache[cache_key] = validator
 
         def _schema_guardrail(output: str) -> str:
             try:

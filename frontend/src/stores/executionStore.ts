@@ -41,6 +41,11 @@ function executionsPath(crewName?: string, pagination?: PaginationParams): strin
   return qs ? `/api/v1/executions?${qs}` : '/api/v1/executions'
 }
 
+// Monotonic token guarding against out-of-order responses: two overlapping
+// fetchExecution() calls must not let the older response win after the newer
+// one has already populated currentExecution.
+let fetchExecutionToken = 0
+
 export const useExecutionStore = create<ExecutionState>((set, get) => ({
   executions: [],
   executionsTotal: 0,
@@ -64,6 +69,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
   },
 
   fetchExecution: async (id: string) => {
+    const token = ++fetchExecutionToken
     // Only clear currentExecution when loading a *different* execution
     // to avoid flickering the spinner on refetch of the same execution.
     set((state) => ({
@@ -74,8 +80,10 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     }))
     try {
       const execution = await api.get<Execution>(`/api/v1/executions/${id}`)
+      if (token !== fetchExecutionToken) return
       set({ currentExecution: execution, loading: false })
     } catch (err) {
+      if (token !== fetchExecutionToken) return
       const message = getErrorMessage(err, 'Failed to fetch execution')
       set({ error: message, loading: false })
     }
