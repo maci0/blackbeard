@@ -620,8 +620,14 @@ export default function Models() {
       if (resp.status === 'ok') {
         let msg = `Connected to ${name} (${resp.latency_ms ?? 0} ms)`
         const t = resp.tokens
-        if (t?.completion && resp.latency_ms && resp.latency_ms > 0) {
-          const tps = formatNumber(t.completion / (resp.latency_ms / 1000), {
+        // Decode throughput must use the generation window, not the
+        // round-trip latency (which also covers prompt eval + network).
+        // Fall back to round-trip latency only when the provider does not
+        // report completion time.
+        const genMs = t?.completion_time_ms ?? null
+        const denomMs = genMs != null && genMs > 0 ? genMs : resp.latency_ms
+        if (t?.completion && denomMs && denomMs > 0) {
+          const tps = formatNumber(t.completion / (denomMs / 1000), {
             minimumFractionDigits: 1,
             maximumFractionDigits: 1,
           })
