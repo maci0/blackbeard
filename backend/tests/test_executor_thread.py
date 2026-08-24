@@ -391,11 +391,16 @@ class TestRunCrewAsync:
         async def mock_get_exec(session, exec_id):
             return exec_obj
 
-        listener = MagicMock()
-
-        with patch(
-            "blackbeard.engine.executor._get_execution_for_update",
-            side_effect=mock_get_exec,
+        with (
+            patch(
+                "blackbeard.engine.executor._get_execution_for_update", side_effect=mock_get_exec
+            ),
+            patch("blackbeard.engine.executor._extract_policy_specs", return_value={}),
+            patch(
+                "blackbeard.engine.executor._derive_budget_and_pii",
+                return_value=(None, None, None, None),
+            ),
+            patch("blackbeard.engine.executor.BlackbeardExecutionListener") as mock_listener_cls,
         ):
             # Pre-fix, the finally block raised UnboundLocalError out of this
             # already-handled failure path; post-fix the coroutine completes.
@@ -409,8 +414,10 @@ class TestRunCrewAsync:
 
         # The original failure was handled: execution marked failed...
         assert exec_obj.status == ExecutionStatus.FAILED
-        # ...and listener teardown still ran despite the failure.
-        listener.close.assert_called_once()
+        # ...and the failure happened during snapshot materialization, i.e.
+        # before any listener (or virtual key) existed, so there is nothing
+        # to tear down and the guarded finally must not construct one.
+        mock_listener_cls.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_returns_early_if_cancelled_before_start(self) -> None:

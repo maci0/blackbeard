@@ -368,22 +368,3 @@ class TestDatabaseHumanInputContextManager:
             assert get_provider() is sentinel
         finally:
             reset_provider(token)
-
-
-# ---------------------------------------------------------------------------
-# Tests -- HITL respond endpoint (API)
-# ---------------------------------------------------------------------------
-
-
-async def _create_crew_and_kickoff(client: AsyncClient) -> str:
-    """Create resources, kick off, and return execution ID."""
-    from tests.test_executor import _create_full_crew
-
-    await _create_full_crew(client)
-    response = await client.post(
-        "/api/v1/crews/test-crew/kickoff",
-        json={"inputs": {}},
-        headers=API_KEY_HEADER,
-    )
-    assert response.status_code == 202
-    return response.json()["id"]
