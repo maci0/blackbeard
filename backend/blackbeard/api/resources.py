@@ -548,6 +548,7 @@ async def list_resource_versions(
     except ResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    # Keep the newest snapshots when the cap kicks in; output stays ascending.
     result = await session.execute(
         select(ResourceVersion)
         .where(ResourceVersion.resource_id == resource.id)
@@ -559,10 +560,10 @@ async def list_resource_versions(
                 ResourceVersion.created_at,
             )
         )
-        .order_by(ResourceVersion.version.asc())
+        .order_by(ResourceVersion.version.desc())
         .limit(_VERSION_LIST_LIMIT)
     )
-    snapshots = list(result.scalars().all())
+    snapshots = list(reversed(result.scalars().all()))
 
     summaries: list[_VersionSummary] = []
     for i, snap in enumerate(snapshots):

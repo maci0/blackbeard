@@ -146,7 +146,7 @@ class AutomationScheduler:
             await self.start()
 
     # Minimum interval between cron executions (in seconds).
-    # Prevents DoS via ``* * * * *`` (every minute) or sub-minute crons.
+    # Rejects sub-minute crons; ``* * * * *`` (every 60s) is allowed.
     _MIN_INTERVAL_S = 60
 
     def _schedule(

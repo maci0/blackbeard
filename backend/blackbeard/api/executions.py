@@ -63,6 +63,10 @@ logger = logging.getLogger(__name__)
 
 _MAX_STREAM_POLLS = 400
 
+# Events fetched per poll; the stream drains consecutive batches so a burst
+# larger than one batch is never dropped when the execution turns terminal.
+_EVENT_BATCH_SIZE = 50
+
 _SSE_ERROR_TOO_MANY = json.dumps({"detail": "Too many concurrent SSE streams"})
 _SSE_ERROR_INTERNAL = json.dumps({"detail": "Internal stream error"})
 
@@ -160,13 +164,18 @@ async def _poll_execution(execution_id: UUID) -> AsyncGenerator[_StreamEvent]:
                 and current_status not in TERMINAL_STATUSES
             )
             if not skip_events:
-                new_events = await _executor_mod.list_execution_events(
-                    session, execution_id, after=last_event_seq, limit=50
-                )
-                prev_had_events = len(new_events) > 0
-                for ev in new_events:
-                    yield _StreamEvent("event", _serialize_event(ev), event_type=ev.event_type)
-                    last_event_seq = ev.sequence
+                had_events = False
+                while True:
+                    new_events = await _executor_mod.list_execution_events(
+                        session, execution_id, after=last_event_seq, limit=_EVENT_BATCH_SIZE
+                    )
+                    had_events = had_events or len(new_events) > 0
+                    for ev in new_events:
+                        yield _StreamEvent("event", _serialize_event(ev), event_type=ev.event_type)
+                        last_event_seq = ev.sequence
+                    if len(new_events) < _EVENT_BATCH_SIZE:
+                        break
+                prev_had_events = had_events
             else:
                 # Reset so next poll re-checks for events
                 prev_had_events = True

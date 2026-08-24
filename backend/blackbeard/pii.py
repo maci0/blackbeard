@@ -105,6 +105,33 @@ def resolve_pii_entities(
     return sorted(result)
 
 
+def _resolve_litellm_config(config: dict[str, Any]) -> tuple[str, str]:
+    """Resolve (model, proxy_url) for the ``litellm`` PII backend."""
+    from blackbeard.config import settings
+
+    model = str(config.get("model") or "ollama/gliner-pii")
+    proxy_url = str(config.get("proxy_url") or settings.litellm_proxy_url)
+    return model, proxy_url
+
+
+def _analyzer_cache_key(config: dict[str, Any] | None) -> str:
+    """Return the cache key identifying the analyzer engine to reuse.
+
+    Non-litellm backends share one engine per backend type. The litellm
+    backend bakes model/proxy into its recognizer, so those values must be
+    part of the key or the first-seen config would silently serve every
+    later crew regardless of its own PII settings.
+    """
+    backend = config.get("backend", "default") if config else "default"
+    if backend == "litellm":
+        if config:
+            model, proxy_url = _resolve_litellm_config(config)
+        else:
+            model, proxy_url = _resolve_litellm_config({})
+        return f"litellm:{model}:{proxy_url}"
+    return str(backend)
+
+
 def _get_analyzer(config: dict[str, Any] | None = None) -> AnalyzerEngine:
     """Return (or create) an AnalyzerEngine for the requested backend.
 
@@ -112,15 +139,15 @@ def _get_analyzer(config: dict[str, Any] | None = None) -> AnalyzerEngine:
     and ``"litellm"`` PII backends each get their own engine instance.
     Uses lock-always pattern (safe under both GIL and free-threaded Python).
     """
-    backend = config.get("backend", "default") if config else "default"
+    cache_key = _analyzer_cache_key(config)
     with _analyzer_lock:
-        engine = _analyzers.get(backend)
+        engine = _analyzers.get(cache_key)
         if engine is not None:
             return engine
         engine = AnalyzerEngine()
-        if backend == "litellm" and config:
+        if cache_key.startswith("litellm:") and config:
             _add_llm_recognizer(engine, config)
-        _analyzers[backend] = engine
+        _analyzers[cache_key] = engine
         return engine
 
 
@@ -144,8 +171,7 @@ def _add_llm_recognizer(
     """Register an :class:`LLMPIIRecognizer` on *analyzer*."""
     from blackbeard.config import settings
 
-    model = config.get("model", "ollama/gliner-pii")
-    proxy_url = config.get("proxy_url") or settings.litellm_proxy_url
+    model, proxy_url = _resolve_litellm_config(config)
     master_key = settings.litellm_master_key.get_secret_value()
     recognizer = LLMPIIRecognizer(model=model, proxy_url=proxy_url, master_key=master_key)
     analyzer.registry.add_recognizer(recognizer)
@@ -214,7 +240,10 @@ class LLMPIIRecognizer(EntityRecognizer):
             proxy_url = proxy_url or settings.litellm_proxy_url
             master_key = master_key or settings.litellm_master_key.get_secret_value()
 
-        sanitized = text.replace("</TEXT>", "< /TEXT>")
+        # Defuse any literal "</TEXT>" in the text so it cannot terminate the
+        # tagged region early. The substitute is the same length, keeping LLM
+        # reported offsets valid against the original string.
+        sanitized = text.replace("</TEXT>", "<\\TEXT>")
         prompt = self._prompt_prefix + sanitized + "\n</TEXT>"
 
         try:

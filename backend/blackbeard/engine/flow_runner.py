@@ -459,6 +459,38 @@ def run_flow_steps(
     return last_result
 
 
+def _find_operator(expr: str) -> tuple[int, tuple[str, Any]] | None:
+    """Locate the first comparison operator outside quoted regions.
+
+    Returns (index, (operator, comparator)), preferring the longest operator
+    at a given position so ``>=`` wins over ``>``. Operators inside single- or
+    double-quoted values are ignored so ``mode == ">="`` splits on ``==``,
+    not on the embedded ``>=``.
+    """
+    best: tuple[int, tuple[str, Any]] | None = None
+    quote: str | None = None
+    i = 0
+    n = len(expr)
+    while i < n:
+        ch = expr[i]
+        if quote is not None:
+            if ch == quote:
+                quote = None
+            i += 1
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+            i += 1
+            continue
+        for op, fn in _CONDITION_OPS:
+            if expr.startswith(op, i):
+                if best is None or i < best[0]:
+                    best = (i, (op, fn))
+                break
+        i += 1
+    return best
+
+
 def evaluate_condition(expr: str, context: dict[str, Any]) -> bool:
     """Evaluate a simple condition expression safely (NO eval/exec).
 
@@ -467,36 +499,37 @@ def evaluate_condition(expr: str, context: dict[str, Any]) -> bool:
     """
     expr = expr.strip()
 
-    for op, fn in _CONDITION_OPS:
-        if op in expr:
-            left, right = expr.split(op, 1)
-            left_val = resolve_dotted(left.strip().strip("'\""), context)
-            right_str = right.strip().strip("'\"")
-            right_val: float | str
-            try:
-                right_val = float(right_str)
-                if math.isinf(right_val) or math.isnan(right_val):
-                    right_val = right_str
-            except ValueError:
+    found = _find_operator(expr)
+    if found is not None:
+        idx, (op, fn) = found
+        left, right = expr[:idx], expr[idx + len(op) :]
+        left_val = resolve_dotted(left.strip().strip("'\""), context)
+        right_str = right.strip().strip("'\"")
+        right_val: float | str
+        try:
+            right_val = float(right_str)
+            if math.isinf(right_val) or math.isnan(right_val):
                 right_val = right_str
-            try:
-                return bool(fn(left_val, right_val))
-            except TypeError:
-                logger.debug(
-                    "Condition type mismatch: %r (%s) %s %r (%s) — evaluating as False",
-                    left_val,
-                    type(left_val).__name__,
-                    op,
-                    right_val,
-                    type(right_val).__name__,
-                    extra={
-                        "event": "condition_type_mismatch",
-                        "operator": op,
-                        "left_type": type(left_val).__name__,
-                        "right_type": type(right_val).__name__,
-                    },
-                )
-                return False
+        except ValueError:
+            right_val = right_str
+        try:
+            return bool(fn(left_val, right_val))
+        except TypeError:
+            logger.debug(
+                "Condition type mismatch: %r (%s) %s %r (%s) — evaluating as False",
+                left_val,
+                type(left_val).__name__,
+                op,
+                right_val,
+                type(right_val).__name__,
+                extra={
+                    "event": "condition_type_mismatch",
+                    "operator": op,
+                    "left_type": type(left_val).__name__,
+                    "right_type": type(right_val).__name__,
+                },
+            )
+            return False
 
     if " in " in expr:
         key, container = expr.split(" in ", 1)
