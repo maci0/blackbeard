@@ -47,10 +47,10 @@ Navigate to **Tool Library** in the sidebar (under Resources). Browse the catalo
 curl -H "X-API-Key: $KEY" \
   http://localhost:8000/api/v1/tools/library
 
-# Install a tool
+# Install one or more tools (up to 20 slugs per request)
 curl -X POST -H "X-API-Key: $KEY" \
   -H "Content-Type: application/json" \
-  -d '{"name": "web-search"}' \
+  -d '{"slugs": ["web-search"]}' \
   http://localhost:8000/api/v1/tools/library/install
 ```
 
@@ -148,7 +148,7 @@ curl -X POST -H "X-API-Key: $KEY" \
 
 ### From the UI
 
-On any resource detail page, the **Version History** tab shows all past mutations with timestamps and diffs.
+On any resource detail page, the **History** tab shows an audit-log timeline of all past mutations (action, actor, timestamp). Version listing and rollback are also available via the API endpoints above.
 
 ---
 
@@ -425,7 +425,7 @@ spec:
   deprecated: false
 ```
 
-When a tool is marked `deprecated: true`, the UI shows a warning badge and the optional `deprecated_message` field is displayed to guide users toward the replacement.
+When a tool is marked `deprecated: true`, a deprecation warning (including the optional `deprecated_message`) is logged when a crew loads the tool, guiding users toward the replacement.
 
 ---
 
@@ -440,7 +440,7 @@ metadata:
   name: safety-chain
 spec:
   type: composite
-  operator: AND
+  operator: and
   guardrails:
     - "ref:guardrails/no-pii"
     - "ref:guardrails/no-profanity"
@@ -448,7 +448,7 @@ spec:
   on_fail: reject
 ```
 
-With `operator: AND`, all guardrails must pass. With `operator: OR`, at least one must pass. Composite guardrails can reference any other guardrail type (function, llm, schema, pii, hallucination).
+With `operator: and`, all guardrails must pass. With `operator: or`, at least one must pass. Composite guardrails can reference any other guardrail type (function, llm, schema, pii, hallucination).
 
 ---
 

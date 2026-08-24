@@ -74,7 +74,7 @@ If `TEMPORAL_HOST` is set but the SDK is not installed, the API server logs a wa
 2. The executor creates an `Execution` record with status `queued`, same as before.
 3. If `TEMPORAL_HOST` is set and the SDK is available, `submit_temporal_execution()` starts a `CrewExecution` Temporal workflow. Otherwise, the execution goes to the ThreadPoolExecutor as before.
 4. The Temporal worker picks up the workflow and runs the `run_crew` activity.
-5. The activity calls the same `_run_crew_async()` function used by the ThreadPoolExecutor path, so budget enforcement, PII redaction, cost alerts, and all other execution features work identically.
+5. The activity calls the same `run_crew_async()` function used by the ThreadPoolExecutor path, so budget enforcement, PII redaction, cost alerts, and all other execution features work identically.
 6. Results are stored in the database. The Temporal UI also shows workflow status and history.
 
 ### Retry Policy

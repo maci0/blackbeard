@@ -191,7 +191,7 @@ spec:
 | `tasks` | string[] (≥1) | ✅ | Ordered task `ref:` list |
 | `description` | string |  -- | Human-readable description |
 | `verbose` | boolean |  -- | Verbose logging (default `true`) |
-| `memory` | boolean\|object |  -- | Shared cross-agent memory; object form supports `enabled`, `provider` (`lancedb`\|`chromadb`\|`qdrant`\|`muninndb`), `config` |
+| `memory` | boolean\|object |  -- | Shared cross-agent memory; object form supports `enabled`, `provider` (`lancedb`\|`chromadb`\|`qdrant`\|`muninndb`), `config`, and MuninnDB settings (`muninndb_url`, `muninndb_vault`, `muninndb_token_env`) when `provider: muninndb` |
 | `embedder` | object |  -- | Embedder config for RAG (`provider`, `config`) |
 | `cache` | boolean |  -- | Shared tool cache |
 | `max_rpm` | integer ≥ 1 |  -- | Crew-wide LLM rate limit |
@@ -317,8 +317,9 @@ spec:
 | `url` | string |  -- | URL of the MCP HTTP server (required for `mcp-http`) |
 | `env` | object |  -- | Environment variables for the MCP server process (`mcp-stdio`) |
 | `config` | object | -- | Constructor kwargs passed to the tool |
+| `image` | string |  -- | Container image override for `docker`/`podman`/`gvisor`/`microvm` sandbox tiers |
 | `tool_version` | string | -- | Semantic version string (e.g., `"1.0.0"`, `"2.1.0"`) |
-| `deprecated` | boolean | -- | Mark this tool as deprecated (default `false`); UI shows a warning badge |
+| `deprecated` | boolean | -- | Mark this tool as deprecated (default `false`); a warning is logged when a crew loads the tool |
 | `deprecated_message` | string | -- | Message displayed to users when the tool is deprecated (e.g., migration instructions) |
 
 > **Note:** The `env` capability passes a fixed set of safe environment variables (`LANG`, `LC_ALL`, `TZ`, `TERM`). Granular per-variable access is not supported.
@@ -510,7 +511,7 @@ spec:
 
   # For type: composite
   # type: composite
-  # operator: AND                           # "AND" (all must pass) or "OR" (at least one must pass)
+  # operator: and                           # "and" (all must pass) or "or" (at least one must pass)
   # guardrails:                             # List of guardrail refs to combine
   #   - "ref:guardrails/no-pii"
   #   - "ref:guardrails/no-profanity"
@@ -527,8 +528,13 @@ spec:
 | `llm` | string | -- | LLMConnection ref used for the LLM judge (used by `llm` and `hallucination` types) |
 | `json_schema` | object | -- | JSON Schema to validate output against (required for `schema`) |
 | `context_sources` | string[] | -- | `ref:` KnowledgeSource resources used as reference material for hallucination detection (for `hallucination` type) |
-| `operator` | `AND`\|`OR` | -- | Combination logic for composite guardrails (required for `composite`) |
-| `guardrails` | string[] | -- | `ref:` guardrail resources to combine (required for `composite`) |
+| `operator` | `and`\|`or` | -- | Combination logic for composite guardrails (required for `composite`) |
+| `guardrails` | string[] (2–10) | -- | `ref:` guardrail resources to combine (required for `composite`) |
+| `backend` | `default`\|`presidio-nlp`\|`litellm` | -- | PII detection engine (default `default`; for `pii` type) |
+| `model` | string | -- | Model override for the detection backend |
+| `hallucination_check` | `factual_consistency`\|`source_grounding`\|`self_contradiction` | -- | Hallucination detection strategy (for `hallucination` type) |
+| `hallucination_threshold` | number (0–1) | -- | Minimum similarity score to pass hallucination checks (default `0.7`) |
+| `short_circuit` | boolean | -- | Stop evaluating remaining guardrails in a chain after a failure (default `true`) |
 | `pii_preset` | `hipaa`\|`gdpr`\|`pci-dss`\|`ccpa`\|`custom` | -- | Predefined PII entity set (default `custom`; for `pii` type) |
 | `pii_entities` | string[] | -- | Explicit PII entity types to detect (max 30; for `pii` type) |
 | `pii_action` | `redact`\|`reject`\|`warn` | -- | Action when PII is detected (default `redact`; for `pii` type) |
@@ -583,6 +589,8 @@ spec:
 | `steps[].condition` | string |  -- | Condition expression (for `condition` steps) |
 | `steps[].routes` | object |  -- | Named routes mapping to step names (for `router` steps) |
 | `steps[].wasm_module` | string |  -- | Path to `.wasm` module (required for `transform` steps; output JSON becomes the step output) |
+| `steps[].transform_config` | object |  -- | Config passed to the transform WASM module (max 50 keys; for `transform` steps) |
+| `steps[].hooks` | object |  -- | Function callables by dotted path: `before`, `after`, `on_error` |
 | `description` | string |  -- | Human-readable description |
 | `state_schema` | object |  -- | JSON Schema for shared flow state |
 | `memory` | boolean |  -- | Flow-level memory (default `false`) |
@@ -660,9 +668,9 @@ spec:
 | `rules` | object[] (≥1) | ✅ | Permission rules |
 | `rules[].resources` | string[] (≥1) | ✅ | Resource kind names (e.g. `"Agent"`, `"Crew"`) or `"*"` for all |
 | `rules[].verbs` | string[] (≥1) | ✅ | Allowed operations: `get`, `list`, `create`, `update`, `delete`, `run`, `invoke`, `delegate`, or `*` |
-| `rules[].resourceNames` | string[] |  -- | Restrict rule to specific resource names |
-| `rules[].namespaces` | string[] |  -- | Restrict rule to specific namespaces |
-| `subjectKinds` | string[] |  -- | Restrict which subject types can use this role: `User`, `Group`, `Agent`, `Crew` |
+| `rules[].resourceNames` | string[] |  -- | Restrict rule to specific resource names (accepted by the schema; not yet evaluated by the authorizer) |
+| `rules[].projects` | string[] |  -- | Restrict rule to specific projects (accepted by the schema; not yet evaluated by the authorizer) |
+| `subjectKinds` | string[] |  -- | Restrict which subject types can use this role: `User`, `Group`, `Agent`, `Crew` (accepted by the schema; not yet evaluated by the authorizer) |
 
 ---
 
@@ -764,7 +772,7 @@ spec:
 | `description` | string | -- | Human-readable description (max 5000 chars) |
 | `labels` | object | -- | Arbitrary key-value labels for filtering (max 50) |
 | `parent` | string | -- | `ref:` to a parent Project for nested hierarchy |
-| `inherit_policies` | boolean | -- | Inherit `default_agent_policy`, `guardrails`, and `resource_quota` from the parent project (default `false`) |
+| `inherit_policies` | boolean | -- | Inherit `default_agent_policy`, `guardrails`, and `resource_quota` from the parent project (default `true`) |
 | `default_agent_policy` | string | -- | Default AgentPolicy ref applied to all agents in this project |
 | `resource_quota.max_resources` | integer (1--10000) | -- | Maximum resources allowed in this project |
 | `resource_quota.max_executions_per_hour` | integer (1--1000) | -- | Maximum executions per hour |

@@ -231,7 +231,7 @@ cat ~/.config/blackbeard/credentials.json
 ### Collaboration not working
 
 - Verify Valkey is running: `docker compose ps valkey`
-- Check Valkey connectivity: `docker compose exec valkey redis-cli ping`
+- Check Valkey connectivity: `docker compose exec valkey sh -c 'REDISCLI_AUTH=$VALKEY_PASSWORD valkey-cli ping'` (the server requires a password)
 - Collaboration uses WebSocket + Valkey pub/sub for multi-replica fan-out
 - Single replica: works without Valkey (falls back to local broadcast)
 
