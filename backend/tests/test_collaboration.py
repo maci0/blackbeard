@@ -15,7 +15,6 @@ from blackbeard.api.collaboration import (
     ValkeyCollabBackend,
     _broadcast_local,
     _rooms,
-    get_room_stats,
     router,
     validate_ws_auth,
 )
@@ -82,24 +81,6 @@ class TestValidateWsAuth:
 # ---------------------------------------------------------------------------
 # Unit tests for room management helpers
 # ---------------------------------------------------------------------------
-
-
-class TestGetRoomStats:
-    def test_empty_rooms(self) -> None:
-        assert get_room_stats() == {}
-
-    def test_room_with_participants(self) -> None:
-        class FakeWS:
-            pass
-
-        _rooms["crew-a"] = {FakeWS(), FakeWS()}  # type: ignore[arg-type]
-        _rooms["crew-b"] = {FakeWS()}  # type: ignore[arg-type]
-        stats = get_room_stats()
-        assert stats == {"crew-a": 2, "crew-b": 1}
-
-    def test_empty_room_excluded(self) -> None:
-        _rooms["crew-empty"] = set()
-        assert get_room_stats() == {}
 
 
 class TestAllowedMessageTypes:

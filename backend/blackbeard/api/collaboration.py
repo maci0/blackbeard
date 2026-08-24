@@ -700,16 +700,4 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
             )
 
 
-def get_room_stats() -> dict[str, int]:
-    """Return per-room participant counts for health/debug endpoints.
 
-    Snapshot is taken under ``_rooms_lock`` so concurrent join/leave cannot
-    mutate the dict mid-iteration (relevant under free-threaded CPython).
-    """
-    # Sync helper: callers are async request handlers on the event loop.
-    # We cannot await ``_rooms_lock`` here; copy is atomic under the GIL and
-    # join/leave only mutate at await points. For free-threaded builds the
-    # shallow copy alone is enough for a consistent *dict* view; set lengths
-    # may still race and are best-effort metrics only.
-    snapshot = {room: len(clients) for room, clients in _rooms.items() if clients}
-    return snapshot

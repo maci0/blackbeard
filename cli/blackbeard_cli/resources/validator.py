@@ -327,16 +327,6 @@ def _get_dns_executor() -> concurrent.futures.ThreadPoolExecutor:
         return _DNS_EXECUTOR
 
 
-def shutdown_dns_executor() -> None:
-    """Shut down the shared DNS resolution thread pool."""
-    global _DNS_EXECUTOR
-    with _DNS_EXECUTOR_LOCK:
-        executor = _DNS_EXECUTOR
-        _DNS_EXECUTOR = None
-    if executor is not None:
-        executor.shutdown(wait=False)
-
-
 def _dns_cache_get(hostname: str) -> tuple[bool, str | None]:
     """Return (hit, error_msg). error_msg is None when hostname is safe."""
     with _dns_cache_lock:
