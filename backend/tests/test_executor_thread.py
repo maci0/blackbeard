@@ -4,7 +4,7 @@ Covers _run_crew_sync, run_crew_async, _snapshot_crew_resources,
 recover_stale_executions, cleanup_orphaned_keys, and
 BlackbeardExecutionListener methods (_flush_buffer, flush,
 setup_listeners, _write_event, _deliver_webhooks_sync,
-_prepare_webhook_targets, _get_sync_session_factory, dispose_sync_engine).
+_prepare_webhook_targets, get_sync_session_factory, dispose_sync_engine).
 
 All external dependencies (DB sessions, CrewAI, LiteLLM, httpx) are mocked.
 """
@@ -119,7 +119,7 @@ def _make_listener(
 
     with (
         patch(
-            "blackbeard.engine.execution_listener._get_sync_session_factory",
+            "blackbeard.engine.execution_listener.get_sync_session_factory",
             return_value=mock_factory,
         ),
         patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
@@ -905,7 +905,7 @@ class TestListenerInit:
         pii_config = {"enabled": True, "entities": ["EMAIL"]}
 
         with (
-            patch("blackbeard.engine.execution_listener._get_sync_session_factory") as mock_sf,
+            patch("blackbeard.engine.execution_listener.get_sync_session_factory") as mock_sf,
             patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
         ):
             mock_sf.return_value = MagicMock()
@@ -929,7 +929,7 @@ class TestListenerInit:
         eid = uuid.uuid4()
 
         with (
-            patch("blackbeard.engine.execution_listener._get_sync_session_factory") as mock_sf,
+            patch("blackbeard.engine.execution_listener.get_sync_session_factory") as mock_sf,
             patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None),
         ):
             mock_sf.return_value = MagicMock()
@@ -1373,12 +1373,12 @@ class TestGetWebhookHostname:
 
 
 # ===========================================================================
-# 13. _get_sync_session_factory
+# 13. get_sync_session_factory
 # ===========================================================================
 
 
 class TestGetSyncSessionFactory:
-    """Tests for blackbeard.engine.execution_listener._get_sync_session_factory."""
+    """Tests for blackbeard.engine.execution_listener.get_sync_session_factory."""
 
     def test_creates_session_factory(self) -> None:
         import blackbeard.engine.execution_listener as mod
@@ -1400,7 +1400,7 @@ class TestGetSyncSessionFactory:
                 patch("blackbeard.models.database.instrument_engine"),
             ):
                 mock_sm.return_value = MagicMock()
-                factory = mod._get_sync_session_factory(
+                factory = mod.get_sync_session_factory(
                     "postgresql+asyncpg://localhost:5432/testdb"
                 )
 
@@ -1419,7 +1419,7 @@ class TestGetSyncSessionFactory:
             mod._sync_session_factory = mock_factory
             mod._sync_engine = MagicMock()
 
-            result = mod._get_sync_session_factory("postgresql+asyncpg://localhost/test")
+            result = mod.get_sync_session_factory("postgresql+asyncpg://localhost/test")
             assert result is mock_factory
         finally:
             mod._sync_engine = original_engine

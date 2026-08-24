@@ -15,13 +15,12 @@ import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from blackbeard.api.resources import (
-    _AUTHZ_CACHE_KINDS,
-    _AUTOMATION_KIND,
-    _fire_and_forget,
-    _maybe_reload_scheduler,
-    _sync_llm_to_litellm,
-    save_version_snapshot,
+from blackbeard.api.mutations import (
+    AUTHZ_CACHE_KINDS,
+    AUTOMATION_KIND,
+    fire_and_forget,
+    maybe_reload_scheduler,
+    sync_llm_to_litellm,
 )
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth import require_permission
@@ -33,6 +32,7 @@ from blackbeard.resources import (
     ResourceValidationError,
     check_url_ssrf,
     is_blocked_env_name,
+    save_version_snapshot,
 )
 
 if TYPE_CHECKING:
@@ -410,11 +410,11 @@ async def import_from_url(
         # them per resource makes a 500-resource import do 500 full scheduler
         # rebuilds and cache wipes.
         for kind, name, spec in imported_specs:
-            _fire_and_forget(_sync_llm_to_litellm(kind, name, spec))
+            fire_and_forget(sync_llm_to_litellm(kind, name, spec))
         imported_kinds = {kind for kind, _, _ in imported_specs}
-        if _AUTOMATION_KIND in imported_kinds:
-            _fire_and_forget(_maybe_reload_scheduler(request, _AUTOMATION_KIND))
-        if imported_kinds & _AUTHZ_CACHE_KINDS:
+        if AUTOMATION_KIND in imported_kinds:
+            fire_and_forget(maybe_reload_scheduler(request, AUTOMATION_KIND))
+        if imported_kinds & AUTHZ_CACHE_KINDS:
             _clear_authz_cache()
 
     logger.info(

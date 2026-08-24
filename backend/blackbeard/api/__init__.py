@@ -6,7 +6,9 @@ here so list endpoints stay consistent without a separate utils package.
 Routers (wired in ``blackbeard.main``): a2a, agency_import, assistant,
 asyncapi, audit, auth, automations, chat, collaboration, credentials,
 executions, health, marketplace, oidc, plugins, resources, tools_library,
-users, webhooks. Cross-cutting: ``middleware``.
+users, webhooks. Cross-cutting: ``middleware`` and ``mutations`` (shared
+post-mutation side effects: LiteLLM sync, scheduler reload, RBAC cache
+invalidation, background task draining).
 
 Keep domain logic out of this package; call into ``engine``, ``resources``,
 ``auth``, and ``models`` instead.

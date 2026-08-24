@@ -80,7 +80,7 @@ def _deliver(
 
     with (
         patch(
-            "blackbeard.engine.execution_listener._get_sync_session_factory",
+            "blackbeard.engine.execution_listener.get_sync_session_factory",
             return_value=mock_factory,
         ),
         patch(
@@ -261,7 +261,7 @@ def test_webhook_db_load_failure_doesnt_crash():
     mock_factory.return_value = mock_session
 
     with patch(
-        "blackbeard.engine.execution_listener._get_sync_session_factory",
+        "blackbeard.engine.execution_listener.get_sync_session_factory",
         return_value=mock_factory,
     ):
         # Should NOT raise

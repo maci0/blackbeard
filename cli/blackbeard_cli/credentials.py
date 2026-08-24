@@ -29,7 +29,7 @@ ACCESS_TOKEN_LIFETIME_S = 840
 _REFRESH_MARGIN_S = 60
 
 
-def _access_token_expiry(access_token: str) -> float:
+def access_token_expiry(access_token: str) -> float:
     """Return when the access token stops being usable, as epoch seconds.
 
     Reads the authoritative ``exp`` claim from the JWT payload (no signature
@@ -134,7 +134,7 @@ def _refresh_token(server: str, refresh_token: str, timeout: float) -> StoredCre
             # new one or the session hard-dies 7 days after initial login.
             refresh_token=data.get("refresh_token") or refresh_token,
             email="",
-            expires_at=_access_token_expiry(data["access_token"]),
+            expires_at=access_token_expiry(data["access_token"]),
         )
     except (httpx.RequestError, KeyError, TypeError, ValueError):
         logger.debug("Token refresh failed", exc_info=True)

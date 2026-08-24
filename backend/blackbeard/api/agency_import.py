@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from blackbeard.api.resources import save_version_snapshot
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth import require_permission
 from blackbeard.engine.agency_import import parse_agency_agent_markdown
@@ -19,7 +18,7 @@ from blackbeard.kinds import API_VERSION
 from blackbeard.models import User, get_session
 from blackbeard.models.resource_schemas import ResourceCreate, ResourceMetadata
 from blackbeard.rate_limiter import check_rate_limit, mutation_limiter
-from blackbeard.resources import ResourceService
+from blackbeard.resources import ResourceService, save_version_snapshot
 
 logger = logging.getLogger(__name__)
 

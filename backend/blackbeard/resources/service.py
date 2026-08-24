@@ -13,7 +13,7 @@ from sqlalchemy.orm import defer, load_only
 
 from blackbeard.kinds import ResourceKind
 from blackbeard.logging_config import request_id_var
-from blackbeard.models import Resource, ResourceRef
+from blackbeard.models import Resource, ResourceRef, ResourceVersion
 from blackbeard.resources.exceptions import (
     ResourceConflictError,
     ResourceNotFoundError,
@@ -26,9 +26,11 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from blackbeard.models.resource_schemas import ResourceCreate, ResourceUpdate
+    from blackbeard.models.user import User
 
 __all__ = [
     "ResourceService",
+    "save_version_snapshot",
     "smart_total",
 ]
 
@@ -61,6 +63,23 @@ async def smart_total(
         return offset + len(items)
     result = await session.execute(count_stmt)
     return int(result.scalar_one())
+
+
+async def save_version_snapshot(
+    session: AsyncSession,
+    resource: Any,
+    user: User | None,
+) -> None:
+    """Persist a version snapshot for the given resource."""
+    snapshot = ResourceVersion(
+        resource_id=resource.id,
+        version=resource.version,
+        spec=resource.spec,
+        labels=resource.labels,
+        changed_by=str(user.id) if user else None,
+    )
+    session.add(snapshot)
+    await session.flush()
 
 
 class ResourceService:

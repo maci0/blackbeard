@@ -1,6 +1,7 @@
 """Resource system: validation, CRUD service, and reference management.
 
-- ``service`` — create/read/update/delete with optimistic locking
+- ``service`` — create/read/update/delete with optimistic locking; version
+  snapshots (``save_version_snapshot``, used by every mutating router)
 - ``validator`` — JSON Schema + structural/SSRF/callable path checks
 - ``spec_schemas`` — per-kind JSON schemas (single source for ``spec``)
 - ``refs`` — ``ref:kind/name`` parse, extract, cycle detection
@@ -18,7 +19,7 @@ from blackbeard.resources.exceptions import (
     ValidationError,
 )
 from blackbeard.resources.refs import build_adjacency, detect_cycles, parse_ref
-from blackbeard.resources.service import ResourceService
+from blackbeard.resources.service import ResourceService, save_version_snapshot
 from blackbeard.resources.validator import (
     ALLOWED_CALLABLE_MODULE_PREFIXES,
     ALLOWED_TOOL_MODULE_PREFIXES,
@@ -53,6 +54,7 @@ __all__ = [
     "is_blocked_env_name",
     "is_internal_host",
     "parse_ref",
+    "save_version_snapshot",
     "shutdown_dns_executor",
     "validate_resource",
 ]

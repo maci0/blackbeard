@@ -67,6 +67,7 @@ except ImportError:
 __all__ = [
     "BlackbeardExecutionListener",
     "dispose_sync_engine",
+    "get_sync_session_factory",
     "invalidate_webhook_cache",
     "shutdown_otel",
     "shutdown_webhook_executor",
@@ -219,7 +220,7 @@ def _get_cached_webhooks(db_url: str) -> list[Any]:
 
         from blackbeard.models.webhook import Webhook
 
-        session_factory = _get_sync_session_factory(db_url)
+        session_factory = get_sync_session_factory(db_url)
         try:
             with session_factory() as session:
                 result = session.execute(
@@ -463,7 +464,7 @@ _sync_session_factory: sessionmaker[Session] | None = None
 _sync_engine_lock = threading.Lock()
 
 
-def _get_sync_session_factory(db_url: str) -> sessionmaker[Session]:
+def get_sync_session_factory(db_url: str) -> sessionmaker[Session]:
     """Return a shared sync sessionmaker, creating engine+factory on first call.
 
     Both are thread-safe and not bound to event loops, so one instance
@@ -559,7 +560,7 @@ class BlackbeardExecutionListener(BaseEventListener):
         # SSE consumers polling ``sequence > last`` skip earlier events.
         # Acquired BEFORE _lock everywhere (never the reverse).
         self._io_lock = threading.Lock()
-        self._session_factory = _get_sync_session_factory(db_url)
+        self._session_factory = get_sync_session_factory(db_url)
         self._buffer: list[ExecutionEvent] = []
         self._flush_timer: threading.Timer | None = None
         self._flushing = False  # True while a flush DB write is in flight

@@ -17,12 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
 
 from blackbeard.api import MUTATION_RATE_MSG as _MUTATION_RATE_MSG
+from blackbeard.api.mutations import post_mutation_hooks
 from blackbeard.audit import audit_from_request, log_audit
 from blackbeard.auth import check_resource_permission, require_permission
-from blackbeard.auth.authorizer import clear_cache as _clear_authz_cache
-from blackbeard.kinds import API_VERSION, NAME_PATTERN, PLURAL_TO_KIND, ResourceKind
-from blackbeard.litellm import model_sync
-from blackbeard.logging_config import log_task_exception
+from blackbeard.kinds import API_VERSION, NAME_PATTERN, PLURAL_TO_KIND
 from blackbeard.models import ResourceVersion, User, get_session
 from blackbeard.models.resource_schemas import (
     ResourceCreate,
@@ -37,105 +35,13 @@ from blackbeard.resources import (
     ResourceNotFoundError,
     ResourceService,
     ResourceValidationError,
+    save_version_snapshot,
     validate_resource,
 )
 
 logger = logging.getLogger(__name__)
 
 _yaml_dumper: Any = getattr(yaml, "CSafeDumper", yaml.SafeDumper)
-
-_background_tasks: set[asyncio.Task[None]] = set()
-
-
-def _discard_and_log(task: asyncio.Task[None]) -> None:
-    _background_tasks.discard(task)
-    log_task_exception(task)
-
-
-def _fire_and_forget(coro: Any) -> None:
-    task = asyncio.create_task(coro)
-    _background_tasks.add(task)
-    task.add_done_callback(_discard_and_log)
-
-
-async def drain_background_tasks(timeout: float = 5.0) -> None:
-    """Wait for in-flight background tasks (LiteLLM sync, etc.).
-
-    Called during shutdown to avoid losing fire-and-forget mutations.
-    """
-    tasks = list(_background_tasks)
-    if not tasks:
-        return
-    _done, pending = await asyncio.wait(tasks, timeout=timeout)
-    if pending:
-        for task in pending:
-            task.cancel()
-        await asyncio.gather(*pending, return_exceptions=True)
-        logger.warning(
-            "Cancelled %d background tasks that did not finish within %.1fs",
-            len(pending),
-            timeout,
-            extra={
-                "event": "background_tasks_cancelled_on_shutdown",
-                "cancelled_count": len(pending),
-                "timeout": timeout,
-            },
-        )
-
-
-_LLM_KIND = "LLMConnection"
-_AUTHZ_CACHE_KINDS = frozenset({ResourceKind.ROLE.value, ResourceKind.ROLE_BINDING.value})
-
-
-def _post_mutation_hooks(
-    request: Request,
-    kind: str,
-    name: str,
-    spec: dict[str, Any] | None = None,
-) -> None:
-    """Fire scheduler/LiteLLM/RBAC side-effects after a resource mutation."""
-    _fire_and_forget(_maybe_reload_scheduler(request, kind))
-    _fire_and_forget(_sync_llm_to_litellm(kind, name, spec))
-    if kind in _AUTHZ_CACHE_KINDS:
-        _clear_authz_cache()
-
-
-async def _sync_llm_to_litellm(kind: str, name: str, spec: dict[str, Any] | None) -> None:
-    """Push LLMConnection changes to LiteLLM proxy (errors logged, not raised)."""
-    if kind != _LLM_KIND:
-        return
-    try:
-        if spec is not None:
-            await model_sync.add_model(name, spec)
-        else:
-            await model_sync.delete_model(name)
-    except Exception:
-        logger.warning(
-            "LiteLLM sync failed for %s (non-fatal)",
-            name,
-            exc_info=True,
-            extra={"event": "litellm_sync_failed", "model_name": name},
-        )
-
-
-_VERSION_LIST_LIMIT = 500
-
-
-async def save_version_snapshot(
-    session: AsyncSession,
-    resource: Any,
-    user: User | None,
-) -> None:
-    """Persist a version snapshot for the given resource."""
-    snapshot = ResourceVersion(
-        resource_id=resource.id,
-        version=resource.version,
-        spec=resource.spec,
-        labels=resource.labels,
-        changed_by=str(user.id) if user else None,
-    )
-    session.add(snapshot)
-    await session.flush()
 
 
 class _VersionSummary(BaseModel):
@@ -173,28 +79,7 @@ router = APIRouter(tags=["resources"])
 
 _KIND_PATTERN = "^(" + "|".join(PLURAL_TO_KIND.keys()) + ")$"
 
-_AUTOMATION_KIND = ResourceKind.AUTOMATION.value
-
-
-async def _maybe_reload_scheduler(request: Request, kind: str) -> None:
-    """Trigger scheduler reload when an Automation resource is modified."""
-    if kind != _AUTOMATION_KIND:
-        return
-    scheduler = getattr(request.app.state, "scheduler", None)
-    if scheduler is not None:
-        try:
-            await scheduler.reload()
-        except Exception as exc:
-            logger.error(
-                "Scheduler reload failed after Automation change — "
-                "cron schedules may be stale until next restart",
-                exc_info=True,
-                extra={
-                    "event": "scheduler_reload_failed",
-                    "error_type": type(exc).__name__,
-                    "error_message": str(exc)[:500],
-                },
-            )
+_VERSION_LIST_LIMIT = 500
 
 
 def _resolve_kind(kind_plural: str) -> str:
@@ -419,7 +304,7 @@ async def create_resource(
         response.headers["Location"] = f"/api/v1/{kind_plural}/{data.metadata.name}?project={ns}"
     else:
         response.status_code = 200
-    _post_mutation_hooks(request, url_kind, data.metadata.name, data.spec)
+    post_mutation_hooks(request, url_kind, data.metadata.name, data.spec)
     return ResourceResponse.from_db(resource)
 
 
@@ -556,7 +441,7 @@ async def update_resource(
             status_code=422,
             detail=[e.to_dict() for e in exc.errors],
         ) from exc
-    _post_mutation_hooks(request, kind, name, resource.spec)
+    post_mutation_hooks(request, kind, name, resource.spec)
     return ResourceResponse.from_db(resource)
 
 
@@ -614,7 +499,7 @@ async def delete_resource(
             },
         )
     else:
-        _post_mutation_hooks(request, kind, name)
+        post_mutation_hooks(request, kind, name)
 
 
 # ---------------------------------------------------------------------------
@@ -824,5 +709,5 @@ async def rollback_resource(
     await save_version_snapshot(session, resource, user)
     await session.commit()
 
-    _post_mutation_hooks(request, kind, name, resource.spec)
+    post_mutation_hooks(request, kind, name, resource.spec)
     return ResourceResponse.from_db(resource)

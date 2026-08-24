@@ -31,7 +31,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from blackbeard.config import settings
-from blackbeard.engine.execution_listener import _get_sync_session_factory
+from blackbeard.engine.execution_listener import get_sync_session_factory
 from blackbeard.models.execution import (
     TERMINAL_STATUSES,
     Execution,
@@ -81,7 +81,7 @@ class BlackbeardHumanInputProvider(SyncHumanInputProvider):
     ) -> None:
         super().__init__()
         self._execution_id = execution_id
-        self._session_factory = session_factory or _get_sync_session_factory(db_url)
+        self._session_factory = session_factory or get_sync_session_factory(db_url)
         self._timeout_s = settings.hitl_response_timeout_s if timeout_s is None else timeout_s
 
     def handle_feedback(self, formatted_answer: Any, context: Any) -> Any:
