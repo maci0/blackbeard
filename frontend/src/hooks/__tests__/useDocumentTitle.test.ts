@@ -13,13 +13,13 @@ describe('useDocumentTitle', () => {
   it('sets document.title on mount with suffix', () => {
     renderHook(() => useDocumentTitle('Studio'))
 
-    expect(document.title).toBe('Studio — Blackbeard')
+    expect(document.title).toBe('Studio · Blackbeard')
   })
 
   it('restores default title on unmount', () => {
     const { unmount } = renderHook(() => useDocumentTitle('Executions'))
 
-    expect(document.title).toBe('Executions — Blackbeard')
+    expect(document.title).toBe('Executions · Blackbeard')
 
     unmount()
 
@@ -31,17 +31,17 @@ describe('useDocumentTitle', () => {
       initialProps: { title: 'Resources' },
     })
 
-    expect(document.title).toBe('Resources — Blackbeard')
+    expect(document.title).toBe('Resources · Blackbeard')
 
     rerender({ title: 'Agents' })
 
-    expect(document.title).toBe('Agents — Blackbeard')
+    expect(document.title).toBe('Agents · Blackbeard')
   })
 
   it('handles empty string title', () => {
     renderHook(() => useDocumentTitle(''))
 
-    expect(document.title).toBe('— Blackbeard')
+    expect(document.title).toBe('· Blackbeard')
   })
 
   it('restores title even after multiple title changes', () => {
@@ -52,7 +52,7 @@ describe('useDocumentTitle', () => {
     rerender({ title: 'Second' })
     rerender({ title: 'Third' })
 
-    expect(document.title).toBe('Third — Blackbeard')
+    expect(document.title).toBe('Third · Blackbeard')
 
     unmount()
 
