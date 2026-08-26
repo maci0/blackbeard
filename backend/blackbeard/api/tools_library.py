@@ -1,9 +1,9 @@
-"""Tools Library API — browse and install curated tools."""
+"""Tools Library API: browse and install curated tools."""
 
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from importlib import resources
 from typing import Any
 
 import yaml
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tools/library", tags=["tools-library"])
 
-_CATALOG_PATH = Path(__file__).parent.parent / "tools_library.yaml"
+_CATALOG_PATH = resources.files("blackbeard") / "tools_library.yaml"
 _catalog: list[dict[str, Any]] | None = None
 
 
@@ -32,11 +32,11 @@ def _load_catalog() -> list[dict[str, Any]]:
     global _catalog
     if _catalog is not None:
         return _catalog
-    if not _CATALOG_PATH.exists():
+    if not _CATALOG_PATH.is_file():
         logger.warning("Tools library catalog not found: %s", _CATALOG_PATH)
         return []
     try:
-        with open(_CATALOG_PATH, encoding="utf-8") as f:
+        with _CATALOG_PATH.open(encoding="utf-8") as f:
             raw = yaml.safe_load(f)
         if not isinstance(raw, list):
             logger.error(
