@@ -113,7 +113,7 @@ def test_agent_policy_with_sandbox_tier():
 
 
 def test_agent_policy_empty_spec():
-    # All fields are optional — empty spec should pass
+    # All fields are optional: empty spec should pass
     errors, _ = validate_resource("AgentPolicy", {})
     assert errors == []
 

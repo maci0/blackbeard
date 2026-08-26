@@ -40,7 +40,7 @@ def _clear_auth_failures():
 
 
 # ---------------------------------------------------------------------------
-# InMemoryRateLimiter — basic sliding window
+# InMemoryRateLimiter: basic sliding window
 # ---------------------------------------------------------------------------
 
 

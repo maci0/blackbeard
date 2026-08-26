@@ -25,7 +25,7 @@ interface UseCollaborationReturn {
   participants: number
   connected: boolean
   broadcast: (type: string, data: Record<string, unknown>) => void
-  /** Throttled — call on every mousemove. */
+  /** Throttled: call on every mousemove. */
   broadcastCursor: (data: Record<string, unknown>) => void
   remoteCursors: Map<string, RemoteCursor>
 }
@@ -93,7 +93,7 @@ export function useCollaboration(crewName: string, enabled: boolean): UseCollabo
     // Guards against zombie reconnects: the closing socket's onclose fires
     // asynchronously after cleanup ran (unmount / crew switch / disable),
     // and without this flag it would schedule a reconnect for an effect
-    // that no longer exists — leaking a ghost connection to the old room.
+    // that no longer exists: leaking a ghost connection to the old room.
     let disposed = false
 
     function connect() {

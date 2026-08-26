@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------ */
-/* TourOverlay — spotlight cutout using the box-shadow technique       */
+/* TourOverlay: spotlight cutout using the box-shadow technique       */
 /* A transparent div positioned over the target element, with a huge  */
 /* box-shadow that fills the rest of the screen with a dark overlay.  */
 /* ------------------------------------------------------------------ */
@@ -27,11 +27,11 @@ export function TourOverlay({ targetRect, onBackdropClick }: TourOverlayProps) {
           inset: 0,
           zIndex: 9997,
           cursor: 'pointer',
-          // No background — the spotlight's box-shadow creates the dark overlay
+          // No background: the spotlight's box-shadow creates the dark overlay
         }}
       />
 
-      {/* Spotlight — transparent box positioned over the target.           */}
+      {/* Spotlight: transparent box positioned over the target.           */}
       {/* The giant box-shadow creates the semi-opaque overlay around it.   */}
       {/* pointer-events: none so the target element remains interactive.   */}
       {targetRect && (

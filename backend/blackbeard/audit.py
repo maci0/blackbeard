@@ -42,7 +42,7 @@ async def log_audit(
 ) -> AuditLog:
     """Write an audit log entry.
 
-    The entry is added to the session but NOT committed -- the caller
+    The entry is added to the session but NOT committed: the caller
     is responsible for committing the transaction so audit writes are
     atomic with the action they record.
     """

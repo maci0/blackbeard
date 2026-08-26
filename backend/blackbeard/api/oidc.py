@@ -1,6 +1,6 @@
 """OIDC / SSO authentication endpoints.
 
-Generic OIDC client — works with any provider (Google, Azure AD, Okta,
+Generic OIDC client: works with any provider (Google, Azure AD, Okta,
 Keycloak, Authentik). Required env vars: OIDC_ISSUER, OIDC_CLIENT_ID,
 OIDC_CLIENT_SECRET.  Optional: OIDC_REDIRECT_URI, OIDC_SCOPES.
 """
@@ -104,7 +104,7 @@ async def oidc_callback(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> RedirectResponse:
-    """Handle OIDC callback — exchange code, create/link user, redirect with tokens."""
+    """Handle OIDC callback: exchange code, create/link user, redirect with tokens."""
     oauth = await _ensure_oauth()
 
     try:
@@ -128,7 +128,7 @@ async def oidc_callback(
             userinfo = await oauth.provider.userinfo(token=token)
         except Exception as exc:
             logger.warning(
-                "OIDC userinfo fetch failed — proceeding with empty profile: %s",
+                "OIDC userinfo fetch failed, proceeding with empty profile: %s",
                 type(exc).__name__,
                 exc_info=True,
                 extra={
@@ -228,7 +228,7 @@ async def oidc_callback(
     # token theft via open-redirect if OIDC_REDIRECT_URI is misconfigured.
     if origin not in settings.cors_origins:
         logger.error(
-            "OIDC redirect origin %s not in CORS_ORIGINS — refusing redirect",
+            "OIDC redirect origin %s not in CORS_ORIGINS: refusing redirect",
             origin,
             extra={
                 "event": "oidc_redirect_origin_rejected",

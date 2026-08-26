@@ -81,7 +81,7 @@ class MicroVMSandbox(BaseSandbox):
         """Warn when neither krun nor crun is found; soft check only."""
         if not shutil.which("krun") and not shutil.which("crun"):
             logger.warning(
-                "krun/crun not found -- microvm sandbox tier will fail at "
+                "krun/crun not found: microvm sandbox tier will fail at "
                 "execution time. "
                 "Install: apt install crun-krun or dnf install crun-krun",
                 extra={"event": "microvm_krun_not_found"},

@@ -81,7 +81,7 @@ class AgentPolicy:
         return list(targets) if targets else None
 
 
-# Default policy — no restrictions
+# Default policy: no restrictions
 DEFAULT_POLICY = AgentPolicy({})
 
 

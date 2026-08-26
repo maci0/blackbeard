@@ -13,7 +13,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 try:
-    import muninn  # noqa: F401 — presence check only
+    import muninn  # noqa: F401  (presence check only)
 
     HAS_MUNINN = True
 except ImportError:

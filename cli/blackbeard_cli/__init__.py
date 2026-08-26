@@ -1,4 +1,4 @@
-"""Blackbeard CLI — standalone command-line interface."""
+"""Blackbeard CLI: standalone command-line interface."""
 
 from __future__ import annotations
 

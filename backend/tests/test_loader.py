@@ -894,7 +894,7 @@ def test_build_tool_rejects_config_sensitive_path(mock_importlib):
 
 
 # ---------------------------------------------------------------------------
-# build_agent — forwarded kwargs (max_iter, max_rpm, cache)
+# build_agent: forwarded kwargs (max_iter, max_rpm, cache)
 # ---------------------------------------------------------------------------
 
 
@@ -924,7 +924,7 @@ def test_build_agent_forwards_extra_kwargs(mock_agent_cls, mock_llm_cls):
 
 
 # ---------------------------------------------------------------------------
-# build_crew — memory config
+# build_crew: memory config
 # ---------------------------------------------------------------------------
 
 
@@ -995,7 +995,7 @@ def test_build_crew_memory_dict(mock_crew_cls, mock_task_cls, mock_agent_cls, mo
 
 
 # ---------------------------------------------------------------------------
-# Crew — embedder passthrough
+# Crew: embedder passthrough
 # ---------------------------------------------------------------------------
 
 
@@ -1036,7 +1036,7 @@ def test_build_crew_embedder_passthrough(
 
 
 # ---------------------------------------------------------------------------
-# Crew — cache and max_rpm forwarding
+# Crew: cache and max_rpm forwarding
 # ---------------------------------------------------------------------------
 
 
@@ -1076,7 +1076,7 @@ def test_build_crew_cache_and_max_rpm(mock_crew_cls, mock_task_cls, mock_agent_c
 
 
 # ---------------------------------------------------------------------------
-# Task — async_execution and human_input forwarding
+# Task: async_execution and human_input forwarding
 # ---------------------------------------------------------------------------
 
 
@@ -1141,7 +1141,7 @@ def test_build_task_with_callback(mock_task_cls, mock_agent_cls, mock_llm_cls):
 
 
 # ---------------------------------------------------------------------------
-# Agent — skills forwarding
+# Agent: skills forwarding
 # ---------------------------------------------------------------------------
 
 
@@ -1167,7 +1167,7 @@ def test_build_agent_with_skills(mock_agent_cls, mock_llm_cls):
 
 
 # ---------------------------------------------------------------------------
-# Agent — memory dict with custom weights → MemoryConfig
+# Agent: memory dict with custom weights → MemoryConfig
 # ---------------------------------------------------------------------------
 
 
@@ -1262,7 +1262,7 @@ def test_build_tool_config_non_string_values_are_safe(mock_importlib):
 
 
 # ---------------------------------------------------------------------------
-# build_crew — hierarchical process
+# build_crew: hierarchical process
 # ---------------------------------------------------------------------------
 
 
@@ -1388,7 +1388,7 @@ def test_build_crew_hierarchical_without_manager_raises(
 
 
 # ---------------------------------------------------------------------------
-# Loader isolation — different loaders don't share caches
+# Loader isolation: different loaders don't share caches
 # ---------------------------------------------------------------------------
 
 

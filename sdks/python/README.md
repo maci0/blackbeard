@@ -104,9 +104,9 @@ client.cancel(execution["id"])
 execs = client.list_executions(crew_name="my-crew", status="completed")
 
 # Human-in-the-loop: respond to a paused execution
-client.respond(execution["id"], "Approved — proceed with the analysis.")
+client.respond(execution["id"], "Approved: proceed with the analysis.")
 
-# Retry a finished execution — completed, failed, or cancelled (creates a new execution)
+# Retry a finished execution: completed, failed, or cancelled (creates a new execution)
 new_exec = client.retry(execution["id"])
 
 # Get execution events (for streaming/replay); returns a page dict

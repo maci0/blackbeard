@@ -94,7 +94,7 @@ describe('Login', () => {
   describe('validation', () => {
     it('shows error when fields contain only whitespace', async () => {
       const user = userEvent.setup()
-      // Mock login to not be called — validation should prevent it
+      // Mock login to not be called: validation should prevent it
       const mockLogin = vi.fn()
       useAuthStore.setState({ login: mockLogin })
 

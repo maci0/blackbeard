@@ -67,7 +67,7 @@ class PublicConfigResponse(BaseModel):
 
 @router.get("/config/public", response_model=PublicConfigResponse)
 async def public_config() -> PublicConfigResponse:
-    """Public configuration — no auth required."""
+    """Public configuration: no auth required."""
     return PublicConfigResponse(oidc_enabled=bool(settings.oidc_issuer))
 
 
@@ -164,7 +164,7 @@ async def _check_valkey() -> dict[str, object]:
 async def _check_litellm() -> dict[str, object]:
     """Hit LiteLLM /health/liveliness and return status dict.
 
-    Note: "liveliness" is LiteLLM's actual endpoint name — not a typo.
+    Note: "liveliness" is LiteLLM's actual endpoint name, not a typo.
     """
     t0 = time.monotonic()
     try:
@@ -267,7 +267,7 @@ async def readiness(
     response: Response,
     session: AsyncSession = Depends(get_session),
 ) -> ReadinessResponse:
-    """Readiness check -- verifies database, Valkey, and LiteLLM connectivity.
+    """Readiness check: verifies database, Valkey, and LiteLLM connectivity.
 
     Returns 200 with status=healthy (all up) or status=degraded (non-critical
     component down). Returns 503 with status=unhealthy only when a critical

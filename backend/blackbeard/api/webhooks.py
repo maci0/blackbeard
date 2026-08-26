@@ -109,7 +109,7 @@ class WebhookListResponse(BaseModel):
 class WebhookCreateResponse(WebhookResponse):
     """Response after creating a webhook (includes secret once)."""
 
-    secret: str = Field(description="HMAC-SHA256 signing secret — shown only on create")
+    secret: str = Field(description="HMAC-SHA256 signing secret, shown only on create")
 
 
 class WebhookTestResponse(BaseModel):
@@ -360,7 +360,7 @@ async def test_webhook(
     "/{webhook_id}",
     status_code=204,
     responses={
-        204: {"description": "Webhook deleted (or did not exist — idempotent)"},
+        204: {"description": "Webhook deleted (or did not exist, idempotent)"},
         429: {"description": "Too many mutation requests"},
     },
 )

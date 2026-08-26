@@ -1,11 +1,11 @@
 """Resource system: validation, CRUD service, and reference management.
 
-- ``service`` — create/read/update/delete with optimistic locking; version
+- ``service``: create/read/update/delete with optimistic locking; version
   snapshots (``save_version_snapshot``, used by every mutating router)
-- ``validator`` — JSON Schema + structural/SSRF/callable path checks
-- ``spec_schemas`` — per-kind JSON schemas (single source for ``spec``)
-- ``refs`` — ``ref:kind/name`` parse, extract, cycle detection
-- ``exceptions`` — validation and conflict errors for API mapping
+- ``validator``: JSON Schema + structural/SSRF/callable path checks
+- ``spec_schemas``: per-kind JSON schemas (single source for ``spec``)
+- ``refs``: ``ref:kind/name`` parse, extract, cycle detection
+- ``exceptions``: validation and conflict errors for API mapping
 
 Kind registry lives in ``blackbeard.kinds`` (not here) so CLI and API share it.
 """

@@ -1,4 +1,4 @@
-"""SSE connection tracking — shared between executions and health endpoints."""
+"""SSE connection tracking: shared between executions and health endpoints."""
 
 from __future__ import annotations
 

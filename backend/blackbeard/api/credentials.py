@@ -1,8 +1,8 @@
-"""Credentials API — centralized secret management.
+"""Credentials API: centralized secret management.
 
 Stores credentials (API keys, tokens, passwords) that can be
 referenced by tools and LLM connections. Values are never returned
-in full — only a masked preview is exposed.
+in full: only a masked preview is exposed.
 """
 
 from __future__ import annotations
@@ -29,14 +29,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/credentials", tags=["credentials"])
 
 # ---------------------------------------------------------------------------
-# In-memory credential store (MVP — no separate table needed yet)
+# In-memory credential store (MVP: no separate table needed yet)
 # ---------------------------------------------------------------------------
 
 _credentials: dict[str, dict[str, Any]] = {}
 _credentials_lock = threading.Lock()
 
 
-# Fixed-width mask for all secret values — identical regardless of input
+# Fixed-width mask for all secret values: identical regardless of input
 # to avoid leaking length, prefix, or suffix information (CWE-200).
 _MASKED_VALUE = "****"
 
@@ -223,7 +223,7 @@ async def get_credential(
     "/{credential_id}",
     status_code=204,
     responses={
-        204: {"description": "Credential deleted (or did not exist — idempotent)"},
+        204: {"description": "Credential deleted (or did not exist, idempotent)"},
         429: {"description": "Too many mutation requests"},
     },
 )

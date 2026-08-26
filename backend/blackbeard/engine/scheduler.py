@@ -74,7 +74,7 @@ class AutomationScheduler:
         except Exception:
             self._running = False
             logger.exception(
-                "Failed to start automation scheduler — no cron automations will run until restart",
+                "Failed to start automation scheduler: no cron automations will run until restart",
                 extra={"event": "scheduler_start_failed"},
             )
             raise
@@ -305,7 +305,7 @@ class AutomationScheduler:
             return False
         except Exception:
             logger.warning(
-                "Cron firing claim failed for '%s' — firing anyway",
+                "Cron firing claim failed for '%s': firing anyway",
                 automation_name,
                 exc_info=True,
                 extra={

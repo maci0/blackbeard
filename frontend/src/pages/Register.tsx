@@ -64,7 +64,7 @@ export default function Register() {
       setPassword('')
       void navigate('/studio', { replace: true })
     } catch {
-      // Error is set in the store — move focus so screen readers announce it
+      // Error is set in the store: move focus so screen readers announce it
       document.getElementById('register-email')?.focus()
     }
   }

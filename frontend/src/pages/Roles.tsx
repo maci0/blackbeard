@@ -57,7 +57,7 @@ function RoleCard({
           onSelect()
         }
       }}
-      aria-label={`Role: ${role.name} — press Enter to view details`}
+      aria-label={`Role: ${role.name}, press Enter to view details`}
       aria-pressed={selected}
       className={cn(
         'flex w-full flex-col overflow-hidden rounded-lg border bg-card text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',

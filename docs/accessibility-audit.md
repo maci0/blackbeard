@@ -32,7 +32,7 @@
 - **WCAG Criterion**: 4.1.3 Status Messages (Level AA)
 - **Severity**: Major
 - **File**: `frontend/src/components/ui/Toast.tsx`, line 81
-- **User Impact**: Screen reader users may hear toast messages announced twice -- once from the container's `aria-live="polite"` and again from each toast item's `role="alert"` or `role="status"`. Error toasts use `role="alert"` (which implies `aria-live="assertive"`), creating a conflict with the container's `polite` politeness level.
+- **User Impact**: Screen reader users may hear toast messages announced twice, once from the container's `aria-live="polite"` and again from each toast item's `role="alert"` or `role="status"`. Error toasts use `role="alert"` (which implies `aria-live="assertive"`), creating a conflict with the container's `polite` politeness level.
 - **Fix Applied**: Removed `aria-live="polite"` from the container `div`. Each `ToastItem` already carries the appropriate role (`role="alert"` for errors, `role="status"` for success/info), which handles live-region announcements at the correct urgency level.
 
 ### Issue 2: NavSection `aria-expanded` button missing `aria-controls` [FIXED]

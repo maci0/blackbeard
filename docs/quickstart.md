@@ -15,8 +15,8 @@ This guide walks you through starting Blackbeard, loading an example crew, runni
 
 - [ ] [Docker](https://docs.docker.com/get-docker/) (or [Podman](https://podman.io/)) with Compose support
 - [ ] [Git](https://git-scm.com/)
-- [ ] [uv](https://docs.astral.sh/uv/) -- Python package manager (for the CLI)
-- [ ] [Ollama](https://ollama.com/) with `qwen3.6` pulled -- only needed to execute crews locally; not required to start services
+- [ ] [uv](https://docs.astral.sh/uv/), Python package manager (for the CLI)
+- [ ] [Ollama](https://ollama.com/) with `qwen3.6` pulled, only needed to execute crews locally; not required to start services
 
 ---
 
@@ -55,7 +55,7 @@ Starting Blackbeard...
 
 ## Step 2: Open the UI
 
-Navigate to **http://localhost:3000** in your browser. You will see the Dashboard page -- this shows execution metrics, resource counts, and recent activity. The platform is running but has no resources yet, so the dashboard will be empty.
+Navigate to **http://localhost:3000** in your browser. You will see the Dashboard page, this shows execution metrics, resource counts, and recent activity. The platform is running but has no resources yet, so the dashboard will be empty.
 
 Use the sidebar to navigate to the **Studio** page (the visual graph editor) or any other page. You can also press `Cmd+K` (macOS) or `Ctrl+K` to open the command palette for quick navigation.
 
@@ -102,7 +102,7 @@ uv sync
 uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 ```
 
-The `--wait` flag polls until the execution completes. You will see a panel with the execution ID, status, and -- once finished -- the outputs and token usage.
+The `--wait` flag polls until the execution completes. You will see a panel with the execution ID, status, and: once finished, the outputs and token usage.
 
 > **Note:** This requires Ollama running locally with the `qwen3.6` model. The seeded LLM connection points to `ollama/qwen3.6`. If you use a different model provider, update the LLMConnection resource first.
 
@@ -319,7 +319,7 @@ uv run blackbeard get Agent researcher --json
 
 ## Step 11: Use the YAML Editor
 
-The Studio property panel includes a bidirectional YAML editor (Monaco). You can switch between the form view and YAML view at any time -- changes sync automatically. This is useful for power users who prefer editing raw YAML.
+The Studio property panel includes a bidirectional YAML editor (Monaco). You can switch between the form view and YAML view at any time: changes sync automatically. This is useful for power users who prefer editing raw YAML.
 
 ---
 
@@ -379,14 +379,14 @@ This is useful for exploratory work and rapid iteration.
 
 ## Next Steps
 
-- **Add tools to agents** -- see `examples/research-crew/tools/` for examples of builtin and Python tools
-- **Set up agent policies** -- create `AgentPolicy` resources to enforce spending budgets, tool allowlists, and delegation rules
-- **Add guardrails** -- attach `Guardrail` resources to tasks for output validation (function, LLM, schema, or composite chains)
-- **Configure RBAC** -- create users, groups, roles, and role bindings for team access control
-- **Use different LLM providers** -- create `LLMConnection` resources pointing to OpenAI, Anthropic, or Vertex AI
-- **Build flows** -- create `Flow` resources to chain multiple crews into multi-step pipelines
-- **Set up webhooks** -- register webhook URLs at `POST /api/v1/webhooks` for execution event delivery
-- **Write a plugin** -- extend the platform with custom tools, guardrails, auth providers, or execution hooks via the Plugin SDK (see [features.md](features.md#plugin-sdk))
-- **Install the Python SDK** -- see [sdks/python/README.md](../sdks/python/README.md) for programmatic access
-- **Read the YAML reference** -- see [docs/yaml-reference.md](yaml-reference.md) for every field on every resource kind
-- **Explore the API** -- open http://localhost:8000/docs for interactive Swagger documentation (debug mode)
+- **Add tools to agents**: see `examples/research-crew/tools/` for examples of builtin and Python tools
+- **Set up agent policies**: create `AgentPolicy` resources to enforce spending budgets, tool allowlists, and delegation rules
+- **Add guardrails**: attach `Guardrail` resources to tasks for output validation (function, LLM, schema, or composite chains)
+- **Configure RBAC**: create users, groups, roles, and role bindings for team access control
+- **Use different LLM providers**: create `LLMConnection` resources pointing to OpenAI, Anthropic, or Vertex AI
+- **Build flows**: create `Flow` resources to chain multiple crews into multi-step pipelines
+- **Set up webhooks**: register webhook URLs at `POST /api/v1/webhooks` for execution event delivery
+- **Write a plugin**: extend the platform with custom tools, guardrails, auth providers, or execution hooks via the Plugin SDK (see [features.md](features.md#plugin-sdk))
+- **Install the Python SDK**: see [sdks/python/README.md](../sdks/python/README.md) for programmatic access
+- **Read the YAML reference**: see [docs/yaml-reference.md](yaml-reference.md) for every field on every resource kind
+- **Explore the API**: open http://localhost:8000/docs for interactive Swagger documentation (debug mode)

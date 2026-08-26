@@ -109,17 +109,17 @@ async def get_current_user(
         cached = getattr(request.state, "jwt_payload", None)
         return await _resolve_bearer_user(auth_header[7:], session, cached_payload=cached)
 
-    # EventSource cannot set custom headers either — accept a JWT via
+    # EventSource cannot set custom headers either: accept a JWT via
     # ?token= on SSE endpoints (mirrors the WebSocket ?token= contract).
     if not auth_header and SSE_STREAM_RE.match(request.url.path):
         token = request.query_params.get("token", "")
         if token:
             return await _resolve_bearer_user(token, session)
 
-    # Try resolving the X-API-Key to a user (optional — API key may belong to
+    # Try resolving the X-API-Key to a user (optional: API key may belong to
     # the global system key rather than a user-specific key).
     # Only accept query-string keys on SSE/stream endpoints where EventSource
-    # cannot set custom headers — query-string credentials leak via proxy logs,
+    # cannot set custom headers: query-string credentials leak via proxy logs,
     # browser history, and Referer headers (CWE-598).
     api_key = request.headers.get("X-API-Key", "")
     if not api_key and SSE_STREAM_RE.match(request.url.path):
@@ -157,7 +157,7 @@ async def require_jwt_user(
 ) -> User:
     """Require authentication via JWT Bearer token only.
 
-    Rejects API key authentication — used for sensitive operations like
+    Rejects API key authentication: used for sensitive operations like
     API key management where authenticating with the credential being
     managed would be a security risk.
     """
@@ -217,7 +217,7 @@ def require_permission(
     ) -> User | None:
         if not settings.enforce_rbac:
             return user
-        # RBAC is on — user identity is mandatory.
+        # RBAC is on: user identity is mandatory.
         if user is None:
             raise bearer_401("Authentication required. Provide a Bearer token or user API key.")
         authz = Authorizer(session)
@@ -248,7 +248,7 @@ async def check_resource_permission(
     if not settings.enforce_rbac:
         return user
 
-    # RBAC is on — user identity is mandatory.
+    # RBAC is on: user identity is mandatory.
     if user is None:
         raise bearer_401("Authentication required. Provide a Bearer token or user API key.")
 
@@ -258,14 +258,14 @@ async def check_resource_permission(
     path_parts = request.url.path.rstrip("/").split("/")
     if request.method == "GET" and path_parts[-1] == kind_plural:
         verb = "list"
-    # POST /{kind}/{name}/rollback mutates an existing resource — that is an
+    # POST /{kind}/{name}/rollback mutates an existing resource: that is an
     # update, not a create.
     if request.method == "POST" and path_parts[-1] == "rollback":
         verb = "update"
 
     kind = PLURAL_TO_KIND.get(kind_plural)
     if kind is None:
-        # Unknown kind — let the route handler return 404.
+        # Unknown kind: let the route handler return 404.
         return user
 
     authz = Authorizer(session)

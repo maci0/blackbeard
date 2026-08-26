@@ -2,13 +2,13 @@
 
 When a user creates, updates, or deletes an LLMConnection resource through
 Blackbeard, this module pushes the change to LiteLLM so the model becomes
-available immediately — no proxy restart required.
+available immediately: no proxy restart required.
 
 LiteLLM management API:
-  POST /model/new    — add a model
-  POST /model/update — update a model
-  POST /model/delete — delete a model
-  GET  /model/info   — list configured models
+  POST /model/new   : add a model
+  POST /model/update: update a model
+  POST /model/delete: delete a model
+  GET  /model/info  : list configured models
 """
 
 from __future__ import annotations

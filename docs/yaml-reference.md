@@ -392,7 +392,7 @@ spec:
 
 ## AgentPolicy
 
-An AgentPolicy defines governance rules  -- tool access, spending budgets, and sandbox requirements  -- that are enforced at execution time.
+An AgentPolicy defines governance rules : tool access, spending budgets, and sandbox requirements , that are enforced at execution time.
 
 ```yaml
 apiVersion: blackbeard/v1

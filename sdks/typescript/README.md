@@ -7,7 +7,6 @@ dependencies, works in Node 18+ and modern browsers (uses global `fetch`).
 
 ```bash
 bun add blackbeard-sdk
-# or: npm install blackbeard-sdk
 ```
 
 ## Quickstart
@@ -110,4 +109,4 @@ try {
 ## Testing
 
 The client uses global `fetch`, so stub it with your test framework
-(e.g. `vi.stubGlobal("fetch", mock)` in vitest) — no HTTP server needed.
+(e.g. `vi.stubGlobal("fetch", mock)` in vitest): no HTTP server needed.

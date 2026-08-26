@@ -1,4 +1,4 @@
-"""Current schema baseline -- matches Base.metadata as of this commit.
+"""Current schema baseline: matches Base.metadata as of this commit.
 
 This migration exists so that ``alembic stamp head`` can mark existing
 databases as up-to-date without re-running old migrations.

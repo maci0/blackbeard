@@ -232,7 +232,7 @@ def _get_cached_webhooks(db_url: str) -> list[Any]:
                 cached = list(result.scalars())
                 if len(cached) > _WEBHOOK_LOAD_LIMIT:
                     logger.warning(
-                        "Active webhook count exceeds %d — some webhooks will not receive events",
+                        "Active webhook count exceeds %d: some webhooks will not receive events",
                         _WEBHOOK_LOAD_LIMIT,
                         extra={
                             "event": "webhook_limit_exceeded",
@@ -244,7 +244,7 @@ def _get_cached_webhooks(db_url: str) -> list[Any]:
         except Exception as exc:
             if entry is not None:
                 logger.warning(
-                    "Failed to refresh webhook cache — using stale data (%d webhooks): %s",
+                    "Failed to refresh webhook cache, using stale data (%d webhooks): %s",
                     len(entry[1]),
                     exc,
                     exc_info=True,
@@ -255,7 +255,7 @@ def _get_cached_webhooks(db_url: str) -> list[Any]:
                 )
                 return entry[1]
             logger.error(
-                "Failed to load webhooks for event delivery — "
+                "Failed to load webhooks for event delivery: "
                 "no stale cache available, webhook notifications will be skipped: %s",
                 exc,
                 exc_info=True,
@@ -529,7 +529,7 @@ class BlackbeardExecutionListener(BaseEventListener):
     # Hard cap on events pending DB write. While flushes keep failing
     # (prolonged Postgres outage), failed batches are re-queued into the
     # buffer; without this cap a long-running execution grows memory
-    # without bound for its whole lifetime. Oldest events drop first —
+    # without bound for its whole lifetime. Oldest events drop first:
     # they were never committed, so no SSE consumer can have seen them.
     _MAX_PENDING_EVENTS = 1000
     _PII_CACHE_MAX = 1024
@@ -678,8 +678,7 @@ class BlackbeardExecutionListener(BaseEventListener):
             dropped = self._requeue_locked(to_flush, collision)
         if dropped:
             logger.warning(
-                "Dropped %d oldest pending events for %s: "
-                "buffer exceeded %d during DB outage",
+                "Dropped %d oldest pending events for %s: buffer exceeded %d during DB outage",
                 dropped,
                 self._execution_id,
                 self._MAX_PENDING_EVENTS,
@@ -757,7 +756,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                     fallback_seq += 1
                 self._seq = fallback_seq
             logger.warning(
-                "Failed to renumber events for %s after sequence collision — "
+                "Failed to renumber events for %s after sequence collision: "
                 "using local counter fallback (start=%d)",
                 self._execution_id,
                 fallback_seq - len(events),
@@ -811,7 +810,7 @@ class BlackbeardExecutionListener(BaseEventListener):
             lost = len(self._buffer)
         if lost > 0:
             logger.error(
-                "Execution %s: %d events lost — could not flush after %d retries",
+                "Execution %s: %d events lost, could not flush after %d retries",
                 self._execution_id,
                 lost,
                 self._FLUSH_RETRIES,
@@ -932,7 +931,7 @@ class BlackbeardExecutionListener(BaseEventListener):
     def _redact_event_payload(self, data: dict[str, Any]) -> dict[str, Any]:
         """Redact PII in *data*, sharing results across events via a bounded cache.
 
-        The lock only guards the cache dict — each call redacts against a
+        The lock only guards the cache dict: each call redacts against a
         snapshot and merges back, so the (slow) NLP analysis never serializes
         concurrent event-bus handlers.
         """
@@ -1020,7 +1019,7 @@ class BlackbeardExecutionListener(BaseEventListener):
         # Cancel any pending flush timer and wait for an in-flight flush
         # to complete BEFORE draining the buffer.  This ensures that if the
         # timer's _flush_buffer failed and re-queued events, those events
-        # are back in the buffer when we drain it below — preventing the
+        # are back in the buffer when we drain it below: preventing the
         # SSE consumer from skipping lower-sequence events.
         with self._lock:
             timer = self._flush_timer
@@ -1061,7 +1060,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                         values["started_at"] = task_started_at
                     if task_completed_at is not None:
                         values["completed_at"] = task_completed_at
-                    # Bulk UPDATE bypasses ORM onupdate — set updated_at explicitly.
+                    # Bulk UPDATE bypasses ORM onupdate: set updated_at explicitly.
                     values["updated_at"] = now
                     session.execute(
                         update(ExecutionTask)
@@ -1077,7 +1076,7 @@ class BlackbeardExecutionListener(BaseEventListener):
                 self._handle_failed_flush(to_flush, exc)
                 self._schedule_flush()
                 logger.exception(
-                    "Failed to write event+task for %s: type=%s order=%d — "
+                    "Failed to write event+task for %s: type=%s order=%d, "
                     "task status in DB may be stale (expected %s)",
                     self._execution_id,
                     event_type,

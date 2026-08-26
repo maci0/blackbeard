@@ -106,7 +106,7 @@ def detect_cycles(
         color[node] = GRAY
         for neighbor in adjacency.get(node, []):
             if color[neighbor] == GRAY:
-                # Found a cycle — reconstruct path from node back to neighbor via parents
+                # Found a cycle: reconstruct path from node back to neighbor via parents
                 cycle = []
                 current = node
                 max_depth = len(adjacency) + 1

@@ -650,7 +650,7 @@ export default function Resources() {
                           }}
                           tabIndex={0}
                           role="row"
-                          aria-label={`${resource.kind}: ${resource.metadata.name} — press Enter to view details`}
+                          aria-label={`${resource.kind}: ${resource.metadata.name}, press Enter to view details`}
                           className={cn(
                             'group cursor-pointer border-l-2 border-l-transparent transition-all duration-150 hover:border-l-primary hover:bg-accent/50 focus-visible:border-l-primary focus-visible:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                             selectedIds.has(rowId) && 'bg-primary/5',

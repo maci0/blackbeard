@@ -95,7 +95,7 @@ def _make_snapshot(
 
 
 # ---------------------------------------------------------------------------
-# Tests — derive_budget_and_pii
+# Tests: derive_budget_and_pii
 # ---------------------------------------------------------------------------
 
 
@@ -287,7 +287,7 @@ def test_derive_warn_tokens_clamped_to_token_cap():
 
 
 # ---------------------------------------------------------------------------
-# Tests — VirtualKeyManager
+# Tests: VirtualKeyManager
 # ---------------------------------------------------------------------------
 
 
@@ -498,7 +498,7 @@ async def test_delete_key_http_error_returns_false():
 
 
 # ---------------------------------------------------------------------------
-# Tests — ResourceLoader api_key override
+# Tests: ResourceLoader api_key override
 # ---------------------------------------------------------------------------
 
 
@@ -549,7 +549,7 @@ def test_loader_multiple_llms_use_same_override():
 
 
 # ---------------------------------------------------------------------------
-# Tests — VirtualKeyManager URL handling
+# Tests: VirtualKeyManager URL handling
 # ---------------------------------------------------------------------------
 
 
@@ -578,7 +578,7 @@ async def test_proxy_url_trailing_slash_stripped():
 
 
 # ---------------------------------------------------------------------------
-# Tests — AgentPolicy kinds loaded by executor
+# Tests: AgentPolicy kinds loaded by executor
 # ---------------------------------------------------------------------------
 
 

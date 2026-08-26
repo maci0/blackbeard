@@ -51,7 +51,7 @@ function buildResourceBody(node: Node, crewName: string) {
   const rawName =
     (data['role'] as string | undefined) ?? (data['name'] as string | undefined) ?? node.id
 
-  // 'name' is used for metadata.name, not a spec field — exclude to avoid validation failure
+  // 'name' is used for metadata.name, not a spec field: exclude to avoid validation failure
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- omit-only destructure: name moves to metadata below
   const { name: _unused, ...spec } = data
 
@@ -77,7 +77,7 @@ function buildFlowBody(flowName: string, flowStepNodes: Node[], edges: Edge[]) {
     const stepType = (data['type'] as string | undefined) ?? 'crew'
     const listenTo = (data['listen_to'] as string[] | undefined) ?? []
 
-    // Derive listen_to from edges too — incoming edges imply dependency
+    // Derive listen_to from edges too: incoming edges imply dependency
     const edgeListenTo = edges
       .filter((e) => e.target === node.id)
       .map((e) => {
@@ -204,7 +204,7 @@ function buildCrewGraph(
 }
 
 /* ------------------------------------------------------------------ */
-/* Studio inner — uses the ReactFlowProvider context from parent       */
+/* Studio inner: uses the ReactFlowProvider context from parent       */
 /* ------------------------------------------------------------------ */
 
 function StudioInner() {
@@ -270,7 +270,7 @@ function StudioInner() {
 
   useDocumentTitle('Studio')
 
-  // sm breakpoint (640px) -- panels only on desktop
+  // sm breakpoint (640px): panels only on desktop
   const isDesktop = useMediaQuery('(min-width: 640px)')
 
   // Persist panel sizes to localStorage across page reloads.
@@ -323,7 +323,7 @@ function StudioInner() {
             if (!currentIds.has(node.id)) broadcast('node_delete', { id: node.id })
           }
         } else {
-          // Same count — compare by index reference (fast path for the
+          // Same count: compare by index reference (fast path for the
           // common drag case where applyNodeChanges preserves array order
           // and only replaces the dragged node object).
           for (let i = 0; i < state.nodes.length; i++) {
@@ -465,7 +465,7 @@ function StudioInner() {
     // (and downstream handleRun) to be recreated on every drag frame.
     const { nodes: currentNodes, edges: currentEdges } = useStudioStore.getState()
     if (currentNodes.length === 0) {
-      applyStatus('error', 'Nothing to save — add some nodes first')
+      applyStatus('error', 'Nothing to save: add some nodes first')
       return false
     }
     applyStatus('saving', 'Saving…')
@@ -474,7 +474,7 @@ function StudioInner() {
     const isFlowMode = flowStepNodes.length > 0
 
     try {
-      // Save individual resource nodes (agent, task, tool — skip crewGroup and flowStep)
+      // Save individual resource nodes (agent, task, tool: skip crewGroup and flowStep)
       const resourceNodes = currentNodes.filter(
         (n) => n.type === 'agent' || n.type === 'task' || n.type === 'tool',
       )
@@ -710,7 +710,7 @@ function StudioInner() {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mutated by cleanup after await
         if (pollCancelledRef.current) return
         if (TERMINAL_STATUSES.has(exec.status)) {
-          // Stop polling on any terminal status — a run that failed before
+          // Stop polling on any terminal status: a run that failed before
           // any task started has tasks: [] and would otherwise poll forever.
           if (exec.tasks && exec.tasks.length > 0) {
             applyExecResults(exec.tasks, exec.status)
@@ -1007,7 +1007,7 @@ function StudioInner() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Exported page — provides ReactFlowProvider for all children         */
+/* Exported page: provides ReactFlowProvider for all children         */
 /* ------------------------------------------------------------------ */
 
 export default function Studio() {

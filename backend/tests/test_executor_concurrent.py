@@ -21,7 +21,7 @@ from blackbeard.engine.executor import (
 )
 
 # ---------------------------------------------------------------------------
-# Tests -- _get_executor concurrency
+# Tests: _get_executor concurrency
 # ---------------------------------------------------------------------------
 
 
@@ -79,7 +79,7 @@ def test_get_executor_concurrent_calls():
 
 
 # ---------------------------------------------------------------------------
-# Tests -- shutdown_executor safety
+# Tests: shutdown_executor safety
 # ---------------------------------------------------------------------------
 
 
@@ -118,7 +118,7 @@ def test_shutdown_executor_idempotent():
 
 
 # ---------------------------------------------------------------------------
-# Tests -- get_pool_status
+# Tests: get_pool_status
 # ---------------------------------------------------------------------------
 
 

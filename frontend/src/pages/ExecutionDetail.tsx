@@ -247,7 +247,7 @@ const TaskTimeline = memo(function TaskTimeline({
                 width: `${width}%`,
                 minWidth: '2px',
               }}
-              title={`${task.task_name} — ${formatDurationMs(durationMs)}`}
+              title={`${task.task_name}: ${formatDurationMs(durationMs)}`}
             >
               <span className="truncate">{width > 8 ? task.task_name : ''}</span>
             </div>
@@ -459,7 +459,7 @@ const EventGroupSection = memo(function EventGroupSection({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-expanded={open}
-        aria-label={`${group.name} — ${group.events.length} events`}
+        aria-label={`${group.name}: ${group.events.length} events`}
       >
         <ChevronRight
           className={cn('h-3 w-3 shrink-0 text-gray-500 transition-transform', open && 'rotate-90')}

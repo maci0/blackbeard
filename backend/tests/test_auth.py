@@ -239,7 +239,7 @@ async def test_refresh_with_invalid_token(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# /auth/me — profile endpoint
+# /auth/me: profile endpoint
 # ---------------------------------------------------------------------------
 
 
@@ -487,7 +487,7 @@ async def test_add_group_member_duplicate_returns_409(client: AsyncClient):
     assert group_resp.status_code == 201
     group_id = group_resp.json()["id"]
 
-    # Add once — success
+    # Add once: success
     resp = await client.post(
         f"/api/v1/groups/{group_id}/members",
         json={"user_id": user_id},
@@ -495,7 +495,7 @@ async def test_add_group_member_duplicate_returns_409(client: AsyncClient):
     )
     assert resp.status_code == 201
 
-    # Add again — conflict
+    # Add again: conflict
     resp = await client.post(
         f"/api/v1/groups/{group_id}/members",
         json={"user_id": user_id},

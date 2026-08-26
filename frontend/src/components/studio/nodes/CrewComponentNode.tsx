@@ -20,7 +20,7 @@ export default memo(function CrewComponentNode({ data, selected }: NodeProps) {
           : 'border-primary/30 hover:border-primary/50 hover:shadow-md',
       )}
     >
-      {/* Input ports — one per crew input */}
+      {/* Input ports: one per crew input */}
       {inputs.length > 0 ? (
         inputs.map((input, i) => (
           <Handle

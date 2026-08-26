@@ -2,7 +2,7 @@
 
 Covers executor, execution_listener, flow_runner, scheduler, loader,
 litellm/model_sync, sse, and api/executions helpers. Uses mocks
-throughout — no real DB, no real CrewAI, no real LiteLLM.
+throughout: no real DB, no real CrewAI, no real LiteLLM.
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ class TestSanitizeError:
 
         msg = "psycopg2.OperationalError: connection refused at 10.0.0.5:5432"
         result = _sanitize_error(msg)
-        assert result == "Execution failed — check server logs for details"
+        assert result == "Execution failed: check server logs for details"
         assert "10.0.0.5" not in result
 
     def test_arbitrary_traceback_returns_generic(self) -> None:
@@ -64,7 +64,7 @@ class TestSanitizeError:
 
         msg = "Traceback (most recent call last):\n  File ..."
         result = _sanitize_error(msg)
-        assert result == "Execution failed — check server logs for details"
+        assert result == "Execution failed: check server logs for details"
 
     def test_long_safe_error_truncates(self) -> None:
         from blackbeard.engine.executor import _sanitize_error
@@ -385,7 +385,7 @@ class TestGetWebhookHostname:
         with _webhook_host_cache_lock:
             _webhook_host_cache.clear()
 
-        # A URL with no hostname — urlparse returns empty string
+        # A URL with no hostname: urlparse returns empty string
         result = _get_webhook_hostname("not-a-url")
         assert result is None
 

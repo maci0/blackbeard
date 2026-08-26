@@ -5,7 +5,7 @@ public endpoint surface.  The invariant under test is always the same:
 
     **No input should ever produce a 500 Internal Server Error.**
 
-We allow 200, 201, 400, 401, 403, 404, 409, 413, 422, 429, 504 — those are
+We allow 200, 201, 400, 401, 403, 404, 409, 413, 422, 429, 504: those are
 all intentional rejections or successes.  A 500 means the server crashed on
 attacker-controlled input and must be fixed.
 """

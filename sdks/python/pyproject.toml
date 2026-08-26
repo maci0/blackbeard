@@ -31,7 +31,7 @@ line-length = 100
 # is derived from requires-python (3.10).
 select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "ANN", "RUF", "C4", "PIE", "T20", "TCH", "DTZ", "ISC", "RSE", "PT"]
 ignore = [
-    "ANN401",  # Any in signatures — HTTP payloads are dynamically shaped
+    "ANN401",  # Any in signatures: HTTP payloads are dynamically shaped
 ]
 
 [tool.ruff.lint.per-file-ignores]

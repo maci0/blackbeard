@@ -22,7 +22,7 @@ from blackbeard.kinds import ResourceKind
 from tests.conftest import _resource_map, make_resource
 
 # ---------------------------------------------------------------------------
-# Tests -- _build_schema_guardrail
+# Tests: _build_schema_guardrail
 # ---------------------------------------------------------------------------
 
 
@@ -119,7 +119,7 @@ def test_schema_guardrail_array_schema():
 
 
 # ---------------------------------------------------------------------------
-# Tests -- _build_guardrails (ref resolution)
+# Tests: _build_guardrails (ref resolution)
 # ---------------------------------------------------------------------------
 
 
@@ -261,7 +261,7 @@ def test_build_guardrails_failed_import_skipped():
 
 
 # ---------------------------------------------------------------------------
-# Tests -- _build_pii_guardrail
+# Tests: _build_pii_guardrail
 # ---------------------------------------------------------------------------
 
 

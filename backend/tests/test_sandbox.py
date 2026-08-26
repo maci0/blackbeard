@@ -113,7 +113,7 @@ class TestWasmToolResult:
 
 
 # ---------------------------------------------------------------------------
-# WasmSandbox (non-execution tests -- no real .wasm files needed)
+# WasmSandbox (non-execution tests: no real .wasm files needed)
 # ---------------------------------------------------------------------------
 
 
@@ -244,7 +244,7 @@ class TestContainerResult:
 
 
 # ---------------------------------------------------------------------------
-# ContainerSandbox -- runtime detection (mocked)
+# ContainerSandbox: runtime detection (mocked)
 # ---------------------------------------------------------------------------
 
 
@@ -292,7 +292,7 @@ class TestContainerSandboxDetection:
 
 
 # ---------------------------------------------------------------------------
-# ContainerSandbox -- command building
+# ContainerSandbox: command building
 # ---------------------------------------------------------------------------
 
 
@@ -387,7 +387,7 @@ class TestContainerSandboxCommand:
 
 
 # ---------------------------------------------------------------------------
-# ContainerSandbox -- async execution (mocked subprocess)
+# ContainerSandbox: async execution (mocked subprocess)
 # ---------------------------------------------------------------------------
 
 

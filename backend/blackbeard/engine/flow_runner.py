@@ -170,7 +170,7 @@ def run_flow_steps(
             crew_ref = step.get("crew")
             if not crew_ref:
                 logger.warning(
-                    "Flow step '%s' has no crew ref — skipped",
+                    "Flow step '%s' has no crew ref: skipped",
                     step_name,
                     extra={
                         "event": "flow_step_skipped",
@@ -188,7 +188,7 @@ def run_flow_steps(
             ]
             if failed_deps:
                 logger.warning(
-                    "Flow step '%s' receives error outputs from steps %s — "
+                    "Flow step '%s' receives error outputs from steps %s: "
                     "downstream results may be unreliable",
                     step_name,
                     failed_deps,
@@ -384,7 +384,7 @@ def run_flow_steps(
                     step_outputs[step_name] = "error: step failed"
             else:
                 logger.warning(
-                    "Transform step '%s' has no wasm_module — skipped",
+                    "Transform step '%s' has no wasm_module: skipped",
                     step_name,
                     extra={
                         "event": "flow_step_skipped",
@@ -396,7 +396,7 @@ def run_flow_steps(
 
         else:
             logger.warning(
-                "Flow step '%s' has unknown type '%s' — skipped",
+                "Flow step '%s' has unknown type '%s': skipped",
                 step_name,
                 step_type,
                 extra={
@@ -516,7 +516,7 @@ def evaluate_condition(expr: str, context: dict[str, Any]) -> bool:
             return bool(fn(left_val, right_val))
         except TypeError:
             logger.debug(
-                "Condition type mismatch: %r (%s) %s %r (%s) — evaluating as False",
+                "Condition type mismatch: %r (%s) %s %r (%s), evaluating as False",
                 left_val,
                 type(left_val).__name__,
                 op,

@@ -100,7 +100,7 @@ async def retention_loop() -> None:
                 await purge_expired_data(session)
         except Exception:
             logger.exception(
-                "Retention purge failed — retrying next cycle",
+                "Retention purge failed: retrying next cycle",
                 extra={"event": "retention_purge_failed"},
             )
         await asyncio.sleep(_PURGE_INTERVAL_S)

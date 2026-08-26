@@ -1,4 +1,4 @@
-## Blackbeard Tools Library — curated tool catalog
+## Blackbeard Tools Library: curated tool catalog
 ## Each entry becomes installable via POST /api/v1/tools/library/install
 
 - slug: web-search

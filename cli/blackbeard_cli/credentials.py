@@ -34,7 +34,7 @@ def access_token_expiry(access_token: str) -> float:
 
     Reads the authoritative ``exp`` claim from the JWT payload (no signature
     check needed: we are only scheduling our own refresh) instead of assuming
-    the server's token lifetime — a server configured with a shorter
+    the server's token lifetime: a server configured with a shorter
     ``JWT_ACCESS_TOKEN_EXPIRE_MINUTES`` would otherwise leave the CLI using
     expired tokens. Falls back to the default lifetime when the payload
     cannot be parsed.
@@ -45,7 +45,7 @@ def access_token_expiry(access_token: str) -> float:
         claims: dict[str, Any] = json.loads(base64.urlsafe_b64decode(padded))
         return float(claims["exp"]) - _REFRESH_MARGIN_S
     except (IndexError, KeyError, TypeError, ValueError, binascii.Error):
-        logger.debug("Could not read exp claim from access token — using default lifetime")
+        logger.debug("Could not read exp claim from access token: using default lifetime")
         return time.time() + ACCESS_TOKEN_LIFETIME_S
 
 
@@ -78,7 +78,7 @@ def load_credentials() -> StoredCredentials | None:
             expires_at=float(data["expires_at"]),
         )
     except (json.JSONDecodeError, KeyError, TypeError, ValueError):
-        logger.debug("Credentials file corrupt or incompatible — ignoring", exc_info=True)
+        logger.debug("Credentials file corrupt or incompatible: ignoring", exc_info=True)
         return None
 
 

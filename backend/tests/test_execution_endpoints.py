@@ -3,7 +3,7 @@
 Covers crew kickoff, train, test, flow endpoints, execution listing,
 detail retrieval, event listing, cancellation, and SSE streaming.
 
-All executor functions are mocked to avoid running real CrewAI — the
+All executor functions are mocked to avoid running real CrewAI: the
 executor unit tests already cover that layer.
 """
 
@@ -968,7 +968,7 @@ async def test_train_rejects_non_pkl_filename(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# _poll_execution — shared SSE/WS polling loop
+# _poll_execution: shared SSE/WS polling loop
 # ---------------------------------------------------------------------------
 
 

@@ -429,9 +429,7 @@ class TestOtelListener:
         listener_id = uuid.uuid4()
         from blackbeard.engine.execution_listener import BlackbeardExecutionListener
 
-        with patch(
-            "blackbeard.engine.execution_listener.get_sync_session_factory"
-        ) as mock_factory:
+        with patch("blackbeard.engine.execution_listener.get_sync_session_factory") as mock_factory:
             mock_factory.return_value = MagicMock()
             listener = BlackbeardExecutionListener(
                 execution_id=listener_id,
@@ -445,9 +443,7 @@ class TestOtelListener:
         listener_id = uuid.uuid4()
         from blackbeard.engine.execution_listener import BlackbeardExecutionListener
 
-        with patch(
-            "blackbeard.engine.execution_listener.get_sync_session_factory"
-        ) as mock_factory:
+        with patch("blackbeard.engine.execution_listener.get_sync_session_factory") as mock_factory:
             mock_factory.return_value = MagicMock()
             with patch("blackbeard.engine.execution_listener._get_otel_tracer", return_value=None):
                 listener = BlackbeardExecutionListener(
@@ -650,10 +646,8 @@ class TestWebhookDelivery:
 
         listener_mod.invalidate_webhook_cache()
 
-        # This will try to load webhooks from DB — mock it
-        with patch(
-            "blackbeard.engine.execution_listener.get_sync_session_factory"
-        ) as mock_factory:
+        # This will try to load webhooks from DB: mock it
+        with patch("blackbeard.engine.execution_listener.get_sync_session_factory") as mock_factory:
             mock_session = MagicMock()
             mock_result = MagicMock()
             mock_result.scalars.return_value = []  # no webhooks

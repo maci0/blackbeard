@@ -406,7 +406,7 @@ async def import_from_url(
     if imported_names:
         await session.commit()
         # Same side-effects as the CRUD routes: LiteLLM sync per resource,
-        # but scheduler reload and authz cache clear once per batch — firing
+        # but scheduler reload and authz cache clear once per batch: firing
         # them per resource makes a 500-resource import do 500 full scheduler
         # rebuilds and cache wipes.
         for kind, name, spec in imported_specs:

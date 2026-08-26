@@ -1,4 +1,4 @@
-"""CLI auth commands — login, logout, whoami, register."""
+"""CLI auth commands: login, logout, whoami, register."""
 
 from __future__ import annotations
 

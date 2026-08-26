@@ -69,7 +69,7 @@ jobs:
 
       - name: Warn on dependency vulnerabilities
         if: steps.pip-audit.outcome == 'failure'
-        run: echo "::warning::pip-audit found dependency vulnerabilities — review the Audit dependencies step output"
+        run: echo "::warning::pip-audit found dependency vulnerabilities, review the Audit dependencies step output"
 
   cli:
     runs-on: ubuntu-latest

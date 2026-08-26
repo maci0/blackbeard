@@ -18,7 +18,7 @@ from blackbeard.auth.api_key import _EXPECTED_API_KEY
 from blackbeard.auth.jwt import create_access_token
 
 # ---------------------------------------------------------------------------
-# Tests -- WS auth logic (unit-level) — uses the actual validate_ws_auth
+# Tests: WS auth logic (unit-level): uses the actual validate_ws_auth
 # ---------------------------------------------------------------------------
 
 

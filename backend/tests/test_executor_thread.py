@@ -132,7 +132,7 @@ def _make_listener(
 
 
 # ===========================================================================
-# 1. _run_crew_sync — main background thread entry point
+# 1. _run_crew_sync: main background thread entry point
 # ===========================================================================
 
 
@@ -230,7 +230,7 @@ class TestRunCrewSync:
 
 
 # ===========================================================================
-# 2. run_crew_async — the async execution function
+# 2. run_crew_async: the async execution function
 # ===========================================================================
 
 
@@ -1400,9 +1400,7 @@ class TestGetSyncSessionFactory:
                 patch("blackbeard.models.database.instrument_engine"),
             ):
                 mock_sm.return_value = MagicMock()
-                factory = mod.get_sync_session_factory(
-                    "postgresql+asyncpg://localhost:5432/testdb"
-                )
+                factory = mod.get_sync_session_factory("postgresql+asyncpg://localhost:5432/testdb")
 
             assert factory is not None
         finally:

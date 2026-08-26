@@ -10,7 +10,7 @@ pauses for feedback, this provider writes an ``hitl_request`` execution event
 and polls until an ``hitl_response`` event is recorded via
 ``POST /api/v1/executions/{id}/respond`` (the UI polls for requests and shows
 a response form). Sequence numbers are allocated with max+1 and retried on
-unique-constraint collisions, mirroring ``record_hitl_response`` — the
+unique-constraint collisions, mirroring ``record_hitl_response``: the
 execution listener renumbers its own buffered events after such collisions.
 """
 

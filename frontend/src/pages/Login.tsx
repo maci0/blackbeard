@@ -86,7 +86,7 @@ export default function Login() {
       setPassword('')
       void navigate(redirectTo, { replace: true })
     } catch {
-      // Error is set in the store — move focus so screen readers announce it
+      // Error is set in the store: move focus so screen readers announce it
       document.getElementById('login-email')?.focus()
     }
   }

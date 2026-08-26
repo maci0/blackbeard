@@ -1,4 +1,4 @@
-"""Blackbeard CLI entry point — Rich-powered output."""
+"""Blackbeard CLI entry point: Rich-powered output."""
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def _ingest_yaml_stream(stream: Any, source_label: str) -> list[dict[str, Any]]:
             elif "metadata" in doc or "spec" in doc:
                 console.print(
                     f"[yellow]Warning:[/] {escape(source_label)}: document has"
-                    " 'metadata'/'spec' but no 'kind' — skipped"
+                    " 'metadata'/'spec' but no 'kind': skipped"
                 )
     except yaml.YAMLError as exc:
         console.print(
@@ -242,7 +242,7 @@ def cli(
     no_color: bool,
     quiet: bool,
 ) -> None:
-    """Blackbeard — Agent Management Platform CLI."""
+    """Blackbeard: Agent Management Platform CLI."""
     ctx.ensure_object(dict)
 
     configure_output(no_color=no_color, quiet=quiet)
@@ -511,7 +511,7 @@ def apply(ctx: click.Context, path: str, dry_run: bool, yes: bool) -> None:
         else:
             out.print(
                 Panel(
-                    f"[cyan]Dry run — no changes applied[/]\n"
+                    f"[cyan]Dry run: no changes applied[/]\n"
                     f"[dim]Server: {server}  Project: {project}[/]",
                     border_style="cyan",
                 )

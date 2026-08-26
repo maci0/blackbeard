@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  *
- * Fuzz tests for resourceStore — kind mapping, state merging,
+ * Fuzz tests for resourceStore: kind mapping, state merging,
  * and concurrent fetch deduplication.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'

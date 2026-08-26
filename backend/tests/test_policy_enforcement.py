@@ -183,7 +183,7 @@ def test_policy_allowlist_removes_all_tools_when_none_match(
 
 
 # ---------------------------------------------------------------------------
-# No policy — all tools preserved
+# No policy: all tools preserved
 # ---------------------------------------------------------------------------
 
 
@@ -218,7 +218,7 @@ def test_no_policy_preserves_all_tools(mock_agent_cls, mock_llm_cls, mock_import
 
 
 # ---------------------------------------------------------------------------
-# No policies dict — all tools preserved
+# No policies dict: all tools preserved
 # ---------------------------------------------------------------------------
 
 
@@ -247,7 +247,7 @@ def test_empty_policies_dict_preserves_all_tools(mock_agent_cls, mock_llm_cls, m
 
 
 # ---------------------------------------------------------------------------
-# Policy mode=all — no filtering
+# Policy mode=all: no filtering
 # ---------------------------------------------------------------------------
 
 
@@ -400,7 +400,7 @@ def test_crew_default_policy_applies_tool_filter(
     _setup_mock_tools(mock_importlib, search=search_cls)
 
     search_res = _tool_resource("search", "SearchTool")
-    # Agent has no policy ref — should inherit crew default_agent_policy
+    # Agent has no policy ref: should inherit crew default_agent_policy
     agent_res = make_resource(
         ResourceKind.AGENT,
         "researcher",
@@ -537,7 +537,7 @@ def test_agent_policy_delegation_targets_empty():
 
 
 # ---------------------------------------------------------------------------
-# Combined policy — tool filter + delegation
+# Combined policy: tool filter + delegation
 # ---------------------------------------------------------------------------
 
 

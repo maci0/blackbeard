@@ -21,7 +21,7 @@ _DEP_EMAIL = "dep-test@example.com"
 
 
 # ---------------------------------------------------------------------------
-# get_current_user — JWT auth
+# get_current_user: JWT auth
 # ---------------------------------------------------------------------------
 
 
@@ -127,11 +127,11 @@ async def test_get_current_user_returns_none_for_api_key_only(client: AsyncClien
     """System API key auth returns None user (not 401) for execution endpoints."""
     # Resource endpoints work with system API key but get_current_user returns None
     resp = await client.get("/api/v1/agents", headers=API_KEY_HEADER)
-    assert resp.status_code == 200  # Works — system API key is sufficient
+    assert resp.status_code == 200  # Works: system API key is sufficient
 
 
 # ---------------------------------------------------------------------------
-# require_user — 401 on missing auth
+# require_user: 401 on missing auth
 # ---------------------------------------------------------------------------
 
 
@@ -155,7 +155,7 @@ async def test_require_user_with_jwt(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# User endpoints — additional edge cases
+# User endpoints: additional edge cases
 # ---------------------------------------------------------------------------
 
 
@@ -242,7 +242,7 @@ async def test_deactivate_self(client: AsyncClient, db_session):
 
 
 # ---------------------------------------------------------------------------
-# Group endpoints — additional edge cases
+# Group endpoints: additional edge cases
 # ---------------------------------------------------------------------------
 
 

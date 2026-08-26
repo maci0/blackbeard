@@ -175,7 +175,7 @@ class FirecrackerSandbox:
     ) -> dict[str, Any]:
         """Build Firecracker VM configuration JSON.
 
-        This method is intentionally public for testability -- tests can
+        This method is intentionally public for testability: tests can
         verify the configuration structure without spawning a real VM.
 
         The ``command`` is injected into the kernel boot args so that
@@ -385,7 +385,7 @@ class FirecrackerSandbox:
             return result
 
         finally:
-            # Clean up temp files -- never leave config or socket on disk
+            # Clean up temp files: never leave config or socket on disk
             Path(config_path).unlink(missing_ok=True)
             shutil.rmtree(socket_dir, ignore_errors=True)
 

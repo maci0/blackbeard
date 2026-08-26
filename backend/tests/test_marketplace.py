@@ -18,7 +18,7 @@ from httpx import AsyncClient
 from tests.conftest import API_KEY_HEADER
 
 # ---------------------------------------------------------------------------
-# Tests -- URL validation
+# Tests: URL validation
 # ---------------------------------------------------------------------------
 
 
@@ -66,7 +66,7 @@ async def test_marketplace_import_empty_url_returns_422(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests -- Path traversal
+# Tests: Path traversal
 # ---------------------------------------------------------------------------
 
 
@@ -91,7 +91,7 @@ async def test_marketplace_import_path_traversal_returns_422(client: AsyncClient
 
 
 # ---------------------------------------------------------------------------
-# Tests -- Built-in import
+# Tests: Built-in import
 # ---------------------------------------------------------------------------
 
 
@@ -158,7 +158,7 @@ async def test_marketplace_import_builtin_no_examples_returns_503(
 
 
 # ---------------------------------------------------------------------------
-# Tests -- Auth required
+# Tests: Auth required
 # ---------------------------------------------------------------------------
 
 
@@ -172,7 +172,7 @@ async def test_marketplace_import_requires_auth(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests -- _find_yaml_files safety
+# Tests: _find_yaml_files safety
 # ---------------------------------------------------------------------------
 
 

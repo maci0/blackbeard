@@ -764,7 +764,7 @@ KIND_SCHEMAS: dict[str, dict[str, Any]] = {
     "ServiceAccount": SERVICE_ACCOUNT_SCHEMA,
 }
 
-# Verify all kinds have schemas — catches missing schemas at import time
+# Verify all kinds have schemas: catches missing schemas at import time
 assert set(KIND_SCHEMAS.keys()) == set(ALL_KINDS), (
     f"KIND_SCHEMAS keys {set(KIND_SCHEMAS.keys())} don't match ALL_KINDS {set(ALL_KINDS)}"
 )

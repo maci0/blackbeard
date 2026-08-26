@@ -59,9 +59,9 @@ async def test_cors_disallows_unauthorized_origin(client):
     assert allow_origin != "https://evil.example.com", (
         "CORS should not reflect an unauthorized origin"
     )
-    assert allow_origin != "*", "CORS must not use wildcard — would allow any origin"
+    assert allow_origin != "*", "CORS must not use wildcard: would allow any origin"
     assert allow_origin in ("", "http://localhost:3000", "http://localhost:5173"), (
-        f"Unexpected CORS origin: {allow_origin!r} — should be empty or a configured origin"
+        f"Unexpected CORS origin: {allow_origin!r}, should be empty or a configured origin"
     )
 
 

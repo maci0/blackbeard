@@ -19,20 +19,20 @@
 
 ## What is Blackbeard?
 
-Blackbeard gives you a self-hosted platform to build, deploy, and manage AI agent crews powered by [CrewAI](https://crewai.com). Define agents, tasks, tools, and crews as declarative YAML resources -- a Kubernetes-inspired model -- then orchestrate them through a visual graph editor, a REST API, or a full-featured CLI.
+Blackbeard gives you a self-hosted platform to build, deploy, and manage AI agent crews powered by [CrewAI](https://crewai.com). Define agents, tasks, tools, and crews as declarative YAML resources (a Kubernetes-inspired model), then orchestrate them through a visual graph editor, a REST API, or a full-featured CLI.
 
 **Key differentiators:**
 
-- **Visual graph editor** -- drag-and-drop Studio built on React Flow for designing crews, with PNG/SVG canvas export
-- **Declarative resource model** -- 14 resource kinds (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount)
-- **Full RBAC** -- JWT authentication with roles, role bindings, and per-resource permissions
-- **LiteLLM routing** -- multi-provider model access (Vertex AI, OpenAI, Ollama, etc.) with built-in spend/token/latency tracking
-- **Budget enforcement** -- per-execution spending limits via AgentPolicy and LiteLLM virtual keys
-- **Multi-tier sandbox isolation** -- run untrusted tool code in WASM, Docker/Podman, gVisor, or Firecracker MicroVM sandboxes
-- **Plugin SDK** -- extend the platform with custom tools, guardrails, auth providers, and execution hooks
-- **Resource versioning** -- database snapshots on every create/update, with list/view/rollback API
-- **Temporal integration** -- optional Temporal workflow engine for durable execution (falls back to ThreadPoolExecutor)
-- **CLI parity** -- everything you can do in the UI, you can do from the command line, including an interactive TUI shell
+- **Visual graph editor**: drag-and-drop Studio built on React Flow for designing crews, with PNG/SVG canvas export
+- **Declarative resource model**: 14 resource kinds (Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount)
+- **Full RBAC**: JWT authentication with roles, role bindings, and per-resource permissions
+- **LiteLLM routing**: multi-provider model access (Vertex AI, OpenAI, Ollama, etc.) with built-in spend/token/latency tracking
+- **Budget enforcement**: per-execution spending limits via AgentPolicy and LiteLLM virtual keys
+- **Multi-tier sandbox isolation**: run untrusted tool code in WASM, Docker/Podman, gVisor, or Firecracker MicroVM sandboxes
+- **Plugin SDK**: extend the platform with custom tools, guardrails, auth providers, and execution hooks
+- **Resource versioning**: database snapshots on every create/update, with list/view/rollback API
+- **Temporal integration**: optional Temporal workflow engine for durable execution (falls back to ThreadPoolExecutor)
+- **CLI parity**: everything you can do in the UI, you can do from the command line, including an interactive TUI shell
 
 ## Quick Start
 
@@ -112,33 +112,33 @@ uv run blackbeard kickoff research-crew --input topic="AI agents" --wait
 
 ## Features
 
-- **14 resource kinds** -- Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount
-- **Visual graph editor** -- drag-and-drop crew design with React Flow, undo/redo, YAML preview, PNG/SVG canvas export
-- **Full RBAC** -- JWT auth (access + refresh tokens), predefined roles (owner, admin, developer, operator, viewer, policy-admin), user/group management
-- **CLI with 31 commands** -- apply, validate, kickoff, train, test-crew, export, pull, status, shell, login, and more
-- **Interactive TUI shell** -- `blackbeard shell` launches a REPL for exploratory resource management
-- **Budget enforcement** -- per-execution spending caps via AgentPolicy `max_usd`/`max_tokens` and LiteLLM virtual keys
-- **Multi-provider LLM routing** -- Vertex AI, OpenAI, Anthropic, Ollama, and any LiteLLM-supported provider
-- **Execution streaming** -- SSE and WebSocket streams with event replay for real-time execution monitoring
-- **Tool ecosystem** -- Python tools, builtin CrewAI tools, sandboxed tools (WASM/Docker/gVisor/MicroVM), MCP servers (stdio + HTTP), with tool versioning and deprecation support
-- **Plugin SDK** -- 4 extension types (tool, guardrail, auth_provider, execution_hook) for extending the platform
-- **Temporal integration** -- optional Temporal workflow engine for durable execution (falls back to ThreadPoolExecutor when not configured)
-- **Marketplace** -- import crews from git repositories (`blackbeard pull`)
-- **Train/test** -- CrewAI native training and testing via CLI or API
-- **Policy enforcement** -- tool allowlists/denylists, delegation control, sandbox tier requirements
-- **Guardrails** -- function-based, LLM-judge, hallucination detection, and composite guardrail chains (AND/OR), with PII compliance presets (HIPAA, GDPR, PCI-DSS, CCPA)
-- **Knowledge sources** -- RAG-accessible content (text, PDF, CSV, JSON) attached to agents
-- **A2A protocol** -- agent-to-agent discovery via `/.well-known/agent-card.json`
-- **Resource versioning** -- snapshot on every mutation, list versions, rollback to any point
-- **Nested projects** -- hierarchical project structure with parent refs and inherited policies
-- **AsyncAPI spec** -- machine-readable event schema at `/api/v1/asyncapi.json`
-- **Agency Agents import** -- one-click import of 200+ agent personas from the Agency Agents library
-- **Tools Library** -- bundled catalog of tools ready to install
-- **Credentials manager** -- centralized secret storage for API keys and tokens
-- **Helm chart** -- Kubernetes deployment via `deploy/helm/blackbeard/`, with HPA autoscaling
-- **Multi-replica compose** -- nginx load balancer for horizontal scaling in Docker Compose
-- **Monitoring stack** -- Prometheus, Grafana, and alerting rules (optional OpenTelemetry via `OTEL_ENDPOINT`)
-- **SDKs** -- Python, TypeScript, and React client libraries in `sdks/`
+- **14 resource kinds**: Agent, Task, Crew, Tool, LLMConnection, AgentPolicy, Guardrail, Flow, KnowledgeSource, Role, RoleBinding, Automation, Project, ServiceAccount
+- **Visual graph editor**: drag-and-drop crew design with React Flow, undo/redo, YAML preview, PNG/SVG canvas export
+- **Full RBAC**: JWT auth (access + refresh tokens), predefined roles (owner, admin, developer, operator, viewer, policy-admin), user/group management
+- **CLI with 31 commands**: apply, validate, kickoff, train, test-crew, export, pull, status, shell, login, and more
+- **Interactive TUI shell**: `blackbeard shell` launches a REPL for exploratory resource management
+- **Budget enforcement**: per-execution spending caps via AgentPolicy `max_usd`/`max_tokens` and LiteLLM virtual keys
+- **Multi-provider LLM routing**: Vertex AI, OpenAI, Anthropic, Ollama, and any LiteLLM-supported provider
+- **Execution streaming**: SSE and WebSocket streams with event replay for real-time execution monitoring
+- **Tool ecosystem**: Python tools, builtin CrewAI tools, sandboxed tools (WASM/Docker/gVisor/MicroVM), MCP servers (stdio + HTTP), with tool versioning and deprecation support
+- **Plugin SDK**: 4 extension types (tool, guardrail, auth_provider, execution_hook) for extending the platform
+- **Temporal integration**: optional Temporal workflow engine for durable execution (falls back to ThreadPoolExecutor when not configured)
+- **Marketplace**: import crews from git repositories (`blackbeard pull`)
+- **Train/test**: CrewAI native training and testing via CLI or API
+- **Policy enforcement**: tool allowlists/denylists, delegation control, sandbox tier requirements
+- **Guardrails**: function-based, LLM-judge, hallucination detection, and composite guardrail chains (AND/OR), with PII compliance presets (HIPAA, GDPR, PCI-DSS, CCPA)
+- **Knowledge sources**: RAG-accessible content (text, PDF, CSV, JSON) attached to agents
+- **A2A protocol**: agent-to-agent discovery via `/.well-known/agent-card.json`
+- **Resource versioning**: snapshot on every mutation, list versions, rollback to any point
+- **Nested projects**: hierarchical project structure with parent refs and inherited policies
+- **AsyncAPI spec**: machine-readable event schema at `/api/v1/asyncapi.json`
+- **Agency Agents import**: one-click import of 200+ agent personas from the Agency Agents library
+- **Tools Library**: bundled catalog of tools ready to install
+- **Credentials manager**: centralized secret storage for API keys and tokens
+- **Helm chart**: Kubernetes deployment via `deploy/helm/blackbeard/`, with HPA autoscaling
+- **Multi-replica compose**: nginx load balancer for horizontal scaling in Docker Compose
+- **Monitoring stack**: Prometheus, Grafana, and alerting rules (optional OpenTelemetry via `OTEL_ENDPOINT`)
+- **SDKs**: Python, TypeScript, and React client libraries in `sdks/`
 
 ## Resource Kinds
 
@@ -206,7 +206,7 @@ All commands support `--json` for scripting and `--server` / `--api-key` / `--pr
 
 ## Development
 
-For full dev commands, see [CLAUDE.md](CLAUDE.md).
+For full dev commands, see [AGENTS.md](AGENTS.md).
 
 ```bash
 # Backend (Python 3.12+, uv required)

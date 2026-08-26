@@ -6,7 +6,7 @@ if [ -f alembic.ini ] && [ -d alembic/versions ]; then
   echo "Running alembic migrations..."
   timeout "${MIGRATION_TIMEOUT:-120}" alembic upgrade head
 else
-  echo "Alembic not configured — skipping migrations."
+  echo "Alembic not configured: skipping migrations."
 fi
 echo "Starting Blackbeard API..."
 reload_flag=""

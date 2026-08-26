@@ -111,7 +111,7 @@ def test_fuzz_masked_value_never_reveals_original(value):
 
     assert isinstance(_MASKED_VALUE, str)
     assert len(_MASKED_VALUE) > 0, "Mask must be non-empty"
-    # Mask must be a fixed, short placeholder — not derived from input
+    # Mask must be a fixed, short placeholder: not derived from input
     assert len(_MASKED_VALUE) <= 10, "Mask should be a short placeholder"
     assert _MASKED_VALUE == "****", "Mask must be the expected fixed value"
 
@@ -193,7 +193,7 @@ def test_fuzz_resolve_dotted_depth_limit(parts):
     if len(parts) > _MAX_RESOLVE_DEPTH:
         assert result is None
     else:
-        # Empty context means no key can be found — must also be None
+        # Empty context means no key can be found: must also be None
         assert result is None
 
 
@@ -218,7 +218,7 @@ def test_fuzz_check_path_safety(path):
         assert not any(ind in path for ind in unsafe_indicators)
         assert not path.startswith(absolute_prefixes)
     except LoaderError:
-        # Expected for unsafe paths -- verify at least one indicator is present
+        # Expected for unsafe paths: verify at least one indicator is present
         has_traversal = any(ind in path for ind in unsafe_indicators)
         is_absolute = path.startswith(absolute_prefixes)
         assert has_traversal or is_absolute
@@ -259,7 +259,7 @@ def test_fuzz_check_path_safety_safe_paths(safe_path):
 )
 @settings(max_examples=100)
 def test_fuzz_validate_tool_config(config, tool_name):
-    """_validate_tool_config either succeeds or raises LoaderError — never an unhandled exception."""
+    """_validate_tool_config either succeeds or raises LoaderError: never an unhandled exception."""
     from blackbeard.engine.loader import LoaderError, _validate_tool_config
 
     try:

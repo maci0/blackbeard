@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ------------------------------------------------------------------ */
-/* Studio canvas — animated edge stroke                                */
+/* Studio canvas: animated edge stroke                                */
 /* ------------------------------------------------------------------ */
 @keyframes studio-edge-dash {
   to {
@@ -42,7 +42,7 @@
   cursor: default;
 }
 
-/* Connection validation feedback — green for valid, red for invalid */
+/* Connection validation feedback: green for valid, red for invalid */
 .react-flow__handle.connectingto.valid {
   background: #10b981 !important;
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);

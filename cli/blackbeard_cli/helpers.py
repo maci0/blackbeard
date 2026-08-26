@@ -1,4 +1,4 @@
-"""Shared CLI helpers — output, error handling, auth resolution."""
+"""Shared CLI helpers: output, error handling, auth resolution."""
 
 from __future__ import annotations
 
@@ -204,7 +204,7 @@ def handle_http_error(response: httpx.Response) -> NoReturn:
         f"[red bold]Error:[/] HTTP {response.status_code} on {method} {path}: {escape(detail)}"
     )
     if response.status_code == 400:
-        console.print("[dim]Hint: Bad request — check the request body and parameters[/]")
+        console.print("[dim]Hint: Bad request, check the request body and parameters[/]")
     elif response.status_code == 401:
         console.print("[dim]Hint: Check your credentials (blackbeard login or --api-key)[/]")
     elif response.status_code == 403:
@@ -212,19 +212,19 @@ def handle_http_error(response: httpx.Response) -> NoReturn:
     elif response.status_code == 404:
         console.print("[dim]Hint: Verify the resource name and project (-n)[/]")
     elif response.status_code == 409:
-        console.print("[dim]Hint: Resource version conflict — re-fetch and retry[/]")
+        console.print("[dim]Hint: Resource version conflict, re-fetch and retry[/]")
     elif response.status_code == 413:
-        console.print("[dim]Hint: Payload too large — reduce file size (server limit: 10MB)[/]")
+        console.print("[dim]Hint: Payload too large, reduce file size (server limit: 10MB)[/]")
     elif response.status_code == 422:
         console.print("[dim]Hint: Check your input against the expected schema[/]")
     elif response.status_code == 429:
         retry = response.headers.get("Retry-After")
-        hint = "Too many requests — wait and retry"
+        hint = "Too many requests: wait and retry"
         if retry:
             hint += f" (Retry-After: {retry}s)"
         console.print(f"[dim]Hint: {hint}[/]")
     elif response.status_code >= 500:
-        console.print("[dim]Hint: Server error — check server logs for details[/]")
+        console.print("[dim]Hint: Server error, check server logs for details[/]")
     try:
         body = response.json()
         if isinstance(body, dict) and "request_id" in body:

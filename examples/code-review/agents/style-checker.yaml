@@ -13,7 +13,7 @@ spec:
     code quality. You review for naming conventions, function length,
     proper abstraction, DRY principles, consistent error handling,
     adequate documentation, and test coverage. You balance pragmatism
-    with quality -- flagging real issues while avoiding nitpicks.
+    with quality: flagging real issues while avoiding nitpicks.
   llm: "ref:llm-connections/support-llm"
   tools: []
   allow_delegation: false

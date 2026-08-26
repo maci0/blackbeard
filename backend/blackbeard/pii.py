@@ -1,9 +1,9 @@
 """PII redaction via Microsoft Presidio.
 
 Supports multiple recognizer backends:
-- "default" -- Presidio's built-in regex + deny-list recognizers
-- "presidio-nlp" -- requires spaCy model (en_core_web_lg)
-- "litellm" -- uses LiteLLM proxy for LLM-based PII detection
+- "default": Presidio's built-in regex + deny-list recognizers
+- "presidio-nlp": requires spaCy model (en_core_web_lg)
+- "litellm": uses LiteLLM proxy for LLM-based PII detection
 """
 
 from __future__ import annotations
@@ -216,7 +216,7 @@ class LLMPIIRecognizer(EntityRecognizer):
         )
 
     def load(self) -> None:
-        """Required by EntityRecognizer protocol — nothing to pre-load."""
+        """Required by EntityRecognizer protocol: nothing to pre-load."""
 
     def analyze(
         self,
@@ -277,7 +277,7 @@ class LLMPIIRecognizer(EntityRecognizer):
                 items = json.loads(content)
             except json.JSONDecodeError as exc:
                 logger.warning(
-                    "LLM PII recognizer returned invalid JSON — treating as no PII found",
+                    "LLM PII recognizer returned invalid JSON: treating as no PII found",
                     exc_info=True,
                     extra={
                         "event": "llm_pii_invalid_json",
@@ -291,7 +291,7 @@ class LLMPIIRecognizer(EntityRecognizer):
                 return []
 
             # SECURITY: Validate each item returned by the LLM.
-            # The LLM is an untrusted data source -- it could return
+            # The LLM is an untrusted data source: it could return
             # out-of-bounds positions (causing incorrect redaction or
             # crashes), disallowed entity types, or negative indices.
             text_len = len(text)
@@ -317,7 +317,7 @@ class LLMPIIRecognizer(EntityRecognizer):
                     clamped_score = max(0.0, min(1.0, float(score)))
                 except (TypeError, ValueError):
                     logger.debug(
-                        "LLM returned invalid PII score %r for %s — defaulting to 0.85",
+                        "LLM returned invalid PII score %r for %s: defaulting to 0.85",
                         score,
                         entity_type,
                         extra={
@@ -341,7 +341,7 @@ class LLMPIIRecognizer(EntityRecognizer):
 
         except Exception:
             logger.error(
-                "LLM PII recognizer failed — re-raising to prevent unredacted PII",
+                "LLM PII recognizer failed: re-raising to prevent unredacted PII",
                 exc_info=True,
                 extra={"event": "llm_pii_recognizer_error", "model": self._model},
             )

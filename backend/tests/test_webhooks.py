@@ -97,7 +97,7 @@ def _deliver(
 
 
 # ---------------------------------------------------------------------------
-# Tests -- HMAC signature correctness
+# Tests: HMAC signature correctness
 # ---------------------------------------------------------------------------
 
 
@@ -142,7 +142,7 @@ def test_webhook_hmac_signature_correct():
 
 
 def test_webhook_hmac_wrong_secret_produces_different_signature():
-    """HMAC signature with wrong secret must differ — tampering must be detectable."""
+    """HMAC signature with wrong secret must differ: tampering must be detectable."""
     payload = json.dumps(
         {"event_type": "execution_completed", "execution_id": "exec-1", "data": {}},
         default=str,
@@ -153,7 +153,7 @@ def test_webhook_hmac_wrong_secret_produces_different_signature():
 
 
 # ---------------------------------------------------------------------------
-# Tests -- Event filtering
+# Tests: Event filtering
 # ---------------------------------------------------------------------------
 
 
@@ -210,7 +210,7 @@ def test_webhook_empty_events_receives_all():
 
 
 # ---------------------------------------------------------------------------
-# Tests -- Delivery failure doesn't crash
+# Tests: Delivery failure doesn't crash
 # ---------------------------------------------------------------------------
 
 
@@ -274,7 +274,7 @@ def test_webhook_db_load_failure_doesnt_crash():
 
 
 # ---------------------------------------------------------------------------
-# Tests -- No webhooks registered
+# Tests: No webhooks registered
 # ---------------------------------------------------------------------------
 
 
@@ -294,7 +294,7 @@ def test_webhook_no_webhooks_is_noop():
 
 
 # ---------------------------------------------------------------------------
-# Tests -- Executor lifecycle
+# Tests: Executor lifecycle
 # ---------------------------------------------------------------------------
 
 
@@ -329,7 +329,7 @@ def test_shutdown_webhook_executor_idempotent():
         shutdown_webhook_executor()
         assert listener_mod._webhook_executor is None
 
-        # Shutdown second time -- should not raise
+        # Shutdown second time: should not raise
         shutdown_webhook_executor()
         assert listener_mod._webhook_executor is None
     finally:

@@ -43,11 +43,11 @@ This document describes how Blackbeard is structured: the backend API, the front
 
 Five services run in Docker Compose:
 
-1. **UI** -- Static React SPA served by Nginx (Vite dev server in development). Proxies `/api` requests to the API server.
-2. **API** -- FastAPI application handling resource CRUD, crew execution, authentication, and WebSocket/SSE streaming.
-3. **PostgreSQL 18** -- Primary data store for resources, executions, users, groups, and LiteLLM's own tables.
-4. **Valkey 9** -- Redis-compatible store used for real-time collaboration pub/sub (multi-replica WebSocket fan-out).
-5. **LiteLLM Proxy** -- Routes LLM calls to configured providers (Vertex AI, OpenAI, Ollama, etc.) and tracks spend, tokens, and latency per virtual key.
+1. **UI**: Static React SPA served by Nginx (Vite dev server in development). Proxies `/api` requests to the API server.
+2. **API**: FastAPI application handling resource CRUD, crew execution, authentication, and WebSocket/SSE streaming.
+3. **PostgreSQL 18**: Primary data store for resources, executions, users, groups, and LiteLLM's own tables.
+4. **Valkey 9**: Redis-compatible store used for real-time collaboration pub/sub (multi-replica WebSocket fan-out).
+5. **LiteLLM Proxy**: Routes LLM calls to configured providers (Vertex AI, OpenAI, Ollama, etc.) and tracks spend, tokens, and latency per virtual key.
 
 ---
 
@@ -67,7 +67,7 @@ metadata:
 spec: { ... }        # kind-specific fields
 ```
 
-Resources are stored in a single `resources` table with a JSONB `spec` column. This design means adding a new resource kind requires only a schema definition -- no new tables or migrations.
+Resources are stored in a single `resources` table with a JSONB `spec` column. This design means adding a new resource kind requires only a schema definition: no new tables or migrations.
 
 ```
 resources table
@@ -82,11 +82,11 @@ resources table
 
 **Key components:**
 
-- **`kinds.py`** -- Single source of truth for the kind registry and URL plural mapping (e.g., `Agent` -> `agents`, `LLMConnection` -> `llm-connections`)
-- **`resources/spec_schemas.py`** -- Per-kind JSON schemas used for `spec` validation on create and update
-- **`resources/validator.py`** -- Validates resource payloads against schemas and checks structural rules
-- **`resources/refs.py`** -- Parses `ref:` strings (e.g., `ref:agents/researcher`) and tracks cross-resource dependencies in a `ResourceRef` table
-- **`resources/service.py`** -- Resource CRUD operations (create, read, update, delete, list with filtering)
+- **`kinds.py`**: Single source of truth for the kind registry and URL plural mapping (e.g., `Agent` -> `agents`, `LLMConnection` -> `llm-connections`)
+- **`resources/spec_schemas.py`**: Per-kind JSON schemas used for `spec` validation on create and update
+- **`resources/validator.py`**: Validates resource payloads against schemas and checks structural rules
+- **`resources/refs.py`**: Parses `ref:` strings (e.g., `ref:agents/researcher`) and tracks cross-resource dependencies in a `ResourceRef` table
+- **`resources/service.py`**: Resource CRUD operations (create, read, update, delete, list with filtering)
 
 **Optimistic locking:** Every resource has a `version` integer. Updates must include the current version. If the version does not match, the API returns `409 Conflict`.
 
@@ -176,10 +176,10 @@ Executions can also be triggered by Automation resources via cron schedules or i
 
 Blackbeard supports two authentication methods:
 
-- **API key** -- `X-API-Key` header, validated with `hmac.compare_digest` against `BLACKBEARD_API_KEY`
-- **JWT Bearer** -- `Authorization: Bearer <token>`, with 15-minute access tokens and 7-day refresh tokens
+- **API key**: `X-API-Key` header, validated with `hmac.compare_digest` against `BLACKBEARD_API_KEY`
+- **JWT Bearer**: `Authorization: Bearer <token>`, with 15-minute access tokens and 7-day refresh tokens
 
-**Public endpoints** (no auth required): health and metrics (`/api/v1/health`, `/api/v1/health/ready`, `/api/v1/metrics`), the agent card (`/.well-known/agent-card.json`) and event schema (`/api/v1/asyncapi.json`), auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), automation webhook paths (`/automations/{name}/webhook` -- use their own HMAC validation), and API docs (`/docs`, `/openapi.json`, `/redoc` in debug mode).
+**Public endpoints** (no auth required): health and metrics (`/api/v1/health`, `/api/v1/health/ready`, `/api/v1/metrics`), the agent card (`/.well-known/agent-card.json`) and event schema (`/api/v1/asyncapi.json`), auth endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`), OIDC endpoints (`/auth/oidc/login`, `/auth/oidc/callback`, `/config/public`), automation webhook paths (`/automations/{name}/webhook`, use their own HMAC validation), and API docs (`/docs`, `/openapi.json`, `/redoc` in debug mode).
 
 **RBAC model:**
 
@@ -193,7 +193,7 @@ Role                     RoleBinding                 Subject
 └──────────────┘         └───────────────────┘       └──────────┘
 ```
 
-Both `Role` and `RoleBinding` are first-class resources -- managed through the same CRUD API as agents and tasks. The seed script (`deploy/seed.sh`) creates predefined roles: owner, admin, developer, operator, viewer, policy-admin, and agent-scoped roles.
+Both `Role` and `RoleBinding` are first-class resources: managed through the same CRUD API as agents and tasks. The seed script (`deploy/seed.sh`) creates predefined roles: owner, admin, developer, operator, viewer, policy-admin, and agent-scoped roles.
 
 **RBAC enforcement:** API endpoints use a `require_permission()` FastAPI dependency that checks the authenticated user's roles and role bindings before allowing access. Permissions are checked as `(resource_kind, verb)` pairs (e.g., `("Agent", "create")`). If the user lacks the required permission, the API returns `403 Forbidden`.
 
@@ -203,10 +203,10 @@ Both `Role` and `RoleBinding` are first-class resources -- managed through the s
 
 Middleware is applied from outermost to innermost:
 
-1. **Security headers** -- CSP, X-Content-Type-Options, X-Frame-Options, etc.
-2. **Auth + Request ID** -- API key or JWT validation, `X-Request-Id` header injection
-3. **Body size limiter** -- Rejects request bodies over 10MB
-4. **CORS** -- `CORSMiddleware`, innermost because it is registered first (`add_middleware` is LIFO)
+1. **Security headers**: CSP, X-Content-Type-Options, X-Frame-Options, etc.
+2. **Auth + Request ID**: API key or JWT validation, `X-Request-Id` header injection
+3. **Body size limiter**: Rejects request bodies over 10MB
+4. **CORS**: `CORSMiddleware`, innermost because it is registered first (`add_middleware` is LIFO)
 
 Responses short-circuited by auth or the body size limiter never reach `CORSMiddleware`, so those responses carry no CORS headers. When `OIDC_ISSUER` is configured, `SessionMiddleware` is added last and becomes the true outermost layer.
 
@@ -214,8 +214,8 @@ Responses short-circuited by auth or the body size limiter never reach `CORSMidd
 
 The API server manages LiteLLM's configuration and uses it as a proxy for all LLM calls:
 
-- **`litellm/key_manager.py`** -- Creates and deletes per-execution virtual keys for budget enforcement
-- **`litellm/helpers.py`** -- Utility functions for model name resolution
+- **`litellm/key_manager.py`**: Creates and deletes per-execution virtual keys for budget enforcement
+- **`litellm/helpers.py`**: Utility functions for model name resolution
 
 **Dynamic model sync:** When `LLMConnection` resources are created, updated, or deleted, the API server pushes changes to LiteLLM via `POST /model/new`, `/model/update`, and `/model/delete`. This means model changes take effect without restarting the LiteLLM container.
 
@@ -241,7 +241,7 @@ LiteLLM's own data (spend tracking, virtual keys) is stored in a separate `litel
 
 ```
 /                            → Redirects to /dashboard
-/dashboard                   → Dashboard (default landing page) -- execution metrics, resource counts, recent activity
+/dashboard                   → Dashboard (default landing page): execution metrics, resource counts, recent activity
 /studio                      → Visual crew editor
 /resources                   → Generic resource list (all kinds)
 /resources/:kindPlural/:name → Resource detail view
@@ -282,14 +282,14 @@ LiteLLM's own data (spend tracking, virtual keys) is stored in a separate `litel
 
 Two primary Zustand stores:
 
-**`studioStore`** -- Manages the visual editor canvas state:
+**`studioStore`**: Manages the visual editor canvas state:
 
 - Node and edge state for React Flow
 - Undo/redo stack (30-snapshot circular buffer)
 - Selected node tracking
 - Save and load operations
 
-**`resourceStore`** -- Manages CRUD operations for all resource kinds:
+**`resourceStore`**: Manages CRUD operations for all resource kinds:
 
 - Fetches resources from `/api/v1/{kind_plural}` endpoints
 - Handles optimistic locking via `version` field
@@ -383,7 +383,7 @@ The database schema is initialized in `backend/entrypoint.sh`:
 2. `Base.metadata.create_all()` creates any missing tables
 3. If Alembic is configured (`alembic.ini` + `alembic/versions`), `alembic upgrade head` runs for schema evolution
 
-`create_all` can only create new tables -- it cannot alter existing ones. Alembic handles all schema migrations after initial creation.
+`create_all` can only create new tables: it cannot alter existing ones. Alembic handles all schema migrations after initial creation.
 
 ---
 
@@ -416,7 +416,7 @@ Docker Compose defines two networks:
 ```
 
 - The **UI** container is only on the frontend network. It can reach the API but not the database or cache directly.
-- The **API** container is on both networks -- it serves HTTP to the frontend and connects to backend services.
+- The **API** container is on both networks: it serves HTTP to the frontend and connects to backend services.
 - **PostgreSQL**, **Valkey**, and **LiteLLM** are only on the backend network, not exposed to the frontend.
 
 All containers use `no-new-privileges` and `cap_drop: ALL`. PostgreSQL and Valkey add back only the capabilities they require.
@@ -527,7 +527,7 @@ Flows orchestrate multiple crews and functions into multi-step pipelines with st
 POST /api/v1/flows/{name}/run   → Run a flow
 ```
 
-**Execution model:** Flow steps are executed sequentially. Each step of type `crew` builds and kicks off the referenced crew. Step outputs are chained -- the result of step N is available as input context to step N+1.
+**Execution model:** Flow steps are executed sequentially. Each step of type `crew` builds and kicks off the referenced crew. Step outputs are chained, the result of step N is available as input context to step N+1.
 
 **Step types:**
 
@@ -678,18 +678,18 @@ The Temporal integration (`backend/blackbeard/engine/temporal.py`) provides an a
 
 GitHub Actions runs 12 jobs on every push:
 
-1. **Backend** -- ruff check + ruff format + mypy + pytest + bandit + pip-audit
-2. **CLI** -- ruff lint + mypy (strict) + offline validation
-3. **Python SDK** -- ruff check + ruff format + pytest with mock transport
-4. **TypeScript SDK** -- tsc type-check
-5. **React SDK** -- tsc type-check
-6. **Version lockstep** -- fails if the six package manifests drift apart
-7. **Helm** -- helm lint + template rendering
-8. **Frontend** -- prettier + eslint + tsc + vitest + production build
-9. **Docker API image** -- build + Trivy scan (after backend passes)
-10. **Docker UI image** -- build + Trivy scan (after frontend passes)
-11. **SBOM** -- CycloneDX inventory of the resolved backend dependency tree (informational, not gated)
-12. **CI gate** -- aggregate check that all blocking jobs above are green (SBOM is informational and excluded)
+1. **Backend**: ruff check + ruff format + mypy + pytest + bandit + pip-audit
+2. **CLI**: ruff lint + mypy (strict) + offline validation
+3. **Python SDK**: ruff check + ruff format + pytest with mock transport
+4. **TypeScript SDK**: tsc type-check
+5. **React SDK**: tsc type-check
+6. **Version lockstep**: fails if the six package manifests drift apart
+7. **Helm**: helm lint + template rendering
+8. **Frontend**: prettier + eslint + tsc + vitest + production build
+9. **Docker API image**: build + Trivy scan (after backend passes)
+10. **Docker UI image**: build + Trivy scan (after frontend passes)
+11. **SBOM**: CycloneDX inventory of the resolved backend dependency tree (informational, not gated)
+12. **CI gate**: aggregate check that all blocking jobs above are green (SBOM is informational and excluded)
 
 **Security scanning:** Bandit runs as part of the backend CI job, checking for common Python security issues (SQL injection, hardcoded secrets, unsafe deserialization, etc.). Trivy scans the built Docker images for vulnerabilities.
 

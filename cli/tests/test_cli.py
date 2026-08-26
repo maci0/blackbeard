@@ -111,7 +111,7 @@ def test_subgroup_help(group, sub):
 
 
 # ---------------------------------------------------------------------------
-# validate command — offline, uses bundled examples
+# validate command: offline, uses bundled examples
 # ---------------------------------------------------------------------------
 
 
@@ -120,7 +120,7 @@ def test_subgroup_help(group, sub):
     reason="Example resources not found",
 )
 def test_validate_examples_directory():
-    """Validate bundled example resources — should pass validation."""
+    """Validate bundled example resources: should pass validation."""
     result = runner.invoke(cli, ["validate", "-f", str(_EXAMPLES_DIR)])
     assert result.exit_code == 0, f"Validation failed: {result.output}"
     assert "valid" in result.output.lower() or "OK" in result.output
@@ -134,7 +134,7 @@ def test_validate_examples_json_output():
     """Validate examples with --json output."""
     result = runner.invoke(cli, ["validate", "-f", str(_EXAMPLES_DIR), "--json"])
     assert result.exit_code == 0, f"Validation failed: {result.output}"
-    # Use stdout only — stderr may contain warnings/status (Click 8.4 mixes into .output).
+    # Use stdout only: stderr may contain warnings/status (Click 8.4 mixes into .output).
     data = json.loads(result.stdout)
     assert data["valid"] is True
     assert data["total"] > 0
@@ -253,7 +253,7 @@ spec:
 
 
 # ---------------------------------------------------------------------------
-# health command — expects connection failure to be handled gracefully
+# health command: expects connection failure to be handled gracefully
 # ---------------------------------------------------------------------------
 
 
@@ -271,7 +271,7 @@ def test_health_ready_no_server():
 
 
 # ---------------------------------------------------------------------------
-# Commands requiring auth — should fail with helpful message when no auth
+# Commands requiring auth: should fail with helpful message when no auth
 # ---------------------------------------------------------------------------
 
 
@@ -337,7 +337,7 @@ def test_export_no_auth():
 
 
 # ---------------------------------------------------------------------------
-# logout command — offline, no server needed
+# logout command: offline, no server needed
 # ---------------------------------------------------------------------------
 
 
@@ -370,7 +370,7 @@ def test_logout_json_output():
 
 
 # ---------------------------------------------------------------------------
-# apply command — validation checks (offline part)
+# apply command: validation checks (offline part)
 # ---------------------------------------------------------------------------
 
 

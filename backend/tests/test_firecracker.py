@@ -49,7 +49,7 @@ class TestFirecrackerResult:
 
 
 # ---------------------------------------------------------------------------
-# FirecrackerSandbox -- initialization
+# FirecrackerSandbox: initialization
 # ---------------------------------------------------------------------------
 
 
@@ -114,7 +114,7 @@ class TestFirecrackerSandboxInit:
 
 
 # ---------------------------------------------------------------------------
-# FirecrackerSandbox -- config building
+# FirecrackerSandbox: config building
 # ---------------------------------------------------------------------------
 
 
@@ -224,7 +224,7 @@ class TestFirecrackerSandboxConfig:
 
 
 # ---------------------------------------------------------------------------
-# FirecrackerSandbox -- validation
+# FirecrackerSandbox: validation
 # ---------------------------------------------------------------------------
 
 
@@ -263,7 +263,7 @@ class TestFirecrackerSandboxValidation:
 
 
 # ---------------------------------------------------------------------------
-# FirecrackerSandbox -- async execution (mocked subprocess)
+# FirecrackerSandbox: async execution (mocked subprocess)
 # ---------------------------------------------------------------------------
 
 

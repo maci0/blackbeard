@@ -58,7 +58,7 @@ async def _get_user_headers(client: AsyncClient, email: str = "handler-test@exam
 
 
 # =========================================================================
-# 1. Credentials API — create, list, delete
+# 1. Credentials API: create, list, delete
 # =========================================================================
 
 
@@ -193,12 +193,12 @@ class TestCredentialsDelete:
         headers = await _get_user_headers(client, "cred-del-noop@test.com")
         fake_id = str(uuid.uuid4())
         resp = await client.delete(f"/api/v1/credentials/{fake_id}", headers=headers)
-        # Delete is idempotent — returns 204 even if not found
+        # Delete is idempotent: returns 204 even if not found
         assert resp.status_code == 204
 
 
 # =========================================================================
-# 2. Tools Library API — list with filters, install
+# 2. Tools Library API: list with filters, install
 # =========================================================================
 
 
@@ -313,7 +313,7 @@ class TestToolsLibraryInstall:
         assert resp1.status_code == 200
         assert resp1.json()["installed"] == 1
 
-        # Install again — ResourceService.create() upserts, so it counts as installed
+        # Install again: ResourceService.create() upserts, so it counts as installed
         resp2 = await client.post(
             "/api/v1/tools/library/install",
             json={"slugs": ["csv-reader"]},
@@ -339,7 +339,7 @@ class TestToolsLibraryInstall:
 
 
 # =========================================================================
-# 3. Agency Import API — list and import (mocked GitHub)
+# 3. Agency Import API: list and import (mocked GitHub)
 # =========================================================================
 
 
@@ -513,7 +513,7 @@ class TestAgencyImportCreate:
             )
             assert resp1.json()["imported"] == 1
 
-            # Second import — upserts (ResourceService.create does upsert)
+            # Second import: upserts (ResourceService.create does upsert)
             resp2 = await client.post(
                 "/api/v1/import/agency-agents",
                 json={"slugs": ["testing-test-engineer"]},
@@ -524,7 +524,7 @@ class TestAgencyImportCreate:
 
 
 # =========================================================================
-# 4. Webhooks API — create, list, delete
+# 4. Webhooks API: create, list, delete
 # =========================================================================
 
 
@@ -651,12 +651,12 @@ class TestWebhooksDelete:
     async def test_delete_nonexistent_webhook_is_idempotent(self, client: AsyncClient) -> None:
         fake_id = str(uuid.uuid4())
         resp = await client.delete(f"/api/v1/webhooks/{fake_id}", headers=API_KEY_HEADER)
-        # Idempotent — returns 204 even if not found
+        # Idempotent: returns 204 even if not found
         assert resp.status_code == 204
 
 
 # =========================================================================
-# 5. A2A Agent Card — card with crew data, response shape
+# 5. A2A Agent Card: card with crew data, response shape
 # =========================================================================
 
 
@@ -778,7 +778,7 @@ class TestA2AAgentCard:
 
 
 # =========================================================================
-# 6. Auth Dependencies — require_permission, JWT/API-key resolution
+# 6. Auth Dependencies: require_permission, JWT/API-key resolution
 # =========================================================================
 
 

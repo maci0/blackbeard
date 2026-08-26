@@ -1,4 +1,4 @@
-"""CLI execution commands — list, events, cancel."""
+"""CLI execution commands: list, events, cancel."""
 
 from __future__ import annotations
 

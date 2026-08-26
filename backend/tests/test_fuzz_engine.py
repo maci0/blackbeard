@@ -98,19 +98,19 @@ def test_fuzz_get_webhook_hostname(url):
 def test_fuzz_log_webhook_future_no_crash():
     from blackbeard.engine.execution_listener import _log_webhook_future_exception
 
-    # Future with no exception — should call .exception() but not log error
+    # Future with no exception: should call .exception() but not log error
     mock_future = MagicMock()
     mock_future.exception.return_value = None
     _log_webhook_future_exception(mock_future)
     mock_future.exception.assert_called_once()
 
-    # Future with exception — should call .exception()
+    # Future with exception: should call .exception()
     mock_future2 = MagicMock()
     mock_future2.exception.return_value = RuntimeError("test")
     _log_webhook_future_exception(mock_future2)
     mock_future2.exception.assert_called_once()
 
-    # Future that raises on .exception() — should not propagate
+    # Future that raises on .exception(): should not propagate
     mock_future3 = MagicMock()
     mock_future3.exception.side_effect = Exception("cancelled")
     _log_webhook_future_exception(mock_future3)
@@ -233,7 +233,7 @@ def test_invalidate_webhook_cache():
 
 
 # ---------------------------------------------------------------------------
-# 12. loader._build_knowledge_source — with mock
+# 12. loader._build_knowledge_source: with mock
 # ---------------------------------------------------------------------------
 
 

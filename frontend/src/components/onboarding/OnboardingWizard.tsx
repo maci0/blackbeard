@@ -25,14 +25,14 @@ const STEPS: Step[] = [
     icon: <LayoutGrid className="h-8 w-8 text-primary" />,
     title: 'Visual Studio',
     description:
-      'Drag agents, tasks, and tools onto the canvas to design your crew. Connect them visually, configure properties, and save — no YAML required.',
+      'Drag agents, tasks, and tools onto the canvas to design your crew. Connect them visually, configure properties, and save: no YAML required.',
     action: { label: 'Open Studio', path: '/studio' },
   },
   {
     icon: <Boxes className="h-8 w-8 text-primary" />,
     title: 'Resource Library',
     description:
-      'All entities — agents, tasks, crews, tools, LLM connections — are stored as resources. Browse, search, and manage them from the Resources page.',
+      'All entities (agents, tasks, crews, tools, LLM connections) are stored as resources. Browse, search, and manage them from the Resources page.',
     action: { label: 'Browse Resources', path: '/resources' },
   },
   {

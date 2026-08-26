@@ -71,7 +71,7 @@ test.describe('Resources page', () => {
   test('clear filters resets to full list', async ({ page }) => {
     const main = page.locator('main')
 
-    // Wait for data to load — table must be visible before capturing count
+    // Wait for data to load: table must be visible before capturing count
     await expect(main.getByRole('table', { name: /resources/i })).toBeVisible()
 
     const resultStatus = main.getByRole('status', { name: /results/i }).or(

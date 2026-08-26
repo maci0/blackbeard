@@ -1,4 +1,4 @@
-"""CLI export command — dump resources as YAML or JSON."""
+"""CLI export command: dump resources as YAML or JSON."""
 
 from __future__ import annotations
 

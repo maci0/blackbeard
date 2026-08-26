@@ -10,7 +10,7 @@ from blackbeard.engine.budget import derive_budget_and_pii
 from blackbeard.pii import redact_dict, redact_text, reset_engines
 
 # ---------------------------------------------------------------------------
-# Shared fixture — reset Presidio singletons before each test so that tests
+# Shared fixture: reset Presidio singletons before each test so that tests
 # are independent regardless of execution order.
 # ---------------------------------------------------------------------------
 

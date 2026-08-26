@@ -73,7 +73,7 @@ class GVisorSandbox(BaseSandbox):
         """Warn when runsc is missing; the tier fails at execution time."""
         if not shutil.which("runsc"):
             logger.warning(
-                "runsc (gVisor) not found -- gvisor sandbox tier will fail at "
+                "runsc (gVisor) not found: gvisor sandbox tier will fail at "
                 "execution time. Install from "
                 "https://gvisor.dev/docs/user_guide/install/",
                 extra={"event": "gvisor_runsc_not_found"},

@@ -47,7 +47,7 @@ PUBLIC_PATHS = (
 
 _AUTOMATION_WEBHOOK_RE = re.compile(r"^/api/v1/automations/[a-z0-9][a-z0-9\-]*/webhook$")
 
-# Allowlist pattern for client-supplied request IDs — prevents header injection
+# Allowlist pattern for client-supplied request IDs: prevents header injection
 _REQUEST_ID_PATTERN = re.compile(r"^[a-zA-Z0-9\-]{1,64}$")
 
 
@@ -173,7 +173,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         return rate_limited
 
     # Automation webhook paths use their own HMAC auth inside the route
-    # handler — let them through without requiring an API key or JWT.
+    # handler: let them through without requiring an API key or JWT.
     # Rate limiting runs ABOVE this check so brute-force attempts against
     # webhook secrets are throttled.
     if _AUTOMATION_WEBHOOK_RE.match(path):
@@ -228,7 +228,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
         _log_request(request, response, start, client_ip)
         return response
 
-    # EventSource cannot set custom headers — on SSE endpoints also accept a
+    # EventSource cannot set custom headers: on SSE endpoints also accept a
     # JWT via ?token= (mirrors the WebSocket ?token= contract). Query-string
     # credentials leak via proxy logs, browser history, and Referer headers
     # (CWE-598), so this stays restricted to the execution stream path.
@@ -248,7 +248,7 @@ async def api_key_middleware(request: Request, call_next: RequestResponseEndpoin
                 # records the auth failure for rate limiting.
                 pass
 
-    # Check API key — constant-time compare (SHA-256 digests) so length and
+    # Check API key: constant-time compare (SHA-256 digests) so length and
     # content are not distinguishable via short-circuit timing (CWE-208).
     # Fall back to ?api_key= query parameter ONLY for SSE/stream endpoints where
     # EventSource cannot set custom headers.  Query-string credentials leak via

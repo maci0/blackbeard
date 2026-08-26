@@ -25,7 +25,7 @@ const TOUR_STEPS = [
     target: '[data-tour="crew-name"]',
     title: 'Name Your Crew',
     description:
-      'Give your crew a name — it becomes the resource identifier used by the API and CLI. Use lowercase letters and hyphens.',
+      'Give your crew a name: it becomes the resource identifier used by the API and CLI. Use lowercase letters and hyphens.',
   },
   {
     target: '[data-tour="save-button"]',
@@ -86,7 +86,7 @@ export default function GuidedTour({ active, onComplete }: GuidedTourProps) {
         el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
         setTargetRect(el.getBoundingClientRect())
       } else {
-        setTargetRect(null) // graceful fallback — tooltip shows centered
+        setTargetRect(null) // graceful fallback: tooltip shows centered
       }
     }
 

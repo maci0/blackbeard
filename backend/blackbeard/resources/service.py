@@ -150,7 +150,7 @@ class ResourceService:
                 await self.session.flush()
         except IntegrityError:
             logger.info(
-                "Create race: %s/%s project=%s — retrying as upsert",
+                "Create race: %s/%s project=%s, retrying as upsert",
                 kind_enum.value,
                 data.metadata.name,
                 data.metadata.project,

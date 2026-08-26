@@ -8,7 +8,7 @@ test.describe('Roles page', () => {
 
   test('displays role cards', async ({ page }) => {
     const main = page.locator('main')
-    // Wait for roles to load — expect at least one role button
+    // Wait for roles to load: expect at least one role button
     const roleCards = main.getByRole('button', { name: /^role:/i })
     await expect(roleCards.first()).toBeVisible()
 

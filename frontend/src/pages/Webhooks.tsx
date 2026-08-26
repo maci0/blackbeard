@@ -119,7 +119,7 @@ function SecretReveal({ secret }: { secret: string }) {
   return (
     <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
       <p className="mb-2 text-xs font-semibold text-amber-800 dark:text-amber-300">
-        Signing secret — save this now, it will not be shown again
+        Signing secret: save this now, it will not be shown again
       </p>
       <div className="flex items-center gap-2">
         <code className="flex-1 truncate rounded bg-muted px-2 py-1.5 font-mono text-xs">
@@ -552,7 +552,7 @@ export default function Webhooks() {
                       key={webhook.id}
                       tabIndex={0}
                       role="row"
-                      aria-label={`Webhook ${truncateUrl(webhook.url, 30)} — ${webhook.active ? 'active' : 'inactive'}`}
+                      aria-label={`Webhook ${truncateUrl(webhook.url, 30)}: ${webhook.active ? 'active' : 'inactive'}`}
                       className="group border-l-2 border-l-transparent transition-colors duration-150 hover:border-l-primary hover:bg-accent/50 focus-visible:border-l-primary focus-visible:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     >
                       <td className="px-4 py-3">

@@ -81,7 +81,7 @@ def test_fuzz_check_url_ssrf_http_shaped(url):
 def test_fuzz_evaluate_condition(expr):
     """evaluate_condition must never crash and must always return bool.
 
-    It uses only operator comparisons and dict lookups -- no dynamic
+    It uses only operator comparisons and dict lookups: no dynamic
     code execution.
     """
     context = {"score": 0.5, "status": "completed", "outputs": {"result": "ok"}}
@@ -153,7 +153,7 @@ def test_fuzz_parse_ref(value):
         pass  # Expected for malformed refs
     else:
         if result is not None:
-            # Valid ref -- verify fields are sane
+            # Valid ref: verify fields are sane
             assert hasattr(result, "kind")
             assert hasattr(result, "name")
             assert hasattr(result, "raw")
@@ -303,7 +303,7 @@ def test_fuzz_validate_ws_auth(token, api_key):
     """validate_ws_auth must never crash and must always return bool.
 
     Random tokens will fail JWT validation, random API keys will fail
-    hmac comparison — but nothing should raise an unhandled exception.
+    hmac comparison: but nothing should raise an unhandled exception.
     """
     from blackbeard.api.collaboration import validate_ws_auth
 
@@ -426,7 +426,7 @@ def test_fuzz_validate_and_filter(docs):
     for doc in result:
         assert isinstance(doc, dict)
         assert doc.get("kind") in {"Agent", "Task", "Crew"}
-    # Result must be a subset of input — no docs invented
+    # Result must be a subset of input: no docs invented
     assert len(result) <= len(docs)
     # Docs with non-allowed kinds must be filtered out
     non_allowed = [d for d in docs if d.get("kind") not in {"Agent", "Task", "Crew"}]

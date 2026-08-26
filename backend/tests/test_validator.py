@@ -66,7 +66,7 @@ def test_agent_missing_all_required():
 
 
 def test_agent_extra_field():
-    """additionalProperties: false — unknown fields should fail."""
+    """additionalProperties: false, unknown fields should fail."""
     spec = {
         "role": "Analyst",
         "goal": "Analyse",
@@ -278,7 +278,7 @@ def test_llm_connection_missing_provider():
 
 
 # ---------------------------------------------------------------------------
-# LLMConnection — SSRF and env-var exfiltration protection
+# LLMConnection: SSRF and env-var exfiltration protection
 # ---------------------------------------------------------------------------
 
 
@@ -371,7 +371,7 @@ def test_llm_connection_allows_external_base_url(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# KnowledgeSource — path traversal and SSRF protection
+# KnowledgeSource: path traversal and SSRF protection
 # ---------------------------------------------------------------------------
 
 
@@ -413,7 +413,7 @@ def test_knowledge_source_allows_safe_paths():
 
 
 # ---------------------------------------------------------------------------
-# Tool — SSRF and env-var exfiltration protection
+# Tool: SSRF and env-var exfiltration protection
 # ---------------------------------------------------------------------------
 
 
@@ -473,7 +473,7 @@ def test_tool_blocks_env_shell_expansion():
 
 
 # ---------------------------------------------------------------------------
-# URL validation — scheme and embedded credentials
+# URL validation: scheme and embedded credentials
 # ---------------------------------------------------------------------------
 
 
@@ -496,7 +496,7 @@ def test_llm_connection_blocks_embedded_credentials():
 
 
 # ---------------------------------------------------------------------------
-# KnowledgeSource — backslash path traversal
+# KnowledgeSource: backslash path traversal
 # ---------------------------------------------------------------------------
 
 
@@ -517,7 +517,7 @@ def test_knowledge_source_blocks_tilde_path():
 
 
 # ---------------------------------------------------------------------------
-# LLMConnection — additional SSRF edge cases
+# LLMConnection: additional SSRF edge cases
 # ---------------------------------------------------------------------------
 
 

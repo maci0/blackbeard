@@ -37,7 +37,7 @@ test.describe('Keyboard accessibility', () => {
   test('Escape closes dialogs', async ({ page }) => {
     await loginAndNavigate(page, '/dashboard')
 
-    // Open keyboard shortcuts dialog — button is in sidebar
+    // Open keyboard shortcuts dialog: button is in sidebar
     const shortcutsBtn = page.getByRole('button', { name: /keyboard shortcuts/i })
     await shortcutsBtn.click()
 
@@ -54,7 +54,7 @@ test.describe('Keyboard accessibility', () => {
   test('Tab navigates sidebar items', async ({ page }) => {
     await loginAndNavigate(page, '/dashboard')
 
-    // Focus the first sidebar nav link — intentionally testing sidebar
+    // Focus the first sidebar nav link: intentionally testing sidebar
     const nav = page.getByRole('navigation', { name: /primary/i })
     const studioLink = nav.getByRole('link', { name: 'Studio' })
 

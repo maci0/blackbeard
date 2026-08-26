@@ -636,7 +636,7 @@ export default function Automations() {
     setTriggeringName(name)
     try {
       await api.post(`/api/v1/automations/${name}/trigger`, {})
-      toasts.info(`Automation "${name}" started — view results in Executions`)
+      toasts.info(`Automation "${name}" started: view results in Executions`)
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to trigger automation')
       toasts.error(message)

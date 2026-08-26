@@ -22,7 +22,7 @@ from blackbeard.auth.api_key import _EXPECTED_API_KEY
 from blackbeard.auth.jwt import create_access_token
 
 # ---------------------------------------------------------------------------
-# Minimal app for WebSocket integration tests — avoids the full lifespan
+# Minimal app for WebSocket integration tests: avoids the full lifespan
 # (which requires a live PostgreSQL connection) by mounting only the
 # collaboration router on a fresh FastAPI instance.
 # ---------------------------------------------------------------------------
@@ -161,7 +161,7 @@ class TestBroadcast:
 
     async def test_broadcast_empty_room(self) -> None:
         sender = FakeWebSocket()
-        # Room doesn't exist — should not raise and must not create the room.
+        # Room doesn't exist: should not raise and must not create the room.
         await _broadcast_local("nonexistent", sender, {"type": "node_add", "data": {}})  # type: ignore[arg-type]
         assert "nonexistent" not in _rooms
 
@@ -247,7 +247,7 @@ def test_two_clients_broadcast() -> None:
             assert joined_msg["type"] == "participant_joined"
             assert joined_msg["data"]["count"] == 2
 
-            # ws1 sends a node_move — ws2 should receive it
+            # ws1 sends a node_move: ws2 should receive it
             ws1.send_json({"type": "node_move", "data": {"id": "n1", "x": 100, "y": 200}})
             received = ws2.receive_json()
             assert received["type"] == "node_move"
@@ -296,7 +296,7 @@ def test_different_crews_are_isolated() -> None:
                 # Send message in crew-alpha
                 ws_alpha.send_json({"type": "node_add", "data": {"id": "alpha-node"}})
 
-                # Send message in crew-beta — ws_beta2 should receive this
+                # Send message in crew-beta: ws_beta2 should receive this
                 ws_beta1.send_json({"type": "node_move", "data": {"id": "beta-node"}})
                 received = ws_beta2.receive_json()
                 assert received["type"] == "node_move"
@@ -319,7 +319,7 @@ def test_disconnect_updates_participant_count() -> None:
             ws2.receive_json()  # room_state
             ws1.receive_json()  # participant_joined
 
-        # ws2 disconnected here — ws1 should get participant_left
+        # ws2 disconnected here: ws1 should get participant_left
         left_msg = ws1.receive_json()
         assert left_msg["type"] == "participant_left"
         assert left_msg["data"]["count"] == 1

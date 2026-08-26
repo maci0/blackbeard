@@ -48,7 +48,7 @@ class TestGVisorResult:
 
 
 # ---------------------------------------------------------------------------
-# GVisorSandbox -- runtime detection (mocked)
+# GVisorSandbox: runtime detection (mocked)
 # ---------------------------------------------------------------------------
 
 
@@ -134,7 +134,7 @@ class TestGVisorSandboxDetection:
 
 
 # ---------------------------------------------------------------------------
-# GVisorSandbox -- command building
+# GVisorSandbox: command building
 # ---------------------------------------------------------------------------
 
 
@@ -224,7 +224,7 @@ class TestGVisorSandboxCommand:
 
 
 # ---------------------------------------------------------------------------
-# GVisorSandbox -- async execution (mocked subprocess)
+# GVisorSandbox: async execution (mocked subprocess)
 # ---------------------------------------------------------------------------
 
 
@@ -319,7 +319,7 @@ class TestGVisorSandboxExecution:
 
 
 # ---------------------------------------------------------------------------
-# Sandbox selector -- gvisor tier ordering
+# Sandbox selector: gvisor tier ordering
 # ---------------------------------------------------------------------------
 
 

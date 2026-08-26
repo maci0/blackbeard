@@ -98,7 +98,7 @@ _LOG_RECORD_BUILTIN = frozenset(
     }
 )
 
-# Keys that must never appear in structured log output — defense-in-depth
+# Keys that must never appear in structured log output: defense-in-depth
 # against accidental secret leakage through extra={} fields.
 # Also used by middleware to redact query-string parameters.
 SENSITIVE_KEYS = frozenset(
@@ -379,7 +379,7 @@ def configure_logging(debug: bool = False, log_level: str = "") -> None:
     if debug:
         handler.setFormatter(
             _PiiScrubFormatter(
-                fmt="%(asctime)s %(levelname)-8s [%(request_id)s] %(name)s — %(message)s",
+                fmt="%(asctime)s %(levelname)-8s [%(request_id)s] %(name)s: %(message)s",
                 datefmt="%Y-%m-%dT%H:%M:%S",
             )
         )

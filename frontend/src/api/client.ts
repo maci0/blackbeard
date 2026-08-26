@@ -86,7 +86,7 @@ class ApiClient {
             ? new ApiError('Request was cancelled.', 0, null, requestId)
             : err instanceof TypeError
               ? new ApiError(
-                  'Network error — check your connection and try again.',
+                  'Network error: check your connection and try again.',
                   0,
                   null,
                   requestId,

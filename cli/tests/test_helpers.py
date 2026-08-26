@@ -14,7 +14,7 @@ def test_z_suffix_handled():
 
 
 def test_non_utc_offset_converted_to_utc():
-    # 16:30+02:00 is 14:30 UTC — the wall time shown must be the instant in UTC.
+    # 16:30+02:00 is 14:30 UTC, the wall time shown must be the instant in UTC.
     assert format_timestamp("2026-08-23T16:30:00+02:00") == "2026-08-23T14:30:00"
 
 

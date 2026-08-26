@@ -60,7 +60,7 @@ def redact_sensitive_values(inputs: dict[str, Any], _depth: int = 0) -> dict[str
     """Return a copy of inputs with sensitive-looking values redacted (recursively).
 
     Returns the original dict unchanged when no keys match and no nested
-    structures need walking — uses copy-on-write in a single pass.
+    structures need walking: uses copy-on-write in a single pass.
     """
     if _depth >= _MAX_REDACT_DEPTH:
         return inputs

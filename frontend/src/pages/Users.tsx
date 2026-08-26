@@ -330,7 +330,7 @@ function UserDetailPanel({
             )}
             {roleStatus === 'error' && (
               <span role="alert" className="text-xs text-destructive">
-                Failed — try again
+                Failed: try again
               </span>
             )}
           </dd>
@@ -583,7 +583,7 @@ export default function Users() {
                       }}
                       tabIndex={0}
                       role="row"
-                      aria-label={`${user.email} — press Enter to view details`}
+                      aria-label={`${user.email}: press Enter to view details`}
                       className={cn(
                         'group cursor-pointer border-l-2 border-l-transparent transition-colors duration-150 hover:border-l-primary hover:bg-accent/50 focus-visible:border-l-primary focus-visible:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                         selectedUser?.id === user.id && 'bg-muted/60',

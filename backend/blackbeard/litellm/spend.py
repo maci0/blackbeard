@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["fetch_execution_spend", "sum_spend_entries"]
 
-# Matches Execution.cost_usd NUMERIC(14,6) — 6 digits after the decimal point.
+# Matches Execution.cost_usd NUMERIC(14,6): 6 digits after the decimal point.
 _QUANTUM = Decimal("0.000001")
 
 _MAX_ENTRIES = 10_000
@@ -48,7 +48,7 @@ def sum_spend_entries(entries: list[Any]) -> Decimal | None:
 
     Returns ``None`` when no entry carries a numeric spend (the caller cannot
     distinguish "no data" from zero and should keep the stored value). The
-    result is clamped to >= 0 — the ``cost_usd`` column forbids negatives —
+    result is clamped to >= 0 (the ``cost_usd`` column forbids negatives)
     and quantized to the stored precision using half-up rounding.
     """
     total = Decimal(0)

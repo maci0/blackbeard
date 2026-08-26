@@ -578,7 +578,7 @@ def _validate_tool_extra(spec: dict[str, Any], errors: list[ValidationError]) ->
     if url and isinstance(url, str):
         _validate_url_ssrf(url, "spec.url", errors)
 
-    # Validate command field for mcp-stdio tools -- reject shell metacharacters
+    # Validate command field for mcp-stdio tools: reject shell metacharacters
     command = spec.get("command")
     if command and isinstance(command, str):
         if _SHELL_METACHAR_PATTERN.search(command):
@@ -657,7 +657,7 @@ ALLOWED_CALLABLE_MODULE_PREFIXES = (
     "blackbeard.flows.",
 )
 
-# Explicitly blocked modules -- dangerous even with prefix allowlist
+# Explicitly blocked modules: dangerous even with prefix allowlist
 BLOCKED_CALLABLE_MODULES = frozenset(
     {
         "os",

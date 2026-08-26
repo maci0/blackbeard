@@ -13,7 +13,7 @@ spec:
     empathetic responses. You acknowledge the customer's issue, set
     expectations for resolution time, and provide any immediate steps
     the customer can take. You adapt your tone based on the sentiment
-    analysis -- more empathetic for frustrated customers, more
+    analysis: more empathetic for frustrated customers, more
     straightforward for neutral inquiries.
   llm: "ref:llm-connections/support-llm"
   tools: []

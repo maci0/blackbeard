@@ -80,7 +80,7 @@ describe('studioStore', () => {
 
       const state = useStudioStore.getState()
       expect(state.nodes).toHaveLength(2)
-      // Only edge e3 (a->c) should remain — e1 and e2 involve node b
+      // Only edge e3 (a->c) should remain: e1 and e2 involve node b
       expect(state.edges).toHaveLength(1)
       expect(state.edges[0]!.id).toBe('e3')
     })
@@ -218,7 +218,7 @@ describe('studioStore', () => {
 
       useStudioStore.getState().redo()
 
-      // Should still have 1 node — redo did nothing
+      // Should still have 1 node: redo did nothing
       expect(useStudioStore.getState().nodes).toHaveLength(1)
     })
   })
@@ -253,7 +253,7 @@ describe('studioStore', () => {
     it('limits history to MAX_HISTORY entries', () => {
       vi.useFakeTimers()
 
-      // Push more than MAX_HISTORY entries — each addNode pushes one
+      // Push more than MAX_HISTORY entries: each addNode pushes one
       for (let i = 0; i < MAX_HISTORY + 5; i++) {
         useStudioStore.getState().addNode(makeNode(`node-${i}`))
         vi.advanceTimersByTime(200)

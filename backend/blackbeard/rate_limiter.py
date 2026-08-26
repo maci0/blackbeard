@@ -4,7 +4,7 @@ Tracks authentication failures per client IP and blocks requests that
 exceed the configured threshold within a time window.  Thread-safe for
 use from both async middleware and sync background tasks.
 
-Also provides ``InMemoryRateLimiter`` — a reusable sliding-window counter
+Also provides ``InMemoryRateLimiter``: a reusable sliding-window counter
 for per-user mutation rate limiting on resource, execution, marketplace,
 AI assist, and chat endpoints.
 """

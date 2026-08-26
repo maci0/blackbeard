@@ -507,7 +507,7 @@ class ResourceLoader:
                 tool_resource = self._resolve_ref(ref)
             except LoaderError:
                 logger.warning(
-                    "Tool ref '%s' for agent '%s' failed to resolve — agent will run without it",
+                    "Tool ref '%s' for agent '%s' failed to resolve: agent will run without it",
                     ref,
                     agent_name,
                     exc_info=True,
@@ -520,7 +520,7 @@ class ResourceLoader:
                 continue
             if tool_resource.kind != ResourceKind.TOOL:
                 logger.warning(
-                    "Tool ref '%s' for agent '%s' resolved to kind %s, expected Tool — skipping",
+                    "Tool ref '%s' for agent '%s' resolved to kind %s, expected Tool: skipping",
                     ref,
                     agent_name,
                     tool_resource.kind.value,
@@ -701,12 +701,12 @@ class ResourceLoader:
                         },
                     )
                 agent_kwargs["allow_delegation"] = False
-            # Log delegation targets constraint (informational — CrewAI does
+            # Log delegation targets constraint (informational: CrewAI does
             # not support restricting *which* agents can be delegated to,
             # so we can only log when targets are configured).
             if policy.delegation_targets:
                 logger.info(
-                    "Agent '%s' policy specifies delegation targets %s — "
+                    "Agent '%s' policy specifies delegation targets %s: "
                     "note: target restriction is advisory only (CrewAI limitation)",
                     resource.name,
                     policy.delegation_targets,
@@ -788,14 +788,14 @@ class ResourceLoader:
         """
         if "." not in dotted_path:
             logger.warning(
-                "Invalid callable path (no module separator): '%s' — skipping",
+                "Invalid callable path (no module separator): '%s', skipping",
                 dotted_path,
                 extra={"event": "callable_import_invalid_path", "dotted_path": dotted_path},
             )
             return None
         path_error = check_callable_path(dotted_path)
         if path_error:
-            msg = f"Blocked import: {dotted_path} — {path_error}"
+            msg = f"Blocked import: {dotted_path}, {path_error}"
             logger.warning(
                 msg,
                 extra={"event": "callable_import_blocked", "dotted_path": dotted_path},
@@ -807,7 +807,7 @@ class ResourceLoader:
             return getattr(module, attr_name)
         except (ImportError, AttributeError):
             logger.error(
-                "Failed to import callable: %s — guardrail/output_pydantic will be skipped",
+                "Failed to import callable: %s, guardrail/output_pydantic will be skipped",
                 dotted_path,
                 exc_info=True,
                 extra={"event": "callable_import_failed", "dotted_path": dotted_path},
@@ -1281,7 +1281,7 @@ class ResourceLoader:
     def build_crew(self, crew_name: str) -> Crew:
         """Build a complete CrewAI Crew from a Crew resource.
 
-        This is the main entry point — resolves all agents, tasks, and their
+        This is the main entry point: resolves all agents, tasks, and their
         dependencies recursively.
         """
         t0 = time.monotonic()

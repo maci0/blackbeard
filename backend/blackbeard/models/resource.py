@@ -26,7 +26,7 @@ from blackbeard.models.database import Base
 
 
 class Resource(Base):
-    """Generic resource table — stores all resource kinds."""
+    """Generic resource table: stores all resource kinds."""
 
     __tablename__ = "resources"
 

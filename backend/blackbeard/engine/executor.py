@@ -166,7 +166,7 @@ def _sanitize_error(error_msg: str) -> str:
         if len(sanitized) > _MAX_ERROR_LENGTH:
             return sanitized[:_MAX_ERROR_LENGTH] + "..."
         return sanitized
-    return "Execution failed — check server logs for details"
+    return "Execution failed: check server logs for details"
 
 
 _executor: ThreadPoolExecutor | None = None
@@ -183,7 +183,7 @@ _bg_engine_lock = threading.Lock()
 # connections.
 _bg_dispose_task: asyncio.Task[None] | None = None
 
-# Queued/running thread-pool futures keyed by execution id — allows cancel of
+# Queued/running thread-pool futures keyed by execution id: allows cancel of
 # still-queued work so cancelled jobs do not consume worker slots.
 _execution_futures: dict[UUID, asyncio.Future[None]] = {}
 _execution_futures_lock = threading.Lock()
@@ -221,7 +221,7 @@ def get_pool_status() -> dict[str, object]:
         queued = executor._work_queue.qsize()
     except AttributeError:
         logger.warning(
-            "ThreadPoolExecutor internals unavailable — pool metrics will read 0",
+            "ThreadPoolExecutor internals unavailable: pool metrics will read 0",
             extra={"event": "pool_status_fallback"},
         )
         active, queued = 0, 0
@@ -381,7 +381,7 @@ async def wait_for_bg_engine_dispose(timeout: float = 10.0) -> None:
 
 
 class ExecutionError(Exception):
-    pass
+    """Base class for execution failures."""
 
 
 class ExecutionNotFoundError(ExecutionError):
@@ -435,7 +435,7 @@ async def _load_crew_resources(
 
     if len(resources) > 100:
         logger.warning(
-            "Loaded %d resources for %s '%s' in project '%s' — "
+            "Loaded %d resources for %s '%s' in project '%s': "
             "consider splitting into smaller projects for performance",
             len(resources),
             target_kind,
@@ -843,7 +843,7 @@ def _snapshot_crew_resources(
         resource = resources.get(key)
         if resource is None:
             logger.warning(
-                "Snapshot: referenced resource '%s' not found in project — "
+                "Snapshot: referenced resource '%s' not found in project, "
                 "execution may fail when loader tries to resolve this ref",
                 key,
                 extra={"event": "snapshot_ref_missing", "key": key, "depth": depth},
@@ -955,7 +955,7 @@ def thread_session_factory() -> async_sessionmaker[AsyncSession]:
     instead of each thread creating its own, which avoids redundant object
     allocation on every execution.
 
-    The shared engine must NOT be disposed per-thread -- ``shutdown_executor``
+    The shared engine must NOT be disposed per-thread: ``shutdown_executor``
     handles cleanup at application shutdown.
     """
     _get_bg_engine()
@@ -985,7 +985,7 @@ def _resolve_eval_llm(
             return llm.model
         except Exception:
             logger.warning(
-                "Failed to resolve manager_llm '%s' for eval — trying agent LLMs",
+                "Failed to resolve manager_llm '%s' for eval: trying agent LLMs",
                 manager_ref,
                 exc_info=True,
                 extra={
@@ -1008,7 +1008,7 @@ def _resolve_eval_llm(
                 return llm.model
             except Exception:
                 logger.warning(
-                    "Failed to resolve agent LLM '%s' for eval — trying next agent",
+                    "Failed to resolve agent LLM '%s' for eval: trying next agent",
                     llm_ref,
                     exc_info=True,
                     extra={
@@ -1020,7 +1020,7 @@ def _resolve_eval_llm(
                 continue
 
     logger.info(
-        "No eval LLM resolved for crew '%s' — falling back to gpt-4o",
+        "No eval LLM resolved for crew '%s': falling back to gpt-4o",
         crew_name,
         extra={
             "event": "eval_llm_default_fallback",
@@ -1139,12 +1139,12 @@ async def run_crew_async(
                     virtual_api_key = key_info["key"]
 
                     execution = await _get_execution_for_update(session, execution_id)
-                    # Cancel may have won while we were creating the key — do not
+                    # Cancel may have won while we were creating the key: do not
                     # persist the key or continue spending against a cancelled run.
                     if execution is None or execution.status != ExecutionStatus.RUNNING:
                         logger.info(
                             "Execution %s no longer running after virtual key create "
-                            "(status=%s) — aborting before crew work",
+                            "(status=%s): aborting before crew work",
                             execution_id,
                             execution.status.value if execution is not None else "missing",
                             extra={
@@ -1161,7 +1161,7 @@ async def run_crew_async(
                     await session.commit()
                 except VirtualKeyError as vk_err:
                     logger.error(
-                        "Failed to create virtual key for execution %s — "
+                        "Failed to create virtual key for execution %s: "
                         "failing closed (budget limits are required)",
                         execution_id,
                         exc_info=True,
@@ -1205,7 +1205,7 @@ async def run_crew_async(
             )
 
             if execution_type == ExecutionType.FLOW:
-                # Flow steps call crew.kickoff() synchronously — run off the
+                # Flow steps call crew.kickoff() synchronously: run off the
                 # event loop, same as the crew branch below.
                 result = await asyncio.to_thread(
                     _run_flow_steps, loader, resource_snapshot, crew_name, inputs, listener
@@ -1254,7 +1254,7 @@ async def run_crew_async(
             execution = await _get_execution_for_update(session, execution_id)
             if not execution:
                 logger.error(
-                    "Execution %s vanished after crew completed — results lost",
+                    "Execution %s vanished after crew completed: results lost",
                     execution_id,
                     extra={
                         "event": "execution_result_lost",
@@ -1348,7 +1348,7 @@ async def run_crew_async(
             if alert_thresholds and listener is not None:
                 # Backfill the stored cost from LiteLLM spend logs when a USD
                 # alert is configured: without this, cost_usd stays 0 and the
-                # alert can never fire. Best-effort — None leaves it untouched.
+                # alert can never fire. Best-effort: None leaves it untouched.
                 if alert_thresholds.get("warn_at_usd") is not None:
                     from blackbeard.litellm.spend import fetch_execution_spend
 
@@ -1395,7 +1395,7 @@ async def run_crew_async(
                         },
                     )
                     # _write_event can block (DB commit on buffer-full path,
-                    # webhook dispatch) — keep it off the event loop.
+                    # webhook dispatch): keep it off the event loop.
                     await asyncio.to_thread(
                         listener._write_event, ExecutionEventType.COST_ALERT.value, alert_data
                     )
@@ -1582,7 +1582,7 @@ async def _fail_pending_tasks(
             status=TaskStatus.FAILED,
             error=task_error,
             completed_at=now,
-            # Bulk UPDATE bypasses ORM onupdate — set explicitly.
+            # Bulk UPDATE bypasses ORM onupdate: set explicitly.
             updated_at=now,
         )
     )
@@ -1607,7 +1607,7 @@ async def get_execution(session: AsyncSession, execution_id: UUID) -> Execution 
 
 
 async def get_execution_status(session: AsyncSession, execution_id: UUID) -> ExecutionStatus | None:
-    """Get only the execution status — lightweight query for polling."""
+    """Get only the execution status: lightweight query for polling."""
     result = await session.execute(select(Execution.status).where(Execution.id == execution_id))
     return result.scalar_one_or_none()
 
@@ -1756,7 +1756,7 @@ async def record_hitl_response(
 async def cancel_execution(session: AsyncSession, execution_id: UUID) -> Execution | None:
     """Cancel a queued or running execution.
 
-    Does NOT commit — the caller is responsible for committing so that
+    Does NOT commit: the caller is responsible for committing so that
     the cancellation and any audit log entry are in the same transaction.
     """
     # Lock the row to prevent race conditions with background executor
@@ -1928,7 +1928,7 @@ async def recover_stale_executions() -> int:
         await cleanup_orphaned_keys()
     except Exception:
         logger.warning(
-            "Orphaned key cleanup failed — continuing with stale execution recovery",
+            "Orphaned key cleanup failed: continuing with stale execution recovery",
             exc_info=True,
             extra={"event": "orphaned_key_cleanup_error"},
         )
@@ -1943,7 +1943,7 @@ async def recover_stale_executions() -> int:
                 error="Execution interrupted by server restart",
                 completed_at=now,
                 litellm_key=None,
-                # Bulk UPDATE bypasses ORM onupdate — set explicitly.
+                # Bulk UPDATE bypasses ORM onupdate: set explicitly.
                 updated_at=now,
             )
             .returning(Execution.id)
@@ -1961,7 +1961,7 @@ async def recover_stale_executions() -> int:
                     status=TaskStatus.FAILED,
                     error="Interrupted by server restart",
                     completed_at=now,
-                    # Bulk UPDATE bypasses ORM onupdate — set explicitly.
+                    # Bulk UPDATE bypasses ORM onupdate: set explicitly.
                     updated_at=now,
                 )
             )

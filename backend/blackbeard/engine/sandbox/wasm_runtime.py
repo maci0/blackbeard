@@ -170,7 +170,7 @@ class WasmSandbox:
             wasi_config.inherit_stdout()
             wasi_config.inherit_stderr()
 
-        # Environment variables — only pass safe ones, never leak secrets
+        # Environment variables: only pass safe ones, never leak secrets
         if "env" in self._allowed_capabilities:
             safe_pairs = []
             for key in _SAFE_ENV_VARS:
@@ -385,7 +385,7 @@ _shared_sandbox_lock = threading.Lock()
 def get_shared_sandbox() -> WasmSandbox:
     """Return the process-wide default sandbox.
 
-    Reuses one wasmtime Engine and module cache across all tool calls —
+    Reuses one wasmtime Engine and module cache across all tool calls:
     per-call construction pays engine setup and module reload every time
     and makes the LRU module cache useless. Stores are still created per
     invoke, so isolation between calls is unchanged.

@@ -216,7 +216,7 @@ async def update_user(
     current_user: User = Depends(require_permission("manage", "User", require_identity=True)),
     session: AsyncSession = Depends(get_session),
 ) -> UserResponse:
-    """Update a user (self-only — users can only modify their own profile)."""
+    """Update a user (self-only: users can only modify their own profile)."""
     check_rate_limit(mutation_limiter, current_user, _MUTATION_RATE_MSG)
     _require_self_only(current_user, user_id, "modify")
 
@@ -281,7 +281,7 @@ async def deactivate_user(
     user.email = anonymized_email
     user.display_name = "Deleted User"
     user.last_login_at = None
-    # Remove group memberships (data minimization — sever organizational associations).
+    # Remove group memberships (data minimization: sever organizational associations).
     await session.execute(delete(GroupMember).where(GroupMember.user_id == user.id))
     # Scrub PII from historical audit log entries (GDPR right to erasure).
     # Match by UUID (normal entries) and by original email (legacy failed-login entries
@@ -484,7 +484,7 @@ async def update_group(
     "/groups/{group_id}",
     status_code=204,
     responses={
-        204: {"description": "Group deleted (or did not exist — idempotent)"},
+        204: {"description": "Group deleted (or did not exist, idempotent)"},
         401: {"description": "Authentication required"},
         429: {"description": "Too many mutation requests"},
     },
@@ -660,7 +660,7 @@ async def add_group_member(
     "/groups/{group_id}/members/{user_id}",
     status_code=204,
     responses={
-        204: {"description": "Membership removed (or did not exist — idempotent)"},
+        204: {"description": "Membership removed (or did not exist, idempotent)"},
         401: {"description": "Authentication required"},
         404: {"description": "Group not found"},
         429: {"description": "Too many mutation requests"},

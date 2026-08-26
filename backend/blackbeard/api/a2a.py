@@ -104,7 +104,7 @@ async def agent_card(
         return JSONResponse(content=entry[1], headers=_CACHE_HEADERS)
 
     async with _cache_lock:
-        # Re-check under lock — another coroutine may have refreshed.
+        # Re-check under lock: another coroutine may have refreshed.
         # Re-read monotonic clock: the original `now` is from before we
         # awaited the lock, so it could be stale enough to miss a fresh entry.
         now = time.monotonic()

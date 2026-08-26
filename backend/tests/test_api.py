@@ -1,8 +1,8 @@
-"""Integration tests for the Blackbeard REST API — Resource CRUD endpoints.
+"""Integration tests for the Blackbeard REST API: Resource CRUD endpoints.
 
 Dependencies:
-  - aiosqlite  (pip install aiosqlite)   — async SQLite driver used for in-memory DB
-  - httpx, pytest-asyncio                — already in dev dependencies
+  - aiosqlite  (pip install aiosqlite)  : async SQLite driver used for in-memory DB
+  - httpx, pytest-asyncio               : already in dev dependencies
 
 The test fixture spins up an in-memory SQLite database and overrides the
 `get_session` dependency so no real PostgreSQL instance is needed.
@@ -442,7 +442,7 @@ async def test_create_resource_invalid_name(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Ref integrity — dangling refs
+# Ref integrity: dangling refs
 # ---------------------------------------------------------------------------
 
 
@@ -450,7 +450,7 @@ async def test_create_task_with_dangling_ref_succeeds(client: AsyncClient):
     """Creating a task referencing a non-existent agent should still succeed (soft refs)."""
     payload = _task_payload(name="orphan-task", agent_ref="ref:agents/nonexistent")
     response = await client.post("/api/v1/tasks", json=payload, headers=API_KEY_HEADER)
-    # Refs are soft — creation succeeds even if target doesn't exist
+    # Refs are soft: creation succeeds even if target doesn't exist
     assert response.status_code == 201
     data = response.json()
     assert data["kind"] == "Task"

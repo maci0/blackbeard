@@ -449,7 +449,7 @@ async def update_resource(
     "/{kind_plural}/{name}",
     status_code=204,
     responses={
-        204: {"description": "Resource deleted (or did not exist — idempotent)"},
+        204: {"description": "Resource deleted (or did not exist, idempotent)"},
         429: {"description": "Too many mutation requests"},
     },
 )

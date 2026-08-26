@@ -185,7 +185,7 @@ async def _poll_execution(execution_id: UUID) -> AsyncGenerator[_StreamEvent]:
 
         await asyncio.sleep(_poll_backoff(polls))
 
-    yield _StreamEvent("timeout", {"detail": "Stream timeout — execution still running"})
+    yield _StreamEvent("timeout", {"detail": "Stream timeout, execution still running"})
 
 
 async def _require_execution(

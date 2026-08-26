@@ -95,7 +95,7 @@ async def _create_full_crew(client: AsyncClient, crew_name: str = "test-crew") -
 
 
 # ---------------------------------------------------------------------------
-# Tests — kickoff
+# Tests: kickoff
 # ---------------------------------------------------------------------------
 
 
@@ -156,7 +156,7 @@ async def test_kickoff_crew_has_tasks(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — list executions
+# Tests: list executions
 # ---------------------------------------------------------------------------
 
 
@@ -231,7 +231,7 @@ async def test_list_executions_filter_by_crew(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — get execution
+# Tests: get execution
 # ---------------------------------------------------------------------------
 
 
@@ -264,7 +264,7 @@ async def test_get_execution_after_kickoff(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — cancel execution
+# Tests: cancel execution
 # ---------------------------------------------------------------------------
 
 
@@ -316,12 +316,12 @@ async def test_cancel_already_cancelled_returns_conflict(client: AsyncClient):
     assert kickoff_resp.status_code == 202
     execution_id = kickoff_resp.json()["id"]
 
-    # Cancel first time — succeeds
+    # Cancel first time: succeeds
     first_cancel = await client.patch(
         f"/api/v1/executions/{execution_id}/cancel", headers=API_KEY_HEADER
     )
     assert first_cancel.status_code == 200
-    # Cancel second time — returns 409 since execution is already in terminal state
+    # Cancel second time: returns 409 since execution is already in terminal state
     second_cancel = await client.patch(
         f"/api/v1/executions/{execution_id}/cancel", headers=API_KEY_HEADER
     )
@@ -331,7 +331,7 @@ async def test_cancel_already_cancelled_returns_conflict(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — list executions with filters
+# Tests: list executions with filters
 # ---------------------------------------------------------------------------
 
 
@@ -363,7 +363,7 @@ async def test_executions_require_api_key(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — cancel race condition
+# Tests: cancel race condition
 # ---------------------------------------------------------------------------
 
 
@@ -392,14 +392,14 @@ async def test_cancel_preserves_status(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — _sanitize_error (security-critical error redaction)
+# Tests: _sanitize_error (security-critical error redaction)
 # ---------------------------------------------------------------------------
 
 
 def test_sanitize_error_empty_string():
-    """Empty error string has no safe prefix — should be redacted."""
+    """Empty error string has no safe prefix: should be redacted."""
     result = _sanitize_error("")
-    assert result == "Execution failed — check server logs for details"
+    assert result == "Execution failed: check server logs for details"
 
 
 def test_sanitize_error_exactly_500_chars_not_truncated():
@@ -422,7 +422,7 @@ def test_sanitize_error_redacts_internal_details():
     result = _sanitize_error(msg)
     assert "sqlalchemy" not in result
     assert "connection refused" not in result
-    assert result == "Execution failed — check server logs for details"
+    assert result == "Execution failed: check server logs for details"
 
 
 def test_sanitize_error_redacts_traceback():
@@ -431,7 +431,7 @@ def test_sanitize_error_redacts_traceback():
     result = _sanitize_error(msg)
     assert "Traceback" not in result
     assert "/app" not in result
-    assert result == "Execution failed — check server logs for details"
+    assert result == "Execution failed: check server logs for details"
 
 
 def test_sanitize_error_redacts_file_path():
@@ -441,7 +441,7 @@ def test_sanitize_error_redacts_file_path():
     assert "/home" not in result
     assert "loader.py" not in result
     assert "line 99" not in result
-    assert result == "Execution failed — check server logs for details"
+    assert result == "Execution failed: check server logs for details"
 
 
 def test_sanitize_error_truncates_long_safe_errors():
@@ -510,7 +510,7 @@ def test_sanitize_error_all_safe_prefixes_truncate_at_limit(prefix):
 
 
 # ---------------------------------------------------------------------------
-# Tests — TERMINAL_STATUSES (critical for cancel logic)
+# Tests: TERMINAL_STATUSES (critical for cancel logic)
 # ---------------------------------------------------------------------------
 
 
@@ -523,13 +523,13 @@ def test_terminal_statuses_contains_expected():
 
 
 def test_queued_and_running_not_terminal():
-    """QUEUED and RUNNING must not be terminal — cancel relies on this."""
+    """QUEUED and RUNNING must not be terminal: cancel relies on this."""
     assert ExecutionStatus.QUEUED not in TERMINAL_STATUSES
     assert ExecutionStatus.RUNNING not in TERMINAL_STATUSES
 
 
 # ---------------------------------------------------------------------------
-# Tests — KickoffRequest validation (security boundary)
+# Tests: KickoffRequest validation (security boundary)
 # ---------------------------------------------------------------------------
 
 
@@ -562,7 +562,7 @@ def test_kickoff_request_accepts_max_value_length():
 
 
 def test_kickoff_request_rejects_unsafe_key():
-    """Input keys must match [a-zA-Z_][a-zA-Z0-9_]* — reject injection vectors."""
+    """Input keys must match [a-zA-Z_][a-zA-Z0-9_]*: reject injection vectors."""
     with pytest.raises(ValidationError, match="invalid"):
         KickoffRequest(inputs={"key with spaces": "val"})
 
@@ -594,7 +594,7 @@ def test_kickoff_request_rejects_deeply_nested():
 
 
 # ---------------------------------------------------------------------------
-# Tests — _exceeds_depth helper
+# Tests: _exceeds_depth helper
 # ---------------------------------------------------------------------------
 
 
@@ -634,7 +634,7 @@ def test_exceeds_depth_with_lists():
 
 
 # ---------------------------------------------------------------------------
-# Tests — _snapshot_resource
+# Tests: _snapshot_resource
 # ---------------------------------------------------------------------------
 
 
@@ -706,7 +706,7 @@ def test_build_principal_chain_with_user():
     assert "password_hash" not in chain["user"], "Password hash must not leak into principal chain"
     assert "hashed" not in str(chain["user"]), "Actual password hash value must not appear in chain"
     for key in chain["user"]:
-        assert "password" not in key.lower(), f"Key {key!r} contains 'password' — must not leak"
+        assert "password" not in key.lower(), f"Key {key!r} contains 'password': must not leak"
     assert chain["crew"] == "my-crew"
 
 
@@ -805,7 +805,7 @@ def test_snapshot_resource_spec_is_copy():
 
 
 # ---------------------------------------------------------------------------
-# Tests — kickoff input validation at the API boundary
+# Tests: kickoff input validation at the API boundary
 # ---------------------------------------------------------------------------
 
 
@@ -844,7 +844,7 @@ async def test_kickoff_rejects_non_json_body(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — execution listing pagination
+# Tests: execution listing pagination
 # ---------------------------------------------------------------------------
 
 
@@ -882,7 +882,7 @@ async def test_list_executions_pagination(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — execution response shape validation
+# Tests: execution response shape validation
 # ---------------------------------------------------------------------------
 
 
@@ -932,7 +932,7 @@ async def test_execution_response_has_required_fields(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — ServiceAccount execution context (principal chain / initiated_by)
+# Tests: ServiceAccount execution context (principal chain / initiated_by)
 # ---------------------------------------------------------------------------
 
 
@@ -1092,7 +1092,7 @@ async def test_list_executions_includes_identity_fields(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — execution_type field on kickoff
+# Tests: execution_type field on kickoff
 # ---------------------------------------------------------------------------
 
 
@@ -1112,7 +1112,7 @@ async def test_kickoff_has_execution_type_kickoff(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — train endpoint
+# Tests: train endpoint
 # ---------------------------------------------------------------------------
 
 
@@ -1191,7 +1191,7 @@ async def test_train_crew_requires_auth(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — test endpoint
+# Tests: test endpoint
 # ---------------------------------------------------------------------------
 
 
@@ -1251,7 +1251,7 @@ async def test_test_crew_requires_auth(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — train/test execution visible in list and get
+# Tests: train/test execution visible in list and get
 # ---------------------------------------------------------------------------
 
 
@@ -1291,7 +1291,7 @@ async def test_test_execution_visible_via_get(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# Tests — TrainRequest / TestRequest validation
+# Tests: TrainRequest / TestRequest validation
 # ---------------------------------------------------------------------------
 
 
@@ -1356,7 +1356,7 @@ def test_test_request_validates_inputs():
 
 
 # ---------------------------------------------------------------------------
-# Tests — ExecutionType enum
+# Tests: ExecutionType enum
 # ---------------------------------------------------------------------------
 
 
@@ -1375,7 +1375,7 @@ def test_execution_type_values():
 
 
 # ---------------------------------------------------------------------------
-# Tests — train/test cancel
+# Tests: train/test cancel
 # ---------------------------------------------------------------------------
 
 

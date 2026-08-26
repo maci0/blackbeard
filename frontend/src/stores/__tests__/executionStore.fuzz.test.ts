@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  *
- * Fuzz tests for executionStore — addEvents sequence logic,
+ * Fuzz tests for executionStore: addEvents sequence logic,
  * executionsPath URL construction, and pollExecution state merging.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'

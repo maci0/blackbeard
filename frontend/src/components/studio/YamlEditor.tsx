@@ -71,7 +71,7 @@ export function YamlEditor() {
           setParseError(null)
         } else {
           setSyncStatus('error')
-          setParseError('Invalid YAML — check your syntax')
+          setParseError('Invalid YAML: check your syntax')
         }
         isTypingRef.current = false
       }, DEBOUNCE_MS)

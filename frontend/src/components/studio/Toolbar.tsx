@@ -246,11 +246,11 @@ export function Toolbar({
                 </div>
               ) : crewsFetchError ? (
                 <div className="text-2xs px-3 py-2.5 italic text-red-500">
-                  Failed to load crews — check connection
+                  Failed to load crews: check connection
                 </div>
               ) : crews.length === 0 ? (
                 <div className="text-2xs px-3 py-2.5 italic text-muted-foreground">
-                  No saved crews yet — build one on the canvas and hit Save
+                  No saved crews yet: build one on the canvas and hit Save
                 </div>
               ) : (
                 crews.map((crewItem) => (
@@ -268,7 +268,7 @@ export function Toolbar({
         </DropdownMenu.Root>
       </div>
 
-      {/* Status badge — aria-live so screen readers announce state changes */}
+      {/* Status badge: aria-live so screen readers announce state changes */}
       <div role="status" aria-live="polite" className="flex items-center">
         {status !== 'idle' && (
           <RunStatusBadge

@@ -1,4 +1,4 @@
-"""Agency Agents import — fetch and convert personas from GitHub."""
+"""Agency Agents import: fetch and convert personas from GitHub."""
 
 from __future__ import annotations
 

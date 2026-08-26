@@ -35,7 +35,7 @@ from hypothesis import strategies as st
 from blackbeard.kinds import KIND_TO_PLURAL
 from tests.conftest import API_KEY_HEADER
 
-# Re-usable allowed status codes — never 500.
+# Re-usable allowed status codes: never 500.
 _OK_STATUSES = frozenset({200, 201, 202, 204, 400, 401, 403, 404, 409, 413, 422, 429})
 # Chat/proxy endpoints may return 502/504 when LiteLLM is unreachable in test env.
 _OK_STATUSES_WITH_PROXY = _OK_STATUSES | {502, 504}
@@ -56,7 +56,7 @@ _url_safe_text = st.text(
 
 def _assert_no_500(resp, context: str = "") -> None:
     """Assert the response is not a server error."""
-    assert resp.status_code != 500, f"500 Internal Server Error {context} — body: {resp.text[:300]}"
+    assert resp.status_code != 500, f"500 Internal Server Error {context}: body: {resp.text[:300]}"
 
 
 # ---------------------------------------------------------------------------
@@ -471,7 +471,7 @@ EVIL_CHAT_MESSAGES = [
     {"model": "test-model", "messages": [{"role": "user", "content": "'; DROP TABLE users; --"}]},
     # Very long message
     {"model": "test-model", "messages": [{"role": "user", "content": "A" * 50_000}]},
-    # Empty messages list — should be rejected by min_length=1
+    # Empty messages list: should be rejected by min_length=1
     {"model": "test-model", "messages": []},
     # System message manipulation
     {
@@ -872,7 +872,7 @@ async def test_evil_yaml_import(client, yaml_content):
         resp = await client.post("/api/v1/agents", json=body, headers=API_KEY_HEADER)
     except (ValueError, OverflowError):
         # Circular references or extreme nesting in parsed YAML cannot be
-        # serialized to JSON — this is a client-side rejection, not a server bug.
+        # serialized to JSON: this is a client-side rejection, not a server bug.
         return
     _assert_no_500(resp, "on POST /agents with YAML payload")
 
@@ -1383,7 +1383,7 @@ async def test_fuzz_collab_message_validation(client, msg_type, data):
     if msg_data is not None and exceeds_depth(msg_data, 5):
         return  # would be silently dropped
 
-    # If we reach here, message would be broadcast — verify it's safe
+    # If we reach here, message would be broadcast: verify it's safe
     assert isinstance(msg_type, str)
     assert msg_type in ALLOWED_MESSAGE_TYPES
     if msg_data is not None:

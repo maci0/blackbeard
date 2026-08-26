@@ -1412,7 +1412,7 @@ export default function PropertyPanel() {
     [selectedNodeId, updateNodeData],
   )
 
-  // Close panel on Escape key (skip if delete confirm dialog is open — let Radix handle it)
+  // Close panel on Escape key (skip if delete confirm dialog is open: let Radix handle it)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && selectedNodeId && !showDeleteConfirm) {

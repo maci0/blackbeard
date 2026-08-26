@@ -51,7 +51,7 @@ import DataFlowEdge from './edges/DataFlowEdge'
 import ToolAssignEdge from './edges/ToolAssignEdge'
 
 /* ------------------------------------------------------------------ */
-/* Node / Edge type registries — must be stable references             */
+/* Node / Edge type registries: must be stable references             */
 /* ------------------------------------------------------------------ */
 
 const NODE_TYPES: NodeTypes = {
@@ -406,7 +406,7 @@ export default function Canvas({ onLoadExample }: { onLoadExample?: () => void }
     <div
       data-tour="canvas"
       role="region"
-      aria-label="Studio canvas — drag agents, tasks, and tools to build a crew"
+      aria-label="Studio canvas: drag agents, tasks, and tools to build a crew"
       tabIndex={-1}
       className="relative flex-1 overflow-hidden bg-slate-50 focus-visible:outline-none dark:bg-slate-900"
     >

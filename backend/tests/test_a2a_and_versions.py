@@ -516,7 +516,7 @@ async def test_versions_list_includes_changed_keys(client: AsyncClient) -> None:
     payload["spec"] = spec_v1
     created = await _create_resource(client, payload, "agents")
 
-    # Update only the role — goal and backstory stay the same
+    # Update only the role: goal and backstory stay the same
     await client.put(
         "/api/v1/agents/v-agent-8",
         json={

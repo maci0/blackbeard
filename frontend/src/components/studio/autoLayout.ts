@@ -64,7 +64,7 @@ export async function autoLayout(
     positionMap.set(child.id, { x: child.x ?? 0, y: child.y ?? 0 })
   }
 
-  // Apply positions to leaf nodes (stripping parentId for now — we rebuild below)
+  // Apply positions to leaf nodes (stripping parentId for now: we rebuild below)
   const layoutedLeaves = leafNodes.map((n) => {
     const pos = positionMap.get(n.id)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- omit-only destructure: parentId/extent are stripped, not consumed
@@ -84,7 +84,7 @@ export async function autoLayout(
     const childLeaves = layoutedLeaves.filter((n) => childIds.has(n.id))
 
     if (childLeaves.length === 0) {
-      // Group with no children — keep as-is
+      // Group with no children: keep as-is
       result.push(group)
       continue
     }

@@ -1,4 +1,4 @@
-"""Canonical resource kind registry — single source of truth.
+"""Canonical resource kind registry: single source of truth.
 
 All kind-to-plural mappings should import from here.
 """
@@ -19,7 +19,7 @@ __all__ = [
     "ResourceKind",
 ]
 
-# Canonical API version string — used by resource schemas and response serializers.
+# Canonical API version string: used by resource schemas and response serializers.
 # Must stay in sync with frontend/src/lib/kinds.ts.
 API_VERSION = "blackbeard/v1"
 

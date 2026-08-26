@@ -278,7 +278,7 @@ def test_parse_ref_knowledge_source():
 
 
 # ---------------------------------------------------------------------------
-# extract_refs — edge cases for robustness
+# extract_refs: edge cases
 # ---------------------------------------------------------------------------
 
 
@@ -301,7 +301,7 @@ def test_extract_refs_mixed_ref_and_non_ref():
 
 
 # ---------------------------------------------------------------------------
-# detect_cycles — disjoint graph
+# detect_cycles: disjoint graph
 # ---------------------------------------------------------------------------
 
 
@@ -329,7 +329,7 @@ def test_detect_multiple_cycles():
 
 
 # ---------------------------------------------------------------------------
-# build_adjacency — missing metadata
+# build_adjacency: missing metadata
 # ---------------------------------------------------------------------------
 
 

@@ -56,7 +56,7 @@ export default function WelcomeDialog({ open, onStartTour, onSkip }: WelcomeDial
 
         <Dialog.Content
           className="fixed left-1/2 top-1/2 z-50 w-[560px] max-w-[92vw] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-border bg-card shadow-2xl focus:outline-none"
-          // Prevent closing by clicking outside — user must choose a button
+          // Prevent closing by clicking outside: user must choose a button
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={handleSkip}
           aria-describedby="welcome-description"
@@ -84,7 +84,7 @@ export default function WelcomeDialog({ open, onStartTour, onSkip }: WelcomeDial
                 id="welcome-description"
                 className="mt-3 max-w-sm text-[15px] leading-relaxed text-white/75"
               >
-                Build, run, and manage AI agent crews — visually.
+                Build, run, and manage AI agent crews, visually.
               </Dialog.Description>
             </div>
           </div>

@@ -8,7 +8,6 @@ styles, no CSS import needed.
 
 ```bash
 bun add @blackbeard/react
-# or: npm install @blackbeard/react
 ```
 
 ## Quickstart
@@ -39,21 +38,21 @@ Provider props: `baseUrl` (default `http://localhost:8000`), `apiKey` or
 
 ## Components
 
-- **`CrewViewer`** — read-only node graph of a crew's agents and tasks.
+- **`CrewViewer`**: read-only node graph of a crew's agents and tasks.
   Props: `crewName`, `project` (default `"default"`).
-- **`CrewRunner`** — JSON input form that kicks off a crew and shows live
+- **`CrewRunner`**: JSON input form that kicks off a crew and shows live
   status. Props: `crewName`, `project`, `onComplete(execution)`.
 
 Both components still accept the deprecated `namespace` prop as a fallback
 for `project`; it logs a console warning and will be removed.
-- **`ExecutionStatus`** — status badge, token count, duration, and cost for
+- **`ExecutionStatus`**: status badge, token count, duration, and cost for
   an execution; polls every 3s until terminal. Props: `executionId`.
 
 ## Hooks and utilities
 
-- **`useBlackbeard()`** — returns the provider's `BlackbeardConfig`; throws
+- **`useBlackbeard()`**: returns the provider's `BlackbeardConfig`; throws
   outside a provider.
-- **`apiFetch<T>(config, path, options?)`** — typed fetch wrapper used by all
+- **`apiFetch<T>(config, path, options?)`**: typed fetch wrapper used by all
   components; throws `BlackbeardApiError` on failure. Use it for custom calls:
 
 ```tsx

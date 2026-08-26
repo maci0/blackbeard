@@ -129,7 +129,7 @@ async def test_trigger_automation_api(client):
     payload["spec"]["trigger"] = {"type": "api"}
     await client.post("/api/v1/automations", json=payload, headers=API_KEY_HEADER)
 
-    # Trigger it — should get 404 since the target crew doesn't exist
+    # Trigger it: should get 404 since the target crew doesn't exist
     r = await client.post(
         "/api/v1/automations/trig-auto/trigger",
         json={"inputs": {}},

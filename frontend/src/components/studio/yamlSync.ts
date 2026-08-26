@@ -26,7 +26,7 @@ const NODE_SPEC_FIELDS: Record<string, readonly string[]> = {
   pii: ['type', 'pii_entities', 'pii_action', 'backend', 'model'],
 }
 
-/** 'name' lives in metadata, not spec — strip it from YAML output. */
+/** 'name' lives in metadata, not spec: strip it from YAML output. */
 const INTERNAL_DATA_KEYS = new Set(['name'])
 
 /** Maps node type to resource kind for serialization. */

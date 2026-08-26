@@ -127,7 +127,7 @@ async def test_models_available_requires_auth(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
-# _extract_content unit tests (critical parsing logic — previously untested)
+# _extract_content unit tests (critical parsing logic: previously untested)
 # ---------------------------------------------------------------------------
 
 from blackbeard.api.chat import _extract_content

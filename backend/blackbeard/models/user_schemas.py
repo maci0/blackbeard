@@ -19,7 +19,7 @@ __all__ = [
 class UserResponse(BaseModel):
     """Public user profile.
 
-    last_login_at excluded — unnecessary activity-tracking exposure
+    last_login_at excluded: unnecessary activity-tracking exposure
     in list/detail endpoints. Frontend uses token expiry for session state.
     """
 

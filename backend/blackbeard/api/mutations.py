@@ -3,8 +3,8 @@
 Routers that create/update/delete resources (resources, marketplace,
 agency_import, tools_library) all need the same after-commit machinery:
 fire-and-forget background tasks, LiteLLM model sync, scheduler reload on
-Automation changes, and RBAC cache invalidation. It lives here — not in any
-single router — so routers never import sibling router modules.
+Automation changes, and RBAC cache invalidation. It lives here, not in any
+single router, so routers never import sibling router modules.
 """
 
 from __future__ import annotations
@@ -117,7 +117,7 @@ async def maybe_reload_scheduler(request: Request, kind: str) -> None:
             await scheduler.reload()
         except Exception as exc:
             logger.error(
-                "Scheduler reload failed after Automation change — "
+                "Scheduler reload failed after Automation change: "
                 "cron schedules may be stale until next restart",
                 exc_info=True,
                 extra={

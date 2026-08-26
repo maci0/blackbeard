@@ -52,7 +52,7 @@ async def _register_litellm_user(user_id: str) -> None:
         resp.raise_for_status()
     except Exception:
         logger.warning(
-            "Could not register user in LiteLLM (proxy may not be running) — "
+            "Could not register user in LiteLLM (proxy may not be running): "
             "per-user spend tracking will be unavailable",
             exc_info=True,
             extra={"event": "litellm_user_registration_failed", "user_id": user_id},
@@ -169,7 +169,7 @@ async def register(
             extra={"event": "registration_conflict", "client_ip": anonymize_ip(ip)},
         )
         raise HTTPException(
-            status_code=409, detail="Registration failed — please try again or log in"
+            status_code=409, detail="Registration failed: please try again or log in"
         ) from None
 
     await log_audit(
@@ -230,7 +230,7 @@ async def login(
         valid = False
         if user is not None:
             logger.warning(
-                "User %s has non-bcrypt password hash — login will always fail until reset",
+                "User %s has non-bcrypt password hash: login will always fail until reset",
                 user.id,
                 extra={
                     "event": "corrupted_password_hash",
@@ -493,7 +493,7 @@ async def generate_api_key(
     "/api-key",
     status_code=204,
     responses={
-        204: {"description": "API key revoked (or no key existed — idempotent)"},
+        204: {"description": "API key revoked (or no key existed, idempotent)"},
         401: {"description": "JWT Bearer token required"},
     },
 )

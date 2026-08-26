@@ -185,7 +185,7 @@ export function RunDialog({
       setError('')
       onRun({ mode, inputs, iterations, filename })
     } catch {
-      setError('Invalid JSON — check for missing quotes, commas, or brackets')
+      setError('Invalid JSON: check for missing quotes, commas, or brackets')
     }
   }
 
@@ -410,7 +410,7 @@ export function RunDialog({
                         JSON.parse(val)
                         setError('')
                       } catch {
-                        setError('Invalid JSON — check for missing quotes, commas, or brackets')
+                        setError('Invalid JSON: check for missing quotes, commas, or brackets')
                       }
                     } else {
                       setError('')
@@ -424,7 +424,7 @@ export function RunDialog({
                       JSON.parse(inputs)
                       setError('')
                     } catch {
-                      setError('Invalid JSON — check for missing quotes, commas, or brackets')
+                      setError('Invalid JSON: check for missing quotes, commas, or brackets')
                     }
                   } else {
                     setError('')

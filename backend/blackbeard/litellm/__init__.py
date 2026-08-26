@@ -1,8 +1,8 @@
 """LiteLLM proxy integration: helpers, key management, and model sync.
 
-- ``helpers`` — model string / param builders
-- ``key_manager`` — per-execution virtual keys with budget caps
-- ``model_sync`` — push LLMConnection resources to the live proxy API
+- ``helpers``: model string / param builders
+- ``key_manager``: per-execution virtual keys with budget caps
+- ``model_sync``: push LLMConnection resources to the live proxy API
 """
 
 from __future__ import annotations

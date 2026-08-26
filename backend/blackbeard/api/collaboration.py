@@ -24,7 +24,7 @@ from blackbeard.rate_limiter import record_auth_failure
 logger = logging.getLogger(__name__)
 
 _SINGLE_REPLICA_WARNING = (
-    "Multiple workers detected (WEB_CONCURRENCY != 1) — "
+    "Multiple workers detected (WEB_CONCURRENCY != 1): "
     "cross-worker collaboration requires the Valkey pub/sub backend. "
     "Ensure VALKEY_URL is configured, or set WEB_CONCURRENCY=1."
 )
@@ -66,7 +66,7 @@ _HIGH_FREQ_TYPES = frozenset({"cursor_move", "selection_change"})
 _MAX_MESSAGE_DATA_DEPTH = 5
 
 
-# In-memory room state — maps crew_name to set of WebSocket connections.
+# In-memory room state: maps crew_name to set of WebSocket connections.
 # Used by all deployments for local WebSocket fan-out.  When a Valkey
 # backend is available, messages are also published to Valkey pub/sub so
 # that other replicas receive them.
@@ -113,7 +113,7 @@ class ValkeyCollabBackend:
             await self._redis.publish(f"collab:{room}", text)
         except Exception as exc:
             logger.error(
-                "Valkey publish failed for room %s — other replicas will not receive this message",
+                "Valkey publish failed for room %s: other replicas will not receive this message",
                 room,
                 exc_info=True,
                 extra={
@@ -128,7 +128,7 @@ class ValkeyCollabBackend:
         """Subscribe to a room channel and forward messages to local WebSockets.
 
         Spawns a background task that reads from the Valkey subscription and
-        broadcasts to local connections.  Idempotent -- calling multiple
+        broadcasts to local connections.  Idempotent: calling multiple
         times for the same room is safe.  Replaces a finished/crashed listener.
         """
         async with self._subscriber_lock:
@@ -214,7 +214,7 @@ class ValkeyCollabBackend:
                         message = json.loads(raw_message["data"])
                     except (json.JSONDecodeError, TypeError):
                         logger.warning(
-                            "Valkey collab message parse failed for room %s — skipping",
+                            "Valkey collab message parse failed for room %s: skipping",
                             room,
                             exc_info=True,
                             extra={"event": "valkey_collab_parse_error", "room": room},
@@ -238,7 +238,7 @@ class ValkeyCollabBackend:
                 retries += 1
                 if retries > self._MAX_LISTEN_RETRIES:
                     logger.error(
-                        "Valkey listener for room %s failed %d times — giving up; "
+                        "Valkey listener for room %s failed %d times: giving up; "
                         "cross-replica messages will be lost until a new client joins",
                         room,
                         retries,
@@ -252,7 +252,7 @@ class ValkeyCollabBackend:
                     break
                 delay = min(2**retries, 30)
                 logger.warning(
-                    "Valkey listener for room %s failed — reconnecting in %ds (attempt %d/%d)",
+                    "Valkey listener for room %s failed: reconnecting in %ds (attempt %d/%d)",
                     room,
                     delay,
                     retries,
@@ -325,14 +325,14 @@ async def _init_valkey_backend() -> ValkeyCollabBackend | None:
         except ImportError:
             _valkey_init_done = True
             logger.info(
-                "redis package not installed — Valkey collaboration backend disabled",
+                "redis package not installed: Valkey collaboration backend disabled",
                 extra={"event": "valkey_collab_no_redis"},
             )
             return None
         except Exception:
             _valkey_init_done = True
             logger.warning(
-                "Valkey collaboration backend init failed — "
+                "Valkey collaboration backend init failed: "
                 "cross-replica collaboration will not work",
                 exc_info=True,
                 extra={"event": "valkey_collab_init_failed"},
@@ -397,7 +397,7 @@ async def _broadcast_local(
             await ws.send_text(text)
         except Exception as send_err:
             logger.warning(
-                "WebSocket send failed in room %s — marking connection dead",
+                "WebSocket send failed in room %s: marking connection dead",
                 room,
                 exc_info=True,
                 extra={
@@ -448,7 +448,7 @@ async def _broadcast(
     # the loopback delivery to our own subscription is dropped in _listen.
     backend = _get_valkey_backend()
     if backend is not None:
-        # Reuse the already-serialized message body — _REPLICA_ID is a
+        # Reuse the already-serialized message body: _REPLICA_ID is a
         # uuid4 hex string, so splicing it into the envelope needs no escaping.
         await backend.publish_raw(room, f'{{"origin": "{_REPLICA_ID}", "msg": {text}}}')
 
@@ -597,7 +597,7 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
                 message = json.loads(raw)
             except (json.JSONDecodeError, ValueError):
                 logger.debug(
-                    "WebSocket message parse failed in room %s — skipping",
+                    "WebSocket message parse failed in room %s: skipping",
                     crew_name,
                     exc_info=True,
                     extra={"event": "ws_message_parse_error", "room": crew_name},
@@ -698,6 +698,3 @@ async def collaborate(websocket: WebSocket, crew_name: str) -> None:
                 websocket,
                 {"type": "participant_left", "data": leave_data},
             )
-
-
-

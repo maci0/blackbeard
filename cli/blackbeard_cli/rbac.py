@@ -1,4 +1,4 @@
-"""CLI RBAC commands — role and rolebinding management."""
+"""CLI RBAC commands: role and rolebinding management."""
 
 from __future__ import annotations
 

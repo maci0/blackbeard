@@ -1,4 +1,4 @@
-"""Blackbeard SDK — Python client for the Blackbeard Agent Management Platform."""
+"""Blackbeard SDK: Python client for the Blackbeard Agent Management Platform."""
 
 from __future__ import annotations
 
