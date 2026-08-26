@@ -58,10 +58,10 @@ cd backend/
 uv sync --extra temporal
 ```
 
-Or add `temporalio` to your pip install:
+Or add `temporalio` to the backend environment:
 
 ```bash
-pip install temporalio>=1.9,<2
+uv add 'temporalio>=1.9,<2'
 ```
 
 If `TEMPORAL_HOST` is set but the SDK is not installed, the API server logs a warning and falls back to the ThreadPoolExecutor.

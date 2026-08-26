@@ -27,7 +27,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Tier ordering — higher index = more isolation.
+# Tier ordering: higher index = more isolation.
 # Docker and podman are at the same level (both provide container isolation).
 # gVisor adds syscall-level isolation via runsc on top of docker/podman.
 TIER_ORDER = ["none", "wasm", "docker", "podman", "gvisor", "microvm"]
@@ -103,7 +103,7 @@ def select_microvm_backend() -> str:
     Returns:
         ``"firecracker"``, ``"krun"``, or ``"none"``.
     """
-    # Check Firecracker first — it provides stronger isolation
+    # Check Firecracker first: it provides stronger isolation
     from blackbeard.config import settings
 
     firecracker_kernel = settings.firecracker_kernel
@@ -123,7 +123,7 @@ def select_microvm_backend() -> str:
             return "firecracker"
         logger.warning(
             "FIRECRACKER_KERNEL is set but firecracker binary or /dev/kvm "
-            "not found -- falling back to libkrun",
+            "not found: falling back to libkrun",
             extra={
                 "event": "firecracker_fallback",
                 "kernel": firecracker_kernel,
@@ -145,3 +145,11 @@ def select_microvm_backend() -> str:
         extra={"event": "microvm_backend_none"},
     )
     return "none"
+
+
+if __name__ == "__main__":
+    from blackbeard.engine.sandbox.firecracker import is_firecracker_available
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    print(f"firecracker available: {is_firecracker_available()}")  # noqa: T201
+    print(f"selected microvm backend: {select_microvm_backend()}")  # noqa: T201

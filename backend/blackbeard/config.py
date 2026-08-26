@@ -240,8 +240,7 @@ class Settings(BaseSettings):
         if len(jwt_val) < 32:
             raise ValueError(
                 "JWT_SECRET must be at least 32 characters for adequate HMAC-SHA256 "
-                "signing strength. Generate one with: "
-                'python -c "import secrets; print(secrets.token_urlsafe(32))"'
+                "signing strength. Generate one with: openssl rand -base64 32"
             )
 
         # URL-based secrets: check for insecure password patterns regardless of

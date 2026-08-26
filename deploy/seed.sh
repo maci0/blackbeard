@@ -9,7 +9,7 @@ Seed the Blackbeard database with RBAC roles, an example research crew,
 and common tools (builtin + MCP). Requires a running Blackbeard stack.
 Ollama with qwen3.6 is needed only to execute the seeded crew.
 
-Resources are created via POST — re-running will upsert (update existing
+Resources are created via POST: re-running will upsert (update existing
 resources and increment their version).
 
 Options:
@@ -151,7 +151,7 @@ seed "Role/agent-unrestricted" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
   "kind": "Role",
   "metadata": {"name": "agent-unrestricted"},
   "spec": {
-    "description": "Unrestricted agent access — all tools and delegation",
+    "description": "Unrestricted agent access, all tools and delegation",
     "subjectKinds": ["Agent"],
     "rules": [{"resources": ["Tool"], "verbs": ["invoke"]}, {"resources": ["Agent"], "verbs": ["delegate"]}]
   }
@@ -162,7 +162,7 @@ seed "Role/agent-standard" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
   "kind": "Role",
   "metadata": {"name": "agent-standard"},
   "spec": {
-    "description": "Standard agent access — invoke tools but no delegation",
+    "description": "Standard agent access, invoke tools but no delegation",
     "subjectKinds": ["Agent"],
     "rules": [{"resources": ["Tool"], "verbs": ["invoke"]}]
   }
@@ -173,7 +173,7 @@ seed "Role/agent-read-only" -X POST "$API/api/v1/roles" "${H[@]}" -d '{
   "kind": "Role",
   "metadata": {"name": "agent-read-only"},
   "spec": {
-    "description": "Read-only agent access — no tool invocation or delegation",
+    "description": "Read-only agent access, no tool invocation or delegation",
     "subjectKinds": ["Agent"],
     "rules": [{"resources": ["*"], "verbs": ["get", "list"]}]
   }
@@ -217,7 +217,7 @@ seed "AgentPolicy/sandboxed" -X POST "$API/api/v1/agent-policies" "${H[@]}" -d '
 
 # ── Default admin user (DEBUG mode only) ────────────────────────────
 if [ "${DEBUG:-false}" = "true" ]; then
-  ADMIN_PASSWORD="${BLACKBEARD_ADMIN_PASSWORD:-$(python3 -c "import secrets; print(secrets.token_urlsafe(16))" 2>/dev/null || openssl rand -base64 16)}"
+  ADMIN_PASSWORD="${BLACKBEARD_ADMIN_PASSWORD:-$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24)}"
   CREDS_FILE="${BLACKBEARD_CREDS_FILE:-.admin-credentials}"
   echo "  (DEBUG mode: creating default admin user)"
   curl -sSf -X POST "$API/api/v1/auth/register" \
@@ -461,7 +461,7 @@ seed "Tool/mcp-memory" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "metadata": {"name": "mcp-memory"},
   "spec": {
     "type": "mcp-stdio",
-    "description": "Persistent memory via a knowledge graph — store and retrieve entities and relations",
+    "description": "Persistent memory via a knowledge graph, store and retrieve entities and relations",
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-memory"]
   }
@@ -485,7 +485,7 @@ seed "Tool/mcp-context7" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
   "metadata": {"name": "mcp-context7"},
   "spec": {
     "type": "mcp-http",
-    "description": "Look up library documentation and code examples — no auth required",
+    "description": "Look up library documentation and code examples, no auth required",
     "url": "https://mcp.context7.com/sse"
   }
 }'
@@ -505,7 +505,7 @@ seed "Tool/mcp-sequentialthinking" -X POST "$API/api/v1/tools" "${H[@]}" -d '{
 echo ""
 echo "Seed complete: $CREATED created, $ERRORS failed."
 if [ "$ERRORS" -gt 0 ]; then
-  echo "Some resources failed — check server logs for details." >&2
+  echo "Some resources failed: check server logs for details." >&2
   exit 1
 fi
 

@@ -95,7 +95,7 @@ Blackbeard implements the A2A protocol for inter-agent discovery. Crews with `sp
 curl http://localhost:8000/.well-known/agent-card.json
 ```
 
-Returns `{"agents": [ ... ]}` -- a list of agent cards with skills (derived from task refs), authentication schemes, and capabilities. Cached for 60 seconds.
+Returns `{"agents": [ ... ]}`, a list of agent cards with skills (derived from task refs), authentication schemes, and capabilities. Cached for 60 seconds.
 
 ### Enabling A2A on a Crew
 
@@ -217,9 +217,9 @@ Studio-specific shortcuts are documented in the [Studio guide](studio-guide.md).
 ### Python
 
 ```bash
-pip install blackbeard-sdk
+uv add blackbeard-sdk
 # or from source
-cd sdks/python && pip install -e .
+cd sdks/python && uv pip install -e .
 ```
 
 ```python
@@ -240,9 +240,9 @@ result = client.wait(execution["id"])
 ### TypeScript
 
 ```bash
-npm install blackbeard-sdk
+bun add blackbeard-sdk
 # or from source
-cd sdks/typescript && npm install && npm run build
+cd sdks/typescript && bun install && bun run build
 ```
 
 ```typescript
@@ -257,7 +257,7 @@ const execution = await client.kickoff("research-crew", { topic: "AI agents" });
 ### React
 
 ```bash
-npm install @blackbeard/react
+bun add @blackbeard/react
 ```
 
 ```tsx
@@ -456,8 +456,8 @@ With `operator: and`, all guardrails must pass. With `operator: or`, at least on
 
 The Studio toolbar includes export options for sharing or archiving crew designs:
 
-- **PNG** -- raster image of the current canvas
-- **SVG** -- vector image, suitable for documentation or printing
-- **JSON** -- full canvas state (nodes, edges, positions) for re-importing
+- **PNG**: raster image of the current canvas
+- **SVG**: vector image, suitable for documentation or printing
+- **JSON**: full canvas state (nodes, edges, positions) for re-importing
 
 Use the **Export** dropdown in the Studio toolbar to select the format.

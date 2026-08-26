@@ -85,7 +85,7 @@ def _validate_startup_config() -> None:
         generated = secrets.token_urlsafe(32)
         set_api_key(generated)
         logger.warning(
-            "SECURITY: No API key configured — generated ephemeral key for this session: ...%s",
+            "SECURITY: No API key configured. Generated ephemeral key for this session: ...%s",
             generated[-8:],
             extra={"event": "ephemeral_api_key_generated"},
         )
@@ -100,8 +100,7 @@ def _validate_startup_config() -> None:
         raise _fatal(
             f"Refusing to start: BLACKBEARD_API_KEY is too short "
             f"(minimum {_MIN_SECRET_LENGTH} characters). "
-            'Generate a strong key with: python -c "import secrets; '
-            'print(secrets.token_urlsafe(32))"'
+            "Generate a strong key with: openssl rand -base64 32"
         )
 
     def _check_secret(
@@ -123,8 +122,7 @@ def _validate_startup_config() -> None:
             raise _fatal(
                 f"Refusing to start: {env_var} is too short "
                 f"(minimum {_MIN_SECRET_LENGTH} characters). "
-                'Generate a strong key with: python -c "import secrets; '
-                'print(secrets.token_urlsafe(32))"'
+                "Generate a strong key with: openssl rand -base64 32"
             )
 
     _check_secret(
@@ -132,14 +130,14 @@ def _validate_startup_config() -> None:
         "JWT_SECRET",
         ("change-jwt-secret-in-production!", "change-jwt-secret-in-production"),
         "insecure_default_jwt_secret",
-        "SECURITY: Using default JWT secret — set JWT_SECRET",
+        "SECURITY: Using default JWT secret. Set JWT_SECRET",
     )
     _check_secret(
         settings.litellm_master_key.get_secret_value(),
         "LITELLM_MASTER_KEY",
         ("sk-litellm-master-key",),
         "insecure_default_litellm_key",
-        "SECURITY: Using default LiteLLM master key — set LITELLM_MASTER_KEY",
+        "SECURITY: Using default LiteLLM master key. Set LITELLM_MASTER_KEY",
     )
     if "*" in settings.cors_origins and not settings.debug:
         raise _fatal(
@@ -260,7 +258,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await scheduler.start()
     except Exception:
         logger.warning(
-            "Automation scheduler failed to start — cron automations disabled until restart",
+            "Automation scheduler failed to start: cron automations disabled until restart",
             exc_info=True,
             extra={"event": "scheduler_start_failed"},
         )
@@ -278,7 +276,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                 await scheduler.reload()
             except Exception:
                 logger.warning(
-                    "Scheduler resync failed — retrying in 300s",
+                    "Scheduler resync failed: retrying in 300s",
                     exc_info=True,
                     extra={"event": "scheduler_resync_failed"},
                 )
@@ -323,7 +321,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         )
     except Exception:
         logger.warning(
-            "LiteLLM model sync failed on startup — models from static config only",
+            "LiteLLM model sync failed on startup: models from static config only",
             exc_info=True,
             extra={"event": "litellm_startup_sync_failed"},
         )

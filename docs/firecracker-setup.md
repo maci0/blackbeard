@@ -129,12 +129,12 @@ Check that Firecracker is detected:
 
 ```bash
 # In the backend directory
-uv run python -c "
-from blackbeard.engine.sandbox.firecracker import is_firecracker_available
-from blackbeard.engine.sandbox.selector import select_microvm_backend
-print(f'Firecracker available: {is_firecracker_available()}')
-print(f'Selected backend: {select_microvm_backend()}')
-"
+uv run python -m blackbeard.engine.sandbox.selector
+```
+
+```
+firecracker available: True
+selected microvm backend: firecracker
 ```
 
 ## Docker Deployments
