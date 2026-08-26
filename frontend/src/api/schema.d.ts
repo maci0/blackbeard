@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+  '/api/v1/config/public': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Public Config
+     * @description Public configuration: no auth required.
+     */
+    get: operations['public_config_api_v1_config_public_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/health': {
     parameters: {
       query?: never
@@ -30,7 +50,7 @@ export interface paths {
     }
     /**
      * Readiness
-     * @description Readiness check -- verifies database, Valkey, and LiteLLM connectivity.
+     * @description Readiness check: verifies database, Valkey, and LiteLLM connectivity.
      *
      *     Returns 200 with status=healthy (all up) or status=degraded (non-critical
      *     component down). Returns 503 with status=unhealthy only when a critical
@@ -125,6 +145,45 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/auth/api-key': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Get Api Key Status
+     * @description Check whether the current user has an API key configured.
+     *
+     *     Requires JWT Bearer authentication (API key auth is not accepted).
+     *     Only the SHA-256 hash of the key is stored, so no masked preview
+     *     can be returned.
+     */
+    get: operations['get_api_key_status_api_v1_auth_api_key_get']
+    put?: never
+    /**
+     * Generate Api Key
+     * @description Generate or rotate the current user's API key.
+     *
+     *     Requires JWT Bearer authentication (API key auth is not accepted).
+     *     Returns a new API key with ``bb-`` prefix.  Any previously issued
+     *     key for this user is replaced.
+     */
+    post: operations['generate_api_key_api_v1_auth_api_key_post']
+    /**
+     * Revoke Api Key
+     * @description Revoke the current user's API key.
+     *
+     *     Requires JWT Bearer authentication (API key auth is not accepted).
+     *     Idempotent: returns 204 even if the user has no active key.
+     */
+    delete: operations['revoke_api_key_api_v1_auth_api_key_delete']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/users': {
     parameters: {
       query?: never
@@ -159,7 +218,7 @@ export interface paths {
     get: operations['get_user_api_v1_users__user_id__get']
     /**
      * Update User
-     * @description Update a user (self-only — users can only modify their own profile).
+     * @description Update a user (self-only: users can only modify their own profile).
      */
     put: operations['update_user_api_v1_users__user_id__put']
     post?: never
@@ -225,6 +284,50 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/groups/{group_id}/members': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List Group Members
+     * @description List members of a group.
+     */
+    get: operations['list_group_members_api_v1_groups__group_id__members_get']
+    put?: never
+    /**
+     * Add Group Member
+     * @description Add a user to a group.
+     */
+    post: operations['add_group_member_api_v1_groups__group_id__members_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/groups/{group_id}/members/{user_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Remove Group Member
+     * @description Remove a user from a group. Idempotent.
+     */
+    delete: operations['remove_group_member_api_v1_groups__group_id__members__user_id__delete']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/audit-logs': {
     parameters: {
       query?: never
@@ -265,6 +368,29 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/chat/stream': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Chat Stream
+     * @description Stream an ad-hoc chat completion through LiteLLM via SSE.
+     *
+     *     Each event is ``data: {"content": "...", "done": false}\n\n``.
+     *     The final event includes ``"done": true`` plus token usage and latency.
+     */
+    post: operations['chat_stream_api_v1_chat_stream_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/models/test': {
     parameters: {
       query?: never
@@ -278,7 +404,8 @@ export interface paths {
      * Test Model
      * @description Test connectivity and API key validity for a specific model.
      *
-     *     Sends a minimal prompt ("Say hi") and checks if the model responds.
+     *     All requests route through the LiteLLM proxy so budget tracking,
+     *     rate limiting, and audit logging apply even during tests.
      */
     post: operations['test_model_api_v1_models_test_post']
     delete?: never
@@ -467,6 +594,54 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/executions/{execution_id}/respond': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Respond To Execution
+     * @description Respond to a human-in-the-loop prompt during execution.
+     *
+     *     Records the response as an execution event so the execution listener
+     *     can pick it up. The frontend should poll the events endpoint for
+     *     ``hitl_request`` events and present them to the user.
+     */
+    post: operations['respond_to_execution_api_v1_executions__execution_id__respond_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/executions/{execution_id}/retry': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Retry Execution
+     * @description Retry a failed or cancelled execution.
+     *
+     *     Creates a new execution with the same crew, project, and inputs as the
+     *     original. Only terminal executions (completed, failed, cancelled) can be
+     *     retried. Returns the new execution immediately with status=queued.
+     */
+    post: operations['retry_execution_api_v1_executions__execution_id__retry_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/executions/{execution_id}/cancel': {
     parameters: {
       query?: never
@@ -499,6 +674,380 @@ export interface paths {
      * @description SSE stream of execution status events.
      */
     get: operations['stream_execution_api_v1_executions__execution_id__stream_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/marketplace/import': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Import From Url
+     * @description Import resources from a git URL or built-in examples.
+     */
+    post: operations['import_from_url_api_v1_marketplace_import_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/webhooks': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List Webhooks
+     * @description List all registered webhooks (secrets are not returned).
+     */
+    get: operations['list_webhooks_api_v1_webhooks_get']
+    put?: never
+    /**
+     * Create Webhook
+     * @description Register a new webhook for execution event delivery.
+     */
+    post: operations['create_webhook_api_v1_webhooks_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/webhooks/{webhook_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Get Webhook
+     * @description Get a registered webhook by ID (secret is not returned).
+     */
+    get: operations['get_webhook_api_v1_webhooks__webhook_id__get']
+    put?: never
+    post?: never
+    /**
+     * Delete Webhook
+     * @description Remove a registered webhook.
+     */
+    delete: operations['delete_webhook_api_v1_webhooks__webhook_id__delete']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/webhooks/{webhook_id}/test': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Test Webhook
+     * @description Send a signed test event to the webhook endpoint.
+     *
+     *     Delivers a payload shaped like real execution events (same HMAC-SHA256
+     *     signature headers) so receivers can verify their integration end to end.
+     */
+    post: operations['test_webhook_api_v1_webhooks__webhook_id__test_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/automations/{name}/trigger': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Trigger Automation
+     * @description Manually trigger an automation via API.
+     */
+    post: operations['trigger_automation_api_v1_automations__name__trigger_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/automations/{name}/webhook': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Webhook Trigger
+     * @description Trigger an automation via external webhook (validates secret).
+     */
+    post: operations['webhook_trigger_api_v1_automations__name__webhook_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/assistant/generate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Generate Crew
+     * @description Generate agents, tasks, and crew from a natural language prompt.
+     *
+     *     Uses a configured LLMConnection via the LiteLLM proxy. If no
+     *     llm_connection is specified, uses the first available LLMConnection
+     *     in the given project.
+     */
+    post: operations['generate_crew_api_v1_assistant_generate_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/credentials': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List Credentials
+     * @description List all credentials (masked values only).
+     */
+    get: operations['list_credentials_api_v1_credentials_get']
+    put?: never
+    /**
+     * Create Credential
+     * @description Create a new credential.
+     */
+    post: operations['create_credential_api_v1_credentials_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/credentials/{credential_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Get Credential
+     * @description Get a credential by ID (value masked).
+     */
+    get: operations['get_credential_api_v1_credentials__credential_id__get']
+    put?: never
+    post?: never
+    /**
+     * Delete Credential
+     * @description Delete a credential by ID. Idempotent.
+     */
+    delete: operations['delete_credential_api_v1_credentials__credential_id__delete']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/.well-known/agent-card.json': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Agent Card
+     * @description Return A2A agent cards for all Crew resources with ``a2a.enabled``.
+     */
+    get: operations['agent_card__well_known_agent_card_json_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/asyncapi.json': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * AsyncAPI 3.0 specification for webhook events
+     * @description Returns the AsyncAPI 3.0 specification describing all webhook event types, payload schemas, and the HMAC-SHA256 signing scheme.
+     */
+    get: operations['get_asyncapi_spec_api_v1_asyncapi_json_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/import/agency-agents': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List Agency Agents
+     * @description List available agent personas from the Agency Agents library.
+     */
+    get: operations['list_agency_agents_api_v1_import_agency_agents_get']
+    put?: never
+    /**
+     * Import Agency Agents
+     * @description Import selected agent personas as Blackbeard Agent resources.
+     */
+    post: operations['import_agency_agents_api_v1_import_agency_agents_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/tools/library': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List Library Tools
+     * @description Browse the curated tools library.
+     */
+    get: operations['list_library_tools_api_v1_tools_library_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/tools/library/install': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Install Library Tools
+     * @description Install tools from the library as Blackbeard Tool resources.
+     */
+    post: operations['install_library_tools_api_v1_tools_library_install_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/plugins': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List registered plugins
+     * @description List all registered plugins, optionally filtered by type.
+     */
+    get: operations['list_plugins_api_v1_plugins_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/plugins/{name}/reload': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Reload a plugin
+     * @description Reload a specific plugin by name.
+     *
+     *     Re-imports the plugin module from disk and re-registers the handler.
+     *     Useful for developing plugins without restarting the server.
+     */
+    post: operations['reload_plugin_endpoint_api_v1_plugins__name__reload_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/resources/export': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Export Resources
+     * @description Export all resources as a multi-document YAML stream.
+     *
+     *     Streams resources in pages to avoid loading all into memory at once.
+     *     Returns resources separated by ``---`` document markers, suitable for
+     *     piping into ``blackbeard apply -f -`` or storing as a backup file.
+     */
+    get: operations['export_resources_api_v1_resources_export_get']
     put?: never
     post?: never
     delete?: never
@@ -559,13 +1108,192 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/{kind_plural}/{name}/versions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List Resource Versions
+     * @description List all version snapshots for a resource.
+     */
+    get: operations['list_resource_versions_api_v1__kind_plural___name__versions_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/{kind_plural}/{name}/versions/{version}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Get Resource Version
+     * @description Get the full snapshot of a resource at a specific version.
+     */
+    get: operations['get_resource_version_api_v1__kind_plural___name__versions__version__get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/{kind_plural}/{name}/rollback': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Rollback Resource
+     * @description Rollback a resource to a previous version snapshot.
+     */
+    post: operations['rollback_resource_api_v1__kind_plural___name__rollback_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
 }
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    /** AgencyAgentImportRequest */
+    AgencyAgentImportRequest: {
+      /**
+       * Slugs
+       * @description Agent slugs to import
+       */
+      slugs: string[]
+    }
+    /** AgencyAgentImportResponse */
+    AgencyAgentImportResponse: {
+      /** Imported */
+      imported: number
+      /** Skipped */
+      skipped: number
+      /** Errors */
+      errors: string[]
+    }
+    /** AgencyAgentListResponse */
+    AgencyAgentListResponse: {
+      /** Agents */
+      agents: components['schemas']['AgencyAgentPreview'][]
+      /** Total */
+      total: number
+      /** Divisions */
+      divisions: string[]
+    }
+    /** AgencyAgentPreview */
+    AgencyAgentPreview: {
+      /** Name */
+      name: string
+      /** Slug */
+      slug: string
+      /** Role */
+      role: string
+      /** Goal */
+      goal: string
+      /**
+       * Backstory
+       * @default
+       */
+      backstory: string
+      /**
+       * Division
+       * @default
+       */
+      division: string
+      /**
+       * Source File
+       * @default
+       */
+      source_file: string
+    }
+    /**
+     * ApiKeyResponse
+     * @description Response containing a generated or rotated API key.
+     */
+    ApiKeyResponse: {
+      /** Api Key */
+      api_key: string
+    }
+    /**
+     * ApiKeyStatusResponse
+     * @description Whether the current user has an API key configured.
+     */
+    ApiKeyStatusResponse: {
+      /** Has Key */
+      has_key: boolean
+    }
+    /**
+     * AssistantErrorResponse
+     * @description Error response from Assistant.
+     */
+    AssistantErrorResponse: {
+      /** Detail */
+      detail: string
+    }
+    /**
+     * AssistantRequest
+     * @description Request body for resource generation.
+     */
+    AssistantRequest: {
+      /**
+       * Prompt
+       * @description Natural language description of the crew to generate
+       */
+      prompt: string
+      /**
+       * Llm Connection
+       * @description Name of the LLMConnection to use (uses first available if omitted)
+       */
+      llm_connection?: string | null
+      /**
+       * Project
+       * @description Project for the LLMConnection
+       * @default default
+       */
+      project: string
+    }
+    /**
+     * AssistantResponse
+     * @description Response with generated resources and explanation.
+     */
+    AssistantResponse: {
+      /**
+       * Resources
+       * @description Generated YAML resource dicts (Agent, Task, Crew)
+       */
+      resources: {
+        [key: string]: unknown
+      }[]
+      /**
+       * Explanation
+       * @description Brief explanation of what was generated
+       */
+      explanation: string
+    }
     /**
      * AuditLogItem
      * @description Single audit log entry returned by the API.
+     *
+     *     actor_email and ip_address are stored in the DB for forensics
+     *     but excluded from API responses to limit PII exposure.
      */
     AuditLogItem: {
       /** Id */
@@ -579,8 +1307,6 @@ export interface components {
       actor_type: string
       /** Actor Id */
       actor_id: string
-      /** Actor Email */
-      actor_email?: string | null
       /** Action */
       action: string
       /** Resource Type */
@@ -593,8 +1319,6 @@ export interface components {
       } | null
       /** Request Id */
       request_id?: string | null
-      /** Ip Address */
-      ip_address?: string | null
     }
     /**
      * AuditLogListResponse
@@ -673,6 +1397,8 @@ export interface components {
       model: string
       /** Content */
       content: string
+      /** Finish Reason */
+      finish_reason?: string | null
       tokens: components['schemas']['TokenUsage']
       /** Latency Ms */
       latency_ms: number
@@ -696,6 +1422,70 @@ export interface components {
       queued_tasks?: number | null
       /** Max Workers */
       max_workers?: number | null
+    }
+    /** CreateCredentialRequest */
+    CreateCredentialRequest: {
+      /** Name */
+      name: string
+      /**
+       * Type
+       * @default api_key
+       */
+      type: string
+      /** Value */
+      value: string
+      /**
+       * Description
+       * @default
+       */
+      description: string
+    }
+    /** CredentialListResponse */
+    CredentialListResponse: {
+      /** Items */
+      items: components['schemas']['CredentialResponse'][]
+      /** Total */
+      total: number
+      /**
+       * Limit
+       * @default 100
+       */
+      limit: number
+      /**
+       * Offset
+       * @default 0
+       */
+      offset: number
+      /**
+       * Has More
+       * @default false
+       */
+      has_more: boolean
+    }
+    /** CredentialResponse */
+    CredentialResponse: {
+      /** Id */
+      id: string
+      /** Name */
+      name: string
+      /** Type */
+      type: string
+      /** Description */
+      description: string
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string
+      /** Last Used At */
+      last_used_at: string | null
+      /** Masked Value */
+      masked_value: string
     }
     /**
      * ExecutionEventItem
@@ -723,7 +1513,10 @@ export interface components {
     ExecutionEventsResponse: {
       /** Events */
       events: components['schemas']['ExecutionEventItem'][]
-      /** Next Sequence */
+      /**
+       * Next Sequence
+       * @description Sequence number of the last returned event. Pass as 'after' to fetch the next page.
+       */
       next_sequence: number
       /**
        * Has More
@@ -828,6 +1621,8 @@ export interface components {
        * Format: date-time
        */
       created_at: string
+      /** Updated At */
+      updated_at?: string | null
       /** Started At */
       started_at?: string | null
       /** Completed At */
@@ -877,11 +1672,19 @@ export interface components {
        * @default 0
        */
       cost_usd: string
+      /** Updated At */
+      updated_at?: string | null
       /** Started At */
       started_at?: string | null
       /** Completed At */
       completed_at?: string | null
     }
+    /**
+     * ExecutionType
+     * @description Execution mode: kickoff, train, test, or flow.
+     * @enum {string}
+     */
+    ExecutionType: 'kickoff' | 'train' | 'test' | 'flow'
     /**
      * GroupCreateRequest
      * @description Create a new group.
@@ -899,6 +1702,54 @@ export interface components {
     GroupListResponse: {
       /** Items */
       items: components['schemas']['GroupResponse'][]
+      /** Total */
+      total: number
+      /**
+       * Limit
+       * @default 100
+       */
+      limit: number
+      /**
+       * Offset
+       * @default 0
+       */
+      offset: number
+      /**
+       * Has More
+       * @default false
+       */
+      has_more: boolean
+    }
+    /**
+     * GroupMemberAddRequest
+     * @description Add a user to a group.
+     */
+    GroupMemberAddRequest: {
+      /**
+       * User Id
+       * Format: uuid
+       */
+      user_id: string
+    }
+    /**
+     * GroupMemberAddResponse
+     * @description Response after adding a user to a group.
+     */
+    GroupMemberAddResponse: {
+      /** Group Id */
+      group_id: string
+      /** User Id */
+      user_id: string
+      /** Status */
+      status: string
+    }
+    /**
+     * GroupMemberListResponse
+     * @description List of group members.
+     */
+    GroupMemberListResponse: {
+      /** Items */
+      items: components['schemas']['UserResponse'][]
       /** Total */
       total: number
       /**
@@ -942,6 +1793,32 @@ export interface components {
       /** Description */
       description?: string | null
     }
+    /**
+     * HITLResponseRequest
+     * @description Request to respond to a human-in-the-loop prompt during execution.
+     */
+    HITLResponseRequest: {
+      /**
+       * Response
+       * @description The human response (e.g. 'approved', 'rejected', or freeform feedback)
+       */
+      response: string
+      /**
+       * Feedback
+       * @description Optional additional feedback or instructions
+       */
+      feedback?: string | null
+    }
+    /**
+     * HITLResponseResult
+     * @description Response after recording a HITL response.
+     */
+    HITLResponseResult: {
+      /** Status */
+      status: string
+      /** Execution Id */
+      execution_id: string
+    }
     /** HTTPValidationError */
     HTTPValidationError: {
       /** Detail */
@@ -962,6 +1839,51 @@ export interface components {
       uptime_s?: number | null
     }
     /**
+     * ImportRequest
+     * @description Request body for the marketplace import endpoint.
+     */
+    ImportRequest: {
+      /**
+       * Url
+       * @description Git HTTPS URL or 'built-in' for bundled examples
+       */
+      url: string
+      /**
+       * Path
+       * @description Subdirectory within the repo to import from (optional)
+       * @default
+       */
+      path: string
+    }
+    /**
+     * ImportResponse
+     * @description Response from the marketplace import endpoint.
+     */
+    ImportResponse: {
+      /** Imported */
+      imported: number
+      /** Errors */
+      errors: number
+      /** Resources */
+      resources: string[]
+      /** Error Details */
+      error_details?: string[]
+    }
+    /** InstallRequest */
+    InstallRequest: {
+      /** Slugs */
+      slugs: string[]
+    }
+    /** InstallResponse */
+    InstallResponse: {
+      /** Installed */
+      installed: number
+      /** Skipped */
+      skipped: number
+      /** Errors */
+      errors: string[]
+    }
+    /**
      * KickoffRequest
      * @description Request to kick off a crew execution.
      */
@@ -971,6 +1893,50 @@ export interface components {
        * @description Key-value inputs passed to the crew (max 100 entries)
        */
       inputs?: {
+        [key: string]: unknown
+      }
+    }
+    /** LibraryListResponse */
+    LibraryListResponse: {
+      /** Tools */
+      tools: components['schemas']['LibraryTool'][]
+      /** Total */
+      total: number
+      /** Categories */
+      categories: string[]
+    }
+    /** LibraryTool */
+    LibraryTool: {
+      /** Slug */
+      slug: string
+      /** Name */
+      name: string
+      /** Description */
+      description: string
+      /** Category */
+      category: string
+      /** Type */
+      type: string
+      /**
+       * Class Path
+       * @default
+       */
+      class_path: string
+      /**
+       * Sandbox
+       * @default none
+       */
+      sandbox: string
+      /**
+       * Tags
+       * @default []
+       */
+      tags: string[]
+      /**
+       * Config
+       * @default {}
+       */
+      config: {
         [key: string]: unknown
       }
     }
@@ -1012,10 +1978,49 @@ export interface components {
       /** Response Preview */
       response_preview?: string | null
       tokens?: components['schemas']['TokenUsage'] | null
-      /** Context Length */
-      context_length?: number | null
-      /** Parameter Size */
-      parameter_size?: string | null
+    }
+    /**
+     * PluginListResponse
+     * @description Response for the plugin list endpoint.
+     */
+    PluginListResponse: {
+      /** Plugins */
+      plugins: components['schemas']['PluginResponse'][]
+      /** Count */
+      count: number
+    }
+    /**
+     * PluginReloadResponse
+     * @description Response for plugin reload.
+     */
+    PluginReloadResponse: {
+      /** Name */
+      name: string
+      /** Version */
+      version: string
+      /** Status */
+      status: string
+    }
+    /**
+     * PluginResponse
+     * @description Serialized plugin metadata.
+     */
+    PluginResponse: {
+      /** Name */
+      name: string
+      /** Version */
+      version: string
+      /** Description */
+      description: string
+      /** Plugin Type */
+      plugin_type: string
+      /** Entry Point */
+      entry_point: string
+    }
+    /** PublicConfigResponse */
+    PublicConfigResponse: {
+      /** Oidc Enabled */
+      oidc_enabled: boolean
     }
     /** ReadinessResponse */
     ReadinessResponse: {
@@ -1190,11 +2195,13 @@ export interface components {
     }
     /**
      * TokenResponse
-     * @description Token refresh response.
+     * @description Token refresh response (includes rotated refresh token).
      */
     TokenResponse: {
       /** Access Token */
       access_token: string
+      /** Refresh Token */
+      refresh_token?: string | null
       /**
        * Token Type
        * @default bearer
@@ -1218,6 +2225,10 @@ export interface components {
        * @default 0
        */
       total: number
+      /** Prompt Time Ms */
+      prompt_time_ms?: number | null
+      /** Completion Time Ms */
+      completion_time_ms?: number | null
     }
     /**
      * TrainRequest
@@ -1243,6 +2254,30 @@ export interface components {
        * @default training_data.pkl
        */
       filename: string
+    }
+    /**
+     * TriggerRequest
+     * @description Request body for manually triggering an automation.
+     */
+    TriggerRequest: {
+      /**
+       * Inputs
+       * @description Override inputs
+       */
+      inputs?: {
+        [key: string]: unknown
+      }
+    }
+    /**
+     * TriggerResponse
+     * @description Response after triggering an automation.
+     */
+    TriggerResponse: {
+      /** Status */
+      status: string
+      /** Automation Name */
+      automation_name: string
+      execution?: components['schemas']['ExecutionResponse'] | null
     }
     /**
      * UserListResponse
@@ -1272,6 +2307,9 @@ export interface components {
     /**
      * UserResponse
      * @description Public user profile.
+     *
+     *     last_login_at excluded: unnecessary activity-tracking exposure
+     *     in list/detail endpoints. Frontend uses token expiry for session state.
      */
     UserResponse: {
       /** Id */
@@ -1287,8 +2325,6 @@ export interface components {
        * Format: date-time
        */
       created_at: string
-      /** Last Login At */
-      last_login_at?: string | null
     }
     /**
      * UserUpdateRequest
@@ -1311,6 +2347,175 @@ export interface components {
       /** Context */
       ctx?: Record<string, never>
     }
+    /**
+     * WebhookCreateRequest
+     * @description Request to register a new webhook.
+     */
+    WebhookCreateRequest: {
+      /**
+       * Url
+       * @description Webhook URL to POST events to
+       */
+      url: string
+      /**
+       * Events
+       * @description Event types to deliver (e.g. 'crew_started', 'task_completed'). Must be known types: cost_alert, crew_completed, crew_started, hitl_request, hitl_response, llm_completed, llm_started, task_completed, task_started, tool_finished, tool_started. Empty list means all events.
+       */
+      events?: string[]
+      /**
+       * Secret
+       * @description HMAC-SHA256 signing secret. Auto-generated if omitted.
+       */
+      secret?: string | null
+    }
+    /**
+     * WebhookCreateResponse
+     * @description Response after creating a webhook (includes secret once).
+     */
+    WebhookCreateResponse: {
+      /** Id */
+      id: string
+      /** Url */
+      url: string
+      /** Events */
+      events: string[]
+      /** Active */
+      active: boolean
+      /** Created At */
+      created_at?: string | null
+      /**
+       * Secret
+       * @description HMAC-SHA256 signing secret, shown only on create
+       */
+      secret: string
+    }
+    /**
+     * WebhookListResponse
+     * @description Paginated webhook list.
+     */
+    WebhookListResponse: {
+      /** Items */
+      items: components['schemas']['WebhookResponse'][]
+      /** Total */
+      total: number
+      /**
+       * Limit
+       * @default 100
+       */
+      limit: number
+      /**
+       * Offset
+       * @default 0
+       */
+      offset: number
+      /**
+       * Has More
+       * @default false
+       */
+      has_more: boolean
+    }
+    /**
+     * WebhookResponse
+     * @description Response for a webhook.
+     */
+    WebhookResponse: {
+      /** Id */
+      id: string
+      /** Url */
+      url: string
+      /** Events */
+      events: string[]
+      /** Active */
+      active: boolean
+      /** Created At */
+      created_at?: string | null
+    }
+    /**
+     * WebhookTestResponse
+     * @description Outcome of a test delivery to a webhook endpoint.
+     */
+    WebhookTestResponse: {
+      /** Delivered */
+      delivered: boolean
+      /** Status Code */
+      status_code?: number | null
+      /** Detail */
+      detail: string
+    }
+    /**
+     * WebhookTriggerRequest
+     * @description Request body for webhook-triggered automations.
+     */
+    WebhookTriggerRequest: {
+      /**
+       * Inputs
+       * @description Event payload inputs
+       */
+      inputs?: {
+        [key: string]: unknown
+      }
+      /**
+       * Secret
+       * @description Webhook secret
+       */
+      secret: string
+    }
+    /**
+     * _RollbackRequest
+     * @description Request body for rolling back a resource.
+     */
+    _RollbackRequest: {
+      /** Version */
+      version: number
+    }
+    /**
+     * _VersionDetailResponse
+     * @description Full snapshot of a resource at a specific version.
+     */
+    _VersionDetailResponse: {
+      /** Version */
+      version: number
+      /** Changed By */
+      changed_by: string | null
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string
+      /** Spec */
+      spec: {
+        [key: string]: unknown
+      }
+      /** Labels */
+      labels: {
+        [key: string]: string
+      } | null
+    }
+    /**
+     * _VersionListResponse
+     * @description List of version summaries for a resource.
+     */
+    _VersionListResponse: {
+      /** Versions */
+      versions: components['schemas']['_VersionSummary'][]
+    }
+    /**
+     * _VersionSummary
+     * @description Summary of a single version snapshot (without full spec).
+     */
+    _VersionSummary: {
+      /** Version */
+      version: number
+      /** Changed By */
+      changed_by: string | null
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string
+      /** Changed Keys */
+      changed_keys: string[]
+    }
   }
   responses: never
   parameters: never
@@ -1320,6 +2525,26 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  public_config_api_v1_config_public_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PublicConfigResponse']
+        }
+      }
+    }
+  }
   health_api_v1_health_get: {
     parameters: {
       query?: never
@@ -1391,6 +2616,13 @@ export interface operations {
           'application/json': components['schemas']['AuthResponse']
         }
       }
+      /** @description Registration is disabled on this server */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
       /** @description Email already registered */
       409: {
         headers: {
@@ -1406,6 +2638,13 @@ export interface operations {
         content: {
           'application/json': components['schemas']['HTTPValidationError']
         }
+      }
+      /** @description Too many registration attempts */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
       }
     }
   }
@@ -1438,13 +2677,6 @@ export interface operations {
         }
         content?: never
       }
-      /** @description Account is deactivated */
-      403: {
-        headers: {
-          [name: string]: unknown
-        }
-        content?: never
-      }
       /** @description Validation Error */
       422: {
         headers: {
@@ -1453,6 +2685,13 @@ export interface operations {
         content: {
           'application/json': components['schemas']['HTTPValidationError']
         }
+      }
+      /** @description Too many authentication failures */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
       }
     }
   }
@@ -1494,6 +2733,13 @@ export interface operations {
           'application/json': components['schemas']['HTTPValidationError']
         }
       }
+      /** @description Too many authentication failures */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
     }
   }
   me_api_v1_auth_me_get: {
@@ -1515,6 +2761,85 @@ export interface operations {
         }
       }
       /** @description Missing or invalid Bearer token */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  get_api_key_status_api_v1_auth_api_key_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiKeyStatusResponse']
+        }
+      }
+      /** @description JWT Bearer token required */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  generate_api_key_api_v1_auth_api_key_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiKeyResponse']
+        }
+      }
+      /** @description JWT Bearer token required */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  revoke_api_key_api_v1_auth_api_key_delete: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description API key revoked (or no key existed, idempotent) */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description JWT Bearer token required */
       401: {
         headers: {
           [name: string]: unknown
@@ -1663,6 +2988,13 @@ export interface operations {
           'application/json': components['schemas']['HTTPValidationError']
         }
       }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
     }
   }
   deactivate_user_api_v1_users__user_id__delete: {
@@ -1712,6 +3044,13 @@ export interface operations {
         content: {
           'application/json': components['schemas']['HTTPValidationError']
         }
+      }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
       }
     }
   }
@@ -1800,6 +3139,13 @@ export interface operations {
         content: {
           'application/json': components['schemas']['HTTPValidationError']
         }
+      }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
       }
     }
   }
@@ -1895,6 +3241,13 @@ export interface operations {
           'application/json': components['schemas']['HTTPValidationError']
         }
       }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
     }
   }
   delete_group_api_v1_groups__group_id__delete: {
@@ -1908,7 +3261,7 @@ export interface operations {
     }
     requestBody?: never
     responses: {
-      /** @description Group deleted (or did not exist — idempotent) */
+      /** @description Group deleted (or did not exist, idempotent) */
       204: {
         headers: {
           [name: string]: unknown
@@ -1931,6 +3284,177 @@ export interface operations {
           'application/json': components['schemas']['HTTPValidationError']
         }
       }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  list_group_members_api_v1_groups__group_id__members_get: {
+    parameters: {
+      query?: {
+        /** @description Max results */
+        limit?: number
+        /** @description Results to skip */
+        offset?: number
+      }
+      header?: never
+      path: {
+        group_id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['GroupMemberListResponse']
+        }
+      }
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Group not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  add_group_member_api_v1_groups__group_id__members_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        group_id: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GroupMemberAddRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['GroupMemberAddResponse']
+        }
+      }
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Group or user not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description User is already a member of the group */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  remove_group_member_api_v1_groups__group_id__members__user_id__delete: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        group_id: string
+        user_id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Membership removed (or did not exist, idempotent) */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Group not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
     }
   }
   list_audit_logs_api_v1_audit_logs_get: {
@@ -1944,6 +3468,10 @@ export interface operations {
         resource_type?: string | null
         /** @description Filter by resource ID (resource name or UUID) */
         resource_id?: string | null
+        /** @description Return entries at or after this timestamp (ISO 8601) */
+        start_date?: string | null
+        /** @description Return entries before this timestamp (ISO 8601, exclusive upper bound) */
+        end_date?: string | null
         /** @description Max results */
         limit?: number
         /** @description Results to skip */
@@ -2029,6 +3557,54 @@ export interface operations {
       }
     }
   }
+  chat_stream_api_v1_chat_stream_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ChatRequest']
+      }
+    }
+    responses: {
+      /** @description SSE stream of chat completion tokens */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': unknown
+          'text/event-stream': unknown
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+      /** @description Too many chat requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description LiteLLM proxy unreachable or model error */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
   test_model_api_v1_models_test_post: {
     parameters: {
       query?: never
@@ -2051,17 +3627,15 @@ export interface operations {
           'application/json': components['schemas']['ModelTestResult']
         }
       }
-      /** @description Validation Error */
+      /** @description Invalid model name */
       422: {
         headers: {
           [name: string]: unknown
         }
-        content: {
-          'application/json': components['schemas']['HTTPValidationError']
-        }
+        content?: never
       }
-      /** @description LiteLLM proxy unreachable or model error */
-      502: {
+      /** @description Too many model test requests */
+      429: {
         headers: {
           [name: string]: unknown
         }
@@ -2106,7 +3680,7 @@ export interface operations {
   kickoff_crew_api_v1_crews__crew_name__kickoff_post: {
     parameters: {
       query?: {
-        /** @description Namespace containing the crew */
+        /** @description Project containing the crew */
         project?: string
       }
       header?: never
@@ -2145,6 +3719,13 @@ export interface operations {
         }
         content?: never
       }
+      /** @description Too many execution requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
       /** @description Internal execution error */
       500: {
         headers: {
@@ -2157,7 +3738,7 @@ export interface operations {
   train_crew_endpoint_api_v1_crews__crew_name__train_post: {
     parameters: {
       query?: {
-        /** @description Namespace containing the crew */
+        /** @description Project containing the crew */
         project?: string
       }
       header?: never
@@ -2196,6 +3777,13 @@ export interface operations {
         }
         content?: never
       }
+      /** @description Too many execution requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
       /** @description Internal execution error */
       500: {
         headers: {
@@ -2208,7 +3796,7 @@ export interface operations {
   test_crew_endpoint_api_v1_crews__crew_name__test_post: {
     parameters: {
       query?: {
-        /** @description Namespace containing the crew */
+        /** @description Project containing the crew */
         project?: string
       }
       header?: never
@@ -2247,6 +3835,13 @@ export interface operations {
         }
         content?: never
       }
+      /** @description Too many execution requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
       /** @description Internal execution error */
       500: {
         headers: {
@@ -2259,7 +3854,7 @@ export interface operations {
   run_flow_endpoint_api_v1_flows__flow_name__run_post: {
     parameters: {
       query?: {
-        /** @description Namespace containing the flow */
+        /** @description Project containing the flow */
         project?: string
       }
       header?: never
@@ -2300,6 +3895,20 @@ export interface operations {
           'application/json': components['schemas']['HTTPValidationError']
         }
       }
+      /** @description Too many execution requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Internal execution error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
     }
   }
   list_executions_api_v1_executions_get: {
@@ -2311,6 +3920,8 @@ export interface operations {
         project?: string | null
         /** @description Filter by execution status */
         status?: components['schemas']['ExecutionStatus'] | null
+        /** @description Filter by execution type (kickoff, train, test, flow) */
+        execution_type?: components['schemas']['ExecutionType'] | null
         /** @description Max results */
         limit?: number
         /** @description Results to skip */
@@ -2471,6 +4082,116 @@ export interface operations {
       }
     }
   }
+  respond_to_execution_api_v1_executions__execution_id__respond_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Execution UUID */
+        execution_id: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['HITLResponseRequest']
+      }
+    }
+    responses: {
+      /** @description HITL response recorded */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HITLResponseResult']
+        }
+      }
+      /** @description Execution not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Execution is not awaiting human input */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  retry_execution_api_v1_executions__execution_id__retry_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Execution UUID to retry */
+        execution_id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description New execution created from the original's configuration */
+      202: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExecutionResponse']
+        }
+      }
+      /** @description Execution not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Can only retry terminal executions */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+      /** @description Too many execution requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Internal execution error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
   cancel_execution_api_v1_executions__execution_id__cancel_patch: {
     parameters: {
       query?: never
@@ -2563,6 +4284,925 @@ export interface operations {
       }
     }
   }
+  import_from_url_api_v1_marketplace_import_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ImportRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ImportResponse']
+        }
+      }
+      /** @description Invalid URL or YAML parse errors */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Too many marketplace import requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Built-in examples not available on server */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Git clone timed out */
+      504: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  list_webhooks_api_v1_webhooks_get: {
+    parameters: {
+      query?: {
+        /** @description Max results */
+        limit?: number
+        /** @description Results to skip */
+        offset?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Paginated list of registered webhooks */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['WebhookListResponse']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  create_webhook_api_v1_webhooks_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['WebhookCreateRequest']
+      }
+    }
+    responses: {
+      /** @description Webhook registered */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['WebhookCreateResponse']
+        }
+      }
+      /** @description Invalid request body */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  get_webhook_api_v1_webhooks__webhook_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Webhook UUID */
+        webhook_id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['WebhookResponse']
+        }
+      }
+      /** @description Webhook not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  delete_webhook_api_v1_webhooks__webhook_id__delete: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Webhook UUID */
+        webhook_id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Webhook deleted (or did not exist, idempotent) */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  test_webhook_api_v1_webhooks__webhook_id__test_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Webhook UUID */
+        webhook_id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['WebhookTestResponse']
+        }
+      }
+      /** @description Webhook not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Webhook URL is not reachable (SSRF blocked) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  trigger_automation_api_v1_automations__name__trigger_post: {
+    parameters: {
+      query?: {
+        /** @description Project */
+        project?: string
+      }
+      header?: never
+      path: {
+        /** @description Automation name */
+        name: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TriggerRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TriggerResponse']
+        }
+      }
+      /** @description Automation not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Automation is disabled */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+      /** @description Too many trigger requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Trigger execution failed */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  webhook_trigger_api_v1_automations__name__webhook_post: {
+    parameters: {
+      query?: {
+        /** @description Project */
+        project?: string
+      }
+      header?: never
+      path: {
+        /** @description Automation name */
+        name: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['WebhookTriggerRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TriggerResponse']
+        }
+      }
+      /** @description Invalid webhook secret */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Automation not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Automation is disabled or not a webhook trigger */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+      /** @description Too many trigger requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Trigger execution failed */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  generate_crew_api_v1_assistant_generate_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AssistantRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AssistantResponse']
+        }
+      }
+      /** @description Validation error (prompt too short/long) */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description No LLMConnection available in the specified project */
+      424: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AssistantErrorResponse']
+        }
+      }
+      /** @description Too many AI assist requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description LiteLLM proxy unreachable or model error */
+      502: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AssistantErrorResponse']
+        }
+      }
+    }
+  }
+  list_credentials_api_v1_credentials_get: {
+    parameters: {
+      query?: {
+        /** @description Max results */
+        limit?: number
+        /** @description Results to skip */
+        offset?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Paginated list of credentials (values masked) */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CredentialListResponse']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  create_credential_api_v1_credentials_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateCredentialRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CredentialResponse']
+        }
+      }
+      /** @description Credential with this name already exists */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  get_credential_api_v1_credentials__credential_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        credential_id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CredentialResponse']
+        }
+      }
+      /** @description Credential not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  delete_credential_api_v1_credentials__credential_id__delete: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        credential_id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Credential deleted (or did not exist, idempotent) */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  agent_card__well_known_agent_card_json_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': unknown
+        }
+      }
+    }
+  }
+  get_asyncapi_spec_api_v1_asyncapi_json_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': {
+            [key: string]: unknown
+          }
+        }
+      }
+    }
+  }
+  list_agency_agents_api_v1_import_agency_agents_get: {
+    parameters: {
+      query?: {
+        /** @description Filter by division (e.g., engineering, design) */
+        division?: string | null
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AgencyAgentListResponse']
+        }
+      }
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Invalid division name */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  import_agency_agents_api_v1_import_agency_agents_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AgencyAgentImportRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AgencyAgentImportResponse']
+        }
+      }
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+      /** @description Too many import requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  list_library_tools_api_v1_tools_library_get: {
+    parameters: {
+      query?: {
+        /** @description Filter by category */
+        category?: string | null
+        /** @description Search by name or tag */
+        search?: string | null
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['LibraryListResponse']
+        }
+      }
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  install_library_tools_api_v1_tools_library_install_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['InstallRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['InstallResponse']
+        }
+      }
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+      /** @description Too many install requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  list_plugins_api_v1_plugins_get: {
+    parameters: {
+      query?: {
+        plugin_type?: string | null
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PluginListResponse']
+        }
+      }
+      /** @description Invalid plugin_type */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  reload_plugin_endpoint_api_v1_plugins__name__reload_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        name: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PluginReloadResponse']
+        }
+      }
+      /** @description Plugin not found or reload failed */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  export_resources_api_v1_resources_export_get: {
+    parameters: {
+      query?: {
+        /** @description Filter by project (omit for all projects) */
+        project?: string | null
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description All resources as a multi-document YAML stream */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': unknown
+          'application/x-yaml': unknown
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
   list_resources_api_v1__kind_plural__get: {
     parameters: {
       query?: {
@@ -2652,6 +5292,13 @@ export interface operations {
       }
       /** @description Validation error or kind mismatch between URL and body */
       422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Too many mutation requests */
+      429: {
         headers: {
           [name: string]: unknown
         }
@@ -2752,6 +5399,13 @@ export interface operations {
         }
         content?: never
       }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
     }
   }
   delete_resource_api_v1__kind_plural___name__delete: {
@@ -2770,7 +5424,7 @@ export interface operations {
     }
     requestBody?: never
     responses: {
-      /** @description Resource deleted (or did not exist — idempotent) */
+      /** @description Resource deleted (or did not exist, idempotent) */
       204: {
         headers: {
           [name: string]: unknown
@@ -2785,6 +5439,153 @@ export interface operations {
         content: {
           'application/json': components['schemas']['HTTPValidationError']
         }
+      }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  list_resource_versions_api_v1__kind_plural___name__versions_get: {
+    parameters: {
+      query?: {
+        /** @description Resource project */
+        project?: string
+      }
+      header?: never
+      path: {
+        kind_plural: string
+        /** @description Resource name */
+        name: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['_VersionListResponse']
+        }
+      }
+      /** @description Resource not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_resource_version_api_v1__kind_plural___name__versions__version__get: {
+    parameters: {
+      query?: {
+        /** @description Resource project */
+        project?: string
+      }
+      header?: never
+      path: {
+        kind_plural: string
+        /** @description Resource name */
+        name: string
+        /** @description Version number */
+        version: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['_VersionDetailResponse']
+        }
+      }
+      /** @description Resource or version not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  rollback_resource_api_v1__kind_plural___name__rollback_post: {
+    parameters: {
+      query?: {
+        /** @description Resource project */
+        project?: string
+      }
+      header?: never
+      path: {
+        kind_plural: string
+        /** @description Resource name */
+        name: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['_RollbackRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ResourceResponse']
+        }
+      }
+      /** @description Resource or version not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Too many mutation requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
       }
     }
   }

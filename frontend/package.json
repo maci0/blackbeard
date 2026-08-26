@@ -22,7 +22,7 @@
     "test:e2e": "bunx playwright test",
     "check": "bun run typecheck && bun run lint && bun run format:check",
     "preview": "vite preview",
-    "generate:api": "bunx openapi-typescript openapi.json -o src/api/schema.d.ts"
+    "generate:api": "cd ../backend && uv run python scripts/dump_openapi.py && cd ../frontend && bunx openapi-typescript openapi.json -o src/api/schema.d.ts && bunx prettier --write src/api/schema.d.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.0",
