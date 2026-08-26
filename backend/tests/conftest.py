@@ -1,8 +1,8 @@
 """Shared test configuration and fixtures.
 
 IMPORTANT: The PostgreSQL-specific column types (JSONB, UUID) are monkey-patched
-to SQLite-compatible equivalents here — *before* any blackbeard models are imported
-— so that integration tests can use an in-memory SQLite database without requiring
+to SQLite-compatible equivalents here, *before* any blackbeard models are imported,
+so that integration tests can use an in-memory SQLite database without requiring
 a live PostgreSQL instance.
 """
 
@@ -22,7 +22,7 @@ _os.environ.setdefault("DEBUG", "true")
 import uuid as _uuid_mod
 
 import sqlalchemy.dialects.postgresql as _pg_dialect
-from sqlalchemy import JSON
+from sqlalchemy import JSON, and_
 from sqlalchemy.types import String, TypeDecorator
 
 
@@ -57,7 +57,33 @@ class _UUIDAsString(TypeDecorator):
         return value
 
 
-_pg_dialect.JSONB = JSON  # type: ignore[attr-defined]
+class _JSONBAsJSON(TypeDecorator):
+    """Drop-in replacement for postgresql.JSONB that works on SQLite.
+
+    Storage-wise this is a plain JSON column. The default JSON comparator is
+    not enough, though: ResourceService.list_resources filters with
+    ``Column.contains(dict)``, which SQLAlchemy lowers to a LIKE comparison on
+    SQLite and silently returns wrong results (it only matches rows whose
+    serialized value embeds the filter verbatim). The comparator below
+    rebuilds containment from per-key json_extract equality, matching the
+    PostgreSQL ``@>`` semantics for flat string-keyed dicts.
+    """
+
+    impl = JSON
+    cache_ok = True
+
+    # SQLAlchemy looks this hook up by its exact lowercase name.
+    class comparator_factory(JSON.Comparator):  # noqa: N801  # type: ignore[override]
+        def contains(self, other, **kw):  # type: ignore[override]
+            if not isinstance(other, dict):
+                raise TypeError(f"JSONB.contains() expects a dict, got {type(other)!r}")
+            if not other:
+                return self.expr.is_not(None)
+            conds = [self.expr[str(k)].as_string() == v for k, v in other.items()]
+            return and_(*conds)
+
+
+_pg_dialect.JSONB = _JSONBAsJSON  # type: ignore[attr-defined]
 _pg_dialect.UUID = _UUIDAsString  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
@@ -76,7 +102,7 @@ import blackbeard.models.audit  # registers audit log table
 import blackbeard.models.execution  # registers execution tables
 import blackbeard.models.resource  # registers resource tables
 import blackbeard.models.user  # registers user/group tables
-import blackbeard.models.webhook  # noqa: F401 — registers webhook table
+import blackbeard.models.webhook  # noqa: F401, registers webhook table
 from blackbeard.kinds import ResourceKind
 from blackbeard.main import app
 from blackbeard.models.database import (

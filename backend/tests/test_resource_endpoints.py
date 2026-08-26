@@ -8,7 +8,6 @@ mismatch.
 
 from __future__ import annotations
 
-import pytest
 from httpx import AsyncClient
 
 from tests.conftest import API_KEY_HEADER, _agent_payload
@@ -18,7 +17,6 @@ from tests.conftest import API_KEY_HEADER, _agent_payload
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="SQLite lacks JSON filtering; passes on PostgreSQL")
 async def test_list_with_label_selector(client: AsyncClient):
     """GET /agents?label_selector=env=prod filters by label."""
     # Create agent with labels
@@ -37,8 +35,10 @@ async def test_list_with_label_selector(client: AsyncClient):
     resp = await client.get("/api/v1/agents?label_selector=env%3Dprod", headers=API_KEY_HEADER)
     assert resp.status_code == 200
     data = resp.json()
-    assert isinstance(data["items"], list)
-    assert data["total"] >= 1, "Label filter must return at least the labeled agent"
+    names = [item["metadata"]["name"] for item in data["items"]]
+    assert "labeled-agent" in names, "Label filter must return the labeled agent"
+    assert "unlabeled-agent" not in names, "Label filter must exclude unlabeled agents"
+    assert data["total"] == 1
     for item in data["items"]:
         assert item["metadata"].get("labels", {}).get("env") == "prod"
 
