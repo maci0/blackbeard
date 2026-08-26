@@ -4,6 +4,39 @@ All notable changes to Blackbeard are documented here. Grouped by release, newes
 
 ## Unreleased
 
+## 0.4.0
+
+### Features
+- **Human-in-the-loop actually pauses**: tasks with `human_input: true` now use a database-backed input provider, so CrewAI raises a `hitl_request` event and polls the event log for the answer instead of reading stdin and blocking the worker thread forever. Response wait is capped by `HITL_RESPONSE_TIMEOUT_S` (default 3600).
+- **PII guardrails**: `Guardrail` resources accept a PII type backed by the Presidio redaction machinery, with redact / reject / warn behavior and matching `backend` and `model` spec fields.
+- **Excel knowledge sources** map to CrewAI's `ExcelKnowledgeSource`, and task-level `callback` import paths are forwarded to CrewAI.
+- **`POST /webhooks/{id}/test`** sends a signed sample event so a receiver can verify its integration end to end.
+- **SSE token auth**: streaming endpoints accept a JWT via `?token=`, since `EventSource` cannot set an `Authorization` header. Chat streams reasoning tokens as their own SSE field instead of mixing them into content.
+- **`GET /auth/api-key`** reports whether the caller has an API key without exposing anything hash-derived.
+- **SBOM job in CI**: CycloneDX inventory of the resolved backend dependency tree, derived from `uv.lock`. Informational, kept outside `ci-gate`.
+
+### Fixed
+- **Webhook DNS rebinding**: delivery re-resolves the target host at send time instead of trusting the resolution done at registration.
+- **Execution event ordering**: event batch writes are serialized, and a sequence collision renumbers rather than dropping events. The listener buffer is bounded, so a prolonged database outage can no longer grow a long-running execution's memory without limit.
+- **Executor lifecycle**: cleanup survives a failure before the crew starts, background DB engine disposal is awaited at shutdown, the CrewAI listener no longer leaks, and timed-out sandbox containers are removed.
+- **Cost and budget display**: negative durations are clamped, spend is backfilled before cost alerts fire, and alert thresholds no longer clamp to the wrong bound.
+- **Races**: the schema validator cache and execution fetches are guarded, resource create races retry as upserts, and the Valkey collaboration backend is closed on shutdown.
+- **Timezones**: text logs and CLI timestamps render in UTC, cron times are labelled UTC, and dashboard spend groups by local date.
+- **Label selectors on SQLite**: the test suite patched `JSONB` to a plain JSON column, which turned `contains()` into a LIKE match and silently returned the wrong rows, so the label-selector test was skipped rather than run. The patched type now rebuilds containment from `json_extract`, and the test asserts non-matching resources are excluded.
+- **Type-check gate**: `types-croniter` was missing, so the CI `mypy` step was failing.
+- CLI access-token expiry is derived from the JWT `exp` claim, tools-library installs report per-tool failures, and notification failures warn instead of passing silently.
+
+### Changed
+- **OpenAPI schema regenerated**: the checked-in spec was cut at 0.1.0 and covered 26 of 53 routes, so the generated frontend types were missing half the API. `bun run generate:api` now dumps the spec and regenerates `schema.d.ts` in one step.
+- **`CLAUDE.md` is now a symlink to `AGENTS.md`**, which holds the repository rules.
+- Shared mutation side effects moved into `api.mutations`; sandbox runtimes share a base class; frontend barrel exports are gone in favour of direct imports; import cycles across `api`, `auth` and `plugins` are broken.
+- OpenTelemetry and the locust load harness moved to optional extras. wasmtime is on 45.x, vitest on 4, and starlette is declared directly.
+- Prose across the codebase drops em dashes and their `--` stand-in.
+
+### Removed
+- `GVISOR_ENABLED` and `MICROVM_ENABLED` from `.env.example`: nothing read them. A tool requests those tiers through `spec.sandbox` and they fail at call time when the runtime is absent.
+- Unused policy, plugin and LiteLLM config helpers, `get_room_stats`, unused frontend skeletons, and npm lockfiles.
+
 ## 0.3.0
 
 ### Breaking
