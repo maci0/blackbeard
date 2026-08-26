@@ -49,6 +49,8 @@ credentials.json
 
 # Tool state
 .claude/
+.scratch/
+.review-loop.lock
 .sisyphus/
 .playwright-mcp/
 test-*.png
