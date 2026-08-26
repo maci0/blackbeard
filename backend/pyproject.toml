@@ -52,7 +52,7 @@ constraint-dependencies = [
     "uv>=0.11.15",  # GHSA-4gg8-gxpx-9rph (transitive via crewai-cli)
     "pip>=26.1.2",  # PYSEC-2026-196 (dev transitive via pip-audit)
     # chromadb: CVE-2026-45829 (GHSA-f4j7-r4q5-qw2c) critical pre-auth RCE and PYSEC-2026-311,
-    # NO FIX available as of 2026-08-04; transitive via crewai,
+    # NO FIX available as of 2026-08-26 (checked OSV against chromadb 1.5.9); transitive via crewai,
     # monitor https://github.com/chroma-core/chroma for patch release
 ]
 
@@ -64,6 +64,7 @@ dev = [
     "ruff>=0.11,<1",
     "mypy>=1.15,<2",
     "types-PyYAML>=6.0.12,<7",
+    "types-croniter>=6.0,<7",
     "aiosqlite>=0.20,<1",
     "pip-audit>=2.9,<3",
     "hypothesis>=6.100,<7",
@@ -83,7 +84,7 @@ otel = [
     "opentelemetry-exporter-otlp-proto-grpc>=1.30,<2",
 ]
 load = [
-    # tests/load/locustfile.py — ad-hoc API load testing against a running stack
+    # tests/load/locustfile.py: ad-hoc API load testing against a running stack
     "locust>=2.30,<3",
 ]
 
@@ -107,7 +108,7 @@ select = [
     "ISC",                       # implicit string concat hides missing commas
 ]
 ignore = [
-    "ANN401",   # Any in signatures — needed for crewai untyped APIs
+    "ANN401",   # Any in signatures: needed for crewai untyped APIs
 ]
 
 [tool.ruff.lint.per-file-ignores]
