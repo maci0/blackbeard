@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 import json
+import re
 from unittest.mock import patch
 
 import httpx
@@ -667,10 +668,12 @@ class TestErrorDetailAndHeaders:
         assert err.request_id == "req-abc"
         assert err.retry_after == 30
 
-    def test_version_matches_package(self) -> None:
+    def test_version_resolves_from_installed_metadata(self) -> None:
+        """__version__ comes from the dist, not the not-installed fallback."""
         from blackbeard_sdk import __version__
 
-        assert __version__ == "0.3.0"
+        assert __version__ != "0.0.0.dev0"
+        assert re.fullmatch(r"\d+\.\d+\.\d+.*", __version__), __version__
 
 
 # -- Transport error wrapping -------------------------------------------------
