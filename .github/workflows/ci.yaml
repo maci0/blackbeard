@@ -356,7 +356,7 @@ jobs:
             trivy-db-${{ runner.os }}-
 
       - name: Scan API image for vulnerabilities
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: blackbeard-api:${{ github.sha }}
           format: table
@@ -403,7 +403,7 @@ jobs:
             trivy-db-${{ runner.os }}-
 
       - name: Scan UI image for vulnerabilities
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: blackbeard-ui:${{ github.sha }}
           format: table
